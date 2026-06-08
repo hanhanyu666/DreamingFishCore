@@ -23,11 +23,8 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
@@ -103,13 +100,13 @@ public class ServerInformationDisplay {
     public static void onClientLoginToServer(ClientPlayerNetworkEvent.LoggingIn event) {
         Minecraft mc = Minecraft.getInstance();
 
-        // 单人游戏和多人游戏都显示UI
+        // 单人游戏和多人游戏默认显示右上角信息面板，保留O键手动开关
         SHOW_UI = true;
-        System.out.println("玩家进服：默认开启信息面板");
+        System.out.println("玩家进服：默认显示信息面板");
 
         // 单人游戏发送提示消息
         if (mc.isSingleplayer() && mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal("§e[DreamingfishCore]§f您处于单人游戏，可以按§6O§f隐藏服务器UI"));
+            mc.player.sendSystemMessage(Component.literal("§e[DreamingfishCore]§f信息面板默认显示，可以按§6O§f临时关闭"));
         }
     }
 

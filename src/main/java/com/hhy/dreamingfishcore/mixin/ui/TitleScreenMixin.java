@@ -375,9 +375,9 @@ public abstract class TitleScreenMixin extends Screen {
             // hover 时添加半透明药丸背景
             if (hov) {
                 int pad = 4;
-                guiGraphics.fill(ax - pad, 3, ax + textW + pad, 18, 0x44000000);
-                guiGraphics.fill(ax - pad, 3, ax + textW + pad, 4, 0x22FFFFFF);
-                guiGraphics.fill(ax - pad, 17, ax + textW + pad, 18, 0x22FFFFFF);
+                dreamingFishCore$drawPixelCutRect(guiGraphics, ax - pad, 3, textW + pad * 2, 15, 0x56000000);
+                guiGraphics.fill(ax - pad + 1, 4, ax + textW + pad - 1, 5, 0x24FFFFFF);
+                guiGraphics.fill(ax - pad + 1, 17, ax + textW + pad - 1, 18, 0x22000000);
             }
 
             int color = hov ? TEXT_WHITE : 0xFFAAAAAA;
@@ -397,10 +397,9 @@ public abstract class TitleScreenMixin extends Screen {
             auxX = ax - 16;
         }
 
-        // ===== 右下角主按钮（深色圆角药丸 + 微妙样式） =====
+        // ===== 右下角主按钮（像素切角暗轨 + 细强调线） =====
         int mainBtnW = 110;
         int mainBtnH = 22;
-        int mainRadius = 4;
         int mainRight = virtualW - 20;
         int mainBtnY = virtualH - 6 - mainBtnH;
 
@@ -411,31 +410,34 @@ public abstract class TitleScreenMixin extends Screen {
             int mainX = mainRight - mainBtnW;
 
             boolean hov = mainHover == i;
-            int bgAlpha = hov ? 0xBB : 0x77;
+            int bgAlpha = hov ? 0xA4 : 0x68;
             // 用强调色给背景上微弱的色相
             int accent = MAIN_BTN_COLORS[i];
-            int tintR = (((accent >> 16) & 0xFF) * 18) / 255;
-            int tintG = (((accent >> 8) & 0xFF) * 18) / 255;
-            int tintB = ((accent & 0xFF) * 18) / 255;
+            int tintR = (((accent >> 16) & 0xFF) * (hov ? 24 : 13)) / 255;
+            int tintG = (((accent >> 8) & 0xFF) * (hov ? 24 : 13)) / 255;
+            int tintB = ((accent & 0xFF) * (hov ? 24 : 13)) / 255;
             int bgColor = (bgAlpha << 24) | (tintR << 16) | (tintG << 8) | tintB;
-            int borderAlpha = hov ? 0x60 : 0x28;
 
             int bx = mainX + slideOff;
             int by = mainBtnY;
             int bw = mainBtnW;
             int bh = mainBtnH;
 
-            // 圆角背景
-            dreamingFishCore$fillRounded(guiGraphics, bx, by, bw, bh, mainRadius, bgColor);
+            dreamingFishCore$drawPixelCutRect(guiGraphics, bx + 1, by + 1, bw, bh, 0x33000000);
+            dreamingFishCore$drawPixelCutRect(guiGraphics, bx, by, bw, bh, bgColor);
+            dreamingFishCore$drawPixelCutRect(guiGraphics, bx + 1, by + 1, bw - 2, bh - 2, hov ? 0x64101316 : 0x4A0B0D0F);
+            guiGraphics.fill(bx + 2, by + 1, bx + bw - 2, by + 2, hov ? 0x34FFFFFF : 0x18FFFFFF);
+            guiGraphics.fill(bx + 2, by + bh - 2, bx + bw - 2, by + bh - 1, 0x36000000);
 
-            // 细边框（带一点颜色）
-            int bc = (borderAlpha << 24) | (tintR * 3 << 16) | (tintG * 3 << 8) | (tintB * 3);
-            dreamingFishCore$drawRoundedBorder(guiGraphics, bx, by, bw, bh, mainRadius, bc);
-
-            // hover 效果：左侧强调条 + 顶部微光
+            // hover 效果：底部强调线 + 细微左缘光
             if (hov) {
-                guiGraphics.fill(bx + 1, by + 2, bx + 4, by + bh - 2, accent);
-                guiGraphics.fill(bx + 4, by + 1, bx + bw - 1, by + 2, 0x30FFFFFF);
+                int accentSoft = (0xAE << 24) | (accent & 0x00FFFFFF);
+                guiGraphics.fill(bx + 4, by + bh - 4, bx + bw - 4, by + bh - 2, accentSoft);
+                guiGraphics.fill(bx + 1, by + 4, bx + 2, by + bh - 4,
+                        dreamingFishCore$withAlpha(accent, 96));
+            } else {
+                guiGraphics.fill(bx + 10, by + bh - 3, bx + bw - 10, by + bh - 2,
+                        dreamingFishCore$withAlpha(accent, 48));
             }
 
             // 文字（垂直居中）
@@ -450,8 +452,8 @@ public abstract class TitleScreenMixin extends Screen {
                 int dw = this.font.width(desc) + 12;
                 int tipX = bx - dw - 8;
                 int tipY = by + (bh - 16) / 2;
-                guiGraphics.fill(tipX, tipY, tipX + dw, tipY + 16, 0xEE151515);
-                guiGraphics.fill(tipX, tipY, tipX + dw, tipY + 1, 0x33FFFFFF);
+                dreamingFishCore$drawPixelCutRect(guiGraphics, tipX, tipY, dw, 16, 0xEE151515);
+                guiGraphics.fill(tipX + 1, tipY, tipX + dw - 1, tipY + 1, 0x33FFFFFF);
                 guiGraphics.drawString(this.font, "§7" + desc, tipX + 6, tipY + 4, TEXT_WHITE, false);
             }
 
@@ -459,7 +461,29 @@ public abstract class TitleScreenMixin extends Screen {
         }
     }
 
-    // ===== 圆角绘制辅助 =====
+    // ===== 像素切角绘制辅助 =====
+    @Unique
+    private static void dreamingFishCore$drawPixelCutRect(GuiGraphics g, int x, int y, int w, int h, int color) {
+        if ((color >>> 24) == 0 || w <= 0 || h <= 0) {
+            return;
+        }
+
+        if (w <= 2 || h <= 2) {
+            g.fill(x, y, x + w, y + h, color);
+            return;
+        }
+
+        g.fill(x + 1, y, x + w - 1, y + h, color);
+        g.fill(x, y + 1, x + w, y + h - 1, color);
+    }
+
+    @Unique
+    private static int dreamingFishCore$withAlpha(int color, int alpha) {
+        int clampedAlpha = Math.max(0, Math.min(255, alpha));
+        return (clampedAlpha << 24) | (color & 0x00FFFFFF);
+    }
+
+    // ===== 圆角绘制辅助（保留备用，主按钮不再使用） =====
     @Unique
     private static void dreamingFishCore$fillRounded(GuiGraphics g, int x, int y, int w, int h, int r, int color) {
         if ((color >>> 24) == 0) return;

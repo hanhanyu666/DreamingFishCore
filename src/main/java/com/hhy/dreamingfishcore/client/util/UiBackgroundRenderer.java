@@ -12,13 +12,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class UiBackgroundRenderer {
 
-    private static final int BG_COUNT = 13;
-    private static final ResourceLocation[] BG_TEXTURES = new ResourceLocation[BG_COUNT];
-    static {
-        for (int i = 0; i < BG_COUNT; i++) {
-            BG_TEXTURES[i] = ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_" + (i + 1) + ".png");
-        }
-    }
+    private static final ResourceLocation LOADING_BACKGROUND =
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_1.png");
+    private static final ResourceLocation[] MENU_BG_TEXTURES = {
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_2.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_3.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_4.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_14.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_15.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_16.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_17.png")
+    };
 
     private static int currentBgIndex = 0;
     private static int prevBgIndex = 0;
@@ -31,10 +35,15 @@ public final class UiBackgroundRenderer {
     private UiBackgroundRenderer() {
     }
 
-    /** 5秒轮换背景，供所有界面共用 */
+    /** 5秒轮换背景，供主菜单和普通菜单界面共用 */
     public static void renderCyclingBackground(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
         updateCycle();
-        renderCover(guiGraphics, BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
+        renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
+    }
+
+    /** 加载界面固定使用大合照，避免加载时背景随机跳动。 */
+    public static void renderLoadingBackground(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
+        renderCover(guiGraphics, LOADING_BACKGROUND, screenWidth, screenHeight);
     }
 
     /**
@@ -51,7 +60,7 @@ public final class UiBackgroundRenderer {
         long elapsed = now - lastBgSwitchTime;
         if (elapsed >= BG_SWITCH_INTERVAL) {
             prevBgIndex = currentBgIndex;
-            currentBgIndex = (currentBgIndex + 1) % BG_COUNT;
+            currentBgIndex = (currentBgIndex + 1) % MENU_BG_TEXTURES.length;
             lastBgSwitchTime = now;
             elapsed = 0;
         }
@@ -63,13 +72,13 @@ public final class UiBackgroundRenderer {
             float eased = t * t * (3.0F - 2.0F * t); // smoothstep
 
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F - eased);
-            renderCover(guiGraphics, BG_TEXTURES[prevBgIndex], screenWidth, screenHeight);
+            renderCover(guiGraphics, MENU_BG_TEXTURES[prevBgIndex], screenWidth, screenHeight);
 
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, eased);
-            renderCover(guiGraphics, BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
+            renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
         } else {
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, fadeAlpha);
-            renderCover(guiGraphics, BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
+            renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
         }
 
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
@@ -82,7 +91,7 @@ public final class UiBackgroundRenderer {
         }
         if (now - lastBgSwitchTime >= BG_SWITCH_INTERVAL) {
             prevBgIndex = currentBgIndex;
-            currentBgIndex = (currentBgIndex + 1) % BG_COUNT;
+            currentBgIndex = (currentBgIndex + 1) % MENU_BG_TEXTURES.length;
             lastBgSwitchTime = now;
         }
     }

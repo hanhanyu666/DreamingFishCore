@@ -36,7 +36,7 @@ public abstract class ReceivingLevelScreenMixin extends Screen {
             tip = LoadingTips.getRandomTip();
         }
 
-        UiBackgroundRenderer.renderCyclingBackground(guiGraphics, this.width, this.height);
+        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
         guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
 
         guiGraphics.pose().pushPose();

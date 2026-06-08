@@ -8,29 +8,33 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.limb_health_system.
 import com.hhy.dreamingfishcore.core.playerattributes_system.strength.PlayerStrengthClientSync;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomStatueGUI {
-    // 玩家图标尺寸和UV坐标
-    private static final int PLAYER_ICON_WIDTH = 27;
-    private static final int PLAYER_ICON_HEIGHT = 59;
-    private static final int PLAYER_UV_X_NORMAL = 0;      // 正常状态 UV X (左边)
-    private static final int PLAYER_UV_X_INJURED = 27;    // 受伤状态 UV X (右边，白色边框)
-    private static final int PLAYER_UV_Y = 0;
-    private static final int PLAYER_TEXTURE_TOTAL_WIDTH = 256;
-    private static final int PLAYER_TEXTURE_TOTAL_HEIGHT = 256;
+    // 左下角玩家模型布局
+    private static final int PLAYER_MODEL_ANCHOR_HALF_WIDTH = 20;
+    private static final int PLAYER_MODEL_HALF_WIDTH = 23;
+    private static final int PLAYER_MODEL_HEIGHT = 59;
+    private static final int PLAYER_MODEL_TOP_PADDING = 8;
+    private static final int PLAYER_MODEL_BOTTOM_PADDING = 7;
+    private static final int PLAYER_MODEL_SIZE = 27;
+    private static final int EQUIPMENT_DURABILITY_BAR_WIDTH = 4;
+    private static final int EQUIPMENT_DURABILITY_BAR_GAP = 3;
+    private static final int EQUIPMENT_DURABILITY_WIDTH = EQUIPMENT_DURABILITY_BAR_WIDTH;
+    private static final int EQUIPMENT_DURABILITY_GAP = 2;
+    private static final int EQUIPMENT_DURABILITY_VERTICAL_PADDING = 4;
 
     // 受伤闪烁相关
     private static long lastDamageTime = 0;              // 上次受伤时间（毫秒）
@@ -39,69 +43,85 @@ public class CustomStatueGUI {
     private static float lastHealth = 0;                 // 上次记录的血量
     //控制小人与屏幕右侧的距离
 //    private static final int RIGHT_OFFSET = 5;
-    private static final int LEFT_OFFSET = 12;
-    private static final int PLAYER_ICON_Y_OFFSET = 5;
+    private static final int LEFT_OFFSET = 2;
     //样式常量
-    // 基础样式
-    private static final int BACKGROUND_ALPHA = 72;
-    private static final int BORDER_COLOR = 0x408A8A8A;
-    private static final int BG_COLOR = (BACKGROUND_ALPHA << 24) | 0x000000;
-    private static final int LOW_COLOR = (255 << 24) | 0xFF2222;
+    // 基础样式：低透明、低饱和，警告时才抬高存在感
+    private static final int LOW_COLOR = 0xFFA85048;
+    private static final int TRACK_COLOR = 0xFF101314;
 
-    private static final int BAR_WIDTH = 4; // 进度条宽度
-    private static final int BAR_HEIGHT = 36;//进度条高度
-    private static final int BAR_TO_PLAYER_SPACING = 6; //进度条与小人的间距
-    private static final int BAR_BAR_SPACING = 2; //两进度条之间的间距
+    private static final int HEALTH_SIGNAL_WIDTH = 74;
+    private static final int FOOD_SIGNAL_WIDTH = 64;
+    private static final int ARMOR_SIGNAL_WIDTH = 54;
+    private static final int INFECTION_SIGNAL_WIDTH = 44;
+    private static final int STATUS_BAR_HEIGHT = 6;
+    private static final int HUD_ICON_SIZE = 10;
+    private static final int HUD_ICON_TEXTURE_SIZE = 16;
+    private static final int STATUS_ICON_TO_BAR_SPACING = 4;
+    private static final int STATUS_BAR_TO_PLAYER_SPACING = -5;
+    private static final int STATUS_BAR_SPACING = 6;
+    private static final int STATUS_ROW_COUNT = 4;
+    private static final int STATUS_STACK_HEIGHT =
+            STATUS_ROW_COUNT * STATUS_BAR_HEIGHT + (STATUS_ROW_COUNT - 1) * STATUS_BAR_SPACING;
+    private static final int LEFT_STATUS_BOTTOM_OFFSET = 12;
+    private static final int SPLIT_EXPERIENCE_BAR_HEIGHT = 5;
+    private static final int SPLIT_EXPERIENCE_HOTBAR_GAP = 4;
+    private static final int SPLIT_EXPERIENCE_SIDE_WIDTH = 68;
+    private static final int SPLIT_EXPERIENCE_CENTER_WIDTH = 82;
+    private static final int SPLIT_EXPERIENCE_SEGMENT_GAP = 4;
+    private static final int SPLIT_EXPERIENCE_BAR_WIDTH =
+            SPLIT_EXPERIENCE_SIDE_WIDTH * 2
+                    + SPLIT_EXPERIENCE_CENTER_WIDTH
+                    + SPLIT_EXPERIENCE_SEGMENT_GAP * 2;
+    private static final long BOTTOM_VALUE_REVEAL_DURATION = 1800;
 
-    // 颜色配置（深饱和鲜艳版本）
-    private static final int FOOD_BAR_COLOR = (255 << 24) | 0xFFCC00;      // 深金黄色
-    private static final int STRENGTH_BAR_COLOR = (255 << 24) | 0x00DD00;   // 深绿色
-    // 勇气值进度条为深紫色
-    private static final int COURAGE_BAR_COLOR = (255 << 24) | 0xCC00FF;    // 深紫色
+    private static final int STRENGTH_BAR_COLOR = 0xFFB99A57;
+    private static final int FOOD_BAR_COLOR = 0xFFB9824B;
+    private static final int ARMOR_BAR_COLOR = 0xFF7F95A1;
+    private static final int EXPERIENCE_BAR_COLOR = 0xFF6E9A70;
+    private static final int COURAGE_BAR_COLOR = 0xFF8170A7;
+    private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
+    private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
+    private static final ResourceLocation HEALTH_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/health.png");
+    private static final ResourceLocation FOOD_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/food.png");
+    private static final ResourceLocation ARMOR_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/armor.png");
+    private static final ResourceLocation INFECTION_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/infection.png");
+    private static final ResourceLocation STAMINA_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina.png");
+    private static final ResourceLocation COURAGE_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/courage.png");
 
-    // 玩家健康图标纹理（单一文件，包含正常和受伤两个状态）
-    private static final ResourceLocation PLAYER_HEALTH_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/health/health.png");
-
-    // 肢体受伤标记配置（脉冲圆点）
-    private static final int INJURY_DOT_COLOR = 0x80FF0000;    // 半透明红色
-    private static final int INJURY_DOT_BASE_SIZE = 3;         // 圆点基础大小（缩小）
-    private static final int INJURY_DOT_PULSE_SIZE = 2;        // 脉冲放大幅度（缩小）
-    private static final long PULSE_CYCLE = 500;               // 脉冲周期（毫秒）
-
-    // 肢体部位在小人图标上的相对位置（相对于playerIconX, playerIconY）
-    // 坐标基于小人图标尺寸 27x59
-    private static final int HEAD_OFFSET_X = 13;   // 头部中心X偏移
-    private static final int HEAD_OFFSET_Y = 5;    // 头部中心Y偏移
-    private static final int CHEST_OFFSET_X = 13;  // 胸部中心X偏移
-    private static final int CHEST_OFFSET_Y = 22;  // 胸部中心Y偏移
-    private static final int LEGS_OFFSET_X = 13;   // 腿部中心X偏移
-    private static final int LEGS_OFFSET_Y = 38;   // 腿部中心Y偏移
-    private static final int FEET_OFFSET_X = 13;   // 脚部中心X偏移
-    private static final int FEET_OFFSET_Y = 52;   // 脚部中心Y偏移
+    // 受击区域提示：细白线框，短暂闪白后淡出
+    private static final long INJURY_OUTLINE_DURATION = 520;
 
     //缓存坐标，优化
-    // 缓存小人坐标
-    private static int CACHED_PLAYER_ICON_X = 0;
-    private static int CACHED_PLAYER_ICON_Y = 0;
     // 缓存上一次的屏幕宽高和GUI缩放（用于判断是否需要重新计算）
     private static int CACHED_SCREEN_WIDTH = 0;
     private static int CACHED_SCREEN_HEIGHT = 0;
     private static double CACHED_GUI_SCALE = 0.0D;
-    //进度条坐标缓存
-    private static int CACHED_FOOD_BAR_X = 0;
-    private static int CACHED_FOOD_BAR_Y = 0;
-    private static int CACHED_STRENGTH_BAR_X = 0;
-    private static int CACHED_STRENGTH_BAR_Y = 0;
-    // 勇气值进度条坐标缓存（最左侧）
-    private static int CACHED_COURAGE_BAR_X = 0;
-    private static int CACHED_COURAGE_BAR_Y = 0;
-    // 感染值进度条坐标缓存
-    private static int CACHED_INFECTION_BAR_X = 0;
-    private static int CACHED_INFECTION_BAR_Y = 0;
+    private static boolean bottomValuesInitialized = false;
+    private static long lastBottomValueRevealTime = 0L;
+    private static int lastStrengthValue = 0;
+    private static int lastMaxStrengthValue = 0;
+    private static float lastCourageValue = 0.0f;
+    private static float lastMaxCourageValue = 0.0f;
+    private static final long STATUS_FLASH_DURATION = 420L;
+    private static boolean leftValuesInitialized = false;
+    private static float lastLeftHealthValue = 0.0f;
+    private static float lastLeftMaxHealthValue = 0.0f;
+    private static int lastLeftFoodValue = 0;
+    private static int lastLeftArmorValue = 0;
+    private static float lastLeftInfectionValue = 0.0f;
+    private static long lastHealthFlashTime = 0L;
+    private static long lastFoodFlashTime = 0L;
+    private static long lastArmorFlashTime = 0L;
+    private static long lastInfectionFlashTime = 0L;
 
     /**
-     * 计算并缓存小人坐标 + 进度条坐标
+     * 记录屏幕参数，避免 GUI 缩放变化时沿用旧布局状态
      */
     private static void calculateAndCachePlayerCoords() {
         Minecraft mc = Minecraft.getInstance();
@@ -110,24 +130,6 @@ public class CustomStatueGUI {
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
         double guiScale = mc.getWindow().getGuiScale();
-
-        // 计算小人坐标（往左移一点）
-        CACHED_PLAYER_ICON_X = LEFT_OFFSET;
-        CACHED_PLAYER_ICON_Y = screenHeight - PLAYER_ICON_Y_OFFSET - PLAYER_ICON_HEIGHT;
-
-        //同步计算并缓存进度条坐标
-
-        CACHED_FOOD_BAR_X = CACHED_PLAYER_ICON_X + PLAYER_ICON_WIDTH + BAR_TO_PLAYER_SPACING;
-        CACHED_FOOD_BAR_Y = CACHED_PLAYER_ICON_Y + (PLAYER_ICON_HEIGHT / 2) - (BAR_HEIGHT / 2);
-
-        CACHED_STRENGTH_BAR_X = CACHED_FOOD_BAR_X + BAR_BAR_SPACING + BAR_WIDTH;
-        CACHED_STRENGTH_BAR_Y = CACHED_PLAYER_ICON_Y + (PLAYER_ICON_HEIGHT / 2) - (BAR_HEIGHT / 2);
-        // 勇气值进度条坐标（最左侧）：体力条左侧
-        CACHED_COURAGE_BAR_X = CACHED_STRENGTH_BAR_X + BAR_BAR_SPACING + BAR_WIDTH;
-        CACHED_COURAGE_BAR_Y = CACHED_PLAYER_ICON_Y + (PLAYER_ICON_HEIGHT / 2) - (BAR_HEIGHT / 2);
-        // 感染值进度条坐标：勇气值条左侧
-        CACHED_INFECTION_BAR_X = CACHED_COURAGE_BAR_X + BAR_BAR_SPACING + BAR_WIDTH;
-        CACHED_INFECTION_BAR_Y = CACHED_PLAYER_ICON_Y + (PLAYER_ICON_HEIGHT / 2) - (BAR_HEIGHT / 2);
 
         //更新参数缓存
         CACHED_SCREEN_WIDTH = screenWidth;
@@ -139,10 +141,7 @@ public class CustomStatueGUI {
      * 渲染小人图片
      */
     @SubscribeEvent
-    public static void renderCustomPlayerIcon(RenderGuiLayerEvent.Post event) {
-        if (!VanillaGuiLayers.HOTBAR.equals(event.getName())) {
-            return;
-        } //只处理快捷栏事件
+    public static void renderCustomPlayerIcon(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null || mc.screen != null || player.isDeadOrDying()
@@ -156,9 +155,6 @@ public class CustomStatueGUI {
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
         double currentGuiScale = mc.getWindow().getGuiScale();
-        //计算小人坐标：靠右、垂直中间
-//        int playerIconX = screenWidth - RIGHT_OFFSET - PLAYER_ICON_SIZE;
-
         //判断是否需要重新计算坐标
         // 首次渲染 或 屏幕宽高/GUI缩放变化时，重新计算坐标
         if (CACHED_SCREEN_WIDTH != screenWidth
@@ -166,28 +162,36 @@ public class CustomStatueGUI {
                 || CACHED_GUI_SCALE != currentGuiScale) {
             calculateAndCachePlayerCoords();
         }
-        // 直接取用缓存坐标，无需重复计算
-        int playerIconX = CACHED_PLAYER_ICON_X;
-        int playerIconY = CACHED_PLAYER_ICON_Y;
-        // 进度条缓存坐标
-        int foodBarX = CACHED_FOOD_BAR_X;
-        int foodBarY = CACHED_FOOD_BAR_Y;
-        int strengthBarX = CACHED_STRENGTH_BAR_X;
-        int strengthBarY = CACHED_STRENGTH_BAR_Y;
-        // 勇气值进度条缓存坐标
-        int courageBarX = CACHED_COURAGE_BAR_X;
-        int courageBarY = CACHED_COURAGE_BAR_Y;
-        // 感染值进度条缓存坐标
-        int infectionBarX = CACHED_INFECTION_BAR_X;
-        int infectionBarY = CACHED_INFECTION_BAR_Y;
+
+        boolean showEquipmentDurability = hasDamageableArmor(player);
+        int modelCenterX = LEFT_OFFSET + PLAYER_MODEL_ANCHOR_HALF_WIDTH;
+        if (showEquipmentDurability) {
+            modelCenterX += EQUIPMENT_DURABILITY_WIDTH + EQUIPMENT_DURABILITY_GAP;
+        }
+        int statusBarY = screenHeight - LEFT_STATUS_BOTTOM_OFFSET - STATUS_STACK_HEIGHT;
+        int modelFootY = statusBarY + STATUS_STACK_HEIGHT
+                + (PLAYER_MODEL_HEIGHT - STATUS_STACK_HEIGHT) / 2;
+        int modelTopY = modelFootY - PLAYER_MODEL_HEIGHT;
+        int statusBarX = modelCenterX + PLAYER_MODEL_ANCHOR_HALF_WIDTH + STATUS_BAR_TO_PLAYER_SPACING;
+
+        int splitBarX = (screenWidth - SPLIT_EXPERIENCE_BAR_WIDTH) / 2;
+        int splitBarY = CustomHotbarGUI.getAnimatedHotbarTopY(screenHeight)
+                - SPLIT_EXPERIENCE_HOTBAR_GAP - SPLIT_EXPERIENCE_BAR_HEIGHT;
+        int strengthBarX = splitBarX;
+        int strengthBarY = splitBarY;
+        int experienceBarX = splitBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + SPLIT_EXPERIENCE_SEGMENT_GAP;
+        int experienceBarY = splitBarY;
+        int courageActionBarX = experienceBarX + SPLIT_EXPERIENCE_CENTER_WIDTH + SPLIT_EXPERIENCE_SEGMENT_GAP;
+        int courageActionBarY = splitBarY;
 
         //获取玩家当前血量和最大血量
         float currentHealth = player.getHealth();
         float maxHealth = player.getMaxHealth();
         float healthPercent = maxHealth > 0 ? currentHealth / maxHealth : 0;
-
         int currentFood = player.getFoodData().getFoodLevel();
-        int maxFood = 20;
+        int currentArmor = player.getArmorValue();
+        int experienceLevel = player.experienceLevel;
+        float experienceProgress = player.experienceProgress;
 
         // 检查是否在受伤闪烁时间内（闪烁两下）
         long currentTime = System.currentTimeMillis();
@@ -199,56 +203,61 @@ public class CustomStatueGUI {
             isFlashing = (cycle == 0 || cycle == 2);  // 第1和第3个周期显示白色边框
         }
 
-        int uvX = isFlashing ? PLAYER_UV_X_INJURED : PLAYER_UV_X_NORMAL;
-
-        // 绘制小人图标（带血量颜色）
-        int healthColor = getHealthColor(healthPercent);
-        guiGraphics.setColor(
-            (healthColor >> 16 & 0xFF) / 255.0f,
-            (healthColor >> 8 & 0xFF) / 255.0f,
-            (healthColor & 0xFF) / 255.0f,
-            1.0F
-        );
-        guiGraphics.blit(
-                PLAYER_HEALTH_TEXTURE,
-                playerIconX,
-                playerIconY,
-                uvX,
-                PLAYER_UV_Y,
-                PLAYER_ICON_WIDTH,
-                PLAYER_ICON_HEIGHT,
-                PLAYER_TEXTURE_TOTAL_WIDTH,
-                PLAYER_TEXTURE_TOTAL_HEIGHT
-        );
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-
-        // 绘制肢体受伤标记
-        cleanupAndDrawLimbInjuryIcons(guiGraphics, player, playerIconX, playerIconY);
-
-        //绘制饥饿竖向进度条
-        drawVerticalProgressBar(guiGraphics, foodBarX, foodBarY, currentFood, maxFood, FOOD_BAR_COLOR);
-        drawIcon(guiGraphics, "🍖", foodBarX + BAR_WIDTH / 2, foodBarY - 8, FOOD_BAR_COLOR);
-
-        //绘制体力竖向进度条
         int currentStrength = PlayerStrengthClientSync.getCurrentStrengthClient(player);
         int maxStrength = PlayerStrengthClientSync.getMaxStrengthClient(player);
         if (maxStrength <= 0) maxStrength = 100;
-        drawVerticalProgressBar(guiGraphics, strengthBarX, strengthBarY, currentStrength, maxStrength, STRENGTH_BAR_COLOR);
-        drawIcon(guiGraphics, "💪", strengthBarX + BAR_WIDTH / 2, strengthBarY - 8, STRENGTH_BAR_COLOR);
 
-        // 绘制勇气值竖向进度条
         float currentCourage = PlayerCourageManager.getCurrentCourageClient(player);
         float maxCourage = PlayerCourageManager.getMaxCourageClient(player);
         if (maxCourage <= 0) maxCourage = 100; // 避免除以0异常
-        drawVerticalProgressBar(guiGraphics, courageBarX, courageBarY, currentCourage, maxCourage, COURAGE_BAR_COLOR);
-        drawIcon(guiGraphics, "⚡", courageBarX + BAR_WIDTH / 2, courageBarY - 8, COURAGE_BAR_COLOR);
 
-        // 绘制感染值竖向进度条
         float currentInfection = PlayerInfectionManager.getCurrentInfectionClient(player);
         int maxInfection = 100;
         int infectionColor = getInfectionColor((int) currentInfection, maxInfection);
-        drawVerticalProgressBar(guiGraphics, infectionBarX, infectionBarY, (int) currentInfection, maxInfection, infectionColor);
-        drawIcon(guiGraphics, "☣", infectionBarX + BAR_WIDTH / 2, infectionBarY - 8, infectionColor);
+
+        boolean courageDanger = currentCourage / maxCourage <= COURAGE_DANGER_THRESHOLD;
+        boolean infectionDanger = currentInfection / maxInfection >= INFECTION_DANGER_THRESHOLD;
+        float statusFade = 1.0f;
+
+        if (showEquipmentDurability) {
+            drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
+        }
+        drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
+        drawPlayerModel(guiGraphics, player, modelCenterX, modelFootY);
+        drawRecentDamageOutlines(guiGraphics, modelCenterX, modelTopY, currentTime, isFlashing);
+        cleanupAndDrawLimbInjuryOutlines(guiGraphics, player, modelCenterX, modelTopY, currentTime);
+
+        float strengthRatio = currentStrength / (float) maxStrength;
+        float courageRatio = currentCourage / maxCourage;
+
+        drawSplitExperienceSegment(guiGraphics, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                strengthRatio, STRENGTH_BAR_COLOR, false);
+        drawSplitExperienceSegment(guiGraphics, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
+                experienceProgress, EXPERIENCE_BAR_COLOR, false);
+        drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                courageRatio, COURAGE_BAR_COLOR, courageDanger);
+        drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
+                strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+        drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
+                courageActionBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+        boolean revealSideValues = shouldRevealBottomSideValues(currentTime, currentStrength, maxStrength,
+                currentCourage, maxCourage);
+        if (revealSideValues) {
+            drawSegmentValue(guiGraphics, mc, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                    currentStrength + "/" + maxStrength, STRENGTH_BAR_COLOR);
+            drawSegmentValue(guiGraphics, mc, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                    Math.round(currentCourage) + "/" + Math.round(maxCourage), COURAGE_BAR_COLOR);
+        }
+        if (experienceLevel > 0) {
+            drawSegmentValue(guiGraphics, mc, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
+                    Integer.toString(experienceLevel), EXPERIENCE_BAR_COLOR);
+        }
+
+        updateLeftStatusFlashTimes(currentTime, currentHealth, maxHealth, currentFood, currentArmor, currentInfection);
+        drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
+                currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
+                currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
+                currentTime);
     }
 
     /**
@@ -292,116 +301,488 @@ public class CustomStatueGUI {
         int ri = Math.max(0, Math.min(255, r));
         int gi = Math.max(0, Math.min(255, g));
 
-        return (255 << 24) | (ri << 16) | (gi << 8);
+        int rawColor = (255 << 24) | (ri << 16) | (gi << 8);
+        return blendColor(rawColor, 0xFF8D8F86, 0.28f);
     }
 
-    /**
-     * 根据感染值计算动态颜色
-     * 感染值越高，颜色越深
-     *
-     * 颜色渐变：
-     * - 0：浅绿色 (0xBBFFBB)
-     * - 50：中等绿色
-     * - 100：深绿色 (0x003300)
-     *
-     * @param currentInfection 当前感染值
-     * @param maxInfection 最大感染值
-     * @return ARGB 颜色值
-     */
+    private static boolean shouldRevealBottomSideValues(long currentTime, int currentStrength, int maxStrength,
+                                                        float currentCourage, float maxCourage) {
+        if (!bottomValuesInitialized) {
+            bottomValuesInitialized = true;
+            cacheBottomSideValues(currentStrength, maxStrength, currentCourage, maxCourage);
+            return false;
+        }
+
+        boolean changed = currentStrength != lastStrengthValue
+                || maxStrength != lastMaxStrengthValue
+                || Math.abs(currentCourage - lastCourageValue) > 0.5f
+                || Math.abs(maxCourage - lastMaxCourageValue) > 0.5f;
+
+        if (changed) {
+            lastBottomValueRevealTime = currentTime;
+            cacheBottomSideValues(currentStrength, maxStrength, currentCourage, maxCourage);
+        }
+
+        return currentTime - lastBottomValueRevealTime <= BOTTOM_VALUE_REVEAL_DURATION;
+    }
+
+    private static void cacheBottomSideValues(int currentStrength, int maxStrength,
+                                              float currentCourage, float maxCourage) {
+        lastStrengthValue = currentStrength;
+        lastMaxStrengthValue = maxStrength;
+        lastCourageValue = currentCourage;
+        lastMaxCourageValue = maxCourage;
+    }
+
+    private static void updateLeftStatusFlashTimes(long currentTime, float currentHealth, float maxHealth,
+                                                   int currentFood, int currentArmor, float currentInfection) {
+        if (!leftValuesInitialized) {
+            leftValuesInitialized = true;
+            cacheLeftStatusValues(currentHealth, maxHealth, currentFood, currentArmor, currentInfection);
+            return;
+        }
+
+        if (Math.abs(currentHealth - lastLeftHealthValue) > 0.05f
+                || Math.abs(maxHealth - lastLeftMaxHealthValue) > 0.05f) {
+            lastHealthFlashTime = currentTime;
+        }
+        if (currentFood != lastLeftFoodValue) {
+            lastFoodFlashTime = currentTime;
+        }
+        if (currentArmor != lastLeftArmorValue) {
+            lastArmorFlashTime = currentTime;
+        }
+        if (Math.abs(currentInfection - lastLeftInfectionValue) > 0.5f) {
+            lastInfectionFlashTime = currentTime;
+        }
+
+        cacheLeftStatusValues(currentHealth, maxHealth, currentFood, currentArmor, currentInfection);
+    }
+
+    private static void cacheLeftStatusValues(float currentHealth, float maxHealth,
+                                              int currentFood, int currentArmor, float currentInfection) {
+        lastLeftHealthValue = currentHealth;
+        lastLeftMaxHealthValue = maxHealth;
+        lastLeftFoodValue = currentFood;
+        lastLeftArmorValue = currentArmor;
+        lastLeftInfectionValue = currentInfection;
+    }
+
     private static int getInfectionColor(int currentInfection, int maxInfection) {
-        // 计算感染值百分比（0.0 ~ 1.0）
-        float t = (maxInfection <= 0) ? 0 : (float) currentInfection / maxInfection;
+        float t = (maxInfection <= 0) ? 0.0f : (float) currentInfection / maxInfection;
         t = Math.max(0.0f, Math.min(1.0f, t));
+        float factor = t * t;
 
-        // RGB 渐变计算
-        // R: 187 (0xBB) → 0
-        // G: 255 (0xFF) → 221 → 51 (0x33)
-        // B: 187 (0xBB) → 0
-
-        // 使用二次函数让颜色变化更明显（感染值高时颜色加深更快）
-        float factor = t * t;  // 二次缓动
-
-        int r = (int) (187 * (1.0f - factor));           // 187 → 0
-        int g = (int) (255 - (255 - 51) * factor);        // 255 → 51
-        int b = (int) (187 * (1.0f - factor));           // 187 → 0
+        int r = (int) (187 * (1.0f - factor));
+        int g = (int) (255 - (255 - 51) * factor);
+        int b = (int) (187 * (1.0f - factor));
 
         return (255 << 24) | (r << 16) | (g << 8) | b;
     }
 
-    /**
-     * 绘制竖向进度条（带左侧高光效果）
-     */
-    private static void drawVerticalProgressBar(GuiGraphics guiGraphics, int x, int y, int currentValue, int maxValue, int normalColor) {
-        //绘制背景
-        guiGraphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, BG_COLOR);
+    private static boolean hasDamageableArmor(Player player) {
+        for (ItemStack stack : player.getInventory().armor) {
+            if (!stack.isEmpty() && stack.isDamageableItem() && stack.getMaxDamage() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-        //计算进度并绘制填充（低进度红色警告色）
-        float progress = Math.max(0, Math.min(1, (float) currentValue / maxValue));
-        int fillHeight = (int) (BAR_HEIGHT * progress);
-        int fillStartY = y + BAR_HEIGHT - fillHeight; // 从下往上填充
+    private static void drawEquipmentDurability(GuiGraphics guiGraphics, Player player,
+                                                int x, int modelTopY, int modelFootY) {
+        int[] armorOrder = {3, 2, 1, 0};
+        int barTop = modelTopY + EQUIPMENT_DURABILITY_VERTICAL_PADDING;
+        int totalHeight = Math.max(16, modelFootY - modelTopY - EQUIPMENT_DURABILITY_VERTICAL_PADDING * 2);
+        int barHeight = Math.max(5, (totalHeight - EQUIPMENT_DURABILITY_BAR_GAP * 3) / 4);
 
-        if (fillHeight > 0) {
-            int finalColor = progress < 0.2f ? LOW_COLOR : normalColor;
-            guiGraphics.fill(x, fillStartY, x + BAR_WIDTH, y + BAR_HEIGHT, finalColor);
-            // 左侧高光效果（白色半透明细线）
+        for (int i = 0; i < armorOrder.length; i++) {
+            int armorSlot = armorOrder[i];
+            ItemStack stack = player.getInventory().armor.get(armorSlot);
+            if (stack.isEmpty() || !stack.isDamageableItem() || stack.getMaxDamage() <= 0) {
+                continue;
+            }
+
+            int remaining = Math.max(0, stack.getMaxDamage() - stack.getDamageValue());
+            float ratio = remaining / (float) stack.getMaxDamage();
+            int color = getDurabilityColor(ratio);
+            int barY = barTop + i * (barHeight + EQUIPMENT_DURABILITY_BAR_GAP);
+            drawVerticalDurabilityBar(guiGraphics, x, barY,
+                    EQUIPMENT_DURABILITY_BAR_WIDTH, barHeight, ratio, color);
+        }
+    }
+
+    private static int getDurabilityColor(float ratio) {
+        float t = Math.max(0.0f, Math.min(1.0f, ratio));
+        int low = 0xFFC65E58;
+        int mid = 0xFFD0B35F;
+        int high = 0xFF78A96D;
+
+        if (t < 0.5f) {
+            return blendColor(low, mid, t * 2.0f);
         }
 
-        // 绘制边框（带淡色发光）
-        drawBorder(guiGraphics, x, y, BAR_WIDTH, BAR_HEIGHT, normalColor);
+        return blendColor(mid, high, (t - 0.5f) * 2.0f);
     }
-    //重载 float（带左侧高光效果）
-    private static void drawVerticalProgressBar(GuiGraphics guiGraphics, int x, int y, float currentValue, float maxValue, int normalColor) {
-        //绘制背景
-        guiGraphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, BG_COLOR);
 
-        //计算进度并绘制填充（低进度红色警告色）
-        float progress = Math.max(0, Math.min(1, currentValue / maxValue)); // 直接用float计算，无强转
-        int fillHeight = (int) (BAR_HEIGHT * progress);
-        int fillStartY = y + BAR_HEIGHT - fillHeight; // 从下往上填充
+    private static void drawVerticalDurabilityBar(GuiGraphics guiGraphics, int x, int y, int width, int height,
+                                                  float ratio, int color) {
+        float progress = Math.max(0.0f, Math.min(1.0f, ratio));
+        int fillHeight = Math.max(1, Math.round((height - 2) * progress));
+        int fillTop = y + height - 1 - fillHeight;
 
-        if (fillHeight > 0) {
-            int finalColor = progress < 0.2f ? LOW_COLOR : normalColor;
-            guiGraphics.fill(x, fillStartY, x + BAR_WIDTH, y + BAR_HEIGHT, finalColor);
-            // 左侧高光效果（白色半透明细线）
+        drawPixelCutRect(guiGraphics, x, y, width, height, withAlpha(TRACK_COLOR, 128));
+        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, withAlpha(TRACK_COLOR, 70));
+        drawPixelCutRect(guiGraphics, x + 1, fillTop, width - 2, fillHeight, withAlpha(color, 184));
+        if (fillHeight > 2) {
+            guiGraphics.fill(x + 1, fillTop, x + width - 1, fillTop + 1,
+                    withAlpha(blendColor(color, 0xFFFFFFFF, 0.22f), 166));
         }
-
-        // 绘制边框（带淡色发光）
-        drawBorder(guiGraphics, x, y, BAR_WIDTH, BAR_HEIGHT, normalColor);
     }
 
-    /**
-     * 绘制进度条边框（带鲜艳发光效果）
-     */
-    private static void drawBorder(GuiGraphics guiGraphics, int x, int y, int width, int height, int barColor) {
-        // 外发光效果（更鲜艳，使用进度条自身的颜色）
-
-        // 上边框
-        guiGraphics.fill(x, y, x + width, y + 1, BORDER_COLOR);
-        // 下边框
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, BORDER_COLOR);
-        // 左边框
-        guiGraphics.fill(x, y, x + 1, y + height, BORDER_COLOR);
-        // 右边框
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, BORDER_COLOR);
-    }
-
-    /**
-     * 绘制属性图标（在进度条上方）
-     */
-    private static void drawIcon(GuiGraphics guiGraphics, String icon, int x, int y, int color) {
-        Minecraft mc = Minecraft.getInstance();
-        float iconScale = 0.7f; // 图标缩放比例
-
-        // 绘制缩放后的图标
+    private static void drawScaledText(GuiGraphics guiGraphics, Minecraft mc, String text, int x, int y,
+                                       int color, float scale) {
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(x, y, 0);
-        guiGraphics.pose().scale(iconScale, iconScale, 1.0f);
-        guiGraphics.pose().translate(-x, -y, 0);
-
-        // 绘制图标（居中对齐）
-        guiGraphics.drawCenteredString(mc.font, icon, x, y - mc.font.lineHeight / 2, color);
-
+        guiGraphics.pose().scale(scale, scale, 1.0f);
+        int scaledX = Math.round(x / scale);
+        int scaledY = Math.round(y / scale);
+        guiGraphics.drawString(mc.font, text, scaledX + 1, scaledY + 1, 0x65000000, false);
+        guiGraphics.drawString(mc.font, text, scaledX, scaledY, color, false);
         guiGraphics.pose().popPose();
+    }
+
+    private static void drawPlayerModel(GuiGraphics guiGraphics, Player player, int centerX, int footY) {
+        InventoryScreen.renderEntityInInventoryFollowsMouse(
+                guiGraphics,
+                centerX - PLAYER_MODEL_HALF_WIDTH,
+                footY - PLAYER_MODEL_HEIGHT - PLAYER_MODEL_TOP_PADDING,
+                centerX + PLAYER_MODEL_HALF_WIDTH,
+                footY + PLAYER_MODEL_BOTTOM_PADDING,
+                PLAYER_MODEL_SIZE,
+                0.0625F,
+                centerX,
+                footY - PLAYER_MODEL_HEIGHT / 2,
+                player
+        );
+    }
+
+    private static void drawPlayerGroundShadow(GuiGraphics guiGraphics, int centerX, int footY) {
+        int y = footY - 2;
+        guiGraphics.fill(centerX - 13, y, centerX + 13, y + 1, 0x2A000000);
+        guiGraphics.fill(centerX - 10, y - 1, centerX + 10, y, 0x20000000);
+        guiGraphics.fill(centerX - 6, y - 2, centerX + 6, y - 1, 0x16000000);
+    }
+
+    private static void drawRecentDamageOutlines(GuiGraphics guiGraphics, int centerX, int topY,
+                                                 long currentTime, boolean flashing) {
+        long elapsed = currentTime - lastDamageTime;
+        if (elapsed >= DAMAGE_FLASH_DURATION) {
+            return;
+        }
+
+        float fade = 1.0f - elapsed / (float) DAMAGE_FLASH_DURATION;
+        int alpha = (int) ((flashing ? 228 : 124) * fade);
+        drawModelRegionOutline(guiGraphics, centerX, topY, LimbType.HEAD, alpha);
+        drawModelRegionOutline(guiGraphics, centerX, topY, LimbType.CHEST, alpha);
+    }
+
+    private static void cleanupAndDrawLimbInjuryOutlines(GuiGraphics guiGraphics, Player player,
+                                                         int centerX, int topY, long currentTime) {
+        LimbClientInjurySync.cleanupExpiredInjuries(player);
+
+        float pulse = (float) Math.sin((currentTime % INJURY_OUTLINE_DURATION)
+                / (float) INJURY_OUTLINE_DURATION * Math.PI);
+        int alpha = 118 + (int) (pulse * 86);
+
+        for (LimbType limbType : LimbType.values()) {
+            if (LimbClientInjurySync.isInjuryVisible(player, limbType)) {
+                drawModelRegionOutline(guiGraphics, centerX, topY, limbType, alpha);
+            }
+        }
+    }
+
+    private static void drawModelRegionOutline(GuiGraphics guiGraphics, int centerX, int topY,
+                                               LimbType limbType, int alpha) {
+        if (alpha <= 0) {
+            return;
+        }
+
+        int x;
+        int y;
+        int width;
+        int height;
+        switch (limbType) {
+            case HEAD:
+                width = 16;
+                height = 16;
+                x = centerX - width / 2;
+                y = topY + 7;
+                break;
+            case CHEST:
+                width = 22;
+                height = 20;
+                x = centerX - width / 2;
+                y = topY + 24;
+                break;
+            case LEGS:
+                width = 19;
+                height = 17;
+                x = centerX - width / 2;
+                y = topY + 43;
+                break;
+            case FEET:
+                width = 21;
+                height = 8;
+                x = centerX - width / 2;
+                y = topY + 57;
+                break;
+            default:
+                return;
+        }
+
+        int lineColor = withAlpha(0xFFFFFFFF, alpha);
+        int shadeColor = withAlpha(0xFF000000, Math.min(100, alpha / 2));
+        drawThinOutline(guiGraphics, x - 1, y - 1, width + 2, height + 2, shadeColor);
+        drawThinOutline(guiGraphics, x, y, width, height, lineColor);
+    }
+
+    private static void drawThinOutline(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
+        guiGraphics.fill(x, y, x + width, y + 1, color);
+        guiGraphics.fill(x, y + height - 1, x + width, y + height, color);
+        guiGraphics.fill(x, y, x + 1, y + height, color);
+        guiGraphics.fill(x + width - 1, y, x + width, y + height, color);
+    }
+
+    private static void drawSplitExperienceSegment(GuiGraphics guiGraphics, int x, int y, int width, float ratio,
+                                                   int fillColor, boolean warning) {
+        float progress = Math.max(0.0f, Math.min(1.0f, ratio));
+        int innerWidth = Math.max(0, width - 2);
+        int fillWidth = (int) (innerWidth * progress);
+        int activeColor = warning ? blendColor(fillColor, LOW_COLOR, 0.36f) : fillColor;
+
+        drawPixelCutRect(guiGraphics, x + 1, y + 1, width, SPLIT_EXPERIENCE_BAR_HEIGHT, 0x26000000);
+        drawPixelCutRect(guiGraphics, x, y, width, SPLIT_EXPERIENCE_BAR_HEIGHT, withAlpha(TRACK_COLOR, 168));
+        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
+                withAlpha(TRACK_COLOR, 88));
+        if (fillWidth > 0) {
+            int fillEnd = x + 1 + Math.min(innerWidth, Math.max(1, fillWidth));
+            drawCleanGlow(guiGraphics, x, y, fillEnd, y + SPLIT_EXPERIENCE_BAR_HEIGHT, activeColor, warning ? 48 : 26);
+            drawPixelCutRect(guiGraphics, x + 1, y + 1, fillEnd - (x + 1), SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
+                    withAlpha(activeColor, warning ? 222 : 196));
+            if (fillEnd > x + 3) {
+                guiGraphics.fill(x + 2, y + 1, fillEnd - 1, y + 2,
+                        withAlpha(blendColor(activeColor, 0xFFFFFFFF, 0.18f), warning ? 232 : 176));
+            }
+        }
+    }
+
+    private static void drawSegmentValue(GuiGraphics guiGraphics, Minecraft mc, int x, int y, int width,
+                                         String text, int color) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        float scale = 0.66f;
+        int textWidth = (int) (mc.font.width(text) * scale);
+        int textX = x + (width - textWidth) / 2;
+        int textY = y - 8;
+        int textColor = withAlpha(blendColor(color, 0xFFFFFFFF, 0.34f), 214);
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(scale, scale, 1.0f);
+        int scaledX = Math.round(textX / scale);
+        int scaledY = Math.round(textY / scale);
+        guiGraphics.drawString(mc.font, text, scaledX + 1, scaledY + 1, 0x70000000, false);
+        guiGraphics.drawString(mc.font, text, scaledX, scaledY, textColor, false);
+        guiGraphics.pose().popPose();
+    }
+
+    private static void drawStatusBars(GuiGraphics guiGraphics, Minecraft mc, int x, int y,
+                                       float healthRatio, float currentHealth, float maxHealth,
+                                       float foodRatio, int currentFood,
+                                       float armorRatio, int currentArmor,
+                                       float infectionRatio, int infectionColor, float currentInfection,
+                                       float fade, boolean infectionDanger,
+                                       long currentTime) {
+        int healthColor = getHealthColor(healthRatio);
+        boolean healthDanger = healthRatio <= 0.25f;
+        boolean foodDanger = foodRatio <= 0.25f;
+        drawStatusBar(guiGraphics, mc, x, y, healthRatio, healthColor, healthDanger, fade,
+                HEALTH_SIGNAL_WIDTH, HEALTH_ICON, formatStatNumber(currentHealth) + "/" + formatStatNumber(maxHealth),
+                currentTime, lastHealthFlashTime);
+        drawStatusBar(guiGraphics, mc, x, y + statusBarStep(1), foodRatio, FOOD_BAR_COLOR, foodDanger, fade,
+                FOOD_SIGNAL_WIDTH, FOOD_ICON, currentFood + "/20", currentTime, lastFoodFlashTime);
+        drawStatusBar(guiGraphics, mc, x, y + statusBarStep(2), armorRatio, ARMOR_BAR_COLOR, false, fade,
+                ARMOR_SIGNAL_WIDTH, ARMOR_ICON, Integer.toString(currentArmor), currentTime, lastArmorFlashTime);
+        drawStatusBar(guiGraphics, mc, x, y + statusBarStep(3), infectionRatio, infectionColor, infectionDanger, fade,
+                INFECTION_SIGNAL_WIDTH, INFECTION_ICON, Math.round(currentInfection) + "%", currentTime,
+                lastInfectionFlashTime);
+    }
+
+    private static int statusBarStep(int index) {
+        return index * (STATUS_BAR_HEIGHT + STATUS_BAR_SPACING);
+    }
+
+    private static void drawStatusBar(GuiGraphics guiGraphics, Minecraft mc, int x, int y, float ratio, int normalColor,
+                                      boolean warning, float fade, int signalWidth, ResourceLocation icon,
+                                      String valueText, long currentTime, long flashTime) {
+        float progress = Math.max(0.0f, Math.min(1.0f, ratio));
+        float warningPulse = getWarningPulse(currentTime, warning);
+        int flashAlpha = getStatusFlashAlpha(currentTime, flashTime);
+        int trackAlpha = (int) (108 + 60 * fade);
+        int fillAlpha = Math.min(255, (int) (((warning ? 210 : 188) + warningPulse * 38) * fade));
+        int activeColor = warning ? blendColor(normalColor, LOW_COLOR, 0.26f + warningPulse * 0.22f) : normalColor;
+        int iconY = y - (HUD_ICON_SIZE - STATUS_BAR_HEIGHT) / 2;
+        int iconX = x + signalWidth + STATUS_ICON_TO_BAR_SPACING;
+        int valueX = iconX + HUD_ICON_SIZE + 3;
+
+        drawStatusSegment(guiGraphics, x, y, signalWidth, progress, activeColor, trackAlpha, fillAlpha,
+                warning, warningPulse, flashAlpha);
+        int iconAlpha = Math.min(255, (int) (((warning ? 218 : 196) + warningPulse * 37 + flashAlpha / 3) * fade));
+        drawHudIcon(guiGraphics, icon, iconX, iconY, iconAlpha);
+        drawStatusValue(guiGraphics, mc, valueX, y - 1, valueText, activeColor, warning,
+                Math.min(1.0f, fade * (0.72f + warningPulse * 0.22f + flashAlpha / 420.0f)));
+    }
+
+    private static void drawStatusValue(GuiGraphics guiGraphics, Minecraft mc, int x, int y, String text,
+                                        int color, boolean warning, float fade) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        float scale = 0.62f;
+        int textColor = withAlpha(blendColor(color, 0xFFFFFFFF, warning ? 0.38f : 0.24f),
+                (int) ((warning ? 232 : 176) * fade));
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(scale, scale, 1.0f);
+        int scaledX = Math.round(x / scale);
+        int scaledY = Math.round(y / scale);
+        guiGraphics.drawString(mc.font, text, scaledX + 1, scaledY + 1, 0x62000000, false);
+        guiGraphics.drawString(mc.font, text, scaledX, scaledY, textColor, false);
+        guiGraphics.pose().popPose();
+    }
+
+    private static String formatStatNumber(float value) {
+        int rounded = Math.round(value);
+        if (Math.abs(value - rounded) < 0.05f) {
+            return Integer.toString(rounded);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
+    }
+
+    private static void drawHudIcon(GuiGraphics guiGraphics, ResourceLocation icon, int x, int y, int alpha) {
+        if (alpha <= 0) {
+            return;
+        }
+
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, Math.max(0, Math.min(255, alpha)) / 255.0F);
+        guiGraphics.blit(icon, x, y, HUD_ICON_SIZE, HUD_ICON_SIZE, 0.0F, 0.0F,
+                HUD_ICON_TEXTURE_SIZE, HUD_ICON_TEXTURE_SIZE,
+                HUD_ICON_TEXTURE_SIZE, HUD_ICON_TEXTURE_SIZE);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    private static void drawStatusSegment(GuiGraphics guiGraphics, int x, int y, int width, float progress,
+                                          int fillColor, int trackAlpha, int fillAlpha, boolean warning,
+                                          float warningPulse, int flashAlpha) {
+        int innerWidth = Math.max(0, width - 2);
+        int filledUntil = (int) (innerWidth * progress);
+        int trackColor = withAlpha(TRACK_COLOR, trackAlpha);
+        int trackInsetColor = withAlpha(TRACK_COLOR, trackAlpha / 2);
+        int activeColor = withAlpha(fillColor, fillAlpha);
+        int warningColor = withAlpha(blendColor(fillColor, 0xFFFFFFFF, 0.32f),
+                warning ? (int) (102 + warningPulse * 118) : 0);
+
+        drawPixelCutRect(guiGraphics, x + 1, y + 1, width, STATUS_BAR_HEIGHT, 0x2B000000);
+        drawPixelCutRect(guiGraphics, x, y, width, STATUS_BAR_HEIGHT, trackColor);
+        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, STATUS_BAR_HEIGHT - 2, trackInsetColor);
+        if (filledUntil > 0) {
+            int fillEnd = x + 1 + Math.min(innerWidth, Math.max(1, filledUntil));
+            int fillWidth = fillEnd - (x + 1);
+            drawPixelCutRect(guiGraphics, x + 1, y + 1, fillWidth, STATUS_BAR_HEIGHT - 2, activeColor);
+            if (fillEnd > x + 3) {
+                guiGraphics.fill(x + 2, y + 1, fillEnd - 1, y + 2,
+                        withAlpha(blendColor(fillColor, 0xFFFFFFFF, 0.22f), Math.max(0, fillAlpha - 18)));
+                guiGraphics.fill(x + 2, y + STATUS_BAR_HEIGHT - 2, fillEnd - 1, y + STATUS_BAR_HEIGHT - 1,
+                        withAlpha(0xFF000000, 44));
+            }
+            if (warning) {
+                guiGraphics.fill(x + 1, y - 1, fillEnd, y, warningColor);
+            }
+        }
+
+        if (flashAlpha > 0) {
+            int flashColor = withAlpha(0xFFFFFFFF, flashAlpha);
+            int flashWidth = Math.max(2, (int) ((width - 2) * Math.max(0.12f, progress)));
+            drawPixelCutRect(guiGraphics, x + 1, y + 1, flashWidth, STATUS_BAR_HEIGHT - 2, flashColor);
+            guiGraphics.fill(x + 1, y - 1, x + width - 1, y, withAlpha(0xFFFFFFFF, flashAlpha / 2));
+        }
+    }
+
+    private static float getWarningPulse(long currentTime, boolean warning) {
+        if (!warning) {
+            return 0.0f;
+        }
+
+        float phase = (currentTime % 720L) / 720.0f;
+        return 0.5f + 0.5f * (float) Math.sin(phase * Math.PI * 2.0f);
+    }
+
+    private static int getStatusFlashAlpha(long currentTime, long flashTime) {
+        if (flashTime <= 0L) {
+            return 0;
+        }
+
+        long elapsed = currentTime - flashTime;
+        if (elapsed < 0L || elapsed > STATUS_FLASH_DURATION) {
+            return 0;
+        }
+
+        float t = 1.0f - elapsed / (float) STATUS_FLASH_DURATION;
+        return (int) (172 * t * t);
+    }
+
+    private static void drawPixelCutRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        if (width <= 2 || height <= 2) {
+            guiGraphics.fill(x, y, x + width, y + height, color);
+            return;
+        }
+
+        guiGraphics.fill(x + 1, y, x + width - 1, y + height, color);
+        guiGraphics.fill(x, y + 1, x + width, y + height - 1, color);
+    }
+
+    private static void drawCleanGlow(GuiGraphics guiGraphics, int x1, int y1, int x2, int y2, int color, int alpha) {
+        int glow = withAlpha(color, alpha);
+        guiGraphics.fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, withAlpha(color, alpha / 3));
+        guiGraphics.fill(x1, y1 - 1, x2, y1, glow);
+        guiGraphics.fill(x1, y2, x2, y2 + 1, glow);
+        guiGraphics.fill(x1 - 1, y1, x1, y2, withAlpha(color, alpha / 2));
+        guiGraphics.fill(x2, y1, x2 + 1, y2, withAlpha(color, alpha / 2));
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        int clampedAlpha = Math.max(0, Math.min(255, alpha));
+        return (clampedAlpha << 24) | (color & 0x00FFFFFF);
+    }
+
+    private static int blendColor(int from, int to, float ratio) {
+        float t = Math.max(0.0f, Math.min(1.0f, ratio));
+        int fr = (from >> 16) & 0xFF;
+        int fg = (from >> 8) & 0xFF;
+        int fb = from & 0xFF;
+        int tr = (to >> 16) & 0xFF;
+        int tg = (to >> 8) & 0xFF;
+        int tb = to & 0xFF;
+        int r = (int) (fr + (tr - fr) * t);
+        int g = (int) (fg + (tg - fg) * t);
+        int b = (int) (fb + (tb - fb) * t);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     //拦截原版UI：在UI渲染前取消原版血量和饱食度的渲染事件
@@ -413,10 +794,6 @@ public class CustomStatueGUI {
         }
         //拦截原版玩家血量UI
         if (event.getName().equals(VanillaGuiLayers.PLAYER_HEALTH)) {
-            event.setCanceled(true);
-        }
-        //拦截原版玩家饱食度UI
-        if (event.getName().equals(VanillaGuiLayers.FOOD_LEVEL)) {
             event.setCanceled(true);
         }
     }
@@ -444,66 +821,4 @@ public class CustomStatueGUI {
         lastHealth = currentHealth;
     }
 
-    /**
-     * 清理过期的受伤记录并绘制肢体受伤标记
-     */
-    private static void cleanupAndDrawLimbInjuryIcons(GuiGraphics guiGraphics, Player player, int playerIconX, int playerIconY) {
-        // 清理过期记录
-        LimbClientInjurySync.cleanupExpiredInjuries(player);
-
-        // 检查并绘制各部位的受伤感叹号
-        for (LimbType limbType : LimbType.values()) {
-            if (LimbClientInjurySync.isInjuryVisible(player, limbType)) {
-                drawLimbInjuryIcon(guiGraphics, playerIconX, playerIconY, limbType);
-            }
-        }
-    }
-
-    /**
-     * 绘制单个部位的受伤脉冲圆点
-     */
-    private static void drawLimbInjuryIcon(GuiGraphics guiGraphics, int playerIconX, int playerIconY, LimbType limbType) {
-        // 根据部位获取偏移位置
-        int offsetX, offsetY;
-        switch (limbType) {
-            case HEAD:
-                offsetX = HEAD_OFFSET_X;
-                offsetY = HEAD_OFFSET_Y;
-                break;
-            case CHEST:
-                offsetX = CHEST_OFFSET_X;
-                offsetY = CHEST_OFFSET_Y;
-                break;
-            case LEGS:
-                offsetX = LEGS_OFFSET_X;
-                offsetY = LEGS_OFFSET_Y;
-                break;
-            case FEET:
-                offsetX = FEET_OFFSET_X;
-                offsetY = FEET_OFFSET_Y;
-                break;
-            default:
-                return;
-        }
-
-        // 计算中心位置
-        int centerX = playerIconX + offsetX;
-        int centerY = playerIconY + offsetY;
-
-        // 计算脉冲大小（呼吸效果：0~1~0 的正弦波）
-        long time = System.currentTimeMillis();
-        float pulsePhase = (time % PULSE_CYCLE) / (float) PULSE_CYCLE;  // 0 ~ 1
-        float pulseFactor = (float) Math.sin(pulsePhase * Math.PI);      // 0 → 1 → 0
-        int currentSize = INJURY_DOT_BASE_SIZE + (int) (pulseFactor * INJURY_DOT_PULSE_SIZE);
-
-        // 绘制半透明红色圆点（用小矩形模拟圆形）
-        int halfSize = currentSize / 2;
-        guiGraphics.fill(
-            centerX - halfSize,
-            centerY - halfSize,
-            centerX + halfSize,
-            centerY + halfSize,
-            INJURY_DOT_COLOR
-        );
-    }
 }

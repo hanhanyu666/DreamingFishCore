@@ -57,7 +57,7 @@ public abstract class LoadingOverlayMixin extends Overlay {
 
         // Draw full-screen background
         RenderSystem.enableBlend();
-        UiBackgroundRenderer.renderCyclingBackground(guiGraphics, width, height);
+        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, width, height);
 
         // Update progress
         float actualProgress = this.reload.getActualProgress();
