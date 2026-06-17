@@ -15,13 +15,16 @@ public final class UiBackgroundRenderer {
     private static final ResourceLocation LOADING_BACKGROUND =
             ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_1.png");
     private static final ResourceLocation[] MENU_BG_TEXTURES = {
+            LOADING_BACKGROUND,
             ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_2.png"),
             ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_3.png"),
             ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_4.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_5.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_6.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_7.png"),
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_8.png"),
             ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_14.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_15.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_16.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_17.png")
+            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_16.png")
     };
 
     private static int currentBgIndex = 0;

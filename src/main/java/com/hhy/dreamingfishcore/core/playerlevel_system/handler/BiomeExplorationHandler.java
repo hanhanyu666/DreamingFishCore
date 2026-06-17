@@ -16,6 +16,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerlevel_system.overalllevel.PlayerLevelManager;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_BiomeDiscoveryNotify;
 import com.hhy.dreamingfishcore.server.playerbiomes.PlayerBiomesDataManager;
 
 import java.util.Objects;
@@ -123,10 +125,7 @@ public class BiomeExplorationHandler {
         // 尝试添加探索记录
         boolean isNewBiome = PlayerBiomesDataManager.addExploredBiome(playerUUID, biomeKey);
 
-        if (isNewBiome) {
-            // 新生物群系探索！
-            onNewBiomeDiscovered(player, biomeId, biomeKey);
-        }
+        onBiomeEntered(player, biomeId, biomeKey, isNewBiome);
     }
 
     /**
@@ -140,20 +139,29 @@ public class BiomeExplorationHandler {
     }
 
     /**
-     * 处理玩家发现新生物群系
+     * 处理玩家进入生物群系
      */
-    private static void onNewBiomeDiscovered(ServerPlayer player, ResourceLocation biomeId, String biomeKey) {
+    private static void onBiomeEntered(ServerPlayer player, ResourceLocation biomeId,
+                                       String biomeKey, boolean isNewBiome) {
         int totalExplored = PlayerBiomesDataManager.getExploredBiomeCount(player.getUUID());
 
-        // 计算经验奖励
-        long expReward = calculateExperienceReward(biomeId);
+        long expReward = isNewBiome ? calculateExperienceReward(biomeId) : 0L;
 
-        // 发送探索消息
-        player.sendSystemMessage(Component.literal("§a✦ 发现新生物群系！§e" + biomeId.getPath()));
-        player.sendSystemMessage(Component.literal("§7已探索生物群系总数：§f" + totalExplored));
-        player.sendSystemMessage(Component.literal("§b+§f" + expReward + " §b经验"));
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_BiomeDiscoveryNotify(
+                        biomeId.toString(),
+                        getBiomeDisplayName(biomeId),
+                        totalExplored,
+                        expReward,
+                        isNewBiome
+                ),
+                player
+        );
 
-        // 发放经验奖励
+        if (!isNewBiome) {
+            return;
+        }
+
         PlayerLevelManager.addPlayerExperienceServer(player, expReward);
 
         DreamingFishCore.LOGGER.info("玩家 {} 发现新生物群系：{}，总计 {} 个，获得 {} 经验",
@@ -208,8 +216,107 @@ public class BiomeExplorationHandler {
      * 获取生物群系的显示名称
      */
     public static String getBiomeDisplayName(ResourceLocation biomeId) {
-        // 可以在这里添加生物群系名称的本地化映射
-        // 例如：minecraft:plains -> "平原"
-        return biomeId.getPath();
+        if (VANILLA_NAMESPACE.equals(biomeId.getNamespace())) {
+            String vanillaName = getVanillaBiomeChineseName(biomeId.getPath());
+            if (vanillaName != null) {
+                return vanillaName;
+            }
+        }
+
+        String displayName = formatBiomePath(biomeId.getPath());
+        if (!VANILLA_NAMESPACE.equals(biomeId.getNamespace())) {
+            return biomeId.getNamespace() + " · " + displayName;
+        }
+        return displayName;
+    }
+
+    private static String getVanillaBiomeChineseName(String path) {
+        return switch (path) {
+            case "badlands" -> "恶地";
+            case "bamboo_jungle" -> "竹林";
+            case "basalt_deltas" -> "玄武岩三角洲";
+            case "beach" -> "沙滩";
+            case "birch_forest" -> "桦木森林";
+            case "cherry_grove" -> "樱花树林";
+            case "cold_ocean" -> "冷水海洋";
+            case "crimson_forest" -> "绯红森林";
+            case "dark_forest" -> "黑森林";
+            case "deep_cold_ocean" -> "冷水深海";
+            case "deep_dark" -> "深暗之域";
+            case "deep_frozen_ocean" -> "冰冻深海";
+            case "deep_lukewarm_ocean" -> "温水深海";
+            case "deep_ocean" -> "深海";
+            case "desert" -> "沙漠";
+            case "dripstone_caves" -> "溶洞";
+            case "end_barrens" -> "末地荒地";
+            case "end_highlands" -> "末地高地";
+            case "end_midlands" -> "末地内陆";
+            case "eroded_badlands" -> "风蚀恶地";
+            case "flower_forest" -> "繁花森林";
+            case "forest" -> "森林";
+            case "frozen_ocean" -> "冰冻海洋";
+            case "frozen_peaks" -> "冰封山峰";
+            case "frozen_river" -> "冰冻河流";
+            case "grove" -> "雪林";
+            case "ice_spikes" -> "冰刺平原";
+            case "jagged_peaks" -> "尖峭山峰";
+            case "jungle" -> "丛林";
+            case "lukewarm_ocean" -> "温水海洋";
+            case "lush_caves" -> "繁茂洞穴";
+            case "mangrove_swamp" -> "红树林沼泽";
+            case "meadow" -> "草甸";
+            case "mushroom_fields" -> "蘑菇岛";
+            case "nether_wastes" -> "下界荒地";
+            case "ocean" -> "海洋";
+            case "old_growth_birch_forest" -> "原始桦木森林";
+            case "old_growth_pine_taiga" -> "原始松木针叶林";
+            case "old_growth_spruce_taiga" -> "原始云杉针叶林";
+            case "pale_garden" -> "苍白之园";
+            case "plains" -> "平原";
+            case "river" -> "河流";
+            case "savanna" -> "热带草原";
+            case "savanna_plateau" -> "热带高原";
+            case "small_end_islands" -> "末地小型岛屿";
+            case "snowy_beach" -> "积雪沙滩";
+            case "snowy_plains" -> "积雪平原";
+            case "snowy_slopes" -> "积雪山坡";
+            case "snowy_taiga" -> "积雪针叶林";
+            case "soul_sand_valley" -> "灵魂沙峡谷";
+            case "sparse_jungle" -> "稀疏丛林";
+            case "stony_peaks" -> "裸岩山峰";
+            case "stony_shore" -> "石岸";
+            case "sunflower_plains" -> "向日葵平原";
+            case "swamp" -> "沼泽";
+            case "taiga" -> "针叶林";
+            case "the_end" -> "末地";
+            case "the_void" -> "虚空";
+            case "warm_ocean" -> "暖水海洋";
+            case "warped_forest" -> "诡异森林";
+            case "windswept_forest" -> "风袭森林";
+            case "windswept_gravelly_hills" -> "风袭沙砾丘陵";
+            case "windswept_hills" -> "风袭丘陵";
+            case "windswept_savanna" -> "风袭热带草原";
+            case "wooded_badlands" -> "疏林恶地";
+            default -> null;
+        };
+    }
+
+    private static String formatBiomePath(String path) {
+        String[] words = path.split("_");
+        StringBuilder displayName = new StringBuilder();
+        for (String word : words) {
+            if (word.isEmpty()) {
+                continue;
+            }
+
+            if (!displayName.isEmpty()) {
+                displayName.append(' ');
+            }
+            displayName.append(Character.toUpperCase(word.charAt(0)));
+            if (word.length() > 1) {
+                displayName.append(word.substring(1));
+            }
+        }
+        return displayName.toString();
     }
 }

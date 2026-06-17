@@ -35,6 +35,7 @@ import com.hhy.dreamingfishcore.network.packets.playerattribute_system.infection
 import com.hhy.dreamingfishcore.network.packets.playerattribute_system.limb_system.Packet_SyncLimbInjury;
 import com.hhy.dreamingfishcore.network.packets.playerattribute_system.strength_system.Packet_CantRun;
 import com.hhy.dreamingfishcore.network.packets.playerattribute_system.strength_system.Packet_SyncStrengthData;
+import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_BiomeDiscoveryNotify;
 import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_LevelUpNotify;
 import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_RequestAllPlayerData;
 import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_RequestPlayerStats;
@@ -82,6 +83,7 @@ public class DreamingFishCore_NetworkManager {
         registrar.playToServer(Packet_SyncCompleteTask.TYPE, Packet_SyncCompleteTask.STREAM_CODEC, Packet_SyncCompleteTask::handle);
         registrar.playToClient(Packet_CantRun.TYPE, Packet_CantRun.STREAM_CODEC, Packet_CantRun::handle);
         registrar.playToClient(Packet_LevelUpNotify.TYPE, Packet_LevelUpNotify.STREAM_CODEC, Packet_LevelUpNotify::handle);
+        registrar.playToClient(Packet_BiomeDiscoveryNotify.TYPE, Packet_BiomeDiscoveryNotify.STREAM_CODEC, Packet_BiomeDiscoveryNotify::handle);
         registrar.playToClient(Packet_VanillaAdvancementNotify.TYPE, Packet_VanillaAdvancementNotify.STREAM_CODEC, Packet_VanillaAdvancementNotify::handle);
         registrar.playToClient(Packet_SyncStrengthData.TYPE, Packet_SyncStrengthData.STREAM_CODEC, Packet_SyncStrengthData::handle);
         registrar.playToClient(Packet_SendTipToClient.TYPE, Packet_SendTipToClient.STREAM_CODEC, Packet_SendTipToClient::handle);

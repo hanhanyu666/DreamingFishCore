@@ -45,15 +45,9 @@ public abstract class GenericWaitingScreenMixin extends Screen {
         int vw = vs.virtualWidth;
         int vh = vs.virtualHeight;
 
-        // 左上角提示
         renderTip(guiGraphics);
 
-        // 中间显示动画等待文字
         long now = System.currentTimeMillis();
-        int dots = (int) ((now / 500) % 4);
-        String dotsStr = ".".repeat(dots);
-        String titleText = (this.title != null ? this.title.getString() : "Please wait...") + dotsStr;
-        guiGraphics.drawCenteredString(this.font, titleText, vw / 2, vh / 2 - 6, 0xFFFFFFFF);
 
         // 底部进度条（循环动画）
         int barMargin = 32;
@@ -64,9 +58,15 @@ public abstract class GenericWaitingScreenMixin extends Screen {
 
         int fakeProgress = (int) ((now % 6000) * 100 / 6000);
 
-        String label = "请稍候... " + fakeProgress + "%";
-        int labelW = this.font.width(label);
-        guiGraphics.drawString(this.font, label, barX + barW - labelW, barY - 12, 0xFFFFFFFF, true);
+        String statusText = this.title == null ? "请稍候" : this.title.getString();
+        if (statusText == null || statusText.isBlank()) {
+            statusText = "请稍候";
+        }
+        String progressText = fakeProgress + "%";
+        guiGraphics.drawString(this.font, trimToWidth(statusText, Math.max(20, barW - this.font.width(progressText) - 18)),
+                barX, barY - 12, 0xFFFFFFFF, true);
+        guiGraphics.drawString(this.font, progressText, barX + barW - this.font.width(progressText), barY - 12,
+                0xFFFFFFFF, true);
 
         renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, BAR_BG);
         int fillW = barW * fakeProgress / 100;
@@ -98,5 +98,14 @@ public abstract class GenericWaitingScreenMixin extends Screen {
         if (right > left) g.fill(left, y, right, y + h, color);
         g.fill(x, y + 1, x + r, y + 1 + ih, color);
         g.fill(x + w - r, y + 1, x + w, y + 1 + ih, color);
+    }
+
+    @Unique
+    private String trimToWidth(String text, int maxWidth) {
+        if (text == null || this.font.width(text) <= maxWidth) {
+            return text == null ? "" : text;
+        }
+        String ellipsis = "...";
+        return this.font.plainSubstrByWidth(text, Math.max(0, maxWidth - this.font.width(ellipsis))) + ellipsis;
     }
 }

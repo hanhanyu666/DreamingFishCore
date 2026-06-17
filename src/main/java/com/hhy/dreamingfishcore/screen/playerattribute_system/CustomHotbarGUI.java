@@ -26,7 +26,7 @@ public class CustomHotbarGUI {
     private static final int HOTBAR_BG_INNER = 0x22101012;
     private static final int HOTBAR_DIVIDER = 0x185E5E62;
     private static final int SELECTED_UNDERLINE = 0x90C8C8C2;
-    private static final float HOTBAR_IDLE_SCALE = 0.75f;
+    private static final float HOTBAR_IDLE_SCALE = 0.7f;
     private static final float HOTBAR_ACTIVE_SCALE = 1.0f;
     private static final long HOTBAR_SCALE_UP_MS = 150L;
     private static final long HOTBAR_ACTIVE_HOLD_MS = 850L;

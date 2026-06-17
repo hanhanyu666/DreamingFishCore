@@ -30,7 +30,11 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
     @Inject(method = "renderBackground", at = @At("HEAD"), cancellable = true)
     private void dreamingFishCore$renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         ci.cancel();
+        dreamingFishCore$renderCleanWaitingScreen(guiGraphics);
+    }
 
+    @Unique
+    private void dreamingFishCore$renderCleanWaitingScreen(GuiGraphics guiGraphics) {
         VirtualCoordinateHelper.calculateVirtualSize(this, vs);
         if (tip.isEmpty()) {
             tip = LoadingTips.getRandomTip();
@@ -45,16 +49,7 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
         int vw = vs.virtualWidth;
         int vh = vs.virtualHeight;
 
-        // 左上角提示
         renderTip(guiGraphics);
-
-        // 中间显示标题文字
-        String titleText = this.title != null ? this.title.getString() : "";
-        if (!titleText.isEmpty()) {
-            int centerX = vw / 2;
-            int centerY = vh / 2;
-            guiGraphics.drawCenteredString(this.font, titleText, centerX, centerY - 6, 0xFFFFFFFF);
-        }
 
         // 底部进度条（循环动画）
         int barMargin = 32;
@@ -66,9 +61,15 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
         long now = System.currentTimeMillis();
         int fakeProgress = (int) ((now % 5000) * 100 / 5000);
 
-        String label = "处理中... " + fakeProgress + "%";
-        int labelW = this.font.width(label);
-        guiGraphics.drawString(this.font, label, barX + barW - labelW, barY - 12, 0xFFFFFFFF, true);
+        String statusText = this.title == null ? "处理中" : this.title.getString();
+        if (statusText == null || statusText.isBlank()) {
+            statusText = "处理中";
+        }
+        String progressText = fakeProgress + "%";
+        guiGraphics.drawString(this.font, trimToWidth(statusText, Math.max(20, barW - this.font.width(progressText) - 18)),
+                barX, barY - 12, 0xFFFFFFFF, true);
+        guiGraphics.drawString(this.font, progressText, barX + barW - this.font.width(progressText), barY - 12,
+                0xFFFFFFFF, true);
 
         renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, BAR_BG);
         int fillW = barW * fakeProgress / 100;
@@ -100,5 +101,14 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
         if (right > left) g.fill(left, y, right, y + h, color);
         g.fill(x, y + 1, x + r, y + 1 + ih, color);
         g.fill(x + w - r, y + 1, x + w, y + 1 + ih, color);
+    }
+
+    @Unique
+    private String trimToWidth(String text, int maxWidth) {
+        if (text == null || this.font.width(text) <= maxWidth) {
+            return text == null ? "" : text;
+        }
+        String ellipsis = "...";
+        return this.font.plainSubstrByWidth(text, Math.max(0, maxWidth - this.font.width(ellipsis))) + ellipsis;
     }
 }

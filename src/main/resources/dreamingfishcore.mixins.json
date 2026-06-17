@@ -18,6 +18,13 @@
     "ui.GenericWaitingScreenMixin",
     "ui.ModScreenBackgroundMixin",
     "ui.VanillaScreenBackgroundMixin",
+    "ui.ModernSelectionListMixin",
+    "ui.WorldSelectionListMixin",
+    "ui.WorldListEntryMixin",
+    "ui.ServerSelectionListMixin",
+    "ui.OnlineServerEntryMixin",
+    "ui.NetworkServerEntryMixin",
+    "ui.LanHeaderMixin",
     "ui.TitleScreenMixin"
   ],
   "server": [

@@ -48,16 +48,52 @@ public abstract class LoadingOverlayMixin extends Overlay {
 
     @Inject(
         method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
-        at = @At("RETURN")
+        at = @At("HEAD"),
+        cancellable = true
     )
     private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        ci.cancel();
+
         int width = guiGraphics.guiWidth();
         int height = guiGraphics.guiHeight();
         long now = Util.getMillis();
+        float fadeOutProgress = this.fadeOutStart > -1L ? (now - this.fadeOutStart) / 1000.0F : -1.0F;
 
-        // Draw full-screen background
+        if (this.fadeOutStart == -1L && this.reload.isDone()) {
+            this.fadeOutStart = now;
+            try {
+                this.reload.checkExceptions();
+                this.onFinish.accept(Optional.empty());
+            } catch (Throwable throwable) {
+                this.onFinish.accept(Optional.of(throwable));
+            }
+            if (this.minecraft.screen != null) {
+                this.minecraft.screen.init(this.minecraft, width, height);
+            }
+            fadeOutProgress = 0.0F;
+        }
+
+        if (fadeOutProgress >= 1.0F) {
+            this.minecraft.setOverlay(null);
+            return;
+        }
+
+        int alpha = fadeOutProgress > -1.0F
+                ? Mth.ceil((1.0F - Mth.clamp(fadeOutProgress, 0.0F, 1.0F)) * 255.0F)
+                : 255;
+        float alphaF = alpha / 255.0F;
+
+        if (this.minecraft.screen != null && fadeOutProgress > -1.0F) {
+            this.minecraft.screen.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
         RenderSystem.enableBlend();
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alphaF);
         UiBackgroundRenderer.renderLoadingBackground(guiGraphics, width, height);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        guiGraphics.fillGradient(0, 0, width, height,
+                (Mth.ceil(0x88 * alphaF) << 24),
+                (Mth.ceil(0xCC * alphaF) << 24));
 
         // Update progress
         float actualProgress = this.reload.getActualProgress();
@@ -74,23 +110,35 @@ public abstract class LoadingOverlayMixin extends Overlay {
         int progressBarX = barMargin;
         int progressBarWidth = width - barMargin * 2;
         int progressBarY = height - 35;
+        int percent = Mth.clamp(Math.round(this.currentProgress * 100.0F), 0, 100);
+        String statusText = "加载资源中";
+        String progressText = percent + "%";
+        var font = this.minecraft.font;
+        int textAlpha = Mth.ceil(255 * alphaF) << 24;
+        guiGraphics.drawString(font, statusText, progressBarX, progressBarY - 13, textAlpha | 0xFFFFFF, true);
+        guiGraphics.drawString(font, progressText, progressBarX + progressBarWidth - font.width(progressText),
+                progressBarY - 13, textAlpha | 0xFFFFFF, true);
 
-        // Background bar
-        dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressBarWidth, progressBarHeight, BAR_BACKGROUND);
+        int barBg = (BAR_BACKGROUND & 0x00FFFFFF) | (Mth.ceil(((BAR_BACKGROUND >>> 24) & 255) * alphaF) << 24);
+        int barAccent = (ACCENT_BLUE & 0x00FFFFFF) | (Mth.ceil(((ACCENT_BLUE >>> 24) & 255) * alphaF) << 24);
+
+        dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressBarWidth, progressBarHeight, barBg);
 
         // Progress bar (blue)
         int progressWidth = (int) (this.currentProgress * progressBarWidth);
         if (progressWidth > 0) {
-            dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight, ACCENT_BLUE);
+            dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight, barAccent);
 
             // Top highlight line
             if (progressWidth > 2) {
-                guiGraphics.fill(progressBarX + 2, progressBarY, progressBarX + progressWidth - 2, progressBarY + 1, 0xFF55AAFF);
+                guiGraphics.fill(progressBarX + 2, progressBarY, progressBarX + progressWidth - 2, progressBarY + 1,
+                        (Mth.ceil(255 * alphaF) << 24) | 0x55AAFF);
             }
 
             // Pulsing glow effect
             if ((now / 500) % 2 == 0) {
-                dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight, 0x330055FF);
+                dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight,
+                        (Mth.ceil(0x33 * alphaF) << 24) | 0x0055FF);
             }
 
             // Star-like sparkles
@@ -102,9 +150,9 @@ public abstract class LoadingOverlayMixin extends Overlay {
                     int offset = (int) ((now / 220 + i * 13) % 1000);
                     int sx = progressBarX + (offset * 37 + i * 53) % Math.max(1, progressWidth);
                     int sy = sparkleY1 + (i * 3 + (int) (now / 350)) % Math.max(1, (sparkleY2 - sparkleY1));
-                    guiGraphics.fill(sx, sy, sx + 1, sy + 1, 0x33FFFFFF);
+                    guiGraphics.fill(sx, sy, sx + 1, sy + 1, (Mth.ceil(0x33 * alphaF) << 24) | 0xFFFFFF);
                     if ((now / 700 + i) % 2 == 0) {
-                        guiGraphics.fill(sx - 1, sy, sx, sy + 1, 0x2200FFFF);
+                        guiGraphics.fill(sx - 1, sy, sx, sy + 1, (Mth.ceil(0x22 * alphaF) << 24) | 0x00FFFF);
                     }
                 }
             }
