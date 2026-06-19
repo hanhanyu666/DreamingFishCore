@@ -16,6 +16,9 @@ import com.hhy.dreamingfishcore.network.packets.check_system.Packet_GetResultRes
 import com.hhy.dreamingfishcore.network.packets.login_system.Packet_PlayerLoginRequest;
 import com.hhy.dreamingfishcore.network.packets.login_system.Packet_PlayerLoginResponse;
 import com.hhy.dreamingfishcore.network.packets.login_system.Packet_PlayerLoginResult;
+import com.hhy.dreamingfishcore.network.packets.marker_system.Packet_MarkerRejected;
+import com.hhy.dreamingfishcore.network.packets.marker_system.Packet_RequestMarker;
+import com.hhy.dreamingfishcore.network.packets.marker_system.Packet_ShowMarker;
 import com.hhy.dreamingfishcore.network.packets.notice_system.Packet_MarkNoticeReadRequest;
 import com.hhy.dreamingfishcore.network.packets.notice_system.Packet_NoticeCheckResponse;
 import com.hhy.dreamingfishcore.network.packets.notice_system.Packet_NoticeListRequest;
@@ -114,6 +117,9 @@ public class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_OpenNpcDialogueGUI.TYPE, Packet_OpenNpcDialogueGUI.STREAM_CODEC, Packet_OpenNpcDialogueGUI::handle);
         registrar.playToServer(Packet_NpcInteractionRequest.TYPE, Packet_NpcInteractionRequest.STREAM_CODEC, Packet_NpcInteractionRequest::handle);
         registrar.playToClient(Packet_SyncUpdateTask.TYPE, Packet_SyncUpdateTask.STREAM_CODEC, Packet_SyncUpdateTask::handle);
+        registrar.playToServer(Packet_RequestMarker.TYPE, Packet_RequestMarker.STREAM_CODEC, Packet_RequestMarker::handle);
+        registrar.playToClient(Packet_ShowMarker.TYPE, Packet_ShowMarker.STREAM_CODEC, Packet_ShowMarker::handle);
+        registrar.playToClient(Packet_MarkerRejected.TYPE, Packet_MarkerRejected.STREAM_CODEC, Packet_MarkerRejected::handle);
     }
 
     public static void sendToClient(CustomPacketPayload packet, ServerPlayer player) {
