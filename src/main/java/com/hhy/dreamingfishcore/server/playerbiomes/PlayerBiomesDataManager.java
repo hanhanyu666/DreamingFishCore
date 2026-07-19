@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.server.playerbiomes;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -10,8 +12,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -127,7 +129,7 @@ public class PlayerBiomesDataManager {
      */
     private static Map<UUID, Set<String>> loadAllBiomesDataFromFile() {
         Map<UUID, Set<String>> allBiomesData = new ConcurrentHashMap<>();
-        try (FileReader reader = new FileReader(BIOMES_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(BIOMES_DATA_FILE)) {
             // 处理空文件
             if (BIOMES_DATA_FILE.length() == 0) {
                 return allBiomesData;
@@ -148,7 +150,7 @@ public class PlayerBiomesDataManager {
      * 保存所有玩家的生物群系数据到文件
      */
     private static void saveAllBiomesDataToFile() {
-        try (FileWriter writer = new FileWriter(BIOMES_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(BIOMES_DATA_FILE)) {
             GSON.toJson(BIOMES_CACHE, writer);
         } catch (Exception e) {
             DreamingFishCore.LOGGER.error("写入生物群系数据文件失败", e);

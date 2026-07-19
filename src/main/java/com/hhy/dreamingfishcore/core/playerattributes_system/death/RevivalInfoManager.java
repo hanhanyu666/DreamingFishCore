@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.playerattributes_system.death;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -8,8 +10,8 @@ import com.hhy.dreamingfishcore.screen.server_screen.tips.TipPushHelper;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
@@ -105,7 +107,7 @@ public class RevivalInfoManager {
      */
     private static void saveToFile() {
         try {
-            try (FileWriter writer = new FileWriter(REVIVAL_INFO_FILE)) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(REVIVAL_INFO_FILE)) {
                 GSON.toJson(revivalInfoMap, writer);
             }
         } catch (IOException e) {
@@ -122,7 +124,7 @@ public class RevivalInfoManager {
             return;
         }
 
-        try (FileReader reader = new FileReader(REVIVAL_INFO_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(REVIVAL_INFO_FILE)) {
             Type type = new TypeToken<Map<UUID, RevivalInfo>>() {}.getType();
             Map<UUID, RevivalInfo> loaded = GSON.fromJson(reader, type);
             if (loaded != null) {

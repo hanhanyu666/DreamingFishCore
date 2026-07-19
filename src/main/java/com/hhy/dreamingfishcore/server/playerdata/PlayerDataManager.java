@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.server.playerdata;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -17,12 +19,13 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -172,7 +175,7 @@ public class PlayerDataManager {
 
     public static Map<UUID, PlayerData> loadAllPlayerDataFromFile() {
         Map<UUID, PlayerData> allPlayerData = new ConcurrentHashMap<>();
-        try (FileReader reader = new FileReader(PLAYER_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(PLAYER_DATA_FILE)) {
             // 处理空文件：避免Gson解析空字符串报错
             if (PLAYER_DATA_FILE.length() == 0) {
                 return allPlayerData;
@@ -183,14 +186,51 @@ public class PlayerDataManager {
             if (allPlayerData == null) {
                 allPlayerData = new HashMap<>();
             }
+            if (repairStoredTitles(allPlayerData)) {
+                saveAllPlayerDataToFile(allPlayerData);
+                DreamingFishCore.LOGGER.info("已按称号 ID 修复玩家数据中的旧版乱码称号");
+            }
         } catch (Exception e) {
             DreamingFishCore.LOGGER.warn("读取玩家数据文件失败，返回空数据", e);
         }
         return allPlayerData;
     }
 
+    private static boolean repairStoredTitles(Map<UUID, PlayerData> allPlayerData) {
+        boolean repaired = false;
+        for (PlayerData playerData : allPlayerData.values()) {
+            if (playerData == null) {
+                continue;
+            }
+
+            Title storedTitle = playerData.getTitle();
+            int titleId = storedTitle == null ? 0 : storedTitle.getTitleID();
+            Title configuredTitle = TitleRegistry.getTitleById(titleId);
+            if (storedTitle != null
+                    && (configuredTitle == null || configuredTitle.getTitleID() != titleId)) {
+                // 配置暂时缺失时保留原称号，避免把未知 ID 永久覆盖为默认称号。
+                continue;
+            }
+            if (configuredTitle == null) {
+                configuredTitle = TitleRegistry.getDefaultTitle();
+            }
+            if (configuredTitle == null) {
+                continue;
+            }
+
+            if (storedTitle == null
+                    || storedTitle.getTitleID() != configuredTitle.getTitleID()
+                    || storedTitle.getColor() != configuredTitle.getColor()
+                    || !Objects.equals(storedTitle.getTitleName(), configuredTitle.getTitleName())) {
+                playerData.setTitle(configuredTitle);
+                repaired = true;
+            }
+        }
+        return repaired;
+    }
+
     private static void saveAllPlayerDataToFile(Map<UUID, PlayerData> allPlayerData) {
-        try (FileWriter writer = new FileWriter(PLAYER_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_DATA_FILE)) {
             GSON.toJson(allPlayerData, writer);
         } catch (Exception e) {
             DreamingFishCore.LOGGER.error("写入玩家数据文件失败", e);

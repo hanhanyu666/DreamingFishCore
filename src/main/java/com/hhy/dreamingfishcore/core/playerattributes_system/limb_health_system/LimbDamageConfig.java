@@ -1,12 +1,14 @@
 package com.hhy.dreamingfishcore.core.playerattributes_system.limb_health_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -74,7 +76,7 @@ public class LimbDamageConfig {
      * 从文件加载配置
      */
     private static void loadFromFile() {
-        try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
+        try (Reader reader = Utf8JsonFileIO.openReader(CONFIG_PATH.toFile())) {
             Type mapType = new TypeToken<Map<String, Float>>() {
             }.getType();
             Map<String, Float> loaded = GSON.fromJson(reader, mapType);
@@ -99,7 +101,7 @@ public class LimbDamageConfig {
             // 确保 config 目录存在
             Files.createDirectories(Path.of("config"));
 
-            try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(CONFIG_PATH.toFile())) {
                 GSON.toJson(multipliers, writer);
                 DreamingFishCore.LOGGER.info("肢体伤害配置已保存到文件: {}", CONFIG_PATH);
             }

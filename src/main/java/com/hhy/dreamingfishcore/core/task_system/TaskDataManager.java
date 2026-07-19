@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.task_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,8 +16,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
@@ -74,7 +76,7 @@ public class TaskDataManager {
     @SubscribeEvent
     public static void loadingTaskData(ServerStartingEvent event) {
         //加载玩家任务数据
-        try (FileReader reader = new FileReader(TASK_PLAYER_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(TASK_PLAYER_DATA_FILE)) {
             Map<Integer, TaskPlayerData> loadedData = GSON.fromJson(reader, playerMapType);
             TASK_PLAYER_DATA_CACHE = loadedData != null ? new ConcurrentHashMap<>(loadedData) : new ConcurrentHashMap<>();
             int beforeSize = TASK_PLAYER_DATA_CACHE.size();
@@ -93,7 +95,7 @@ public class TaskDataManager {
 
     //写入文件
     private static void savePlayerTaskData() {
-        try (FileWriter writer = new FileWriter(TASK_PLAYER_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(TASK_PLAYER_DATA_FILE)) {
             GSON.toJson(TASK_PLAYER_DATA_CACHE, writer);
         } catch (IOException e) {
             DreamingFishCore.LOGGER.error("保存玩家任务数据失败", e);

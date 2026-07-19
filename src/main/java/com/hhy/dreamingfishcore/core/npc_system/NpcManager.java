@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.npc_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -11,8 +13,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -39,7 +41,7 @@ public class NpcManager {
 
     public static void load() {
         ensureFile();
-        try (FileReader reader = new FileReader(NPC_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(NPC_DATA_FILE)) {
             Map<Integer, NpcData> loaded = GSON.fromJson(reader, NPC_MAP_TYPE);
             npcCache = loaded == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(loaded);
             if (npcCache.isEmpty()) {
@@ -55,7 +57,7 @@ public class NpcManager {
 
     public static void save() {
         ensureFile();
-        try (FileWriter writer = new FileWriter(NPC_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(NPC_DATA_FILE)) {
             GSON.toJson(npcCache, writer);
         } catch (IOException e) {
             DreamingFishCore.LOGGER.error("保存NPC数据失败", e);

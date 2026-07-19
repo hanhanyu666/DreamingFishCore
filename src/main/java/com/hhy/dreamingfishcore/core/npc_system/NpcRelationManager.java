@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.npc_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -9,8 +11,8 @@ import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -48,7 +50,7 @@ public class NpcRelationManager {
 
     public static void load() {
         ensureFile();
-        try (FileReader reader = new FileReader(RELATION_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(RELATION_DATA_FILE)) {
             JsonElement root = JsonParser.parseReader(reader);
             relationCache = new ConcurrentHashMap<>();
 
@@ -83,7 +85,7 @@ public class NpcRelationManager {
 
     public static void save() {
         ensureFile();
-        try (FileWriter writer = new FileWriter(RELATION_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(RELATION_DATA_FILE)) {
             GSON.toJson(relationCache, writer);
         } catch (IOException e) {
             DreamingFishCore.LOGGER.error("保存NPC关系数据失败", e);

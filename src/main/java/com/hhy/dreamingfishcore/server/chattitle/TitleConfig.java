@@ -1,13 +1,15 @@
 package com.hhy.dreamingfishcore.server.chattitle;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,7 @@ public class TitleConfig {
         }
 
         // 2. 读取并解析JSON
-        try (FileReader reader = new FileReader(TITLE_CONFIG_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(TITLE_CONFIG_FILE)) {
             // 解析JSON数组为List<TitleData>（需自定义内部类TitleData接收JSON字段）
             List<TitleData> titleDataList = GSON.fromJson(reader, new TypeToken<List<TitleData>>() {}.getType());
 
@@ -77,7 +79,7 @@ public class TitleConfig {
             if (parentDir != null && !parentDir.exists()) {
                 parentDir.mkdirs();
             }
-            try (FileWriter writer = new FileWriter(TITLE_CONFIG_FILE)) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(TITLE_CONFIG_FILE)) {
                 GSON.toJson(defaultTitles, writer);
             }
 
@@ -130,7 +132,7 @@ public class TitleConfig {
                     .map(title -> new TitleData(title.getTitleID(), title.getTitleName(), title.getColor()))
                     .toList();
 
-            try (FileWriter writer = new FileWriter(TITLE_CONFIG_FILE)) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(TITLE_CONFIG_FILE)) {
                 GSON.toJson(titleDataList, writer);
             }
         } catch (Exception e) {

@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.storybook_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -23,8 +25,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -182,7 +184,7 @@ public class StoryBookDataManager {
         STAGE_INDEX.clear();
         CHAPTER_INDEX.clear();
 
-        try (FileReader reader = new FileReader(FRAGMENT_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(FRAGMENT_DATA_FILE)) {
             if (FRAGMENT_DATA_FILE.length() == 0) {
                 saveDefaultFragmentConfig();
                 return;
@@ -211,7 +213,7 @@ public class StoryBookDataManager {
      * 保存片段配置数据
      */
     public static void saveFragmentData() {
-        try (FileWriter writer = new FileWriter(FRAGMENT_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(FRAGMENT_DATA_FILE)) {
             List<FragmentData> fragmentList = new ArrayList<>(FRAGMENT_CACHE.values());
             // 按ID排序
             fragmentList.sort(Comparator.comparingInt(FragmentData::getId));
@@ -268,7 +270,7 @@ public class StoryBookDataManager {
                 "我终于明白了真相...\n\n那些感染者...他们不是怪物。\n\n他们是在进化。\n\n如果你看到了这个，请继续往北走...那里有答案..."
         ));
 
-        try (FileWriter writer = new FileWriter(FRAGMENT_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(FRAGMENT_DATA_FILE)) {
             GSON.toJson(defaultFragments, writer);
             DreamingFishCore.LOGGER.info("默认片段配置已保存");
         } catch (IOException e) {
@@ -289,7 +291,7 @@ public class StoryBookDataManager {
             return;
         }
 
-        try (FileReader reader = new FileReader(PLAYER_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(PLAYER_DATA_FILE)) {
             Map<String, StoryBookData> dataMap = GSON.fromJson(reader, PLAYER_DATA_TYPE);
             if (dataMap != null) {
                 for (Map.Entry<String, StoryBookData> entry : dataMap.entrySet()) {
@@ -317,7 +319,7 @@ public class StoryBookDataManager {
             dataMap.put(entry.getKey().toString(), entry.getValue());
         }
 
-        try (FileWriter writer = new FileWriter(PLAYER_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_DATA_FILE)) {
             GSON.toJson(dataMap, writer);
             DIRTY_PLAYERS.clear();
         } catch (IOException e) {
@@ -338,7 +340,7 @@ public class StoryBookDataManager {
             dataMap.put(entry.getKey().toString(), entry.getValue());
         }
 
-        try (FileWriter writer = new FileWriter(PLAYER_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_DATA_FILE)) {
             GSON.toJson(dataMap, writer);
             DIRTY_PLAYERS.remove(playerUuid);
         } catch (IOException e) {
@@ -359,7 +361,7 @@ public class StoryBookDataManager {
             dataMap.put(entry.getKey().toString(), entry.getValue());
         }
 
-        try (FileWriter writer = new FileWriter(PLAYER_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_DATA_FILE)) {
             GSON.toJson(dataMap, writer);
             DIRTY_PLAYERS.clear();
             DreamingFishCore.LOGGER.debug("随记本玩家数据自动保存完成");

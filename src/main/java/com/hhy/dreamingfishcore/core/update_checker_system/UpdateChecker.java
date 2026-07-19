@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.fml.ModList;
 
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -46,7 +47,7 @@ public class UpdateChecker {
                 }
 
                 // 解析 JSON 响应
-                InputStreamReader reader = new InputStreamReader(connection.getInputStream());
+                InputStreamReader reader = new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8);
                 JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
                 String latestVersion = json.get("tag_name").getAsString(); // 获取最新版本号
                 String downloadUrl = json.get("html_url").getAsString(); // 获取版本下载地址

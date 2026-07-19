@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.client.util;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -9,8 +11,8 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -83,7 +85,7 @@ public final class LoadingTips {
 
         try {
             ensureDefaultConfig(configFile);
-            try (FileReader reader = new FileReader(configFile)) {
+            try (Reader reader = Utf8JsonFileIO.openReader(configFile)) {
                 parse(JsonParser.parseReader(reader).getAsJsonObject());
             }
         } catch (Exception e) {
@@ -119,7 +121,7 @@ public final class LoadingTips {
                 arr.add(tip);
             }
             json.add("tips", arr);
-            try (FileWriter writer = new FileWriter(configFile)) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(configFile)) {
                 new GsonBuilder().setPrettyPrinting().create().toJson(json, writer);
             }
         }
