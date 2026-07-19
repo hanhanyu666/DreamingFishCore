@@ -28,7 +28,7 @@ public class PlayerInfectionManager {
 
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.START) {
+        if (event.phase != TickEvent.Phase.END) {
             return;
         }
         if (event.side.isClient() || !event.player.isAlive() || !(event.player instanceof ServerPlayer serverPlayer)) {

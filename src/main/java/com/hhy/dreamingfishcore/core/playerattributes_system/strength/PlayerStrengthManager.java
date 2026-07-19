@@ -48,6 +48,9 @@ public class PlayerStrengthManager {
     //Tick监听
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         // 仅在服务端执行，且玩家存活
         if (event.side.isClient() || !event.player.isAlive() || !(event.player instanceof ServerPlayer serverPlayer)) {
             return;
@@ -383,26 +386,10 @@ public class PlayerStrengthManager {
             }
         }
 
-        // 监听鼠标输入事件
-        @SubscribeEvent
-        public static void onMouseInput(InputEvent.MouseButton event) {
-            Minecraft mc = Minecraft.getInstance();
-            LocalPlayer player = mc.player;
-            if (player == null || !player.isAlive()) return;
-
-            UUID uuid = player.getUUID();
-            boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);
-
-            // 如果体力耗尽且正在疾跑，强制停止
-            if (isExhausted && player.isSprinting()) {
-                player.setSprinting(false);
-            }
-        }
-
-        // 监听玩家 tick 事件，在物理更新前阻止疾跑加速
+        // 监听玩家 tick 事件，阻止体力耗尽后继续疾跑
         @SubscribeEvent
         public static void onTick(TickEvent.PlayerTickEvent event) {
-            if (!event.side.isClient() || event.phase != TickEvent.Phase.START) return;
+            if (!event.side.isClient() || event.phase != TickEvent.Phase.END) return;
 
             // 只处理本地玩家，忽略其他玩家（RemotePlayer）
             if (!(event.player instanceof LocalPlayer player)) return;
