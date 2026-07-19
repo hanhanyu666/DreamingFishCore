@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.playerattributes_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -13,8 +15,8 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -175,7 +177,7 @@ public class PlayerAttributesDataManager {
      */
     private static Map<UUID, PlayerAttributesData> loadAllAttributesFromFile() {
         Map<UUID, PlayerAttributesData> allAttributes = new HashMap<>();
-        try (FileReader reader = new FileReader(PLAYER_ATTRIBUTES_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(PLAYER_ATTRIBUTES_FILE)) {
             // 处理空文件（避免Gson解析报错）
             if (PLAYER_ATTRIBUTES_FILE.length() == 0) {
                 return allAttributes;
@@ -197,7 +199,7 @@ public class PlayerAttributesDataManager {
      * 保存所有玩家属性数据到文件
      */
     private static void saveAllAttributesToFile(Map<UUID, PlayerAttributesData> allAttributes) {
-        try (FileWriter writer = new FileWriter(PLAYER_ATTRIBUTES_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_ATTRIBUTES_FILE)) {
             GSON.toJson(allAttributes, writer);
         } catch (Exception e) {
             DreamingFishCore.LOGGER.error("写入玩家属性数据文件失败", e);
@@ -212,7 +214,7 @@ public class PlayerAttributesDataManager {
             // 读取现有数据
             Map<UUID, PlayerAttributesData> allAttributes = new HashMap<>();
             if (PLAYER_ATTRIBUTES_FILE.exists() && PLAYER_ATTRIBUTES_FILE.length() > 0) {
-                try (FileReader reader = new FileReader(PLAYER_ATTRIBUTES_FILE)) {
+                try (Reader reader = Utf8JsonFileIO.openReader(PLAYER_ATTRIBUTES_FILE)) {
                     Type mapType = new TypeToken<Map<UUID, PlayerAttributesData>>() {}.getType();
                     Map<UUID, PlayerAttributesData> loaded = GSON.fromJson(reader, mapType);
                     if (loaded != null) {
@@ -225,7 +227,7 @@ public class PlayerAttributesDataManager {
             allAttributes.put(playerUUID, data);
 
             // 保存回文件
-            try (FileWriter writer = new FileWriter(PLAYER_ATTRIBUTES_FILE)) {
+            try (Writer writer = Utf8JsonFileIO.openWriter(PLAYER_ATTRIBUTES_FILE)) {
                 GSON.toJson(allAttributes, writer);
             }
 

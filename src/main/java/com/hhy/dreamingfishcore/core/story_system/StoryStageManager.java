@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.core.story_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -10,8 +12,8 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -75,7 +77,7 @@ public class StoryStageManager {
      * 加载阶段数据
      */
     public static void loadStageData() {
-        try (FileReader reader = new FileReader(STORY_STAGE_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(STORY_STAGE_DATA_FILE)) {
             Map<Integer, StoryStageData> stageData = GSON.fromJson(reader, stageMapType);
             STAGE_CACHE = stageData != null ? stageData : new ConcurrentHashMap<>();
         } catch (IOException e) {
@@ -108,7 +110,7 @@ public class StoryStageManager {
      * 保存阶段数据
      */
     public static void saveStageData() {
-        try (FileWriter writer = new FileWriter(STORY_STAGE_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(STORY_STAGE_DATA_FILE)) {
             GSON.toJson(STAGE_CACHE, writer);
         } catch (IOException e) {
             DreamingFishCore.LOGGER.error("保存故事阶段数据失败", e);

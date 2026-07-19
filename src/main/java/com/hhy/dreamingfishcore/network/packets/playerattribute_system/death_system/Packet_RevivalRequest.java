@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -15,7 +17,7 @@ import net.minecraft.server.players.UserBanList;
 import net.minecraft.world.InteractionHand;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-import java.io.FileReader;
+import java.io.Reader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -70,7 +72,7 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
             Path banFile = sender.server.getServerDirectory().resolve("banned-players.json");
             JsonObject foundEntry = null;
 
-            try (FileReader reader = new FileReader(banFile.toFile())) {
+            try (Reader reader = Utf8JsonFileIO.openReader(banFile.toFile())) {
                 JsonArray bans = new Gson().fromJson(reader, JsonArray.class);
                 if (bans != null) {
                     for (JsonElement element : bans) {

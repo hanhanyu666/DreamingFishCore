@@ -1,13 +1,15 @@
 package com.hhy.dreamingfishcore.core.login_system;
 
+import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
@@ -65,7 +67,7 @@ public class PlayerLoginDataManager {
      * 从文件加载所有登录数据到缓存
      */
     private static void loadAllDataToCache() {
-        try (FileReader reader = new FileReader(LOGIN_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(LOGIN_DATA_FILE)) {
             Type type = new TypeToken<Map<UUID, PlayerLoginData>>(){}.getType();
             Map<UUID, PlayerLoginData> data = GSON.fromJson(reader, type);
             if (data != null) {
@@ -83,7 +85,7 @@ public class PlayerLoginDataManager {
      * @return 所有玩家的登录数据
      */
     public static Map<UUID, PlayerLoginData> loadAllLoginDataFromFile() {
-        try (FileReader reader = new FileReader(LOGIN_DATA_FILE)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(LOGIN_DATA_FILE)) {
             Type type = new TypeToken<Map<UUID, PlayerLoginData>>(){}.getType();
             Map<UUID, PlayerLoginData> data = GSON.fromJson(reader, type);
             return data != null ? data : new ConcurrentHashMap<>();
@@ -98,7 +100,7 @@ public class PlayerLoginDataManager {
      * @param data 要保存的数据
      */
     public static void saveAllLoginDataToFile(Map<UUID, PlayerLoginData> data) {
-        try (FileWriter writer = new FileWriter(LOGIN_DATA_FILE)) {
+        try (Writer writer = Utf8JsonFileIO.openWriter(LOGIN_DATA_FILE)) {
             GSON.toJson(data, writer);
             DreamingFishCore.LOGGER.debug("登录数据已保存到文件");
         } catch (IOException e) {

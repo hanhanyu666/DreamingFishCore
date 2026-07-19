@@ -25,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -1094,7 +1095,7 @@ public abstract class TitleScreenMixin extends Screen {
                     return;
                 }
 
-                try (InputStreamReader reader = new InputStreamReader(connection.getInputStream())) {
+                try (InputStreamReader reader = new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8)) {
                     JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
                     String name = json.has("name") ? json.get("name").getAsString() : "";
                     String tag = json.has("tag_name") ? json.get("tag_name").getAsString() : "";
