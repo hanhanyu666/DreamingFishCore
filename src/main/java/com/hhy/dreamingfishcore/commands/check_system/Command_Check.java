@@ -11,6 +11,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.util.UUID;
 
@@ -99,7 +100,7 @@ public class Command_Check {
         source.sendSuccess(() -> Component.literal("检查请求已发送至 " + playerName), false);
 
         // 向目标玩家发送一个网络包
-        DreamingFishCore_NetworkManager.sendToClient(player,
+        DreamingFishCore_NetworkManager.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
                 new Packet_Check(playerName, String.valueOf(playerUUID), senderName, String.valueOf(senderUUID), type));
 
 
@@ -130,7 +131,7 @@ public class Command_Check {
         source.sendSuccess(() -> Component.literal("获取请求已发送至 " + playerName), false);
 
         // 向目标玩家发送一个网络包
-        DreamingFishCore_NetworkManager.sendToClient(player,
+        DreamingFishCore_NetworkManager.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
                 new Packet_Get(playerName, String.valueOf(playerUUID), senderName, String.valueOf(senderUUID), type, fileName));
 
 

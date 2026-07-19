@@ -14,14 +14,14 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class MarkerClientHandler {
     private static final int FAILURE_TIP_DURATION_MS = 1600;
 
@@ -29,7 +29,7 @@ public class MarkerClientHandler {
     }
 
     @SubscribeEvent
-    public static void onMouseButton(InputEvent.MouseButton.Pre event) {
+    public static void onMouseButton(InputEvent.MouseButton event) {
         if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_MIDDLE || event.getAction() != GLFW.GLFW_PRESS) {
             return;
         }
@@ -101,7 +101,7 @@ public class MarkerClientHandler {
         }
 
         double maxDistance = getMaxMarkerDistance(mc);
-        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
+        float partialTick = mc.getFrameTime();
         Vec3 eyePosition = cameraEntity.getEyePosition(partialTick);
         Vec3 viewVector = cameraEntity.getViewVector(partialTick);
         Vec3 endPosition = eyePosition.add(viewVector.scale(maxDistance));

@@ -6,26 +6,19 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDat
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 死亡屏幕数据包
  * 服务端 → 客户端
  * 发送当前复活点数、消耗信息和死亡位置，用于显示自定义死亡屏幕
  */
-public class Packet_DeathScreenData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_DeathScreenData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/death_system/packet_death_screen_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_DeathScreenData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_DeathScreenData.encode(packet, buf), Packet_DeathScreenData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_DeathScreenData {
 
     private final float respawnPoint;
     private final float normalCost;
@@ -59,7 +52,7 @@ public class Packet_DeathScreenData implements net.minecraft.network.protocol.co
         buf.writeFloat(packet.normalCost);
         buf.writeFloat(packet.keepInventoryCost);
         buf.writeBoolean(packet.isInfected);
-        ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.encode(buf, packet.deathMessage);
+        buf.writeComponent(packet.deathMessage);
         buf.writeDouble(packet.deathX);
         buf.writeDouble(packet.deathY);
         buf.writeDouble(packet.deathZ);
@@ -74,7 +67,7 @@ public class Packet_DeathScreenData implements net.minecraft.network.protocol.co
         float normalCost = buf.readFloat();
         float keepInventoryCost = buf.readFloat();
         boolean isInfected = buf.readBoolean();
-        Component deathMessage = ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.decode(buf);
+        Component deathMessage = buf.readComponent();
         double deathX = buf.readDouble();
         double deathY = buf.readDouble();
         double deathZ = buf.readDouble();
@@ -85,10 +78,12 @@ public class Packet_DeathScreenData implements net.minecraft.network.protocol.co
     /**
      * 处理（客户端）
      */
-    public static void handle(Packet_DeathScreenData packet, IPayloadContext context) {
+    public static void handle(Packet_DeathScreenData packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ClientHandler.handle(packet);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handle(packet));
         });
+        context.setPacketHandled(true);
     }
 
     /**

@@ -7,13 +7,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.GameType;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.Random;
@@ -24,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 感染值事件处理
  * 处理玩家生命值变化、被丧尸击败等事件导致的感染值变化
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class InfectionEventHandler {
 
     private static final int INFECTION_MAX = 100;
@@ -42,9 +39,11 @@ public class InfectionEventHandler {
      * 玩家tick事件 - 每秒检查生命值变化，净损失时增加感染值
      */
     @SubscribeEvent
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
-        
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer player)) {
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.START) {
+            return;
+        }
+        if (event.side.isClient() || !event.player.isAlive() || !(event.player instanceof ServerPlayer player)) {
             return;
         }
         if (player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {

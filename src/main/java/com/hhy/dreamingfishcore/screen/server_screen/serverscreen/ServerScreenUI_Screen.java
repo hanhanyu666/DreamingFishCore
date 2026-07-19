@@ -21,8 +21,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 import com.hhy.dreamingfishcore.network.packets.notice_system.Packet_NoticeListRequest;
 import com.hhy.dreamingfishcore.network.packets.notice_system.Packet_MarkNoticeReadRequest;
@@ -740,18 +740,16 @@ public class ServerScreenUI_Screen extends Screen {
         int titleBoxX = rankBoxX + twoBoxWidth + boxSpacing;
         pageRenderer.renderTitleBox(guiGraphics, player, titleBoxX, twoBoxY, twoBoxWidth, mouseX, mouseY, uiScale);
 
-        // ==================== 绘制金币和领地框（左右排列，Rank/Title框下方） ====================
+        // ==================== 绘制梦鱼币和领地框（左右排列，Rank/Title框下方） ====================
         int thirdBoxY = twoBoxY + (innerMargin * 2 + lineHeight) + boxSpacing;
 
-        // 金币框（左侧）
         int goldBoxX = RIGHT_PANEL_START_X + boxMargin;
         pageRenderer.renderGoldBox(guiGraphics, goldBoxX, thirdBoxY, twoBoxWidth, mouseX, mouseY, uiScale);
 
-        // 领地框（右侧）
         int territoryBoxX = goldBoxX + twoBoxWidth + boxSpacing;
         pageRenderer.renderTerritoryBox(guiGraphics, territoryBoxX, thirdBoxY, twoBoxWidth, mouseX, mouseY, uiScale);
 
-        // ==================== 绘制群系和蓝图框（金币/领地框下方，左右排列） ====================
+        // ==================== 绘制群系和蓝图框（占位框下方，左右排列） ====================
         int fourthBoxY = thirdBoxY + (innerMargin * 2 + lineHeight) + boxSpacing;
 
         // 群系框（左侧）
@@ -1501,7 +1499,7 @@ public class ServerScreenUI_Screen extends Screen {
         int avatarY = y + (height - avatarSize) / 2;
         PlayerInfo playerInfo = player.connection != null ? player.connection.getPlayerInfo(player.getUUID()) : null;
         if (playerInfo != null) {
-            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), avatarX, avatarY, avatarSize);
+            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkinLocation(), avatarX, avatarY, avatarSize);
         } else {
             drawSoftRect(guiGraphics, avatarX, avatarY, avatarSize, avatarSize, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
         }
@@ -1870,21 +1868,17 @@ public class ServerScreenUI_Screen extends Screen {
             rightOffsetY = (int) ((1.0f - rightProgress) * 100);
         }
 
-        // 检查是否点击了金币框（仅主页面可点击）
         int[] goldBoxClick = pageRenderer.getGoldBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2] &&
-            virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
-            // 经济系统已剥离，保留原始入口区域作为占位。
+        if (selectedLeftButtonIndex == 0
+                && virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2]
+                && virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
             return true;
         }
 
-        // 检查是否点击了领地框（仅主页面可点击）
         int[] territoryBoxClick = pageRenderer.getTerritoryBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2] &&
-            virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
-            // 领地系统已剥离，保留原始入口区域作为占位。
+        if (selectedLeftButtonIndex == 0
+                && virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2]
+                && virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
             return true;
         }
 
@@ -2102,20 +2096,20 @@ public class ServerScreenUI_Screen extends Screen {
             case 9: // 设置
                 // Minecraft 原版设置
                 this.onClose();
-                mc.setScreen(new net.minecraft.client.gui.screens.options.OptionsScreen(mc.screen, mc.options));
+                mc.setScreen(new net.minecraft.client.gui.screens.OptionsScreen(mc.screen, mc.options));
                 break;
         }
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // 公告列表页面滚动
         if (selectedLeftButtonIndex == 2 && !cachedNotices.isEmpty()) {
             int totalNotices = cachedNotices.size();
             int maxScrollOffset = Math.max(0, totalNotices - VISIBLE_NOTICES);
 
             if (maxScrollOffset > 0) {
-                int newOffset = (int) (noticeScrollOffset - scrollY);
+                int newOffset = (int) (noticeScrollOffset - delta);
                 noticeScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                 return true;
             }
@@ -2130,7 +2124,7 @@ public class ServerScreenUI_Screen extends Screen {
                 int maxScrollOffset = Math.max(0, totalStages - VISIBLE_TASKS);
 
                 if (maxScrollOffset > 0) {
-                    int newOffset = (int) (stageScrollOffset - scrollY);
+                    int newOffset = (int) (stageScrollOffset - delta);
                     stageScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                     return true;
                 }
@@ -2152,7 +2146,7 @@ public class ServerScreenUI_Screen extends Screen {
                     int maxScrollOffset = Math.max(0, totalTasks - VISIBLE_TASKS);
 
                     if (maxScrollOffset > 0) {
-                        int newOffset = (int) (taskScrollOffset - scrollY);
+                        int newOffset = (int) (taskScrollOffset - delta);
                         taskScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                         return true;
                     }
@@ -2164,7 +2158,7 @@ public class ServerScreenUI_Screen extends Screen {
                 int maxScrollOffset = Math.max(0, totalTasks - VISIBLE_TASKS);
 
                 if (maxScrollOffset > 0) {
-                    int newOffset = (int) (taskScrollOffset - scrollY);
+                    int newOffset = (int) (taskScrollOffset - delta);
                     taskScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                     return true;
                 }
@@ -2181,13 +2175,13 @@ public class ServerScreenUI_Screen extends Screen {
             int maxScrollOffset = Math.max(0, totalHelpLines - visibleLines);
 
             if (maxScrollOffset > 0) {
-                int newOffset = (int) (helpScrollOffset - scrollY);
+                int newOffset = (int) (helpScrollOffset - delta);
                 helpScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                 return true;
             }
         }
 
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     /**
@@ -2239,17 +2233,12 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     /**
-     * 渲染鼠标悬浮提示框
-     * @param guiGraphics 图形上下文
-     * @param mouseX 鼠标 X 坐标（屏幕坐标）
-     * @param mouseY 鼠标 Y 坐标（屏幕坐标）
+     * 渲染 1.21.1 中保留的待接入数据提示。
      */
     private void renderTooltips(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        // 将屏幕鼠标坐标转换为虚拟坐标
         double virtualMouseX = mouseX / uiScale;
         double virtualMouseY = mouseY / uiScale;
 
-        // 计算右侧面板偏移（考虑动画）
         int rightOffsetY = 0;
         if (!isClosing) {
             float rightAnimDuration = 800f;
@@ -2258,29 +2247,23 @@ public class ServerScreenUI_Screen extends Screen {
             rightOffsetY = (int) ((1.0f - rightProgress) * 100);
         }
 
-        // 检查鼠标是否悬浮在金币框上（仅主页面显示tooltip）
         int[] goldBoxClick = pageRenderer.getGoldBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2] &&
-            virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
+        if (selectedLeftButtonIndex == 0
+                && virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2]
+                && virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
             Component tooltip = Component.literal("§e经济数据待接入")
-                .append("\n")
-                .append(Component.literal("§7原经济系统已剥离"));
-
-            // 渲染提示框（使用屏幕坐标）
+                    .append("\n")
+                    .append(Component.literal("§7原经济系统已剥离"));
             guiGraphics.renderTooltip(mc.font, tooltip, mouseX, mouseY);
         }
 
-        // 检查鼠标是否悬浮在领地框上（仅主页面显示tooltip）
         int[] territoryBoxClick = pageRenderer.getTerritoryBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2] &&
-            virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
+        if (selectedLeftButtonIndex == 0
+                && virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2]
+                && virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
             Component tooltip = Component.literal("§e领地数据待接入")
-                .append("\n")
-                .append(Component.literal("§7原领地系统已剥离"));
-
-            // 渲染提示框（使用屏幕坐标）
+                    .append("\n")
+                    .append(Component.literal("§7原领地系统已剥离"));
             guiGraphics.renderTooltip(mc.font, tooltip, mouseX, mouseY);
         }
     }

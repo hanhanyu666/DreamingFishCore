@@ -5,16 +5,15 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * 关闭玩家自然回血功能
  * 同时强制开启死亡不掉落（keepInventory）
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID,  bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ServerGameRulesManager {
 
     /**

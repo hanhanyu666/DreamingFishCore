@@ -4,24 +4,18 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.strength.PlayerStre
 import com.hhy.dreamingfishcore.core.playerattributes_system.strength.PlayerStrengthManager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 体力数据同步包（服务端→客户端）
  * 完全模仿 Packet_JoinMessage 结构，彻底隔离客户端代码
  */
-public class Packet_SyncStrengthData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncStrengthData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/strength_system/packet_sync_strength_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncStrengthData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncStrengthData.encode(packet, buf), Packet_SyncStrengthData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncStrengthData {
     private final int currentStrength;
     private final int maxStrength;
     private final boolean canSprint; // 是否可以疾跑（体力是否耗尽）
@@ -46,7 +40,8 @@ public class Packet_SyncStrengthData implements net.minecraft.network.protocol.c
     }
 
     // 对外暴露的handle方法（服务端/客户端都能访问，无客户端类引用）
-    public static void handle(Packet_SyncStrengthData packet, IPayloadContext context) {
+    public static void handle(Packet_SyncStrengthData packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         // 保存包数据为final，避免lambda中引用问题
         final int safeCurrentStrength = packet.currentStrength;
         final int safeMaxStrength = packet.maxStrength;
@@ -54,6 +49,7 @@ public class Packet_SyncStrengthData implements net.minecraft.network.protocol.c
 
         // 提交任务到主线程，调用隔离的处理方法
         context.enqueueWork(() -> processOnMainThread(safeCurrentStrength, safeMaxStrength, safeCanSprint));
+        context.setPacketHandled(true);
     }
 
     /**
@@ -61,7 +57,7 @@ public class Packet_SyncStrengthData implements net.minecraft.network.protocol.c
      */
     private static void processOnMainThread(int currentStrength, int maxStrength, boolean canSprint) {
         // 模仿参考代码：使用safeRunWhenOn，传入客户端专属Runnable
-        new ClientRunnable(currentStrength, maxStrength, canSprint).run();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientRunnable(currentStrength, maxStrength, canSprint));
     }
 
     /**
@@ -69,7 +65,7 @@ public class Packet_SyncStrengthData implements net.minecraft.network.protocol.c
      * 所有客户端逻辑都放在这里，彻底隔离
      */
     @OnlyIn(Dist.CLIENT)
-    private static class ClientRunnable implements Runnable {
+    private static class ClientRunnable implements DistExecutor.SafeRunnable {
         private final int currentStrength;
         private final int maxStrength;
         private final boolean canSprint;

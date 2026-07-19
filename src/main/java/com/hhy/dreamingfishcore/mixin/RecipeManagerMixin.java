@@ -7,7 +7,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.RecipeType;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +21,7 @@ import java.util.Map;
 public class RecipeManagerMixin {
 
     @Shadow
-    private Map<ResourceLocation, RecipeHolder<?>> byName;
+    private Map<ResourceLocation, Recipe<?>> byName;
 
     /**
      * 在配方加载开始时清空工作台配方缓存
@@ -44,9 +43,9 @@ public class RecipeManagerMixin {
     )
     private void dreamingfishcore$collectWorkbenchRecipes(Map<ResourceLocation, JsonElement> recipeList, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
         // 遍历所有配方，收集工作台配方
-        for (Map.Entry<ResourceLocation, RecipeHolder<?>> entry : this.byName.entrySet()) {
+        for (Map.Entry<ResourceLocation, Recipe<?>> entry : this.byName.entrySet()) {
             ResourceLocation recipeId = entry.getKey();
-            Recipe<?> recipe = entry.getValue().value();
+            Recipe<?> recipe = entry.getValue();
 
             // 检查是否为工作台合成配方
             if (recipe.getType() == RecipeType.CRAFTING) {

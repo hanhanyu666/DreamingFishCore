@@ -7,21 +7,14 @@ import com.hhy.dreamingfishcore.server.playerbiomes.PlayerBiomesDataManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 同步玩家统计数据到客户端（群系探索数 + 解锁蓝图数）
  */
-public class Packet_SyncPlayerStats implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncPlayerStats> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerdata_system/packet_sync_player_stats"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncPlayerStats> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncPlayerStats.encode(packet, buf), Packet_SyncPlayerStats::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncPlayerStats {
     private final int biomesCount;
     private final int blueprintCount;
 
@@ -41,7 +34,8 @@ public class Packet_SyncPlayerStats implements net.minecraft.network.protocol.co
         return new Packet_SyncPlayerStats(biomesCount, blueprintCount);
     }
 
-    public static void handle(Packet_SyncPlayerStats msg, IPayloadContext context) {
+    public static void handle(Packet_SyncPlayerStats msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
             // 同步到ClientCacheManager
             Minecraft mc = Minecraft.getInstance();
@@ -50,6 +44,7 @@ public class Packet_SyncPlayerStats implements net.minecraft.network.protocol.co
                 ClientCacheManager.setUnlockedRecipesCount(mc.player.getUUID(), msg.blueprintCount);
             }
         });
+        context.setPacketHandled(true);
     }
 
     /**

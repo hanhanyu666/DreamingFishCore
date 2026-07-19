@@ -3,25 +3,18 @@ package com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_sy
 import com.hhy.dreamingfishcore.core.playerattributes_system.death.Screen_RevivalCharm;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 打开复活护符 GUI 数据包
  * 服务端发送到客户端
  */
-public class Packet_OpenRevivalCharmGUI implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_OpenRevivalCharmGUI> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/death_system/packet_open_revival_charm_gui"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_OpenRevivalCharmGUI> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_OpenRevivalCharmGUI.encode(packet, buf), Packet_OpenRevivalCharmGUI::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_OpenRevivalCharmGUI {
 
     public Packet_OpenRevivalCharmGUI() {}
 
@@ -31,7 +24,8 @@ public class Packet_OpenRevivalCharmGUI implements net.minecraft.network.protoco
         return new Packet_OpenRevivalCharmGUI();
     }
 
-    public static void handle(Packet_OpenRevivalCharmGUI packet, IPayloadContext context) {
+    public static void handle(Packet_OpenRevivalCharmGUI packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
 
         // 只在客户端执行
         if (FMLLoader.getDist().isClient()) {
@@ -39,6 +33,7 @@ public class Packet_OpenRevivalCharmGUI implements net.minecraft.network.protoco
                 handleClient();
             });
         }
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

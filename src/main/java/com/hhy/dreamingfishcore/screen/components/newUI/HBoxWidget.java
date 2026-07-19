@@ -441,11 +441,11 @@ public class HBoxWidget extends AbstractWidget {
      * 鼠标滚轮事件处理
      */
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // 先检查子组件是否需要处理滚动
         for (AbstractWidget child : children) {
             if (child.isMouseOver(mouseX, mouseY)) {
-                if (child.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+                if (child.mouseScrolled(mouseX, mouseY, delta)) {
                     return true;
                 }
             }
@@ -454,12 +454,12 @@ public class HBoxWidget extends AbstractWidget {
         // 处理自己的滚动
         if (scrollEnabled && contentWidth > width) {
             int scrollMax = Math.max(0, contentWidth - (width - paddingLeft - paddingRight));
-            scrollOffset -= scrollY * 10;
+            scrollOffset -= delta * 10;
             if (scrollOffset < 0) scrollOffset = 0;
             if (scrollOffset > scrollMax) scrollOffset = scrollMax;
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     /**

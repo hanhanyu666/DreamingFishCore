@@ -4,21 +4,14 @@ import com.hhy.dreamingfishcore.core.storybook_system.FragmentData;
 import com.hhy.dreamingfishcore.screen.storybook_system.Screen_StoryFragment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
-public class Packet_OpenStoryFragmentGUI implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_OpenStoryFragmentGUI> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "storybook_system/packet_open_story_fragment_gui"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_OpenStoryFragmentGUI> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_OpenStoryFragmentGUI.encode(packet, buf), Packet_OpenStoryFragmentGUI::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_OpenStoryFragmentGUI {
 
     private final int fragmentId;
     private final int stageId;
@@ -72,10 +65,12 @@ public class Packet_OpenStoryFragmentGUI implements net.minecraft.network.protoc
         );
     }
 
-    public static void handle(Packet_OpenStoryFragmentGUI packet, IPayloadContext context) {
+    public static void handle(Packet_OpenStoryFragmentGUI packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         if (FMLLoader.getDist().isClient()) {
             context.enqueueWork(() -> handleClient(packet));
         }
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

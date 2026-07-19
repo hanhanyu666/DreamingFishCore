@@ -2,21 +2,14 @@ package com.hhy.dreamingfishcore.network.packets;
 
 import com.hhy.dreamingfishcore.screen.server_screen.ServerInformationDisplay;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 独立的在线玩家数响应包（仅返回数量，轻量无依赖）
  */
-public class Packet_OnlinePlayerCountResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_OnlinePlayerCountResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "packet_online_player_count_response"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_OnlinePlayerCountResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_OnlinePlayerCountResponse.encode(packet, buf), Packet_OnlinePlayerCountResponse::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_OnlinePlayerCountResponse {
     private final int playerCount; // 仅存储在线玩家数量
 
     // 构造方法：接收服务端传的玩家数
@@ -36,9 +29,11 @@ public class Packet_OnlinePlayerCountResponse implements net.minecraft.network.p
     }
 
     // 客户端处理逻辑：直接更新UI的在线玩家数
-    public static void handle(Packet_OnlinePlayerCountResponse msg, IPayloadContext context) {
+    public static void handle(Packet_OnlinePlayerCountResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
             ServerInformationDisplay.ONLINE_PLAYERS = msg.playerCount;
         });
+        context.setPacketHandled(true);
     }
 }

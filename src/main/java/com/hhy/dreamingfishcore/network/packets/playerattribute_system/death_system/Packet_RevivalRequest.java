@@ -13,26 +13,19 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.world.InteractionHand;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * 复活请求数据包
  * 客户端发送到服务端，请求复活指定玩家
  */
-public class Packet_RevivalRequest implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_RevivalRequest> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/death_system/packet_revival_request"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_RevivalRequest> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_RevivalRequest.encode(packet, buf), Packet_RevivalRequest::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_RevivalRequest {
 
     private final String playerName;
 
@@ -58,16 +51,17 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
     /**
      * 处理（服务端）
      */
-    public static void handle(Packet_RevivalRequest packet, IPayloadContext context) {
+    public static void handle(Packet_RevivalRequest packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer sender = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+            ServerPlayer sender = context.getSender();
             if (sender == null) return;
 
             String targetName = packet.playerName;
             UserBanList banList = sender.server.getPlayerList().getBans();
 
             // 读取 banned-players.json 文件找到玩家的 UUID
-            Path banFile = sender.server.getServerDirectory().resolve("banned-players.json");
+            Path banFile = sender.server.getServerDirectory().toPath().resolve("banned-players.json");
             JsonObject foundEntry = null;
 
             try (FileReader reader = new FileReader(banFile.toFile())) {
@@ -181,6 +175,7 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
                 sender.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c解封失败！"));
             }
         });
+        context.setPacketHandled(true);
     }
 
     /**

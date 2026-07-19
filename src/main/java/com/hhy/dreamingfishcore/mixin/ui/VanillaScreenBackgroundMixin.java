@@ -18,7 +18,7 @@ public class VanillaScreenBackgroundMixin {
     private static final String JOIN_MULTIPLAYER = "net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen";
 
     @Inject(method = "renderBackground", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$cancelVanillaDirt(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$cancelVanillaDirt(GuiGraphics guiGraphics, CallbackInfo ci) {
         String name = this.getClass().getName();
         if (SELECT_WORLD.equals(name) || JOIN_MULTIPLAYER.equals(name)) {
             ci.cancel();

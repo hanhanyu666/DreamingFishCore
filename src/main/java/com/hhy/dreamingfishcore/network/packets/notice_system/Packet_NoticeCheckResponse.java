@@ -3,24 +3,17 @@ package com.hhy.dreamingfishcore.network.packets.notice_system;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 新公告提醒数据包（服务端 -> 客户端）
  * 玩家登录时，如果有新公告则发送此包提醒玩家
  */
-public class Packet_NoticeCheckResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_NoticeCheckResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "notice_system/packet_notice_check_response"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_NoticeCheckResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_NoticeCheckResponse.encode(packet, buf), Packet_NoticeCheckResponse::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_NoticeCheckResponse {
 
     private final boolean hasNewNotice;
     private final int latestNoticeId;
@@ -45,10 +38,15 @@ public class Packet_NoticeCheckResponse implements net.minecraft.network.protoco
         return new Packet_NoticeCheckResponse(hasNewNotice, latestNoticeId, latestNoticeTitle);
     }
 
-    public static void handle(Packet_NoticeCheckResponse msg, IPayloadContext context) {
+    public static void handle(Packet_NoticeCheckResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            handleClient(msg);
+            // 只在客户端处理
+            if (context.getDirection().getReceptionSide().isClient()) {
+                handleClient(msg);
+            }
         });
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

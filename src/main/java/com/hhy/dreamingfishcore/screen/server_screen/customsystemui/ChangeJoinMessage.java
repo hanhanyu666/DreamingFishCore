@@ -7,37 +7,37 @@ import com.hhy.dreamingfishcore.server.rank.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank.Rank;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.common.ModConfigSpec;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 // 注册事件入口，只有注册了这个类才能执行后面的代码
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class ChangeJoinMessage {
-    private static ModConfigSpec COMMON_CONFIG_SPEC;    //声明COMMON_CONFIG_SPEC变量为配置规则容器，存储后面的配置项
+    private static ForgeConfigSpec COMMON_CONFIG_SPEC;    //声明COMMON_CONFIG_SPEC变量为配置规则容器，存储后面的配置项
 
     //无rank消息
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE;     //声明JOIN_MESSAGE为forge配置文件规定的字符串变量
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE;   //同上
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE;     //声明JOIN_MESSAGE为forge配置文件规定的字符串变量
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE;   //同上
 
     // Rank专属进服消息
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
 
     // Rank专属离开消息
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
 
     // 静态代码块，类初始化只会执行一次
     static {
-        ModConfigSpec.Builder configBuilder = new ModConfigSpec.Builder();    //用builder这个类，创建一个配置文件构建器，放后面的规则
+        ForgeConfigSpec.Builder configBuilder = new ForgeConfigSpec.Builder();    //用builder这个类，创建一个配置文件构建器，放后面的规则
 
         // 进服消息配置
         JOIN_MESSAGE = configBuilder
@@ -95,7 +95,7 @@ public class ChangeJoinMessage {
     }
 
     // 获取配置文件的内容
-    public static String getConfigValue(ModConfigSpec.ConfigValue<String> configValue) {
+    public static String getConfigValue(ForgeConfigSpec.ConfigValue<String> configValue) {
         // 配置未加载，那么返回默认值；配置加载了但是是空的，返回默认值，如果返回的不是空的，那么返回自定义值
         if (!COMMON_CONFIG_SPEC.isLoaded()) {
             return configValue.getDefault();

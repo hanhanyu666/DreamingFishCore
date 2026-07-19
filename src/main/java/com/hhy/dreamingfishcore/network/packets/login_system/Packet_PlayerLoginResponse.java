@@ -9,19 +9,12 @@ import com.hhy.dreamingfishcore.screen.server_screen.tips.TipPushHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class Packet_PlayerLoginResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_PlayerLoginResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "login_system/packet_player_login_response"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_PlayerLoginResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_PlayerLoginResponse.encode(packet, buf), Packet_PlayerLoginResponse::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_PlayerLoginResponse {
     //true是注册，false是登录
     private final boolean loginOrRegister;
     private final String password;
@@ -47,14 +40,16 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
         return new Packet_PlayerLoginResponse(loginOrRegister, password, playerUUID);
     }
 
-    public static void handle(Packet_PlayerLoginResponse playerLoginResponse, IPayloadContext context) {
+    public static void handle(Packet_PlayerLoginResponse playerLoginResponse, Supplier<NetworkEvent.Context> contextSupplier) {
         com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.info("收到密码响应包！");
 
         if (playerLoginResponse == null) {
             com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.error("密码响应包为null！");
             return;
         }
-        ServerPlayer serverPlayer = context.player() instanceof ServerPlayer player ? player : null;
+
+        NetworkEvent.Context context = contextSupplier.get();
+        ServerPlayer serverPlayer = context.getSender();
 
         if (serverPlayer == null) {
             com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.error("服务端玩家实例为null！");
@@ -160,6 +155,7 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
                 }
             }
         });
+        context.setPacketHandled(true);
     }
 
     private static void sendResult(ServerPlayer player, boolean success, String message) {

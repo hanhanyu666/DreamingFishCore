@@ -102,7 +102,7 @@ public abstract class DeathScreenMixin extends Screen {
         if (mc.level != null) {
             mc.level.disconnect();
         }
-        mc.disconnect();
+        mc.clearLevel(null);
         mc.setScreen(null);
     }
 

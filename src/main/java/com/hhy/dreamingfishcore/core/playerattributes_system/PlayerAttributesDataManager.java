@@ -6,11 +6,10 @@ import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerattributes_system.strength.StrengthSyncManager;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.FileReader;
@@ -26,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 玩家属性数据管理器
  * 负责属性数据的初始化、加载、保存、缓存管理，适配登录/登出事件
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerAttributesDataManager {
     // 属性数据文件路径
     private static final File PLAYER_ATTRIBUTES_FILE = new File("config/dreamingfishcore/data/player_attributes_data.json");

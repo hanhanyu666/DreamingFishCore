@@ -6,13 +6,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.biome.Biome;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerlevel_system.overalllevel.PlayerLevelManager;
@@ -30,7 +27,7 @@ import java.util.UUID;
  *
  * 参考原版 BiomeAmbientSoundsHandler 的实现方式
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class BiomeExplorationHandler {
 
     // ==================== 配置项 ====================
@@ -84,8 +81,9 @@ public class BiomeExplorationHandler {
      * 定期检查玩家是否进入新生物群系（每秒检查一次，即每20 tick）
      */
     @SubscribeEvent
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        if (!(event.player instanceof ServerPlayer player)) return;
         if (player.level().isClientSide) return;
         if (player.tickCount % 20 != 0) return;
 

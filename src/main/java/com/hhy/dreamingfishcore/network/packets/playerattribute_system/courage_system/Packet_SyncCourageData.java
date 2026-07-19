@@ -3,25 +3,19 @@ package com.hhy.dreamingfishcore.network.packets.playerattribute_system.courage_
 import com.hhy.dreamingfishcore.core.playerattributes_system.courage.PlayerCourageManager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.awt.geom.FlatteningPathIterator;
+import java.util.function.Supplier;
 
 /**
  * 勇气值数据同步包（服务端→客户端）
  * 完全模仿 Packet_SyncStrengthData 结构，彻底隔离客户端代码
  */
-public class Packet_SyncCourageData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncCourageData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/courage_system/packet_sync_courage_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncCourageData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncCourageData.encode(packet, buf), Packet_SyncCourageData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncCourageData {
     private final float currentCourage;
     private final float maxCourage;
 
@@ -42,13 +36,15 @@ public class Packet_SyncCourageData implements net.minecraft.network.protocol.co
     }
 
     // 对外暴露的handle方法（服务端/客户端都能访问，无客户端类引用）
-    public static void handle(Packet_SyncCourageData packet, IPayloadContext context) {
+    public static void handle(Packet_SyncCourageData packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         // 保存包数据为final，避免lambda中引用问题
         final float safeCurrentCourage = packet.currentCourage;
         final float safeMaxCourage = packet.maxCourage;
 
         // 提交任务到主线程，调用隔离的处理方法
         context.enqueueWork(() -> processOnMainThread(safeCurrentCourage, safeMaxCourage));
+        context.setPacketHandled(true);
     }
 
     /**
@@ -56,7 +52,7 @@ public class Packet_SyncCourageData implements net.minecraft.network.protocol.co
      */
     private static void processOnMainThread(float currentCourage, float maxCourage) {
         // 模仿参考代码：使用safeRunWhenOn，传入客户端专属Runnable
-        new ClientRunnable(currentCourage, maxCourage).run();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientRunnable(currentCourage, maxCourage));
     }
 
     /**
@@ -64,7 +60,7 @@ public class Packet_SyncCourageData implements net.minecraft.network.protocol.co
      * 所有客户端逻辑都放在这里，彻底隔离
      */
     @OnlyIn(Dist.CLIENT)
-    private static class ClientRunnable implements Runnable {
+    private static class ClientRunnable implements DistExecutor.SafeRunnable {
         private final float currentCourage;
         private final float maxCourage;
 

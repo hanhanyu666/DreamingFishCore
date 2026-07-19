@@ -4,23 +4,16 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.screen.server_screen.customsystemui.SystemMessageDisplay;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
+import java.util.function.Supplier;
 
 /**
  * 通用系统消息数据包 - 将所有系统消息显示在右上角
  */
-public class Packet_SystemMessage implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SystemMessage> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "packet_system_message"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SystemMessage> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SystemMessage.encode(packet, buf), Packet_SystemMessage::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SystemMessage {
     private final Component message;
     private final int borderColor; // 边框颜色
 
@@ -35,29 +28,31 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
     }
 
     public static void encode(Packet_SystemMessage packet, FriendlyByteBuf buf) {
-        ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.encode(buf, packet.message);
+        buf.writeComponent(packet.message);
         buf.writeInt(packet.borderColor);
     }
 
     public static Packet_SystemMessage decode(FriendlyByteBuf buf) {
-        Component message = ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.decode(buf);
+        Component message = buf.readComponent();
         int borderColor = buf.readInt();
         return new Packet_SystemMessage(message, borderColor);
     }
 
-    public static void handle(Packet_SystemMessage packet, IPayloadContext context) {
+    public static void handle(Packet_SystemMessage packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         final Component safeMessage = packet.message;
         final int safeColor = packet.borderColor;
 
         context.enqueueWork(() -> processOnMainThread(safeMessage, safeColor));
+        context.setPacketHandled(true);
     }
 
     private static void processOnMainThread(Component message, int borderColor) {
-        new ClientRunnable(message, borderColor).run();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientRunnable(message, borderColor));
     }
 
     @OnlyIn(Dist.CLIENT)
-    private static class ClientRunnable implements Runnable {
+    private static class ClientRunnable implements DistExecutor.SafeRunnable {
         private final Component message;
         private final int borderColor;
 

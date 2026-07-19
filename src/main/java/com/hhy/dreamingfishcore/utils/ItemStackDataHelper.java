@@ -1,32 +1,26 @@
 package com.hhy.dreamingfishcore.utils;
 
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 
 public final class ItemStackDataHelper {
     private ItemStackDataHelper() {
     }
 
     public static boolean hasTag(ItemStack stack) {
-        return stack.has(DataComponents.CUSTOM_DATA);
+        return stack.hasTag();
     }
 
     public static CompoundTag getTag(ItemStack stack) {
-        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
-        return data == null ? null : data.copyTag();
+        CompoundTag tag = stack.getTag();
+        return tag == null ? null : tag.copy();
     }
 
     public static void setTag(ItemStack stack, CompoundTag tag) {
-        if (tag == null || tag.isEmpty()) {
-            stack.remove(DataComponents.CUSTOM_DATA);
-        } else {
-            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        }
+        stack.setTag(tag == null || tag.isEmpty() ? null : tag.copy());
     }
 
     public static CompoundTag saveSimple(ItemStack stack) {
@@ -42,7 +36,7 @@ public final class ItemStackDataHelper {
     }
 
     public static ItemStack loadSimple(CompoundTag tag) {
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(tag.getString("id")));
+        Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(tag.getString("id")));
         ItemStack stack = new ItemStack(item, Math.max(1, tag.getInt("count")));
         if (tag.contains("customData")) {
             setTag(stack, tag.getCompound("customData"));

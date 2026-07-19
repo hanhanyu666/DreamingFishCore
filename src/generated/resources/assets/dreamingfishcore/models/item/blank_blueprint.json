@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "dreamingfishcore:item/wormhole_potion"
+    "layer0": "dreamingfishcore:item/blueprint"
   }
 }

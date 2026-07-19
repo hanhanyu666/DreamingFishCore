@@ -13,21 +13,15 @@ import com.hhy.dreamingfishcore.server.playerdata.PlayerDataManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class Packet_SyncPlayerData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncPlayerData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerdata_system/packet_sync_player_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncPlayerData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncPlayerData.encode(packet, buf), Packet_SyncPlayerData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncPlayerData {
     private final UUID playerUUID;
     private final String playerName;
     private final boolean isOnline;
@@ -135,8 +129,10 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
     }
 
     //处理逻辑，无客户端类引用
-    public static void handle(Packet_SyncPlayerData packet, IPayloadContext context) {
+    public static void handle(Packet_SyncPlayerData packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         // 标记已处理（服务器/客户端通用）
+        context.setPacketHandled(true);
 
         // 传递不可变参数，避免lambda捕获导致的类引用
         final UUID safeUUID = packet.playerUUID;
@@ -161,13 +157,13 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
                                             int level, long experience, String onlineTime, long registrationTime,
                                             long lastLoginTime, long totalPlayTime) {
         //用SafeRunnable隔离客户端逻辑，服务器端仅加载接口，不加载实现
-        new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName, titleName, level, experience, onlineTime,
-                registrationTime, lastLoginTime, totalPlayTime).run();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName,
+                titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime));
     }
 
     //纯客户端逻辑（@OnlyIn标记，服务器完全不加载）=
     @OnlyIn(Dist.CLIENT)
-    private static class ClientSyncRunnable implements Runnable {
+    private static class ClientSyncRunnable implements DistExecutor.SafeRunnable {
         private final UUID playerUUID;
         private final String playerName;
         private final boolean isOnline;
@@ -224,26 +220,27 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
             }
             */
 
+            Player targetPlayer = mc.level.getPlayerByUUID(playerUUID);
+            if (targetPlayer == null) {
+                DreamingFishCore.LOGGER.warn("客户端同步数据失败：未找到UUID为{}的玩家", playerUUID);
+                // TODO: 排行榜功能暂时注释，等待重写
+                // ServerScreenUI_Screen.updatePlayerRankLevelCache(playerUUID, playerName, level, rankName, titleName, onlineTime);
+                return;
+            }
+
             //客户端缓存更新
             Rank rank = RankRegistry.getRankByName(rankName);
             Title title = TitleRegistry.getTitleByName(titleName);
+
+            PlayerRankManager.setPlayerRankClient(targetPlayer, rank);
+            PlayerTitleManager.setPlayerTitleClient(targetPlayer, title);
+            PlayerLevelManager.setPlayerLevelClient(targetPlayer, level);
+            PlayerLevelManager.setPlayerExperienceClient(targetPlayer, experience); // 同步经验
             PlayerData cachedData = com.hhy.dreamingfishcore.client.cache.ClientCacheManager.getOrCreatePlayerData(playerUUID);
-            cachedData.setRank(rank);
-            cachedData.setTitle(title);
-            cachedData.setLevel(level);
-            cachedData.setCurrentExperience(experience);
             cachedData.setRegistrationTime(registrationTime);
             cachedData.setLastLoginTime(lastLoginTime);
             cachedData.setTotalPlayTime(totalPlayTime);
             com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setPlayerData(playerUUID, cachedData);
-
-            Player targetPlayer = mc.level != null ? mc.level.getPlayerByUUID(playerUUID) : null;
-            if (targetPlayer != null) {
-                PlayerRankManager.setPlayerRankClient(targetPlayer, rank);
-                PlayerTitleManager.setPlayerTitleClient(targetPlayer, title);
-                PlayerLevelManager.setPlayerLevelClient(targetPlayer, level);
-                PlayerLevelManager.setPlayerExperienceClient(targetPlayer, experience); // 同步经验
-            }
 
             // TODO: 排行榜功能暂时注释，等待重写
             // ServerScreenUI_Screen.updatePlayerRankLevelCache(playerUUID, playerName, level, rankName, titleName, onlineTime);

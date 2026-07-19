@@ -2,11 +2,12 @@ package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.hhy.dreamingfishcore.client.util.ModernSelectionScreenUi;
 import com.mojang.blaze3d.platform.NativeImage;
-import net.minecraft.SharedConstants;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.FaviconTexture;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+import net.minecraft.client.gui.screens.multiplayer.ServerSelectionList;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -25,7 +26,7 @@ import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Mixin(targets = "net.minecraft.client.gui.screens.multiplayer.ServerSelectionList$OnlineServerEntry")
+@Mixin(ServerSelectionList.OnlineServerEntry.class)
 public abstract class OnlineServerEntryMixin {
 
     @Unique
@@ -72,30 +73,28 @@ public abstract class OnlineServerEntryMixin {
 
     @Unique
     private void dreamingFishCore$ensureServerStatus() {
-        if (this.serverData.state() != ServerData.State.INITIAL) {
+        if (this.serverData.pinged) {
             return;
         }
 
-        this.serverData.setState(ServerData.State.PINGING);
+        this.serverData.pinged = true;
+        this.serverData.ping = -2L;
         this.serverData.motd = CommonComponents.EMPTY;
         this.serverData.status = CommonComponents.EMPTY;
         DREAMINGFISHCORE_SERVER_PING_EXECUTOR.submit(() -> {
             try {
                 this.screen.getPinger().pingServer(
                         this.serverData,
-                        () -> this.minecraft.execute(this::dreamingFishCore$updateServerList),
-                        () -> this.serverData.setState(
-                                this.serverData.protocol == SharedConstants.getCurrentVersion().getProtocolVersion()
-                                        ? ServerData.State.SUCCESSFUL
-                                        : ServerData.State.INCOMPATIBLE
-                        )
+                        () -> this.minecraft.execute(this::dreamingFishCore$updateServerList)
                 );
             } catch (UnknownHostException unknownHostException) {
-                this.serverData.setState(ServerData.State.UNREACHABLE);
-                this.serverData.motd = Component.translatable("multiplayer.status.cannot_resolve").withColor(-65536);
+                this.serverData.ping = -1L;
+                this.serverData.motd = Component.translatable("multiplayer.status.cannot_resolve")
+                        .withStyle(ChatFormatting.DARK_RED);
             } catch (Exception exception) {
-                this.serverData.setState(ServerData.State.UNREACHABLE);
-                this.serverData.motd = Component.translatable("multiplayer.status.cannot_connect").withColor(-65536);
+                this.serverData.ping = -1L;
+                this.serverData.motd = Component.translatable("multiplayer.status.cannot_connect")
+                        .withStyle(ChatFormatting.DARK_RED);
             }
         });
     }

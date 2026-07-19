@@ -7,15 +7,14 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.infection.PlayerInf
 import com.hhy.dreamingfishcore.core.playerattributes_system.death.RespawnPointSyncManager;
 import com.hhy.dreamingfishcore.core.playerattributes_system.strength.StrengthSyncManager;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import static com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDataManager.getPlayerAttributesData;
 
 //重生恢复所有默认状态
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class LoginDeathSync {
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {

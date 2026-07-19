@@ -285,19 +285,19 @@ public class Screen_StoryFragment extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (maxScrollOffset <= 0) {
-            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+            return super.mouseScrolled(mouseX, mouseY, delta);
         }
 
         double virtualMouseX = mouseX / uiScale;
         double virtualMouseY = mouseY / uiScale;
         if (virtualMouseX >= panelX && virtualMouseX <= panelX + panelWidth
                 && virtualMouseY >= panelY && virtualMouseY <= panelY + panelHeight) {
-            scrollOffset = Mth.clamp(scrollOffset - (float) scrollY * SCROLL_SPEED, 0, maxScrollOffset);
+            scrollOffset = Mth.clamp(scrollOffset - (float) delta * SCROLL_SPEED, 0, maxScrollOffset);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override

@@ -4,10 +4,9 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.FileReader;
@@ -23,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 故事阶段管理器
  * 负责加载和管理故事阶段数据（包含任务列表和怪物数值调整）
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class StoryStageManager {
     private static final File STORY_STAGE_DATA_FILE = new File("config/dreamingfishcore/story_stage_data.json");
 

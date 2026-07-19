@@ -5,10 +5,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.FileReader;
@@ -25,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 玩家生物群系探索数据管理器
  * 负责管理玩家已探索的生物群系数据
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerBiomesDataManager {
     private static final File BIOMES_DATA_FILE = new File("config/dreamingfishcore/data/player_biomes_data.json");
     private static final Map<UUID, Set<String>> BIOMES_CACHE = new ConcurrentHashMap<>();

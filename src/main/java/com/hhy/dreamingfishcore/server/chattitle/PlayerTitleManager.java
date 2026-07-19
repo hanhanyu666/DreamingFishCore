@@ -1,12 +1,15 @@
 package com.hhy.dreamingfishcore.server.chattitle;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerDataManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.fml.common.Mod;
 
 
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerTitleManager {
     public static void setPlayerTitleServer(ServerPlayer serverPlayer, Title title) {
         PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());

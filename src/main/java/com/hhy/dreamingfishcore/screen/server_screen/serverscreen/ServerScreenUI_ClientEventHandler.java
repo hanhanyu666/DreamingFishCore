@@ -3,15 +3,15 @@ package com.hhy.dreamingfishcore.screen.server_screen.serverscreen;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DeathScreen;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * 客户端事件处理器：处理UI状态恢复（如重生后）
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class ServerScreenUI_ClientEventHandler {
     private static int tickCounter = 0;
 
@@ -20,7 +20,9 @@ public class ServerScreenUI_ClientEventHandler {
      * 处理死亡重生后UI消失的问题
      */
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+
         // 每20 tick（1秒）检查一次
         tickCounter++;
         if (tickCounter < 20) return;

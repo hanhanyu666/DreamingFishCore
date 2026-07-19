@@ -4,19 +4,12 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.utils.Util_Player;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.*;
+import java.util.function.Supplier;
 
-public class Packet_ServerPlayerListRequest implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_ServerPlayerListRequest> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "packet_server_player_list_request"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_ServerPlayerListRequest> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_ServerPlayerListRequest.encode(packet, buf), Packet_ServerPlayerListRequest::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_ServerPlayerListRequest {
     public Packet_ServerPlayerListRequest() {}
 
     public static void encode(Packet_ServerPlayerListRequest msg, FriendlyByteBuf buf) {
@@ -27,13 +20,15 @@ public class Packet_ServerPlayerListRequest implements net.minecraft.network.pro
         return new Packet_ServerPlayerListRequest();
     }
 
-    public static void handle(Packet_ServerPlayerListRequest msg, IPayloadContext context) {
+    public static void handle(Packet_ServerPlayerListRequest msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+            ServerPlayer player = context.getSender();
             if (player != null) {
                 List<Map.Entry<UUID, String>> accounts = Util_Player.getOnlinePlayerNames(player.server);
                 DreamingFishCore_NetworkManager.sendToClient(player, new Packet_ServerPlayerListResponse(accounts));
             }
         });
+        context.setPacketHandled(true);
     }
 }

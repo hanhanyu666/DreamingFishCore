@@ -5,19 +5,18 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDat
 import com.hhy.dreamingfishcore.core.task_system.TaskPlayerData;
 import com.hhy.dreamingfishcore.core.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @OnlyIn(Dist.CLIENT)
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class ClientCacheManager {
     private static final Map<UUID, PlayerData> PLAYER_DATA_CACHE = new ConcurrentHashMap<>();
     private static final Map<UUID, PlayerAttributesData> PLAYER_ATTRIBUTES_DATA_CACHE = new ConcurrentHashMap<>();

@@ -2,7 +2,6 @@ package com.hhy.dreamingfishcore.mixin.death;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerattributes_system.death.DeathItemStorage;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -24,7 +23,7 @@ public class RespawnMixin {
      * 如果是玩家且设置了 DreamingFishCore_DeathPending 标记，存储物品副本
      */
     @Inject(method = "dropAllDeathLoot", at = @At("HEAD"))
-    private void dreamingFishCore$onDropAllDeathLoot(ServerLevel level, DamageSource damageSource, CallbackInfo ci) {
+    private void dreamingFishCore$onDropAllDeathLoot(DamageSource damageSource, CallbackInfo ci) {
         LivingEntity entity = (LivingEntity) (Object) this;
 
         // 只处理玩家

@@ -168,12 +168,9 @@ public class Screen_NpcDialogue extends Screen {
         float relativeMouseY = mouseY - modelFootY + 70;
         InventoryScreen.renderEntityInInventoryFollowsMouse(
                 guiGraphics,
-                modelCenterX - modelSize,
-                modelFootY - modelSize * 2,
-                modelCenterX + modelSize,
+                modelCenterX,
                 modelFootY,
                 modelSize,
-                0.0625F,
                 -relativeMouseX * 0.35f,
                 -relativeMouseY * 0.18f,
                 entity
@@ -284,7 +281,7 @@ public class Screen_NpcDialogue extends Screen {
                             dialogueIndex++;
                             openTime = System.currentTimeMillis();
                         }
-                        DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcInteractionRequest(data.getNpcId(), data.getEntityId(), area.type));
+                        DreamingFishCore_NetworkManager.INSTANCE.sendToServer(new Packet_NpcInteractionRequest(data.getNpcId(), data.getEntityId(), area.type));
                     }
                     return true;
                 }

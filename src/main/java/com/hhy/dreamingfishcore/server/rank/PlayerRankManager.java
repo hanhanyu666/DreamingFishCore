@@ -1,15 +1,18 @@
 package com.hhy.dreamingfishcore.server.rank;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerDataManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.fml.common.Mod;
 
 
 /**
  * 玩家Rank数据管理器（使用全局统一存储）
  */
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerRankManager {
     public static void setPlayerRankServer(ServerPlayer serverPlayer, Rank rank) {
         PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());

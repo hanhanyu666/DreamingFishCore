@@ -322,11 +322,11 @@ public class VBoxWidget extends AbstractWidget {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // 先检查子控件是否需要处理滚动
         for (AbstractWidget child : children) {
             if (child.isMouseOver(mouseX, mouseY)) {
-                if (child.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+                if (child.mouseScrolled(mouseX, mouseY, delta)) {
                     return true;
                 }
             }
@@ -335,12 +335,12 @@ public class VBoxWidget extends AbstractWidget {
         // 如果子控件不需要处理，再处理自己的滚动
         if (scrollEnabled && contentHeight > height) {
             int scrollMax = Math.max(0, contentHeight - (height - paddingTop - paddingBottom));
-            scrollOffset -= scrollY * 10;
+            scrollOffset -= delta * 10;
             if (scrollOffset < 0) scrollOffset = 0;
             if (scrollOffset > scrollMax) scrollOffset = scrollMax;
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override

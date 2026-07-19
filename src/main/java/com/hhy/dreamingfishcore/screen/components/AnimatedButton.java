@@ -37,7 +37,7 @@ public class AnimatedButton extends Button {
 
 
     @Override
-    protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 计算动画进度（0.0 ~ 1.0）
         float progress = (System.currentTimeMillis() - startTime) / (float) duration;
         progress = Mth.clamp(progress, 0, 1); // 限制在 [0,1] 范围内
@@ -53,6 +53,6 @@ public class AnimatedButton extends Button {
         this.setX(currentX);
         this.setY(currentY);
 
-        super.renderWidget(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 }

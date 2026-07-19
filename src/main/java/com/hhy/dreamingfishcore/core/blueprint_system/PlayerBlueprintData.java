@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.core.blueprint_system;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.hhy.dreamingfishcore.item.items.Item_Blueprint;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -12,7 +10,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
-
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,7 +103,7 @@ public class PlayerBlueprintData {
             // 尝试获取配方的输??
             ItemStack output = recipe.getResultItem(RegistryAccess.EMPTY); // 注意：这里需要RegistryAccess
             if (output != null && !output.isEmpty()) {
-                return BuiltInRegistries.ITEM.getKey(output.getItem());
+                return ForgeRegistries.ITEMS.getKey(output.getItem());
             }
         } catch (Exception e) {
             // 如果上面的方法失败，尝试备用方案
@@ -130,12 +128,12 @@ public class PlayerBlueprintData {
             if (recipe instanceof net.minecraft.world.item.crafting.ShapedRecipe shapedRecipe) {
                 ItemStack output = shapedRecipe.getResultItem(RegistryAccess.EMPTY);
                 if (output != null) {
-                    return BuiltInRegistries.ITEM.getKey(output.getItem());
+                    return ForgeRegistries.ITEMS.getKey(output.getItem());
                 }
             } else if (recipe instanceof net.minecraft.world.item.crafting.ShapelessRecipe shapelessRecipe) {
                 ItemStack output = shapelessRecipe.getResultItem(RegistryAccess.EMPTY);
                 if (output != null) {
-                    return BuiltInRegistries.ITEM.getKey(output.getItem());
+                    return ForgeRegistries.ITEMS.getKey(output.getItem());
                 }
             }
         } catch (Exception e) {
@@ -161,7 +159,7 @@ public class PlayerBlueprintData {
                 // 获取配方的输出物??
                 net.minecraft.world.item.ItemStack output = recipe.getResultItem(RegistryAccess.EMPTY); // 注意：需要RegistryAccess
                 if (output != null && !output.isEmpty()) {
-                    ResourceLocation outputItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(output.getItem());
+                    ResourceLocation outputItemId = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(output.getItem());
                     if (itemId.equals(outputItemId)) {
                         return recipe;
                     }
@@ -268,7 +266,7 @@ public class PlayerBlueprintData {
     public static boolean canCraftItem(Player player, ItemStack stack) {
         if (stack.isEmpty()) return true; // 空物品堆总是允许
 
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String itemId = ForgeRegistries.ITEMS.getKey(stack.getItem()).toString();
         return canCraftItem(player, itemId);
     }
 

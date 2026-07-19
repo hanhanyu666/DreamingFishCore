@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.core.npc_system;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -10,7 +8,7 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.npc_system.Packet_OpenNpcDialogueGUI;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.File;
 import java.io.FileReader;
@@ -139,7 +137,7 @@ public class NpcManager {
             return;
         }
 
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        String itemId = ForgeRegistries.ITEMS.getKey(stack.getItem()).toString();
         NpcThoughtData thought = npc.getCurrentThought();
         int favorability = 2;
         if (thought != null && itemId.equals(thought.getWantedItemId())) {

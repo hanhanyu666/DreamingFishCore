@@ -4,7 +4,6 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDataManager;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.HashMap;
@@ -58,7 +57,7 @@ public class PlayerCustomHealthManager {
             // 记录冷却结束时间（当前时间 + 传入的冷却毫秒数）
             MEDICINE_COOLDOWN_MAP.put(playerUUID, currentTime + cooldownMillis);
             // 消耗主手物品（1个），若需要副手可自行修改
-            heldItemStack.hurtAndBreak(durabilityCost, player, EquipmentSlot.MAINHAND);
+            heldItemStack.hurt(durabilityCost, player.getRandom(), player);;
 //            DreamingFishCore.LOGGER.info("玩家 {} 药品回血成功：+{}血量，冷却{}毫秒",
 //                    player.getScoreboardName(), healAmount, cooldownMillis);
         }

@@ -11,18 +11,18 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.RenderNameTagEvent;
-import net.neoforged.neoforge.common.util.TriState;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderNameTagEvent;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Objects;
 
 /**
  * 客户端玩家头顶头衔渲染器
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class HeadDisplay {
     @SubscribeEvent
     public static void onRenderNameTag(RenderNameTagEvent event) {
@@ -35,7 +35,7 @@ public class HeadDisplay {
             return;
         }
 
-        event.setCanRender(TriState.TRUE);
+        event.setResult(Event.Result.ALLOW);
         event.setContent(displayText.copy()
                 .append(Component.literal(" "))
                 .append(event.getOriginalContent().copy()));

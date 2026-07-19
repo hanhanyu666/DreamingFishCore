@@ -3,7 +3,7 @@ package com.hhy.dreamingfishcore.client.util;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.AbstractSelectionList;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -107,29 +107,23 @@ public final class ModernSelectionScreenUi {
         );
     }
 
-    public static void applyLayout(Screen screen, Layout layout, EditBox searchBox, AbstractWidget listWidget, boolean hasSearch) {
+    public static void applyLayout(Screen screen, Layout layout, EditBox searchBox, AbstractSelectionList<?> listWidget, boolean hasSearch) {
         if (searchBox != null && hasSearch) {
             searchBox.visible = false;
             searchBox.setBordered(false);
             searchBox.setTextColor(0xFFE9F1F2);
             searchBox.setTextColorUneditable(0xFF7F8A8E);
-            searchBox.setTextShadow(false);
             searchBox.setHint(Component.literal("搜索存档"));
-            searchBox.setRectangle(
-                    toScreen(layout, layout.searchShellW() - 20),
-                    toScreen(layout, 12),
-                    toScreen(layout, layout.searchShellX() + 10),
-                    toScreen(layout, layout.searchShellY() + 5)
-            );
+            searchBox.setWidth(toScreen(layout, layout.searchShellW() - 20));
+            searchBox.setX(toScreen(layout, layout.searchShellX() + 10));
+            searchBox.setY(toScreen(layout, layout.searchShellY() + 5));
         }
 
         if (listWidget != null) {
-            listWidget.setRectangle(
-                    toScreen(layout, layout.listW()),
-                    toScreen(layout, layout.listH()),
-                    toScreen(layout, layout.listX()),
-                    toScreen(layout, layout.listY())
-            );
+            int listTop = toScreen(layout, layout.listY());
+            int listBottom = listTop + toScreen(layout, layout.listH());
+            listWidget.updateSize(toScreen(layout, layout.listW()), screen.height, listTop, listBottom);
+            listWidget.setLeftPos(toScreen(layout, layout.listX()));
         }
 
         layoutButtons(screen, layout);
@@ -350,7 +344,7 @@ public final class ModernSelectionScreenUi {
         int cardY = top;
         int cardW = width + 16;
         int cardH = Math.max(34, height - 2);
-        int accentColor = summary.primaryActionActive() ? 0xFF83C8D8 : 0xFF757B80;
+        int accentColor = isWorldPrimaryActionActive(summary) ? 0xFF83C8D8 : 0xFF757B80;
 
         drawPixelCutRect(guiGraphics, cardX, cardY, cardW, cardH,
                 withAlpha(hovering ? 0xFF0C151B : 0xFF071016, Math.round((hovering ? 144.0F : 74.0F) * progress)));
@@ -368,7 +362,7 @@ public final class ModernSelectionScreenUi {
         com.mojang.blaze3d.systems.RenderSystem.enableBlend();
         guiGraphics.blit(iconTexture, iconX, iconY, 0.0F, 0.0F, 32, 32, 32, 32);
         com.mojang.blaze3d.systems.RenderSystem.disableBlend();
-        if (!summary.primaryActionActive()) {
+        if (!isWorldPrimaryActionActive(summary)) {
             guiGraphics.fill(iconX, iconY, iconX + 32, iconY + 32, withAlpha(0xFF000000, Math.round(144.0F * progress)));
         }
 
@@ -383,7 +377,7 @@ public final class ModernSelectionScreenUi {
         int textX = iconX + 42;
         int maxTextW = Math.max(40, cardW - 180);
         drawEntryText(guiGraphics, trimScaled(name, maxTextW), textX, cardY + 4,
-                multiplyAlpha(summary.primaryActionActive() ? 0xFFF0F5F6 : 0xFF8A8F92, alpha), false);
+                multiplyAlpha(isWorldPrimaryActionActive(summary) ? 0xFFF0F5F6 : 0xFF8A8F92, alpha), false);
         drawEntryText(guiGraphics, trimScaled(meta, maxTextW), textX, cardY + 18, multiplyAlpha(0xFF9BA5A8, alpha), false);
         drawEntryText(guiGraphics, trimScaled(info, maxTextW), textX, cardY + 32, multiplyAlpha(0xFF737E82, alpha), false);
 
@@ -469,24 +463,30 @@ public final class ModernSelectionScreenUi {
     }
 
     private static String getServerStatus(ServerData serverData) {
-        return switch (serverData.state()) {
-            case INITIAL -> "等待";
-            case PINGING -> "连接中";
-            case UNREACHABLE -> "离线";
-            case INCOMPATIBLE -> "版本";
-            case SUCCESSFUL -> {
-                String text = serverData.status == null ? "" : serverData.status.getString();
-                yield text == null || text.isBlank() ? "在线" : text;
-            }
-        };
+        if (!serverData.pinged) {
+            return "等待";
+        }
+        if (serverData.ping == -2L) {
+            return "连接中";
+        }
+        if (serverData.ping < 0L) {
+            return "离线";
+        }
+        if (serverData.protocol != net.minecraft.SharedConstants.getCurrentVersion().getProtocolVersion()) {
+            return "版本";
+        }
+        String text = serverData.status == null ? "" : serverData.status.getString();
+        return text == null || text.isBlank() ? "在线" : text;
     }
 
     private static int getServerStatusColor(ServerData serverData) {
-        return switch (serverData.state()) {
-            case INITIAL, PINGING -> 0xFF9BA5A8;
-            case UNREACHABLE, INCOMPATIBLE -> 0xFFD16862;
-            case SUCCESSFUL -> 0xFF7EC28F;
-        };
+        if (!serverData.pinged || serverData.ping == -2L) {
+            return 0xFF9BA5A8;
+        }
+        if (serverData.ping < 0L || serverData.protocol != net.minecraft.SharedConstants.getCurrentVersion().getProtocolVersion()) {
+            return 0xFFD16862;
+        }
+        return 0xFF7EC28F;
     }
 
     private static String getWorldStatus(LevelSummary summary) {
@@ -499,7 +499,7 @@ public final class ModernSelectionScreenUi {
         if (summary.requiresManualConversion()) {
             return "转换";
         }
-        if (summary.shouldBackup()) {
+        if (summary.backupStatus().shouldBackup()) {
             return "备份";
         }
         return "可进入";
@@ -509,10 +509,14 @@ public final class ModernSelectionScreenUi {
         if (summary.isLocked() || !summary.isCompatible() || summary.requiresManualConversion()) {
             return 0xFFD16862;
         }
-        if (summary.shouldBackup()) {
+        if (summary.backupStatus().shouldBackup()) {
             return 0xFFD0A45F;
         }
         return 0xFF83C8D8;
+    }
+
+    private static boolean isWorldPrimaryActionActive(LevelSummary summary) {
+        return !summary.isDisabled();
     }
 
     private static int accent(Kind kind) {

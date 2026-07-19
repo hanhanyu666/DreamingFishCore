@@ -14,13 +14,11 @@ import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 public class Easy_Aid_Kit extends Item {
     // 状态标记
@@ -43,8 +41,8 @@ public class Easy_Aid_Kit extends Item {
 
     // 禁用原版使用流程
     @Override
-    public int getUseDuration(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
-        return 0;
+    public int getUseDuration(ItemStack stack) {
+        return START_DELAY_TICKS;
     }
 
     //none无原版使用动画
@@ -58,7 +56,13 @@ public class Easy_Aid_Kit extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack heldItemStack = player.getItemInHand(hand);
         if (level.isClientSide()) {
-            //返回右键操作成功
+            if (player.isUsingItem() && player.getUsedItemHand() == hand && player.getUseItem().getItem() == this) {
+                player.stopUsingItem();
+            } else if (heldItemStack.getDamageValue() < heldItemStack.getMaxDamage()
+                    && player.getHealth() < player.getMaxHealth()) {
+                player.startUsingItem(hand);
+            }
+
             return InteractionResultHolder.sidedSuccess(heldItemStack, true);
         }
 
@@ -99,13 +103,15 @@ public class Easy_Aid_Kit extends Item {
         return InteractionResultHolder.pass(heldItemStack);
     }
 
-    @EventBusSubscriber(modid = DreamingFishCore.MODID)
+    @Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
     public static class FirstAidTickHandler {
         @SubscribeEvent
-        public static void onPlayerTick(PlayerTickEvent.Post event) {
-            if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()) { return; }
+        public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+            if (event.side.isClient() || event.phase != TickEvent.Phase.END || !event.player.isAlive()) {
+                return;
+            }
 
-            ServerPlayer serverPlayer = (ServerPlayer) event.getEntity();
+            ServerPlayer serverPlayer = (ServerPlayer) event.player;
             CompoundTag playerData = serverPlayer.getPersistentData();
             boolean isUsing = playerData.getBoolean(USING_FIRST_AID);
 
@@ -152,7 +158,7 @@ public class Easy_Aid_Kit extends Item {
             boolean isDelayOver = currentGameTime >= startTime + START_DELAY_TICKS;
 
             //药包只有过了启动时间后才能启用
-            if (isDelayOver && event.getEntity().tickCount % HEAL_INTERVAL == 0) {
+            if (isDelayOver && event.player.tickCount % HEAL_INTERVAL == 0) {
                 boolean healSuccess = PlayerCustomHealthManager.handleMedicineHeal(
                         serverPlayer,
                         PER_HEAL_AMOUNT,
@@ -215,9 +221,10 @@ public class Easy_Aid_Kit extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, java.util.List<Component> tooltipComponents, net.minecraft.world.item.TooltipFlag tooltipFlag) {
+    public void appendHoverText(ItemStack stack, Level level, java.util.List<Component> tooltipComponents,
+                                net.minecraft.world.item.TooltipFlag tooltipFlag) {
         // 调用父类方法，保留默认提示（如耐久显示）
-        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
+        super.appendHoverText(stack, level, tooltipComponents, tooltipFlag);
 
         // 添加自定义Tooltip信息，按你的需求补充
         tooltipComponents.add(Component.literal("§7单次回血：§a" + PER_HEAL_AMOUNT + "点"));

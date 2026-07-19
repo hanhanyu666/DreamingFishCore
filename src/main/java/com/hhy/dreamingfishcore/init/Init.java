@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.init;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import net.neoforged.fml.loading.FMLPaths;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.File;
 

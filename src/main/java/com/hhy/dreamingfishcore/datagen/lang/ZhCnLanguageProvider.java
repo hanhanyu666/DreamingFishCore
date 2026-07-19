@@ -2,7 +2,7 @@ package com.hhy.dreamingfishcore.datagen.lang;
 
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import net.minecraft.data.DataGenerator;
-import net.neoforged.neoforge.common.data.LanguageProvider;
+import net.minecraftforge.common.data.LanguageProvider;
 
 public class ZhCnLanguageProvider extends LanguageProvider {
     public ZhCnLanguageProvider(DataGenerator gen, String locale) {
@@ -13,9 +13,11 @@ public class ZhCnLanguageProvider extends LanguageProvider {
     protected void addTranslations() {
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "梦鱼蓝图");
+        add(DreamingFishCore_Items.GUITAR.get(), "吉他");
         add(DreamingFishCore_Items.DREAMINGFISH.get(), "启程锦鲤");
         add("item.dreamingfishcore.dreamingfish.tooltip", "来自梦鱼服的纪念信物。");
         add(DreamingFishCore_Items.BLUEPRINT_ITEM.get(), "蓝图");
+        add(DreamingFishCore_Items.BLANK_BLUEPRINT.get(), "空白蓝图");
         add(DreamingFishCore_Items.FRAGMENT_PAGE.get(), "故事碎片");
         add(DreamingFishCore_Items.STORY_BOOK.get(), "随记本");
         add(DreamingFishCore_Items.EASY_AID_KIT.get(), "简易急救包");

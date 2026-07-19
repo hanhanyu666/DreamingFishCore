@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.mixin.ui;
 import com.hhy.dreamingfishcore.client.util.ModernSelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.FaviconTexture;
+import net.minecraft.client.gui.screens.worldselection.WorldSelectionList;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.LevelSummary;
 import org.spongepowered.asm.mixin.Final;
@@ -12,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "net.minecraft.client.gui.screens.worldselection.WorldSelectionList$WorldListEntry")
+@Mixin(WorldSelectionList.WorldListEntry.class)
 public abstract class WorldListEntryMixin {
 
     @Shadow

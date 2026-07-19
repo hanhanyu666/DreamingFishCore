@@ -4,23 +4,16 @@ import com.hhy.dreamingfishcore.core.storybook_system.StoryBookEntryViewData;
 import com.hhy.dreamingfishcore.screen.storybook_system.Screen_StoryBookCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-public class Packet_OpenStoryBookGUI implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_OpenStoryBookGUI> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "storybook_system/packet_open_story_book_gui"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_OpenStoryBookGUI> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_OpenStoryBookGUI.encode(packet, buf), Packet_OpenStoryBookGUI::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_OpenStoryBookGUI {
     private final List<StoryBookEntryViewData> entries;
 
     public Packet_OpenStoryBookGUI(List<StoryBookEntryViewData> entries) {
@@ -59,10 +52,12 @@ public class Packet_OpenStoryBookGUI implements net.minecraft.network.protocol.c
         return new Packet_OpenStoryBookGUI(entries);
     }
 
-    public static void handle(Packet_OpenStoryBookGUI packet, IPayloadContext context) {
+    public static void handle(Packet_OpenStoryBookGUI packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         if (FMLLoader.getDist().isClient()) {
             context.enqueueWork(() -> handleClient(packet));
         }
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

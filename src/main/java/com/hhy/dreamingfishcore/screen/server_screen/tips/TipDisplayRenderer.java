@@ -6,16 +6,15 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class TipDisplayRenderer {
     //样式参数
     private static final int MARGIN = 5;
@@ -44,7 +43,7 @@ public class TipDisplayRenderer {
         }
 
         // F3 调试菜单打开时隐藏提示消息
-        if (mc.getDebugOverlay().showDebugScreen()) {
+        if (mc.options.renderDebug) {
             return;
         }
 

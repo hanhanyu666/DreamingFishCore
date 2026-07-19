@@ -3,26 +3,19 @@ package com.hhy.dreamingfishcore.network.packets.login_system;
 import com.hhy.dreamingfishcore.core.login_system.Screen_LoginUI;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.network.NetworkEvent;
 import org.jetbrains.annotations.UnknownNullability;
 
+import java.util.function.Supplier;
 
 /**
  * 登录结果包（S→C）
  * 服务端返回登录/注册结果给客户端
  */
-public class Packet_PlayerLoginResult implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_PlayerLoginResult> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "login_system/packet_player_login_result"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_PlayerLoginResult> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_PlayerLoginResult.encode(packet, buf), Packet_PlayerLoginResult::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_PlayerLoginResult {
     private final boolean success;
     private final String message;
 
@@ -50,7 +43,8 @@ public class Packet_PlayerLoginResult implements net.minecraft.network.protocol.
         return new Packet_PlayerLoginResult(success, message);
     }
 
-    public static void handle(Packet_PlayerLoginResult msg, IPayloadContext context) {
+    public static void handle(Packet_PlayerLoginResult msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
 
         // 只在客户端执行UI逻辑
         if (FMLLoader.getDist().isClient()) {
@@ -58,6 +52,8 @@ public class Packet_PlayerLoginResult implements net.minecraft.network.protocol.
                 handleClient(msg);
             });
         }
+
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

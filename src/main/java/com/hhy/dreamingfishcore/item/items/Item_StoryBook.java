@@ -32,8 +32,8 @@ public class Item_StoryBook extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, context, tooltip, flag);
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, level, tooltip, flag);
         tooltip.add(Component.literal("§7一切的见证。在你的续笔下，它仍将见证。"));
         tooltip.add(Component.literal("§8右键后可打开章节目录与片段排序界面"));
     }

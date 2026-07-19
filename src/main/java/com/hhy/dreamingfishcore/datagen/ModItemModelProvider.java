@@ -10,11 +10,11 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.armortrim.TrimMaterial;
 import net.minecraft.world.item.armortrim.TrimMaterials;
-import net.neoforged.neoforge.client.model.generators.ItemModelBuilder;
-import net.neoforged.neoforge.client.model.generators.ItemModelProvider;
-import net.neoforged.neoforge.client.model.generators.ModelFile;
-import net.neoforged.neoforge.common.data.ExistingFileHelper;
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.client.model.generators.ItemModelBuilder;
+import net.minecraftforge.client.model.generators.ItemModelProvider;
+import net.minecraftforge.client.model.generators.ModelFile;
+import net.minecraftforge.common.data.ExistingFileHelper;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.LinkedHashMap;
 
@@ -39,7 +39,10 @@ public class ModItemModelProvider extends ItemModelProvider {
 
     @Override
     protected void registerModels() {
+        simpleItem(DreamingFishCore_Items.GUITAR);
         simpleItem(DreamingFishCore_Items.BLUEPRINT_ITEM);
+        withExistingParent(DreamingFishCore_Items.BLANK_BLUEPRINT.getId().getPath(), mcLoc("item/generated"))
+                .texture("layer0", modLoc("item/blueprint"));
         simpleItem(DreamingFishCore_Items.FRAGMENT_PAGE);
         simpleItem(DreamingFishCore_Items.STORY_BOOK);
         simpleItem(DreamingFishCore_Items.EASY_AID_KIT);
@@ -52,19 +55,19 @@ public class ModItemModelProvider extends ItemModelProvider {
         simpleItem(DreamingFishCore_Items.GENE_RESURGENCE_POTION);
     }
 
-    private ItemModelBuilder simpleItem(DeferredHolder<Item, ? extends Item> itemRegistryObject) {
+    private ItemModelBuilder simpleItem(RegistryObject<Item> itemRegistryObject) {
         return withExistingParent(itemRegistryObject.getId().getPath(),
-                mcLoc("item/generated")).texture("layer0",
-                ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "item/" + itemRegistryObject.getId().getPath()));
+                new ResourceLocation("item/generated")).texture("layer0",
+                new ResourceLocation(DreamingFishCore.MODID, "item/" + itemRegistryObject.getId().getPath()));
     }
 
-    private ItemModelBuilder simpleTool(DeferredHolder<Item, ? extends Item> itemRegistryObject) {
+    private ItemModelBuilder simpleTool(RegistryObject<Item> itemRegistryObject) {
         return withExistingParent(itemRegistryObject.getId().getPath(),
-                mcLoc("item/handheld")).texture("layer0",
-                ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "item/" + itemRegistryObject.getId().getPath()));
+                new ResourceLocation("item/handheld")).texture("layer0",
+                new ResourceLocation(DreamingFishCore.MODID, "item/" + itemRegistryObject.getId().getPath()));
     }
 
-    private void trimmedArmorItem(DeferredHolder<Item, ? extends Item> itemRegistryObject) {
+    private void trimmedArmorItem(RegistryObject<Item> itemRegistryObject) {
         final String MOD_ID = DreamingFishCore.MODID;
 
         if (itemRegistryObject.get() instanceof ArmorItem armorItem) {
@@ -83,9 +86,9 @@ public class ModItemModelProvider extends ItemModelProvider {
                 String armorItemPath = "item/" + armorItem;
                 String trimPath = "trims/items/" + armorType + "_trim_" + trimMaterialResourceKey.location().getPath();
                 String currentTrimName = armorItemPath + "_" + trimMaterialResourceKey.location().getPath() + "_trim";
-                ResourceLocation armorItemResLoc = ResourceLocation.fromNamespaceAndPath(MOD_ID, armorItemPath);
-                ResourceLocation trimResLoc = ResourceLocation.parse(trimPath);
-                ResourceLocation trimNameResLoc = ResourceLocation.fromNamespaceAndPath(MOD_ID, currentTrimName);
+                ResourceLocation armorItemResLoc = new ResourceLocation(MOD_ID, armorItemPath);
+                ResourceLocation trimResLoc = new ResourceLocation(trimPath);
+                ResourceLocation trimNameResLoc = new ResourceLocation(MOD_ID, currentTrimName);
 
                 existingFileHelper.trackGenerated(trimResLoc, PackType.CLIENT_RESOURCES, ".png", "textures");
 
@@ -98,7 +101,7 @@ public class ModItemModelProvider extends ItemModelProvider {
                         .override()
                         .model(new ModelFile.UncheckedModelFile(trimNameResLoc))
                         .predicate(mcLoc("trim_type"), trimValue).end()
-                        .texture("layer0", ResourceLocation.fromNamespaceAndPath(MOD_ID, "item/" + itemRegistryObject.getId().getPath()));
+                        .texture("layer0", new ResourceLocation(MOD_ID, "item/" + itemRegistryObject.getId().getPath()));
             });
         }
     }

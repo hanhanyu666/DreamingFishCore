@@ -44,8 +44,8 @@ public class Item_FragmentPage extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, context, tooltip, flag);
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, level, tooltip, flag);
         tooltip.add(Component.literal("§7一张残破的纸。需要拼成完整的才能真正读懂。"));
         tooltip.add(Component.literal("§8右键后获得§f随记本§8，并直接阅读这次整理出的内容"));
 
@@ -70,22 +70,18 @@ public class Item_FragmentPage extends Item {
     }
 
     public static void setFragmentId(ItemStack stack, int fragmentId) {
-        CompoundTag rootTag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
-        if (rootTag == null) {
-            rootTag = new CompoundTag();
-        }
+        CompoundTag rootTag = stack.getOrCreateTag();
         CompoundTag fragmentPageTag = rootTag.getCompound(FRAGMENT_PAGE_TAG);
         fragmentPageTag.putInt(FRAGMENT_ID_KEY, fragmentId);
         rootTag.put(FRAGMENT_PAGE_TAG, fragmentPageTag);
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, rootTag);
     }
 
     public static Integer getFragmentId(ItemStack stack) {
-        if (!com.hhy.dreamingfishcore.utils.ItemStackDataHelper.hasTag(stack)) {
+        if (!stack.hasTag()) {
             return null;
         }
 
-        CompoundTag rootTag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
+        CompoundTag rootTag = stack.getTag();
         if (rootTag == null || !rootTag.contains(FRAGMENT_PAGE_TAG)) {
             return null;
         }

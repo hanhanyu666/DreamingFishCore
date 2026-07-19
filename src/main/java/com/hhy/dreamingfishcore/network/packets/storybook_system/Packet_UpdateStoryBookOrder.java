@@ -3,20 +3,13 @@ package com.hhy.dreamingfishcore.network.packets.storybook_system;
 import com.hhy.dreamingfishcore.core.storybook_system.StoryBookDataManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_UpdateStoryBookOrder> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "storybook_system/packet_update_story_book_order"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_UpdateStoryBookOrder> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_UpdateStoryBookOrder.encode(packet, buf), Packet_UpdateStoryBookOrder::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_UpdateStoryBookOrder {
     private final List<Integer> orderedFragmentIds;
 
     public Packet_UpdateStoryBookOrder(List<Integer> orderedFragmentIds) {
@@ -39,12 +32,14 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
         return new Packet_UpdateStoryBookOrder(orderedIds);
     }
 
-    public static void handle(Packet_UpdateStoryBookOrder packet, IPayloadContext context) {
+    public static void handle(Packet_UpdateStoryBookOrder packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+            ServerPlayer player = context.getSender();
             if (player != null) {
                 StoryBookDataManager.updateFragmentOrderForPlayer(player.getUUID(), packet.orderedFragmentIds);
             }
         });
+        context.setPacketHandled(true);
     }
 }

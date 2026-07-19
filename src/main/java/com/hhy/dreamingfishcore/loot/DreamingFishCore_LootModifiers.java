@@ -1,19 +1,18 @@
 package com.hhy.dreamingfishcore.loot;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.mojang.serialization.MapCodec;
-import net.neoforged.neoforge.common.loot.IGlobalLootModifier;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
-
-import net.neoforged.neoforge.registries.DeferredHolder;
+import com.mojang.serialization.Codec;
+import net.minecraftforge.common.loot.IGlobalLootModifier;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegistryObject;
 
 public class DreamingFishCore_LootModifiers {
-    private static final DeferredRegister<MapCodec<? extends IGlobalLootModifier>> LOOT_MODIFIERS =
-        DeferredRegister.create(NeoForgeRegistries.Keys.GLOBAL_LOOT_MODIFIER_SERIALIZERS, DreamingFishCore.MODID);
+    private static final DeferredRegister<Codec<? extends IGlobalLootModifier>> LOOT_MODIFIERS =
+        DeferredRegister.create(ForgeRegistries.Keys.GLOBAL_LOOT_MODIFIER_SERIALIZERS, DreamingFishCore.MODID);
 
-    public static final DeferredHolder<MapCodec<? extends IGlobalLootModifier>, ? extends MapCodec<? extends IGlobalLootModifier>> BLUEPRINT_LOOT =
+    public static final RegistryObject<Codec<? extends IGlobalLootModifier>> BLUEPRINT_LOOT =
         LOOT_MODIFIERS.register("blueprint_loot", () -> BlueprintLootModifier.CODEC);
 
     public static void register(IEventBus eventBus) {

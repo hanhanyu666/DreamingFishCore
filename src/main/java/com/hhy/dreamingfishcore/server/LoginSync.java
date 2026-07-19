@@ -4,15 +4,15 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_SyncPlayerData;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.util.Collection;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class LoginSync {
 
     @SubscribeEvent
@@ -36,8 +36,8 @@ public class LoginSync {
     //给单个玩家发送指定玩家的同步包
     public static void sendSyncPacketToPlayer(ServerPlayer targetReceiver, ServerPlayer dataOwner) {
         Packet_SyncPlayerData syncPacket = new Packet_SyncPlayerData(dataOwner);
-        DreamingFishCore_NetworkManager.sendToClient(
-                targetReceiver,
+        DreamingFishCore_NetworkManager.INSTANCE.send(
+                PacketDistributor.PLAYER.with(() -> targetReceiver),
                 syncPacket
         );
         DreamingFishCore.LOGGER.info("已向玩家{}发送{}的同步包",

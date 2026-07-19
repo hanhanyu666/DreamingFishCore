@@ -38,9 +38,9 @@ public abstract class SelectWorldScreenMixin extends Screen {
             method = "init",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/screens/worldselection/WorldSelectionList;<init>(Lnet/minecraft/client/gui/screens/worldselection/SelectWorldScreen;Lnet/minecraft/client/Minecraft;IIIILjava/lang/String;Lnet/minecraft/client/gui/screens/worldselection/WorldSelectionList;)V"
+                    target = "Lnet/minecraft/client/gui/screens/worldselection/WorldSelectionList;<init>(Lnet/minecraft/client/gui/screens/worldselection/SelectWorldScreen;Lnet/minecraft/client/Minecraft;IIIIILjava/lang/String;Lnet/minecraft/client/gui/screens/worldselection/WorldSelectionList;)V"
             ),
-            index = 5,
+            index = 6,
             require = 0
     )
     private int dreamingFishCore$modernWorldRowHeight(int original) {
@@ -48,7 +48,8 @@ public abstract class SelectWorldScreenMixin extends Screen {
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY,
+                                                   float partialTick, CallbackInfo ci) {
         ci.cancel();
 
         ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, true);

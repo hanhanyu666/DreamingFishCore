@@ -342,7 +342,7 @@ public abstract class TitleScreenMixin extends Screen {
         }
 
         // ========== 步骤2: 手动调用Forge钩子，让其他模组可以添加按钮 ==========
-        net.neoforged.neoforge.client.ClientHooks.renderMainMenu(
+        net.minecraftforge.client.ForgeHooksClient.renderMainMenu(
             (TitleScreen) (Object) this,
             guiGraphics,
             this.font,
@@ -389,8 +389,8 @@ public abstract class TitleScreenMixin extends Screen {
         // 渲染左下角版权（屏幕空间，无居中偏移）
         dreamingFishCore$renderFooter(guiGraphics, scale);
 
-        // ========== 步骤4: 手动调用super.render()来渲染右上角原版/模组按钮 ==========
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // 右上角辅助按钮只由梦鱼核心绘制。不能再调用 Screen.render()，
+        // 否则它会先绘制一次原版控件，随后自定义外观又绘制一次。
         dreamingFishCore$renderRelayedAuxButtons(guiGraphics, mouseX, mouseY);
 
         dreamingFishCore$scale = scale;
@@ -1067,7 +1067,7 @@ public abstract class TitleScreenMixin extends Screen {
     @Unique
     private void dreamingFishCore$openSettings(Minecraft mc) {
         TitleScreen self = (TitleScreen) (Object) this;
-        mc.setScreen(new net.minecraft.client.gui.screens.options.OptionsScreen(self, mc.options));
+        mc.setScreen(new net.minecraft.client.gui.screens.OptionsScreen(self, mc.options));
     }
 
     @Unique

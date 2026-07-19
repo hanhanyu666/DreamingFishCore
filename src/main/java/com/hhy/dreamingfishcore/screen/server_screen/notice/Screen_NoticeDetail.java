@@ -306,4 +306,3 @@ public class Screen_NoticeDetail extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 }
-

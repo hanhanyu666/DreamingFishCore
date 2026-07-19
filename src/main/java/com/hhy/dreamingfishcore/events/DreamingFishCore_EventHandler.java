@@ -5,14 +5,13 @@ import com.hhy.dreamingfishcore.commands.check_system.Command_Check;
 import com.hhy.dreamingfishcore.commands.check_system.Command_Info;
 import com.hhy.dreamingfishcore.core.update_checker_system.UpdateChecker;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class DreamingFishCore_EventHandler {
-
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         Command_Info.register(event.getServer().getCommands().getDispatcher());

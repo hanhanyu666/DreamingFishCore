@@ -11,10 +11,8 @@ import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -46,14 +44,16 @@ public abstract class DisconnectedScreenMixin extends Screen {
     private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
 
     @Unique
+    private static final ResourceLocation BACKGROUND_TEXTURE =
+            new ResourceLocation("dreamingfishcore", "background.png");
+
+    @Unique
     private Button dreamingFishCore$returnButton;
 
     @Shadow
-    @Final
-    private DisconnectionDetails details;
+    private Component reason;
 
     @Shadow
-    @Final
     private Screen parent;
 
     protected DisconnectedScreenMixin(Component title) {
@@ -65,9 +65,8 @@ public abstract class DisconnectedScreenMixin extends Screen {
      */
     @Unique
     private boolean isPermaDeathDisconnect() {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        if (reason == null) return false;
-        String msg = reason.getString();
+        if (this.reason == null) return false;
+        String msg = this.reason.getString();
         return msg.contains("复活点数耗尽") || msg.contains("细胞分裂");
     }
 
@@ -76,15 +75,9 @@ public abstract class DisconnectedScreenMixin extends Screen {
      */
     @Unique
     private boolean isBanDisconnect() {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        if (reason == null) return false;
-        String msg = reason.getString();
+        if (this.reason == null) return false;
+        String msg = this.reason.getString();
         return msg.contains("banned") || msg.contains("封禁") || msg.contains("banned.expiration");
-    }
-
-    @Unique
-    private Component dreamingFishCore$getDisconnectReason() {
-        return this.details == null ? null : this.details.reason();
     }
 
     /**
@@ -154,12 +147,16 @@ public abstract class DisconnectedScreenMixin extends Screen {
         if (mc.level != null) {
             mc.level.disconnect();
         }
-        mc.disconnect();
+        mc.clearLevel(null);
         mc.setScreen(new TitleScreen());
     }
 
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    /**
+     * 注入 render() 方法
+     */
+    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
+    private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+        ci.cancel();
         renderCustomScreen(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -172,6 +169,7 @@ public abstract class DisconnectedScreenMixin extends Screen {
         VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
 
         // ========== 背景（使用屏幕坐标） ==========
+        UiBackgroundRenderer.renderCover(guiGraphics, BACKGROUND_TEXTURE, this.width, this.height);
         guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
 
         // ========== 应用虚拟坐标缩放 ==========
@@ -261,8 +259,7 @@ public abstract class DisconnectedScreenMixin extends Screen {
      */
     @Unique
     private void renderDisconnectMessage(GuiGraphics guiGraphics, int centerX, int boxY) {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        String messageText = reason == null ? "" : reason.getString();
+        String messageText = this.reason.getString();
 
         if (isBanDisconnect()) {
             String expiration = extractBanExpiration(messageText);

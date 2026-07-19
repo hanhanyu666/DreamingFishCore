@@ -11,11 +11,10 @@ import com.hhy.dreamingfishcore.server.chattitle.TitleRegistry;
 import com.hhy.dreamingfishcore.server.rank.Rank;
 import com.hhy.dreamingfishcore.server.rank.RankRegistry;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.FileReader;
@@ -29,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 //初始化玩家进服数据管理，对外提供数据初始化和发送，更新的方法
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerDataManager {
     private static final File PLAYER_DATA_FILE = new File("config/dreamingfishcore/data/player_data.json");
     private static final Map<UUID, PlayerData> PLAYER_DATA_CACHE = new ConcurrentHashMap<>();

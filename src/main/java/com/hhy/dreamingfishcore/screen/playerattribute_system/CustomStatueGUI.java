@@ -12,15 +12,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
-import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomStatueGUI {
     // 左下角玩家贴图布局
     private static final int PLAYER_MODEL_ANCHOR_HALF_WIDTH = 14;
@@ -32,7 +32,7 @@ public class CustomStatueGUI {
     private static final int PLAYER_TEXTURE_TOTAL_WIDTH = 256;
     private static final int PLAYER_TEXTURE_TOTAL_HEIGHT = 256;
     private static final ResourceLocation PLAYER_HEALTH_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/health/health.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/health/health.png");
     private static final int EQUIPMENT_DURABILITY_BAR_WIDTH = 4;
     private static final int EQUIPMENT_DURABILITY_BAR_GAP = 3;
     private static final int EQUIPMENT_ICON_SIZE = 8;
@@ -87,17 +87,17 @@ public class CustomStatueGUI {
     private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
     private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
     private static final ResourceLocation HEALTH_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/health.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/health.png");
     private static final ResourceLocation FOOD_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/food.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/food.png");
     private static final ResourceLocation ARMOR_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/armor.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/armor.png");
     private static final ResourceLocation INFECTION_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/infection.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/infection.png");
     private static final ResourceLocation STAMINA_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina.png");
     private static final ResourceLocation COURAGE_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/courage.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/courage.png");
 
     // 肢体受伤标记配置（老贴图上的红色脉冲点）
     private static final int INJURY_DOT_COLOR = 0x90D64038;
@@ -169,7 +169,7 @@ public class CustomStatueGUI {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null || mc.screen != null || player.isDeadOrDying()
-                || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
+                || mc.options.hideGui || mc.options.renderDebug
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.CREATIVE) {
             return;
         }
@@ -866,13 +866,13 @@ public class CustomStatueGUI {
 
     //拦截原版UI：在UI渲染前取消原版血量和饱食度的渲染事件
     @SubscribeEvent
-    public static void interceptVanillaHealthAndFoodUI(RenderGuiLayerEvent.Pre event) {
+    public static void interceptVanillaHealthAndFoodUI(RenderGuiOverlayEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
         }
         //拦截原版玩家血量UI
-        if (event.getName().equals(VanillaGuiLayers.PLAYER_HEALTH)) {
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.PLAYER_HEALTH.id())) {
             event.setCanceled(true);
         }
     }
@@ -881,8 +881,10 @@ public class CustomStatueGUI {
      * 客户端tick事件 - 检测血量变化，触发受伤闪烁
      */
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
-        
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) {

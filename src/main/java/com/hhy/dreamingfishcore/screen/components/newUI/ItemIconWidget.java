@@ -59,7 +59,6 @@ public class ItemIconWidget extends AbstractWidget {
         if (isHovered()) {
             // System.out.println("11111111111111111");
             List<Component> tooltip = itemStack.getTooltipLines(
-                    net.minecraft.world.item.Item.TooltipContext.of(Minecraft.getInstance().level),
                     Minecraft.getInstance().player,
                     Minecraft.getInstance().options.advancedItemTooltips ? TooltipFlag.ADVANCED : TooltipFlag.NORMAL
             );

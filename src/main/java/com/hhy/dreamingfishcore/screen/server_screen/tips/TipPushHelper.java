@@ -4,7 +4,8 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.tip_system.Packet_SendTipToClient;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.minecraftforge.network.NetworkDirection;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Collection;
 
@@ -37,7 +38,7 @@ public class TipPushHelper {
         }
         // 构建数据包并发送给指定玩家
         Packet_SendTipToClient tipPacket = new Packet_SendTipToClient(tipText, displayDuration);
-        DreamingFishCore_NetworkManager.sendToClient(tipPacket, targetPlayer);
+        DreamingFishCore_NetworkManager.INSTANCE.sendTo(tipPacket, targetPlayer.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
 //        DreamingFishCore.LOGGER.info("已给玩家 {} 推送 Tip：{}", targetPlayer.getScoreboardName(), tipText);
     }
 
@@ -74,7 +75,7 @@ public class TipPushHelper {
         // 构建数据包并批量发送
         Packet_SendTipToClient tipPacket = new Packet_SendTipToClient(tipText, displayDuration);
         for (ServerPlayer player : onlinePlayers) {
-            DreamingFishCore_NetworkManager.sendToClient(tipPacket, player);
+            DreamingFishCore_NetworkManager.INSTANCE.sendTo(tipPacket, player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
         }
 //        DreamingFishCore.LOGGER.info("已给全服 {} 名玩家推送 Tip：{}", onlinePlayers.size(), tipText);
     }

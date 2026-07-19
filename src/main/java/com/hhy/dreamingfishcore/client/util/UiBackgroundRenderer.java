@@ -1,11 +1,11 @@
 package com.hhy.dreamingfishcore.client.util;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.Resource;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,32 +13,32 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class UiBackgroundRenderer {
 
     private static final ResourceLocation LOADING_BACKGROUND =
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_1.png");
+            new ResourceLocation(DreamingFishCore.MODID, "background_1.png");
     private static final ResourceLocation[] MENU_BG_TEXTURES = {
             LOADING_BACKGROUND,
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_2.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_3.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_4.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_5.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_6.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_7.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_8.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_14.png"),
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_16.png")
+            new ResourceLocation(DreamingFishCore.MODID, "background_2.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_3.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_4.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_5.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_6.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_7.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_8.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_14.png"),
+            new ResourceLocation(DreamingFishCore.MODID, "background_16.png")
     };
 
-    private static int currentBgIndex = 0;
-    private static int prevBgIndex = 0;
-    private static long lastBgSwitchTime = 0;
-    private static final long BG_SWITCH_INTERVAL = 5000;
-    private static final long BG_CROSSFADE_DURATION = 1000;
-
+    private static final long BG_SWITCH_INTERVAL = 5_000L;
+    private static final long BG_CROSSFADE_DURATION = 1_000L;
     private static final Map<ResourceLocation, ImageSize> SIZE_CACHE = new ConcurrentHashMap<>();
+
+    private static int currentBgIndex;
+    private static int prevBgIndex;
+    private static long lastBgSwitchTime;
 
     private UiBackgroundRenderer() {
     }
 
-    /** 5秒轮换背景，供主菜单和普通菜单界面共用 */
+    /** 5 秒轮换背景，供主菜单和普通菜单界面共用。 */
     public static void renderCyclingBackground(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
         updateCycle();
         renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
@@ -49,47 +49,41 @@ public final class UiBackgroundRenderer {
         renderCover(guiGraphics, LOADING_BACKGROUND, screenWidth, screenHeight);
     }
 
-    /**
-     * 带渐变的5秒轮换背景，供标题界面使用。
-     * 所有界面共享同一个 cycle timer，保证切换同步。
-     *
-     * @param fadeAlpha 屏幕淡入 alpha（0~1），仅在非渐变阶段应用
-     */
-    public static void renderCyclingBackgroundCrossfade(GuiGraphics guiGraphics, int screenWidth, int screenHeight, float fadeAlpha) {
+    /** 带渐变的 5 秒轮换背景，所有界面共享同一计时器。 */
+    public static void renderCyclingBackgroundCrossfade(GuiGraphics guiGraphics, int screenWidth, int screenHeight,
+                                                        float fadeAlpha) {
         long now = System.currentTimeMillis();
-        if (lastBgSwitchTime == 0) {
+        if (lastBgSwitchTime == 0L) {
             lastBgSwitchTime = now;
         }
+
         long elapsed = now - lastBgSwitchTime;
         if (elapsed >= BG_SWITCH_INTERVAL) {
             prevBgIndex = currentBgIndex;
             currentBgIndex = (currentBgIndex + 1) % MENU_BG_TEXTURES.length;
             lastBgSwitchTime = now;
-            elapsed = 0;
+            elapsed = 0L;
         }
 
-        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
-
+        RenderSystem.enableBlend();
         if (fadeAlpha >= 1.0F && elapsed < BG_CROSSFADE_DURATION && prevBgIndex != currentBgIndex) {
-            float t = (float) elapsed / BG_CROSSFADE_DURATION;
-            float eased = t * t * (3.0F - 2.0F * t); // smoothstep
+            float progress = (float) elapsed / BG_CROSSFADE_DURATION;
+            float eased = progress * progress * (3.0F - 2.0F * progress);
 
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F - eased);
             renderCover(guiGraphics, MENU_BG_TEXTURES[prevBgIndex], screenWidth, screenHeight);
-
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, eased);
             renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
         } else {
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, fadeAlpha);
             renderCover(guiGraphics, MENU_BG_TEXTURES[currentBgIndex], screenWidth, screenHeight);
         }
-
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static void updateCycle() {
         long now = System.currentTimeMillis();
-        if (lastBgSwitchTime == 0) {
+        if (lastBgSwitchTime == 0L) {
             lastBgSwitchTime = now;
         }
         if (now - lastBgSwitchTime >= BG_SWITCH_INTERVAL) {
@@ -99,48 +93,36 @@ public final class UiBackgroundRenderer {
         }
     }
 
-    /** 动态读取贴图真实尺寸并缓存。根据屏幕宽高做 cover 裁切铺满，始终保持原图宽高比。 */
+    /** 根据贴图真实尺寸做 cover 裁切，铺满屏幕并保持原始宽高比。 */
     public static void renderCover(GuiGraphics guiGraphics, ResourceLocation texture, int screenWidth, int screenHeight) {
         if (screenWidth <= 0 || screenHeight <= 0) {
             return;
         }
 
         ImageSize size = getImageSize(texture);
-        if (size.width <= 0 || size.height <= 0) {
-            return;
-        }
-
-        float scale = Math.max(
-            screenWidth / (float) size.width,
-            screenHeight / (float) size.height
-        );
-
+        float scale = Math.max(screenWidth / (float) size.width, screenHeight / (float) size.height);
         int drawWidth = Math.round(size.width * scale);
         int drawHeight = Math.round(size.height * scale);
         int drawX = (screenWidth - drawWidth) / 2;
         int drawY = (screenHeight - drawHeight) / 2;
 
-        guiGraphics.blit(
-            texture,
-            drawX, drawY, drawWidth, drawHeight,
-            0, 0, size.width, size.height,
-            size.width, size.height
-        );
+        guiGraphics.blit(texture, drawX, drawY, drawWidth, drawHeight,
+                0, 0, size.width, size.height, size.width, size.height);
     }
 
     private static ImageSize getImageSize(ResourceLocation texture) {
-        return SIZE_CACHE.computeIfAbsent(texture, loc -> {
+        return SIZE_CACHE.computeIfAbsent(texture, location -> {
             try {
-                var resource = Minecraft.getInstance().getResourceManager().getResource(loc);
+                var resource = Minecraft.getInstance().getResourceManager().getResource(location);
                 if (resource.isPresent()) {
                     try (NativeImage image = NativeImage.read(resource.get().open())) {
                         return new ImageSize(image.getWidth(), image.getHeight());
                     }
                 }
-            } catch (Exception e) {
-                DreamingFishCore.LOGGER.warn("Failed to read dimensions for texture: {}", loc, e);
+            } catch (Exception exception) {
+                DreamingFishCore.LOGGER.warn("Failed to read dimensions for texture: {}", location, exception);
             }
-            return new ImageSize(1920, 1080); // fallback 16:9
+            return new ImageSize(1920, 1080);
         });
     }
 

@@ -1,0 +1,16 @@
+{
+  "item.dreamingfishcore.advanced_aid_kit": "高级急救包",
+  "item.dreamingfishcore.blank_blueprint": "空白蓝图",
+  "item.dreamingfishcore.blueprint": "蓝图",
+  "item.dreamingfishcore.dreamingfish": "启程锦鲤",
+  "item.dreamingfishcore.dreamingfish.tooltip": "来自梦鱼服的纪念信物。",
+  "item.dreamingfishcore.easy_aid_kit": "简易急救包",
+  "item.dreamingfishcore.fragment_page": "故事碎片",
+  "item.dreamingfishcore.guitar": "吉他",
+  "item.dreamingfishcore.professional_aid_kit": "专业急救包",
+  "item.dreamingfishcore.restore_uninfected_potion": "基因复苏药剂",
+  "item.dreamingfishcore.revival_charm": "复活护符",
+  "item.dreamingfishcore.story_book": "随记本",
+  "itemGroup.blueprint.tab": "梦鱼蓝图",
+  "itemGroup.dreamingfishcore.tab": "DreamingfishCore"
+}

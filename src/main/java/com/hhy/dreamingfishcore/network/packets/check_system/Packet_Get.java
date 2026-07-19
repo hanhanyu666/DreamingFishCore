@@ -3,7 +3,7 @@ package com.hhy.dreamingfishcore.network.packets.check_system;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,16 +15,9 @@ import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
-public class Packet_Get implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_Get> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "check_system/packet_get"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_Get> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_Get.encode(packet, buf), Packet_Get::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_Get {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final String playerName;
     private final String playerUUID;
@@ -55,7 +48,8 @@ public class Packet_Get implements net.minecraft.network.protocol.common.custom.
         return new Packet_Get(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf());
     }
 
-    public static void handle(Packet_Get msg, IPayloadContext context) {
+    public static void handle(Packet_Get msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
             executor.execute(() -> {
                 Minecraft mc = Minecraft.getInstance();
@@ -80,7 +74,7 @@ public class Packet_Get implements net.minecraft.network.protocol.common.custom.
                 // 构造一个 file 对象
                 File matchedFile = new File(targetFolder, msg.fileName);
                 if (!matchedFile.exists() || !matchedFile.isFile()) {
-                    DreamingFishCore_NetworkManager.sendToServer(new Packet_GetResultRequest(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, "Not Found"));
+                    DreamingFishCore_NetworkManager.INSTANCE.sendToServer(new Packet_GetResultRequest(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, "Not Found"));
                     // 你可以考虑发送一个错误提示包回服务器
                     return;
                 }
@@ -99,7 +93,7 @@ public class Packet_Get implements net.minecraft.network.protocol.common.custom.
                 String uuid = UUID.randomUUID().toString();
 
                 if (base64Content.length() <= 30000) {
-                    DreamingFishCore_NetworkManager.sendToServer(new Packet_GetResultRequest(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, base64Content));
+                    DreamingFishCore_NetworkManager.INSTANCE.sendToServer(new Packet_GetResultRequest(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, base64Content));
                 } else {
                     int totalChunks = (base64Content.length() + chunkSize - 1) / chunkSize;
                     for (int i = 0; i < totalChunks; i++) {
@@ -108,11 +102,12 @@ public class Packet_Get implements net.minecraft.network.protocol.common.custom.
                         String chunkData = base64Content.substring(start, end);
 
                         // 发送 ChunkPacket
-                        DreamingFishCore_NetworkManager.sendToServer(new Packet_Chunk(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, uuid, i, totalChunks, chunkData));
+                        DreamingFishCore_NetworkManager.INSTANCE.sendToServer(new Packet_Chunk(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.fileName, uuid, i, totalChunks, chunkData));
                     }
                 }
             });
         });
+        contextSupplier.get().setPacketHandled(true);
     }
 
     private static String computeSHA256(Path path) throws IOException, NoSuchAlgorithmException {

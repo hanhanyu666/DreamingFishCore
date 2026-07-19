@@ -2,7 +2,7 @@ package com.hhy.dreamingfishcore.utils;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 public class Util_Message {
     public static void sendGlobalMessage(String message) {

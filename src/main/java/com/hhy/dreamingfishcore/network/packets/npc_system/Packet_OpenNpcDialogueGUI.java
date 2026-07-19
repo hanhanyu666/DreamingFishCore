@@ -4,23 +4,16 @@ import com.hhy.dreamingfishcore.core.npc_system.NpcDialogueViewData;
 import com.hhy.dreamingfishcore.screen.npc_system.Screen_NpcDialogue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
-public class Packet_OpenNpcDialogueGUI implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_OpenNpcDialogueGUI> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "npc_system/packet_open_npc_dialogue_gui"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_OpenNpcDialogueGUI> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_OpenNpcDialogueGUI.encode(packet, buf), Packet_OpenNpcDialogueGUI::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_OpenNpcDialogueGUI {
     private final NpcDialogueViewData viewData;
 
     public Packet_OpenNpcDialogueGUI(NpcDialogueViewData viewData) {
@@ -90,10 +83,12 @@ public class Packet_OpenNpcDialogueGUI implements net.minecraft.network.protocol
         ));
     }
 
-    public static void handle(Packet_OpenNpcDialogueGUI packet, IPayloadContext context) {
+    public static void handle(Packet_OpenNpcDialogueGUI packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         if (FMLLoader.getDist().isClient()) {
             context.enqueueWork(() -> handleClient(packet));
         }
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)

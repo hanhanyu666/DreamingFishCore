@@ -2,7 +2,6 @@ package com.hhy.dreamingfishcore.loot;
 
 import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.world.entity.Entity;
@@ -12,10 +11,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
-import net.neoforged.neoforge.common.loot.LootModifier;
+import net.minecraftforge.common.loot.LootModifier;
+import net.minecraftforge.common.loot.IGlobalLootModifier;
 
 public class BlueprintLootModifier extends LootModifier {
-    public static final MapCodec<BlueprintLootModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> codecStart(instance)
+    public static final Codec<BlueprintLootModifier> CODEC = RecordCodecBuilder.create(instance -> codecStart(instance)
         .and(Codec.FLOAT.fieldOf("chance").forGetter(modifier -> modifier.chance))
         .and(Codec.BOOL.optionalFieldOf("only_hostile", false).forGetter(modifier -> modifier.onlyHostile))
         .and(Codec.BOOL.optionalFieldOf("only_chests", false).forGetter(modifier -> modifier.onlyChests))
@@ -62,7 +62,7 @@ public class BlueprintLootModifier extends LootModifier {
     }
 
     @Override
-    public MapCodec<? extends LootModifier> codec() {
+    public Codec<? extends IGlobalLootModifier> codec() {
         return CODEC;
     }
 }

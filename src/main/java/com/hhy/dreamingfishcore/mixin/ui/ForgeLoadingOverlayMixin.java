@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.server.packs.resources.ReloadInstance;
-import net.neoforged.neoforge.client.loading.NeoForgeLoadingOverlay;
+import net.minecraftforge.client.loading.ForgeLoadingOverlay;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,7 +21,7 @@ import java.util.function.Consumer;
  *
  * References: Drippy Loading Screen mod implementation
  */
-@Mixin(NeoForgeLoadingOverlay.class)
+@Mixin(ForgeLoadingOverlay.class)
 public class ForgeLoadingOverlayMixin extends LoadingOverlay {
 
     public ForgeLoadingOverlayMixin(Minecraft mc, ReloadInstance reload, Consumer<Optional<Throwable>> errorConsumer, boolean b) {

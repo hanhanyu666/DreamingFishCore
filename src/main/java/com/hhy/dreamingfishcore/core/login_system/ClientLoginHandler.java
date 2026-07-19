@@ -4,8 +4,8 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.login_system.Packet_PlayerLoginResponse;
 import net.minecraft.client.Minecraft;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * 客户端登录处理器
@@ -32,7 +32,10 @@ public class ClientLoginHandler {
             Minecraft.getInstance().player.getUUID()
         );
 
-        DreamingFishCore_NetworkManager.sendToServer(packet);
+        DreamingFishCore_NetworkManager.INSTANCE.send(
+            net.minecraftforge.network.PacketDistributor.SERVER.noArg(),
+            packet
+        );
 
         DreamingFishCore.LOGGER.info("注册请求包已发送");
     }
@@ -56,7 +59,10 @@ public class ClientLoginHandler {
             Minecraft.getInstance().player.getUUID()
         );
 
-        DreamingFishCore_NetworkManager.sendToServer(packet);
+        DreamingFishCore_NetworkManager.INSTANCE.send(
+            net.minecraftforge.network.PacketDistributor.SERVER.noArg(),
+            packet
+        );
 
         DreamingFishCore.LOGGER.info("登录请求包已发送");
     }

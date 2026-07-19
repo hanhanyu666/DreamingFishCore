@@ -11,10 +11,9 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * 公告管理指令
@@ -26,7 +25,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * 支持 & 符号代替颜色符号：
  * &a(绿) &b(青) &c(红) &d(粉) &e(黄) &f(白) &l(粗体) &m(删除线) &n(下划线) &o(斜体) &r(重置)
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class Command_Notice {
 
     @SubscribeEvent

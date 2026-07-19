@@ -3,20 +3,14 @@ package com.hhy.dreamingfishcore.network.packets.playerattribute_system.infectio
 import com.hhy.dreamingfishcore.core.playerattributes_system.infection.PlayerInfectionManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
-public class Packet_SyncInfectionData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncInfectionData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/infection_system/packet_sync_infection_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncInfectionData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncInfectionData.encode(packet, buf), Packet_SyncInfectionData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncInfectionData {
     private final float currentInfection;
 
     public Packet_SyncInfectionData(float currentInfection) {
@@ -32,18 +26,20 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         return new Packet_SyncInfectionData(current);
     }
 
-    public static void handle(Packet_SyncInfectionData packet, IPayloadContext context) {
+    public static void handle(Packet_SyncInfectionData packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         final float safeCurrentInfection = packet.currentInfection;
 
         context.enqueueWork(() -> processOnMainThread(safeCurrentInfection));
+        context.setPacketHandled(true);
     }
 
     private static void processOnMainThread(float currentInfection) {
-        new ClientRunnable(currentInfection).run();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientRunnable(currentInfection));
     }
 
     @OnlyIn(Dist.CLIENT)
-    private static class ClientRunnable implements Runnable {
+    private static class ClientRunnable implements DistExecutor.SafeRunnable {
         private final float currentInfection;
 
         public ClientRunnable(float currentInfection) {

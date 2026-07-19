@@ -63,6 +63,14 @@ public class ServerScreenUI_PageRenderer {
         this.leftButtonClickAreas = new int[buttonCount][4];
     }
 
+    private void drawText(GuiGraphics guiGraphics, String text, int x, int y, int color) {
+        guiGraphics.drawString(mc.font, text, x, y, color, false);
+    }
+
+    private void drawText(GuiGraphics guiGraphics, net.minecraft.network.chat.Component text, int x, int y, int color) {
+        guiGraphics.drawString(mc.font, text, x, y, color, false);
+    }
+
     // ==================== 点击区域访问方法 ====================
     public int[] getRankBoxClick() { return rankBoxClick; }
     public int[] getGoldBoxClick() { return goldBoxClick; }
@@ -140,19 +148,19 @@ public class ServerScreenUI_PageRenderer {
             }
 
             int iconX = itemX + itemWidth / 2 - mc.font.width(icons[i]) / 2;
-            guiGraphics.drawString(mc.font, icons[i], iconX, iconY, barColor);
+            drawText(guiGraphics, icons[i], iconX, iconY, barColor);
 
             int barX = itemX;
             drawProgressBar(guiGraphics, barX, barY, itemWidth, barHeight, percents[i], barColor);
 
             int valueX = itemX + itemWidth / 2 - mc.font.width(values[i]) / 2;
-            guiGraphics.drawString(mc.font, values[i], valueX, textY, 0xFFFFFFFF);
+            drawText(guiGraphics, values[i], valueX, textY, 0xFFFFFFFF);
         }
 
         int tipY = textY + lineHeight + 8;
         String tipText = "属性与您的等级密切相关，提升等级可以提高您的属性";
         int tipX = boxX + boxWidth / 2 - mc.font.width(tipText) / 2;
-        guiGraphics.drawString(mc.font, tipText, tipX, tipY, 0xFFAAAAAA);
+        drawText(guiGraphics, tipText, tipX, tipY, 0xFFAAAAAA);
 
         drawRoundedRectOutline(guiGraphics, boxX, boxY, boxWidth, boxHeight, cornerRadius, 0x40FFAAAA, 0xFFFFFFFF);
     }
@@ -181,11 +189,11 @@ public class ServerScreenUI_PageRenderer {
         String rankText = rank.getRankName();
         String fullRankText = rankIcon + rankText;
 
-        guiGraphics.drawString(mc.font, fullRankText, boxX + innerMargin + 4, boxY + innerMargin, rankColor);
+        drawText(guiGraphics, fullRankText, boxX + innerMargin + 4, boxY + innerMargin, rankColor);
 
         String descText = "您的Rank";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
 
         if (isHovered) {
             rankBoxClick[0] = boxX;
@@ -214,15 +222,15 @@ public class ServerScreenUI_PageRenderer {
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_TITLE_PURPLE, isHovered);
 
         String titleText = "⭐ " + title.getTitleName();
-        guiGraphics.drawString(mc.font, titleText, boxX + innerMargin + 4, boxY + innerMargin, titleColor);
+        drawText(guiGraphics, titleText, boxX + innerMargin + 4, boxY + innerMargin, titleColor);
 
         String descText = "您的称号";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
     }
 
     /**
-     * 渲染金币框
+     * 渲染梦鱼币数据占位框。经济系统已经剥离，仅保留 1.21.1 的待接入界面。
      */
     public void renderGoldBox(GuiGraphics guiGraphics, int boxX, int boxY, int boxWidth, int mouseX, int mouseY, float uiScale) {
         int innerMargin = 10;
@@ -231,17 +239,15 @@ public class ServerScreenUI_PageRenderer {
 
         float virtualMouseX = mouseX / uiScale;
         float virtualMouseY = mouseY / uiScale;
-        boolean isHovered = virtualMouseX >= boxX && virtualMouseX < boxX + boxWidth &&
-                           virtualMouseY >= boxY && virtualMouseY < boxY + boxHeight;
+        boolean isHovered = virtualMouseX >= boxX && virtualMouseX < boxX + boxWidth
+                && virtualMouseY >= boxY && virtualMouseY < boxY + boxHeight;
 
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_GOLD_ORANGE, isHovered);
-
-        String goldText = "💰 数据待接入";
-        guiGraphics.drawString(mc.font, goldText, boxX + innerMargin + 4, boxY + innerMargin, CARD_GOLD_ORANGE);
+        drawText(guiGraphics, "💰 数据待接入", boxX + innerMargin + 4, boxY + innerMargin, CARD_GOLD_ORANGE);
 
         String descText = "梦鱼币";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
 
         goldBoxClick[0] = boxX;
         goldBoxClick[1] = boxY;
@@ -250,7 +256,7 @@ public class ServerScreenUI_PageRenderer {
     }
 
     /**
-     * 渲染领地框
+     * 渲染领地数据占位框。领地系统已经剥离，仅保留 1.21.1 的待接入界面。
      */
     public void renderTerritoryBox(GuiGraphics guiGraphics, int boxX, int boxY, int boxWidth, int mouseX, int mouseY, float uiScale) {
         int innerMargin = 10;
@@ -259,17 +265,15 @@ public class ServerScreenUI_PageRenderer {
 
         float virtualMouseX = mouseX / uiScale;
         float virtualMouseY = mouseY / uiScale;
-        boolean isHovered = virtualMouseX >= boxX && virtualMouseX < boxX + boxWidth &&
-                           virtualMouseY >= boxY && virtualMouseY < boxY + boxHeight;
+        boolean isHovered = virtualMouseX >= boxX && virtualMouseX < boxX + boxWidth
+                && virtualMouseY >= boxY && virtualMouseY < boxY + boxHeight;
 
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_TERRITORY_GREEN, isHovered);
-
-        String countText = "🏰 数据待接入";
-        guiGraphics.drawString(mc.font, countText, boxX + innerMargin + 4, boxY + innerMargin, CARD_TERRITORY_GREEN);
+        drawText(guiGraphics, "🏰 数据待接入", boxX + innerMargin + 4, boxY + innerMargin, CARD_TERRITORY_GREEN);
 
         String descText = "领地";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
 
         territoryBoxClick[0] = boxX;
         territoryBoxClick[1] = boxY;
@@ -295,11 +299,11 @@ public class ServerScreenUI_PageRenderer {
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_BIOME_CYAN, isHovered);
 
         String biomesText = "🗺️ " + biomesCount;
-        guiGraphics.drawString(mc.font, biomesText, boxX + innerMargin + 4, boxY + innerMargin, CARD_BIOME_CYAN);
+        drawText(guiGraphics, biomesText, boxX + innerMargin + 4, boxY + innerMargin, CARD_BIOME_CYAN);
 
         String descText = "已探索";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
     }
 
     /**
@@ -320,11 +324,11 @@ public class ServerScreenUI_PageRenderer {
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_BLUEPRINT_BLUE, isHovered);
 
         String blueprintText = "📜 " + blueprintCount;
-        guiGraphics.drawString(mc.font, blueprintText, boxX + innerMargin + 4, boxY + innerMargin, CARD_BLUEPRINT_BLUE);
+        drawText(guiGraphics, blueprintText, boxX + innerMargin + 4, boxY + innerMargin, CARD_BLUEPRINT_BLUE);
 
         String descText = "已解锁";
         int descWidth = mc.font.width(descText);
-        guiGraphics.drawString(mc.font, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
+        drawText(guiGraphics, descText, boxX + boxWidth - innerMargin - descWidth, boxY + innerMargin, CARD_TEXT_DESC);
     }
 
     /**
@@ -373,22 +377,22 @@ public class ServerScreenUI_PageRenderer {
         int currentLineY = 0;
 
         String statusText = isInfected ? "§c§l您是感染者" : "§a§l您是幸存者";
-        guiGraphics.drawString(mc.font, statusText, contentX, contentY + currentLineY, 0xFFFFFF);
+        drawText(guiGraphics, statusText, contentX, contentY + currentLineY, 0xFFFFFF);
         currentLineY += lineHeight + 3;
 
         if (isInfected) {
-            guiGraphics.drawString(mc.font, "§7很不幸，您被感染了，您的身体会", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7很不幸，您被感染了，您的身体会", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
-            guiGraphics.drawString(mc.font, "§7随时间出现不同的变化，周围生物", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7随时间出现不同的变化，周围生物", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
-            guiGraphics.drawString(mc.font, "§7对您产生的行为可能也会发生变化...", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7对您产生的行为可能也会发生变化...", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
         } else {
-            guiGraphics.drawString(mc.font, "§7请继续加油生存下去", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7请继续加油生存下去", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
-            guiGraphics.drawString(mc.font, "§7保持警惕，远离被感染的生物", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7保持警惕，远离被感染的生物", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
-            guiGraphics.drawString(mc.font, "§7您的每一次生存都是胜利", contentX, contentY + currentLineY, 0xFFFFFF);
+            drawText(guiGraphics, "§7您的每一次生存都是胜利", contentX, contentY + currentLineY, 0xFFFFFF);
             currentLineY += lineHeight + 3;
         }
 
@@ -396,7 +400,7 @@ public class ServerScreenUI_PageRenderer {
         String costText = isInfected ?
                 String.format("§7作为感染者您每次死亡需要扣除 §c%d §7点分裂次数", deathCost) :
                 String.format("§7作为幸存者您每次死亡需要扣除 §a%d §7点分裂次数", deathCost);
-        guiGraphics.drawString(mc.font, costText, contentX, contentY + currentLineY, 0xFFFFFF);
+        drawText(guiGraphics, costText, contentX, contentY + currentLineY, 0xFFFFFF);
         currentLineY += lineHeight + 3;
 
         String respawnText;
@@ -407,7 +411,7 @@ public class ServerScreenUI_PageRenderer {
         } else {
             respawnText = String.format("§7您还可以重生 §e%d §7次（剩余分裂次数：§b%.1f§7/100）", respawnTimes, respawnPoint);
         }
-        guiGraphics.drawString(mc.font, respawnText, contentX, contentY + currentLineY, 0xFFFFFF);
+        drawText(guiGraphics, respawnText, contentX, contentY + currentLineY, 0xFFFFFF);
     }
 
     /**
@@ -421,23 +425,11 @@ public class ServerScreenUI_PageRenderer {
         float virtualMouseX = mouseX / uiScale;
         float virtualMouseY = mouseY / uiScale;
 
-        int renderFootY = modelFootY + offsetY;
-        int halfWidth = Math.max(18, modelSize);
-        int topPadding = Math.max(12, modelSize / 2);
-        int bottomPadding = Math.max(28, modelSize);
-        int modelHeight = Math.max(72, (int) (modelSize * 2.9F));
+        int relativeMouseX = (int) (virtualMouseX - centerCenterX);
+        int relativeMouseY = (int) ((virtualMouseY - modelFootY * 0.4) * 0.5);
 
         InventoryScreen.renderEntityInInventoryFollowsMouse(
-            guiGraphics,
-            centerCenterX - halfWidth,
-            renderFootY - modelHeight - topPadding,
-            centerCenterX + halfWidth,
-            renderFootY + bottomPadding,
-            modelSize,
-            0.0625F,
-            virtualMouseX,
-            virtualMouseY,
-            player
+            guiGraphics, centerCenterX, modelFootY, modelSize, -relativeMouseX, -relativeMouseY, player
         );
     }
 
@@ -455,7 +447,7 @@ public class ServerScreenUI_PageRenderer {
 
         String titleText = NOTICE_UI_TITLE;
         int titleY = boxMargin + 4;
-        guiGraphics.drawString(mc.font, titleText, rightPanelX + boxMargin, titleY, 0xFF4FC3F7);
+        drawText(guiGraphics, titleText, rightPanelX + boxMargin, titleY, 0xFF4FC3F7);
 
         int listStartY = titleY + mc.font.lineHeight + 8;
         int cardWidth = rightPanelWidth - boxMargin * 2;
@@ -463,7 +455,7 @@ public class ServerScreenUI_PageRenderer {
         if (notices.isEmpty()) {
             String noNoticeText = NO_NOTICE_TEXT;
             int textWidth = mc.font.width(noNoticeText);
-            guiGraphics.drawString(mc.font, noNoticeText,
+            drawText(guiGraphics, noNoticeText,
                 rightPanelX + boxMargin + (cardWidth - textWidth) / 2, listStartY + 20, 0xFFAAAAAA);
             noticeClickArea[0] = noticeClickArea[1] = noticeClickArea[2] = noticeClickArea[3] = 0;
             return;
@@ -496,7 +488,7 @@ public class ServerScreenUI_PageRenderer {
             int indicatorY = lastCardY + 4;
             String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, totalNotices);
             int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint,
+            drawText(guiGraphics, scrollHint,
                 rightPanelX + boxMargin + (cardWidth - hintWidth) / 2, indicatorY, 0xFF666666);
         }
     }
@@ -524,12 +516,12 @@ public class ServerScreenUI_PageRenderer {
         String statusText = isRead ? "已读" : "未读";
         int statusColor = isRead ? 0xFF888888 : 0xFF4FC3F7;
 
-        guiGraphics.drawString(mc.font, dateTime, contentX, contentY, 0xFFAAAAAA);
+        drawText(guiGraphics, dateTime, contentX, contentY, 0xFFAAAAAA);
         int statusWidth = mc.font.width(statusText);
-        guiGraphics.drawString(mc.font, statusText, x + width - innerMargin - statusWidth, contentY, statusColor);
+        drawText(guiGraphics, statusText, x + width - innerMargin - statusWidth, contentY, statusColor);
 
         String title = notice.getNoticeTitle();
-        guiGraphics.drawString(mc.font, title, contentX, contentY + mc.font.lineHeight + 2,
+        drawText(guiGraphics, title, contentX, contentY + mc.font.lineHeight + 2,
             isRead ? 0xFFCCCCCC : 0xFFFFFFFF);
 
         String content = notice.getNoticeContent();
@@ -537,7 +529,7 @@ public class ServerScreenUI_PageRenderer {
         if (mc.font.width(content) > maxWidth) {
             content = truncateText(mc.font, content, maxWidth) + "...";
         }
-        guiGraphics.drawString(mc.font, content, contentX, contentY + mc.font.lineHeight * 2 + 4, 0xFF999999);
+        drawText(guiGraphics, content, contentX, contentY + mc.font.lineHeight * 2 + 4, 0xFF999999);
     }
 
     // ==================== 任务页面渲染 ====================
@@ -587,7 +579,7 @@ public class ServerScreenUI_PageRenderer {
 
         int storyTextX = storyBtnX1 + (storyWidth - mc.font.width(storyText)) / 2;
         int storyTextY = storyBtnY1 + (buttonHeight - mc.font.lineHeight) / 2;
-        guiGraphics.drawString(mc.font, storyText, storyTextX, storyTextY, 0xFFFFFFFF);
+        drawText(guiGraphics, storyText, storyTextX, storyTextY, 0xFFFFFFFF);
 
         // 个人任务按钮
         int personalBtnX1 = storyBtnX2 + buttonSpacing;
@@ -609,7 +601,7 @@ public class ServerScreenUI_PageRenderer {
 
         int personalTextX = personalBtnX1 + (personalWidth - mc.font.width(personalText)) / 2;
         int personalTextY = personalBtnY1 + (buttonHeight - mc.font.lineHeight) / 2;
-        guiGraphics.drawString(mc.font, personalText, personalTextX, personalTextY, 0xFFFFFFFF);
+        drawText(guiGraphics, personalText, personalTextX, personalTextY, 0xFFFFFFFF);
 
         // 保存按钮点击区域
         taskTabArea[0] = storyBtnX1;
@@ -657,9 +649,9 @@ public class ServerScreenUI_PageRenderer {
         int devWidth = mc.font.width(devText);
         int hintWidth = mc.font.width(hintText);
 
-        guiGraphics.drawString(mc.font, devText,
+        drawText(guiGraphics, devText,
             listX + (listWidth - devWidth) / 2, listY + 60, 0xFFFFD700);
-        guiGraphics.drawString(mc.font, hintText,
+        drawText(guiGraphics, hintText,
             listX + (listWidth - hintWidth) / 2, listY + 60 + mc.font.lineHeight + 10, 0xFFAAAAAA);
     }
 
@@ -680,9 +672,9 @@ public class ServerScreenUI_PageRenderer {
         int devWidth = mc.font.width(devText);
         int hintWidth = mc.font.width(hintText);
 
-        guiGraphics.drawString(mc.font, devText,
+        drawText(guiGraphics, devText,
             listX + (listWidth - devWidth) / 2, listY + 60, 0xFFFFD700);
-        guiGraphics.drawString(mc.font, hintText,
+        drawText(guiGraphics, hintText,
             listX + (listWidth - hintWidth) / 2, listY + 60 + mc.font.lineHeight + 10, 0xFFAAAAAA);
     }
 
@@ -694,7 +686,7 @@ public class ServerScreenUI_PageRenderer {
                                   int mouseX, int mouseY, float uiScale, long scrollOffset, int maxVisible) {
         // 故事标题
         String introTitle = "📜 在梦屿上和其他玩家一起推进剧情，拯救服务器";
-        guiGraphics.drawString(mc.font, introTitle, listX, listY, 0xFFFFD700);
+        drawText(guiGraphics, introTitle, listX, listY, 0xFFFFD700);
 
         // 阶段列表
         int cardY = listY + mc.font.lineHeight + 15;
@@ -759,7 +751,7 @@ public class ServerScreenUI_PageRenderer {
             int indicatorY = lastCardY + 4;
             String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, storyStages.size());
             int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint,
+            drawText(guiGraphics, scrollHint,
                 listX + (listWidth - hintWidth) / 2, indicatorY, 0xFF666666);
         }
 
@@ -767,7 +759,7 @@ public class ServerScreenUI_PageRenderer {
             String emptyText = "暂无故事任务";
             int emptyWidth = mc.font.width(emptyText);
             int emptyY = listY + 60;
-            guiGraphics.drawString(mc.font, emptyText,
+            drawText(guiGraphics, emptyText,
                 listX + (listWidth - emptyWidth) / 2, emptyY, 0xFF888888);
         }
     }
@@ -791,7 +783,7 @@ public class ServerScreenUI_PageRenderer {
         guiGraphics.fill(RenderType.gui(), x + width - 1, y, x + width, y + cardHeight, borderColor);
 
         // 阶段标题
-        guiGraphics.drawString(mc.font, stageName, x + innerMargin, y + innerMargin, 0xFFFFD700);
+        drawText(guiGraphics, stageName, x + innerMargin, y + innerMargin, 0xFFFFD700);
 
         // 阶段描述（自动换行，最多显示2行）
         int descMaxWidth = width - innerMargin * 2;
@@ -799,7 +791,7 @@ public class ServerScreenUI_PageRenderer {
         String wrappedDesc = wrapString(mc.font, stageDescription, descMaxWidth);
         String[] descLines = wrappedDesc.split("\n", 3); // 最多2行
         for (int i = 0; i < descLines.length && i < 2; i++) {
-            guiGraphics.drawString(mc.font, descLines[i], x + innerMargin, descY, 0xFFFFFFFF);
+            drawText(guiGraphics, descLines[i], x + innerMargin, descY, 0xFFFFFFFF);
             descY += mc.font.lineHeight + 2;
         }
 
@@ -808,12 +800,12 @@ public class ServerScreenUI_PageRenderer {
 
         // 左侧：玩家完成进度（灰色）
         String playerProgressText = String.format("您的完成进度: %d/%d", finishedCount, totalCount);
-        guiGraphics.drawString(mc.font, playerProgressText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
+        drawText(guiGraphics, playerProgressText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
 
         // 右侧：全服完成该阶段的人数（灰色）
         String serverProgressText = String.format("已有 %d 鱼友完成了该阶段", stageFinishedPlayers);
         int serverTextWidth = mc.font.width(serverProgressText);
-        guiGraphics.drawString(mc.font, serverProgressText, x + width - innerMargin - serverTextWidth, progressInfoY, 0xFFAAAAAA);
+        drawText(guiGraphics, serverProgressText, x + width - innerMargin - serverTextWidth, progressInfoY, 0xFFAAAAAA);
 
         // 进度条
         int barY = progressInfoY + mc.font.lineHeight + 5;
@@ -824,7 +816,7 @@ public class ServerScreenUI_PageRenderer {
         // 进度条下方提示文字（金色，靠左显示，增加底部间距）
         int hintY = barY + barHeight + 6;
         String hintText = "当鱼友们齐心协力揭开当前的谜团，通往下一阶段的道路自会显现，故事的结局将由你们的每一个选择而改变...";
-        guiGraphics.drawString(mc.font, hintText, x + innerMargin, hintY, 0xFFFFD700);
+        drawText(guiGraphics, hintText, x + innerMargin, hintY, 0xFFFFD700);
     }
 
     /**
@@ -871,7 +863,7 @@ public class ServerScreenUI_PageRenderer {
         if (stage == null) {
             String emptyText = "阶段不存在";
             int emptyWidth = mc.font.width(emptyText);
-            guiGraphics.drawString(mc.font, emptyText,
+            drawText(guiGraphics, emptyText,
                 listX + (listWidth - emptyWidth) / 2, listY + 80, 0xFF888888);
             return;
         }
@@ -886,7 +878,7 @@ public class ServerScreenUI_PageRenderer {
         renderBackButton(guiGraphics, listX, titleY, mouseX, mouseY, uiScale);
 
         String titleText = "📋 " + stageName;
-        guiGraphics.drawString(mc.font, titleText, listX + 50, titleY + 6, 0xFFFFFFFF);
+        drawText(guiGraphics, titleText, listX + 50, titleY + 6, 0xFFFFFFFF);
 
         int cardY = titleY + 40;
         int cardSpacing = 8;
@@ -923,7 +915,7 @@ public class ServerScreenUI_PageRenderer {
             int indicatorY = lastCardY + 4;
             String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, stageTasks.size());
             int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint,
+            drawText(guiGraphics, scrollHint,
                 listX + (listWidth - hintWidth) / 2, indicatorY, 0xFF666666);
         }
 
@@ -931,7 +923,7 @@ public class ServerScreenUI_PageRenderer {
             String emptyText = "该阶段暂无任务";
             int emptyWidth = mc.font.width(emptyText);
             int emptyY = listY + 80;
-            guiGraphics.drawString(mc.font, emptyText,
+            drawText(guiGraphics, emptyText,
                 listX + (listWidth - emptyWidth) / 2, emptyY, 0xFF888888);
         }
     }
@@ -948,7 +940,7 @@ public class ServerScreenUI_PageRenderer {
         String titleText = "📜 个人任务";
         String countText = String.format("%s (%d)", titleText, totalTasks);
         int titleY = listY;
-        guiGraphics.drawString(mc.font, countText, listX, titleY, 0xFFFFFFFF);
+        drawText(guiGraphics, countText, listX, titleY, 0xFFFFFFFF);
 
         int cardY = titleY + mc.font.lineHeight + 10;
         int cardSpacing = 8;
@@ -989,7 +981,7 @@ public class ServerScreenUI_PageRenderer {
             int indicatorY = lastCardY + 4;
             String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, totalTasks);
             int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint,
+            drawText(guiGraphics, scrollHint,
                 listX + (listWidth - hintWidth) / 2, indicatorY, 0xFF666666);
         }
 
@@ -997,7 +989,7 @@ public class ServerScreenUI_PageRenderer {
             String emptyText = "暂无个人任务";
             int emptyWidth = mc.font.width(emptyText);
             int emptyY = listY + 60;
-            guiGraphics.drawString(mc.font, emptyText,
+            drawText(guiGraphics, emptyText,
                 listX + (listWidth - emptyWidth) / 2, emptyY, 0xFF888888);
         }
     }
@@ -1025,7 +1017,7 @@ public class ServerScreenUI_PageRenderer {
 
         String backText = "◀";
         int textWidth = mc.font.width(backText);
-        guiGraphics.drawString(mc.font, backText, x + (btnWidth - textWidth) / 2, y + 4, textColor);
+        drawText(guiGraphics, backText, x + (btnWidth - textWidth) / 2, y + 4, textColor);
 
         backButtonArea[0] = x;
         backButtonArea[1] = y;
@@ -1047,7 +1039,7 @@ public class ServerScreenUI_PageRenderer {
 
         String taskIcon = isServerTask ? "📋" : "📜";
         String fullTitle = taskIcon + " " + taskName;
-        guiGraphics.drawString(mc.font, fullTitle, x + innerMargin + 4, y + innerMargin,
+        drawText(guiGraphics, fullTitle, x + innerMargin + 4, y + innerMargin,
             isFinished ? 0xFF888888 : themeColor);
 
         // 故事任务不显示完成按钮，右侧留更多空间显示描述
@@ -1057,7 +1049,7 @@ public class ServerScreenUI_PageRenderer {
         if (mc.font.width(displayContent) > maxWidth) {
             displayContent = truncateText(mc.font, displayContent, maxWidth) + "...";
         }
-        guiGraphics.drawString(mc.font, displayContent, x + innerMargin + 4,
+        drawText(guiGraphics, displayContent, x + innerMargin + 4,
             y + innerMargin + mc.font.lineHeight + 2, 0xFFAAAAAA);
 
         // 只有个人任务显示完成按钮
@@ -1067,7 +1059,7 @@ public class ServerScreenUI_PageRenderer {
             int btnY = y + (cardHeight - btnSize) / 2;
 
             if (isFinished) {
-                guiGraphics.drawString(mc.font, "✓", btnX, btnY, 0xFF00FF00);
+                drawText(guiGraphics, "✓", btnX, btnY, 0xFF00FF00);
             } else {
                 int btnColor = 0x40FFFFFF;
                 guiGraphics.fill(RenderType.gui(), btnX, btnY, btnX + btnSize, btnY + btnSize, btnColor);
@@ -1079,13 +1071,13 @@ public class ServerScreenUI_PageRenderer {
             int countTextX = x + width - innerMargin - 4;
             String countText = finishedCount > 0 ? finishedCount + "人" : "";
             int countWidth = mc.font.width(countText);
-            guiGraphics.drawString(mc.font, countText, countTextX - countWidth,
+            drawText(guiGraphics, countText, countTextX - countWidth,
                 y + cardHeight - innerMargin - mc.font.lineHeight, 0xFF888888);
 
             if (isFinished) {
                 // 已完成的显示✓标记
                 int checkX = countTextX - countWidth - 16;
-                guiGraphics.drawString(mc.font, "✓", checkX,
+                drawText(guiGraphics, "✓", checkX,
                     y + cardHeight - innerMargin - mc.font.lineHeight, 0xFF00FF00);
             }
         }
@@ -1122,14 +1114,14 @@ public class ServerScreenUI_PageRenderer {
 
             // 使用 Component 自动解析颜色代码
             net.minecraft.network.chat.Component textComponent = net.minecraft.network.chat.Component.literal(line);
-            guiGraphics.drawString(mc.font, textComponent, x + innerMargin, lineY, 0xFFFFFFFF);
+            drawText(guiGraphics, textComponent, x + innerMargin, lineY, 0xFFFFFFFF);
         }
 
         // 滚动提示
         if (helpLines.length > visibleLines) {
             String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, helpLines.length - visibleLines + 1);
             int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint, x + (width - hintWidth) / 2, screen.getVirtualHeight() - 30, 0xFF666666);
+            drawText(guiGraphics, scrollHint, x + (width - hintWidth) / 2, screen.getVirtualHeight() - 30, 0xFF666666);
         }
     }
 

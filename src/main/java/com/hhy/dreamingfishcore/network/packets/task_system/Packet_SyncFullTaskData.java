@@ -5,26 +5,20 @@ import com.hhy.dreamingfishcore.core.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.core.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.core.task_system.TaskPlayerData;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 //全量包，进服申请一次
-public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_SyncFullTaskData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "task_system/packet_sync_full_task_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_SyncFullTaskData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_SyncFullTaskData.encode(packet, buf), Packet_SyncFullTaskData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_SyncFullTaskData {
     private final UUID playerUUID;
     private Map<Integer, TaskPlayerData> taskPlayerData = new HashMap<>();
     private Map<Integer, StoryStageData> storyStageData = new HashMap<>();
@@ -45,8 +39,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
             TaskPlayerData task = entry.getValue();
 
             buf.writeInt(taskId);
-            buf.writeUtf(safeUtf(task.getTaskName()));
-            buf.writeUtf(safeUtf(task.getTaskContent()));
+            buf.writeUtf(task.getTaskName());
+            buf.writeUtf(task.getTaskContent());
             buf.writeLong(task.getTaskStartTime());
             buf.writeLong(task.getTaskEndTime());
             buf.writeBoolean(task.isPlayerFinished(packet.playerUUID));
@@ -59,8 +53,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
 
             // 编码阶段基本信息
             buf.writeInt(stage.getStageId());
-            buf.writeUtf(safeUtf(stage.getStageName()));
-            buf.writeUtf(safeUtf(stage.getStageDescription()));
+            buf.writeUtf(stage.getStageName());
+            buf.writeUtf(stage.getStageDescription());
 
             // 编码怪物数值调整
             StoryStageData.MonsterModifier modifier = stage.getMonsterModifier();
@@ -82,8 +76,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                 buf.writeInt(tasks.size());
                 for (StoryTaskData task : tasks) {
                     buf.writeInt(task.getTaskId());
-                    buf.writeUtf(safeUtf(task.getTaskName()));
-                    buf.writeUtf(safeUtf(task.getTaskContent()));
+                    buf.writeUtf(task.getTaskName());
+                    buf.writeUtf(task.getTaskContent());
                     buf.writeLong(task.getStartTime());
                     buf.writeLong(task.getEndTime());
                     buf.writeBoolean(task.isTaskState());
@@ -94,7 +88,7 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                     buf.writeInt(task.getFinishedPlayerCount());
                     if (task.getFinishedPlayers() != null) {
                         for (StoryTaskData.FinishedPlayer fp : task.getFinishedPlayers()) {
-                            buf.writeUtf(safeUtf(fp.getPlayerName()));
+                            buf.writeUtf(fp.getPlayerName());
                             buf.writeUUID(fp.getPlayerUUID());
                         }
                     }
@@ -180,22 +174,23 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
         return new Packet_SyncFullTaskData(playerUUID, playerTaskMap, stageMap);
     }
 
-    public static void handle(Packet_SyncFullTaskData packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            // 客户端更新缓存
-            ClientTaskCache.updateFullTaskData(
-                    packet.getPlayerUUID(),
-                    packet.getTaskPlayerData(),
-                    packet.getStoryStageData()
-            );
-            // 更新 ClientCacheManager
-            com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setPlayerTasks(packet.getTaskPlayerData());
-            com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setStoryStages(packet.getStoryStageData());
-        });
-    }
+    public static void handle(Packet_SyncFullTaskData packet, Supplier<NetworkEvent.Context> ctxSupplier) {
+        NetworkEvent.Context ctx = ctxSupplier.get();
+        ctx.setPacketHandled(true);
 
-    private static String safeUtf(String value) {
-        return value == null ? "" : value;
+        ctx.enqueueWork(() -> {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                // 客户端更新缓存
+                ClientTaskCache.updateFullTaskData(
+                        packet.getPlayerUUID(),
+                        packet.getTaskPlayerData(),
+                        packet.getStoryStageData()
+                );
+                // 更新 ClientCacheManager
+                com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setPlayerTasks(packet.getTaskPlayerData());
+                com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setStoryStages(packet.getStoryStageData());
+            });
+        });
     }
 
     public UUID getPlayerUUID() {

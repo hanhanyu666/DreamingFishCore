@@ -3,19 +3,19 @@ package com.hhy.dreamingfishcore.core.playerlevel_system.handler;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.core.playerlevel_system.overalllevel.PlayerLevelManager;
 import net.minecraft.advancements.Advancement;
-import net.minecraft.advancements.AdvancementHolder;
-import net.minecraft.advancements.AdvancementType;
-import net.minecraft.advancements.DisplayInfo;
+import net.minecraft.advancements.FrameType;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.AdvancementEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.AdvancementEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * 进度（成就）奖励处理器
  * 玩家完成进度时根据进度类型给予不同的经验奖励
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class AdvancementRewardHandler {
 
     // ==================== 配置项 ====================
@@ -42,11 +42,10 @@ public class AdvancementRewardHandler {
     public static void onAdvancementEarned(AdvancementEvent.AdvancementEarnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
-        AdvancementHolder holder = event.getAdvancement();
-        Advancement advancement = holder.value();
+        Advancement advancement = event.getAdvancement();
 
         // 忽略没有显示信息的进度（如配方解锁）
-        if (advancement.display().isEmpty()) {
+        if (advancement.getDisplay() == null) {
             if (HIDE_HIDDEN_ADVANCEMENTS) {
                 return;
             }
@@ -56,10 +55,9 @@ public class AdvancementRewardHandler {
         }
 
         // 根据进度类型给予不同经验奖励
-        DisplayInfo display = advancement.display().get();
-        AdvancementType frameType = display.getType();
-        boolean isHidden = display.isHidden();
-        long expReward = calculateExperienceReward(frameType, isHidden, holder);
+        FrameType frameType = advancement.getDisplay().getFrame();
+        boolean isHidden = advancement.getDisplay().isHidden();
+        long expReward = calculateExperienceReward(frameType, isHidden, advancement);
 
         // 发放经验奖励
         PlayerLevelManager.addPlayerExperienceServer(player, expReward);
@@ -67,7 +65,7 @@ public class AdvancementRewardHandler {
         // 注意：聊天消息由PlayerAdvancementsMixin拦截并显示在右侧
 
         DreamingFishCore.LOGGER.info("玩家 {} 完成进度 {} (类型: {}, 隐藏: {})，获得 {} 经验",
-                player.getScoreboardName(), holder.id(), frameType.getSerializedName(), isHidden, expReward);
+                player.getScoreboardName(), advancement.getId(), frameType.getName(), isHidden, expReward);
     }
 
     /**
@@ -77,14 +75,14 @@ public class AdvancementRewardHandler {
      * @param advancement 进度对象（用于检查命名空间）
      * @return 经验值
      */
-    private static long calculateExperienceReward(AdvancementType frameType, boolean isHidden, AdvancementHolder advancement) {
+    private static long calculateExperienceReward(FrameType frameType, boolean isHidden, Advancement advancement) {
         long baseReward = switch (frameType) {
             case TASK -> TASK_EXPERIENCE_REWARD;
             case GOAL -> GOAL_EXPERIENCE_REWARD;
             case CHALLENGE -> CHALLENGE_EXPERIENCE_REWARD;
         };
         // 仅原版（minecraft命名空间）的隐藏进度给予额外加成
-        boolean isVanilla = "minecraft".equals(advancement.id().getNamespace());
+        boolean isVanilla = "minecraft".equals(advancement.getId().getNamespace());
         if (isHidden && isVanilla) {
             return baseReward + HIDDEN_BONUS_EXPERIENCE;
         }

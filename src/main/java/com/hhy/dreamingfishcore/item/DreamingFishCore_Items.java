@@ -1,129 +1,70 @@
 package com.hhy.dreamingfishcore.item;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.item.items.*;
-import com.hhy.dreamingfishcore.item.items.medicine.Easy_Aid_Kit;
-import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
+import com.hhy.dreamingfishcore.item.items.Item_AidKit;
+import com.hhy.dreamingfishcore.item.items.Item_Blueprint;
+import com.hhy.dreamingfishcore.item.items.Item_FragmentPage;
+import com.hhy.dreamingfishcore.item.items.Item_Guitar;
 import com.hhy.dreamingfishcore.item.items.Item_RevivalCharm;
+import com.hhy.dreamingfishcore.item.items.Item_StoryBook;
+import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.*;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Rarity;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.registries.DeferredRegister;
-
-import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.List;
 
 public class DreamingFishCore_Items {
+    public static final DeferredRegister<Item> ITEMS =
+            DeferredRegister.create(ForgeRegistries.ITEMS, DreamingFishCore.MODID);
 
-    // 创建物品的 DeferredRegister
-    public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(BuiltInRegistries.ITEM, DreamingFishCore.MODID);
+    public static final RegistryObject<Item> GUITAR = ITEMS.register("guitar",
+            () -> new Item_Guitar(new Item.Properties().stacksTo(1).fireResistant()));
 
-    // 注册吉他物品
-    public static final DeferredHolder<Item, ? extends Item> GUITAR = ITEMS.register("guitar",
-            () -> new Item_Guitar(new Item.Properties()
-                    .stacksTo(1) // 堆叠限制为 1
-                    .fireResistant() // 可选，防火
-            ));
-
-    // 注册启程锦鲤
-    public static final DeferredHolder<Item, ? extends Item> DREAMINGFISH = ITEMS.register(
-            "dreamingfish",
-            () -> new Item(new Item.Properties()
-                    .stacksTo(64)
-                    .rarity(Rarity.UNCOMMON))  //金色品质
-            {
-                // 加自定义描述tooltips
+    public static final RegistryObject<Item> DREAMINGFISH = ITEMS.register("dreamingfish",
+            () -> new Item(new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)) {
                 @Override
-                public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context,
-                                            List<Component> tooltip, TooltipFlag flag) {
-                    super.appendHoverText(stack, context, tooltip, flag);
-                    // 读语言文件里的tooltip
+                public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
+                    super.appendHoverText(stack, level, tooltip, flag);
                     tooltip.add(Component.translatable("item.dreamingfishcore.dreamingfish.tooltip"));
                 }
-            }
-    );
+            });
 
-    // 自定义蓝图物品（可选，如果不想用地图）
-    public static final DeferredHolder<Item, ? extends Item> BLUEPRINT_ITEM = ITEMS.register("blueprint",
-            () -> new Item_Blueprint(new Item.Properties()
-                    .stacksTo(1)  // 蓝图只能堆叠1个
-                    .fireResistant()  // 防火（重要物品）
-            ));
+    public static final RegistryObject<Item> BLUEPRINT_ITEM = ITEMS.register("blueprint",
+            () -> new Item_Blueprint(new Item.Properties().stacksTo(1).fireResistant()));
 
-    public static final DeferredHolder<Item, ? extends Item> FRAGMENT_PAGE = ITEMS.register("fragment_page",
-            () -> new Item_FragmentPage(new Item.Properties()
-                    .stacksTo(64)
-                    .rarity(Rarity.UNCOMMON)
-            ));
+    public static final RegistryObject<Item> FRAGMENT_PAGE = ITEMS.register("fragment_page",
+            () -> new Item_FragmentPage(new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)));
 
-    public static final DeferredHolder<Item, ? extends Item> STORY_BOOK = ITEMS.register("story_book",
-            () -> new Item_StoryBook(new Item.Properties()
-                    .stacksTo(1)
-                    .rarity(Rarity.RARE)
-            ));
+    public static final RegistryObject<Item> STORY_BOOK = ITEMS.register("story_book",
+            () -> new Item_StoryBook(new Item.Properties().stacksTo(1).rarity(Rarity.RARE)));
 
-    // 空白蓝图（用于制作特定蓝图）
-    public static final DeferredHolder<Item, ? extends Item> BLANK_BLUEPRINT = ITEMS.register("blank_blueprint",
-            () -> new Item(new Item.Properties()
-                    .stacksTo(64)
-            ));
+    public static final RegistryObject<Item> BLANK_BLUEPRINT = ITEMS.register("blank_blueprint",
+            () -> new Item(new Item.Properties().stacksTo(64)));
 
-    //药品注册————————————————————————————————————————————————————————————————————————
-    // 简易急救包（初级）
-    public static final DeferredHolder<Item, ? extends Item> EASY_AID_KIT = ITEMS.register("easy_aid_kit",
-            () -> new Item_AidKit(
-                    20,      // healInterval: 20刻 = 1秒
-                    1.0,     // perHealAmount: 每次治疗1点生命值
-                    20,      // durabilityConsumeInterval: 每20刻消耗1耐久
-                    1000,    // cooldown: 1000刻 = 50秒冷却
-                    100,     // startDelay: 100刻 = 5秒启动延迟
-                    "简易急救包" // displayName: 显示名称
-            )
-    );
+    public static final RegistryObject<Item> EASY_AID_KIT = ITEMS.register("easy_aid_kit",
+            () -> new Item_AidKit(20, 1.0, 20, 1000, 100, "简易急救包"));
 
-    // 高级急救包（中级）
-    public static final DeferredHolder<Item, ? extends Item> ADVANCED_AID_KIT = ITEMS.register("advanced_aid_kit",
-            () -> new Item_AidKit(
-                    15,      // 更短的治疗间隔
-                    2.0,     // 每次治疗2点生命值
-                    30,      // 更耐用的耐久消耗间隔
-                    800,     // 更短的冷却时间
-                    80,      // 更短的启动延迟
-                    "高级急救包"
-            )
-    );
+    public static final RegistryObject<Item> ADVANCED_AID_KIT = ITEMS.register("advanced_aid_kit",
+            () -> new Item_AidKit(15, 2.0, 30, 800, 80, "高级急救包"));
 
-    // 专业急救包（高级）
-    public static final DeferredHolder<Item, ? extends Item> PROFESSIONAL_AID_KIT = ITEMS.register("professional_aid_kit",
-            () -> new Item_AidKit(
-                    10,      // 非常短的治疗间隔
-                    3.0,     // 每次治疗3点生命值
-                    40,      // 非常耐用的耐久消耗间隔
-                    600,     // 很短的冷却时间
-                    60,      // 很短的启动延迟
-                    "专业急救包"
-            )
-    );
+    public static final RegistryObject<Item> PROFESSIONAL_AID_KIT = ITEMS.register("professional_aid_kit",
+            () -> new Item_AidKit(10, 3.0, 40, 600, 60, "专业急救包"));
 
-    // 复活护符
-    public static final DeferredHolder<Item, ? extends Item> REVIVAL_CHARM = ITEMS.register("revival_charm",
-            () -> new Item_RevivalCharm(new Item.Properties()
-                    .stacksTo(1)  // 只能堆叠1个
-                    .rarity(Rarity.RARE)  // 稀有品质
-            ));
+    public static final RegistryObject<Item> REVIVAL_CHARM = ITEMS.register("revival_charm",
+            () -> new Item_RevivalCharm(new Item.Properties().stacksTo(1).rarity(Rarity.RARE)));
 
-    // 基因复苏药剂
-    public static final DeferredHolder<Item, ? extends Item> GENE_RESURGENCE_POTION = ITEMS.register("restore_uninfected_potion",
-            () -> new Potion_RestoreUnInfected(new Item.Properties()
-                    .stacksTo(1)  // 只能堆叠1个
-                    .rarity(Rarity.EPIC)  // 史诗品质
-            ));
+    public static final RegistryObject<Item> GENE_RESURGENCE_POTION = ITEMS.register("restore_uninfected_potion",
+            () -> new Potion_RestoreUnInfected(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
 
     public static void register(IEventBus eventBus) {
-        ITEMS.register(eventBus); // 注册物品
+        ITEMS.register(eventBus);
     }
 }

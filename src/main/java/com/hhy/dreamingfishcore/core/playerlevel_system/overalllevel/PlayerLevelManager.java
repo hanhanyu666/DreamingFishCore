@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.core.playerlevel_system.overalllevel;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.playerdata_system.Packet_LevelUpNotify;
@@ -7,11 +8,13 @@ import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerDataManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.fml.common.Mod;
 
 /**
  * 玩家无限等级+经验核心管理框架
  * 功能：经验累积、满经验升级、升级发提示、等级/经验获取与设置
  */
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerLevelManager {
     /**
      * 计算指定等级升级所需的总经验（累积经验）
@@ -157,9 +160,10 @@ public class PlayerLevelManager {
      */
     private static void sendLevelUpNotify(ServerPlayer serverPlayer, int newLevel) {
         if (serverPlayer == null) return;
-        DreamingFishCore_NetworkManager.sendToClient(
+        DreamingFishCore_NetworkManager.INSTANCE.sendTo(
                 new Packet_LevelUpNotify(newLevel),
-                serverPlayer
+                serverPlayer.connection.connection,
+                net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT
         );
     }
 

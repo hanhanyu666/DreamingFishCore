@@ -16,17 +16,16 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserBanListEntry;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Optional;
 import java.util.UUID;
 
 //幸存者死亡，可以花费50点复活点数死亡不掉落
 //感染值死亡，直接扣除20点死亡点数
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DeathEventHandler {
 
     //死亡消耗
@@ -115,7 +114,7 @@ public class DeathEventHandler {
         serverPlayer.getPersistentData().putDouble("DreamingFishCore_DeathZ", deathZ);
         serverPlayer.getPersistentData().putString("DreamingFishCore_DeathDimension", dimension);
         // 保存死亡消息
-        serverPlayer.getPersistentData().putString("DreamingFishCore_DeathMessage", Component.Serializer.toJson(deathMessage, serverPlayer.registryAccess()));
+        serverPlayer.getPersistentData().putString("DreamingFishCore_DeathMessage", Component.Serializer.toJson(deathMessage));
 
         Packet_DeathScreenData packet = new Packet_DeathScreenData(
                 currentRespawnPoint,
@@ -189,7 +188,7 @@ public class DeathEventHandler {
         String deathMessageJson = player.getPersistentData().getString("DreamingFishCore_DeathMessage");
         if (deathMessageJson != null && !deathMessageJson.isEmpty()) {
             try {
-                deathMessage = Component.Serializer.fromJson(deathMessageJson, player.registryAccess());
+                deathMessage = Component.Serializer.fromJson(deathMessageJson);
             } catch (Exception e) {
                 deathMessage = Component.literal("您 died");
             }
@@ -242,11 +241,15 @@ public class DeathEventHandler {
         if (respawnPos != null && respawnDim != null) {
             targetLevel = player.server.getLevel(respawnDim);
             if (targetLevel != null) {
-                targetPos = Vec3.atBottomCenterOf(respawnPos);
-                player.teleportTo(targetLevel, targetPos.x, targetPos.y, targetPos.z, respawnAngle, 0);
-                DreamingFishCore.LOGGER.info("玩家 {} 已传送到复活点: {} {} {}",
-                        player.getScoreboardName(), (int)targetPos.x, (int)targetPos.y, (int)targetPos.z);
-                return;
+                Optional<Vec3> optional = Player.findRespawnPositionAndUseSpawnBlock(
+                        targetLevel, respawnPos, respawnAngle, respawnForced, false);
+                if (optional.isPresent()) {
+                    targetPos = optional.get();
+                    player.teleportTo(targetLevel, targetPos.x, targetPos.y, targetPos.z, respawnAngle, 0);
+                    DreamingFishCore.LOGGER.info("玩家 {} 已传送到复活点: {} {} {}",
+                            player.getScoreboardName(), (int)targetPos.x, (int)targetPos.y, (int)targetPos.z);
+                    return;
+                }
             }
         }
 

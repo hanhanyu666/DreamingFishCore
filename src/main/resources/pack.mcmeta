@@ -1,8 +1,8 @@
 {
   "pack": {
     "description": {
-      "text": "dreamingfishcore resources"
+      "text": "${mod_id} resources"
     },
-    "pack_format": 34
+    "pack_format": 15
   }
 }

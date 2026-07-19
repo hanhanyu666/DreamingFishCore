@@ -35,9 +35,9 @@ public class Item_RevivalCharm extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context,
+    public void appendHoverText(ItemStack stack, net.minecraft.world.level.Level level,
                                 java.util.List<Component> tooltip, net.minecraft.world.item.TooltipFlag flag) {
-        super.appendHoverText(stack, context, tooltip, flag);
+        super.appendHoverText(stack, level, tooltip, flag);
 
         tooltip.add(Component.literal("§6§o一个神秘的道具，将您的能量传递给其他人"));
         tooltip.add(Component.literal(""));

@@ -29,7 +29,7 @@ public class Util_Skull {
 
         // 将 "SkullOwner" 数据添加到 ItemStack 的 NBT
         tag.put("SkullOwner", skullOwnerTag);
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(playerHead, tag);
+        playerHead.setTag(tag);
 
         return playerHead;
     }

@@ -5,11 +5,12 @@ import com.hhy.dreamingfishcore.core.story_system.StoryStageManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.task_system.Packet_SyncFullTaskData;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus =  Mod.EventBusSubscriber.Bus.FORGE)
 public class TaskSyncEvent {
     @SubscribeEvent
     public static void onPlayerLogging(PlayerEvent.PlayerLoggedInEvent event) {
@@ -27,8 +28,8 @@ public class TaskSyncEvent {
             );
 
             //向当前登录玩家发送数据包
-            DreamingFishCore_NetworkManager.sendToClient(
-                    player,
+            DreamingFishCore_NetworkManager.INSTANCE.send(
+                    PacketDistributor.PLAYER.with(() -> (net.minecraft.server.level.ServerPlayer) player),
                     syncPacket
             );
 

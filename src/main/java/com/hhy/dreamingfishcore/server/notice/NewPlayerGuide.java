@@ -6,11 +6,10 @@ import com.hhy.dreamingfishcore.core.login_system.PlayerLoginDataManager;
 import com.hhy.dreamingfishcore.screen.server_screen.tips.TipPushHelper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Map;
 import java.util.UUID;
@@ -19,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 新手教程（简化版：引导玩家查看帮助）
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class NewPlayerGuide {
     // 固定15秒时长（显示时间） & 15秒延迟（推送间隔，解决堆叠）
     private static final long SECONDS = 15000;
@@ -41,7 +40,7 @@ public class NewPlayerGuide {
         }
 
         // 第一条：欢迎与快捷键提示
-        TipPushHelper.sendTipToPlayer(player, "§6欢迎游玩梦鱼服，按下[i]打开经济系统主菜单，按下[u]打开服务器菜单", (int) SECONDS);
+        TipPushHelper.sendTipToPlayer(player, "§6欢迎游玩梦鱼服，按下[U]打开服务器菜单，按下[O]切换信息面板", (int) SECONDS);
 
         // 开启子线程，实现延迟推送
         Thread guideThread = new Thread(() -> {

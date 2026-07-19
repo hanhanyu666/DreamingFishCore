@@ -1,6 +1,6 @@
 # DreamingFishCore
 
-DreamingFishCore 是为梦鱼服制作的 Minecraft NeoForge 1.21.1 核心模组，提供综合性的服务器管理功能、服务器玩法、角色成长、终端界面、剧情任务、蓝图合成限制，且制作了一套全新的沉浸式 UI。
+DreamingFishCore 是为梦鱼服制作的 Minecraft Forge 1.20.1 核心模组，提供综合性的服务器管理功能、服务器玩法、角色成长、终端界面、剧情任务、蓝图合成限制，且制作了一套全新的沉浸式 UI。本分支是 1.21.1 版功能的 1.20.1 移植版。
 
 为了方便模组的维护，本项目从原 [QingMo-A/EconomySystem](https://github.com/QingMo-A/EconomySystem) 中分离出专属于 DreamingFish 服务器的核心功能，并围绕 DreamingFishCore 的定位进行独立维护，原 EconomySystem 继续维护商店、领地等内容，该模组将继续为梦鱼服的后续玩法进行开发。
 
@@ -24,7 +24,7 @@ DreamingFishCore 是为梦鱼服制作的 Minecraft NeoForge 1.21.1 核心模组
 
 ### 梦屿终端
 
-梦屿终端是玩家进入服务器后最常用的界面入口。终端使用独立的平板式 UI，展示玩家等级、称号、排行、身体状态、探索数量、蓝图数量和服务器公告。部分服务器数据入口可作为后续系统接入点显示。
+梦屿终端是玩家进入服务器后最常用的界面入口。终端使用独立的平板式 UI，展示玩家等级、称号、排行、身体状态、探索数量、蓝图数量和服务器公告。
 
 ### 蓝图合成
 
@@ -54,9 +54,9 @@ DreamingFishCore 是为梦鱼服制作的 Minecraft NeoForge 1.21.1 核心模组
 
 ## 技术信息
 
-- Minecraft: 1.21.1
-- Mod Loader: NeoForge
-- Java: 21
+- Minecraft: 1.20.1
+- Mod Loader: Forge 47
+- Java: 17
 - Mod ID: `dreamingfishcore`
 - License: GNU Affero General Public License v3.0
 
@@ -78,7 +78,7 @@ Windows PowerShell 下也可以使用：
 
 ## 配置与数据
 
-模组会在 NeoForge 配置目录下创建 `dreamingfishcore` 配置文件夹，用于保存服务器侧配置和运行数据。部分系统会使用玩家持久化数据、服务端保存数据或配置文件来同步和记录状态。
+模组会在 Forge 配置目录下创建 `dreamingfishcore` 配置文件夹，用于保存服务器侧配置和运行数据。部分系统会使用玩家持久化数据、服务端保存数据或配置文件来同步和记录状态。
 
 ## 开发说明
 
@@ -89,7 +89,7 @@ DreamingfishCore 的包名为 `com.hhy.dreamingfishcore`。主要模块位于：
 - `network/`：客户端与服务端同步包
 - `commands/`：服务器命令
 - `item/`：自定义物品与创造栏
-- `events/`：NeoForge 事件处理
+- `events/`：Forge 事件处理
 - `mixin/`：原版行为注入
 - `loot/`：全局掉落修改器
 - `server/`：服务器侧数据管理

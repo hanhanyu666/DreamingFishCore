@@ -4,19 +4,13 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class Packet_CheckResultRequest implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_CheckResultRequest> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "check_system/packet_check_result_request"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_CheckResultRequest> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_CheckResultRequest.encode(packet, buf), Packet_CheckResultRequest::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_CheckResultRequest {
     private final String playerName;
     private final String playerUUID;
     private final String senderName;
@@ -46,12 +40,14 @@ public class Packet_CheckResultRequest implements net.minecraft.network.protocol
         return new Packet_CheckResultRequest(buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readUtf());
     }
 
-    public static void handle(Packet_CheckResultRequest msg, IPayloadContext context) {
+    public static void handle(Packet_CheckResultRequest msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+            ServerPlayer player = context.getSender();
             MinecraftServer server = player.server;
             ServerPlayer target = server.getPlayerList().getPlayer(UUID.fromString(msg.senderUUID));
-            DreamingFishCore_NetworkManager.sendToClient(target, new Packet_CheckResultResponse(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.result));
+            DreamingFishCore_NetworkManager.INSTANCE.send(PacketDistributor.PLAYER.with(() -> target), new Packet_CheckResultResponse(msg.playerName, msg.playerUUID, msg.senderName, msg.senderUUID, msg.actionType, msg.result));
         });
+        contextSupplier.get().setPacketHandled(true);
     }
 }

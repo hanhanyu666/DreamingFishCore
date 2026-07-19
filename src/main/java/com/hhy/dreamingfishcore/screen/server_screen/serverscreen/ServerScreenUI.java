@@ -2,6 +2,9 @@ package com.hhy.dreamingfishcore.screen.server_screen.serverscreen;
 
 import net.minecraft.client.Minecraft;
 
+
+//里面写了隐藏显示其他ui以及叫出鼠标的方法，供事件调用
+
 public class ServerScreenUI {
     private static boolean SHOW_UI = false;
 
@@ -29,13 +32,18 @@ public class ServerScreenUI {
 
         SHOW_UI = !SHOW_UI;
 
+        //显示ui叫出鼠标
         if (SHOW_UI) {
+            //释放鼠标，显示光标
             mc.mouseHandler.releaseMouse();
+            // 打开Screen
             mc.setScreen(new ServerScreenUI_Screen());
         } else {
+            //关闭Screen
             if (mc.screen instanceof ServerScreenUI_Screen) {
                 mc.setScreen(null);
             }
+            //重新捕获鼠标，隐藏光标
             mc.mouseHandler.grabMouse();
         }
     }

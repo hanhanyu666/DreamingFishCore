@@ -3,21 +3,14 @@ package com.hhy.dreamingfishcore.network.packets.notice_system;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.server.notice.PlayerNoticeDataManager;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
 /**
  * 标记公告为已请求数据包（客户端 -> 服务端）
  */
-public class Packet_MarkNoticeReadRequest implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_MarkNoticeReadRequest> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "notice_system/packet_mark_notice_read_request"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_MarkNoticeReadRequest> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_MarkNoticeReadRequest.encode(packet, buf), Packet_MarkNoticeReadRequest::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_MarkNoticeReadRequest {
 
     private final int noticeId;
 
@@ -34,14 +27,19 @@ public class Packet_MarkNoticeReadRequest implements net.minecraft.network.proto
         return new Packet_MarkNoticeReadRequest(noticeId);
     }
 
-    public static void handle(Packet_MarkNoticeReadRequest msg, IPayloadContext context) {
+    public static void handle(Packet_MarkNoticeReadRequest msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            handleServer(msg, context);
+            // 只在服务端处理
+            if (context.getDirection().getReceptionSide().isServer()) {
+                handleServer(msg, context);
+            }
         });
+        context.setPacketHandled(true);
     }
 
-    private static void handleServer(Packet_MarkNoticeReadRequest msg, IPayloadContext context) {
-        var serverPlayer = context.player() instanceof net.minecraft.server.level.ServerPlayer player ? player : null;
+    private static void handleServer(Packet_MarkNoticeReadRequest msg, NetworkEvent.Context context) {
+        var serverPlayer = context.getSender();
         if (serverPlayer == null) {
             DreamingFishCore.LOGGER.warn("Packet_MarkNoticeReadRequest: serverPlayer is null");
             return;

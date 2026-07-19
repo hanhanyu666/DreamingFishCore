@@ -9,18 +9,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.GameType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.entity.living.LivingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 玩家体力（力量）系统核心管理器
  * 负责体力消耗、恢复、疾跑拦截、提示显示等全逻辑
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PlayerStrengthManager {
 
     private static final int SPRINT_COST_PER_5TICK = 1;    // 疾跑每5tick耗1点体力（每秒4点）
@@ -51,9 +47,9 @@ public class PlayerStrengthManager {
 
     //Tick监听
     @SubscribeEvent
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         // 仅在服务端执行，且玩家存活
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+        if (event.side.isClient() || !event.player.isAlive() || !(event.player instanceof ServerPlayer serverPlayer)) {
             return;
         }
 
@@ -80,8 +76,8 @@ public class PlayerStrengthManager {
         //优先检查疾跑状态
         checkSprintState(serverPlayer, attrData);
         //消耗 + 恢复
-        handleSprintConsume(serverPlayer, attrData, event.getEntity().tickCount);
-        handleStrengthRestore(serverPlayer, attrData, event.getEntity().tickCount);
+        handleSprintConsume(serverPlayer, attrData, event.player.tickCount);
+        handleStrengthRestore(serverPlayer, attrData, event.player.tickCount);
     }
 
     //跳跃事件监听
@@ -302,13 +298,15 @@ public class PlayerStrengthManager {
 
     //客户端tick监听器：检查体力耗尽标记，强制停止疾跑
     @OnlyIn(Dist.CLIENT)
-    @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+    @Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
     public static class ClientTickHandler {
         // 客户端体力耗尽标记
         private static final Map<UUID, Boolean> IS_STRENGTH_EXHAUSTED_CLIENT = new ConcurrentHashMap<>();
 
         @SubscribeEvent
-        public static void onClientTick(ClientTickEvent.Post event) {
+        public static void onClientTick(TickEvent.ClientTickEvent event) {
+            if (event.phase != TickEvent.Phase.END) return;
+
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer player = mc.player;
             if (player == null || !player.isAlive()) return;
@@ -385,13 +383,29 @@ public class PlayerStrengthManager {
             }
         }
 
+        // 监听鼠标输入事件
+        @SubscribeEvent
+        public static void onMouseInput(InputEvent.MouseButton event) {
+            Minecraft mc = Minecraft.getInstance();
+            LocalPlayer player = mc.player;
+            if (player == null || !player.isAlive()) return;
+
+            UUID uuid = player.getUUID();
+            boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);
+
+            // 如果体力耗尽且正在疾跑，强制停止
+            if (isExhausted && player.isSprinting()) {
+                player.setSprinting(false);
+            }
+        }
+
         // 监听玩家 tick 事件，在物理更新前阻止疾跑加速
         @SubscribeEvent
-        public static void onTick(PlayerTickEvent.Post event) {
-            if (!event.getEntity().level().isClientSide()) return;
+        public static void onTick(TickEvent.PlayerTickEvent event) {
+            if (!event.side.isClient() || event.phase != TickEvent.Phase.START) return;
 
             // 只处理本地玩家，忽略其他玩家（RemotePlayer）
-            if (!(event.getEntity() instanceof LocalPlayer player)) return;
+            if (!(event.player instanceof LocalPlayer player)) return;
             if (player == null || !player.isAlive()) return;
 
             UUID uuid = player.getUUID();

@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.item.items;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import com.hhy.dreamingfishcore.item.item_renderer.BlueprintItemRenderer;
@@ -18,8 +16,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
-
+import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -47,7 +45,7 @@ public class Item_Blueprint extends Item {
             // 服务端逻辑（处理实际效果）
             if (itemId != null && !itemId.isEmpty()) {
                 // 验证物品是否存在
-                if (!BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(itemId))) {
+                if (!ForgeRegistries.ITEMS.containsKey(new ResourceLocation(itemId))) {
                     player.sendSystemMessage(Component.literal("§c蓝图指向不存在的物品！"));
                     return InteractionResultHolder.fail(stack);
                 }
@@ -62,7 +60,7 @@ public class Item_Blueprint extends Item {
                 PlayerBlueprintData.unlockItem(player, itemId);
 
                 // 获取物品显示名称
-                Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
                 String itemName = item != null ?
                         new ItemStack(item).getHoverName().getString() : itemId;
 
@@ -99,14 +97,14 @@ public class Item_Blueprint extends Item {
     // ===================================================================
 
     @Override
-    public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context,
+    public void appendHoverText(ItemStack stack, @Nullable Level level,
                                 List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, context, tooltip, flag);
+        super.appendHoverText(stack, level, tooltip, flag);
 
         String itemId = getUnlockedItemId(stack);
         if (itemId != null && !itemId.isEmpty()) {
             // 获取物品并显示名称
-            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
             if (item != null) {
                 ItemStack displayStack = new ItemStack(item);
                 String itemName = displayStack.getHoverName().getString();
@@ -130,29 +128,25 @@ public class Item_Blueprint extends Item {
         ItemStack stack = new ItemStack(DreamingFishCore_Items.BLUEPRINT_ITEM.get());
         CompoundTag tag = new CompoundTag();
         tag.putString("unlocks_item", itemId);
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, tag);
+        stack.setTag(tag);
         return stack;
     }
 
     // 获取蓝图中要解锁的物品ID
     public static String getUnlockedItemId(ItemStack stack) {
-        if (com.hhy.dreamingfishcore.utils.ItemStackDataHelper.hasTag(stack) && com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack).contains("unlocks_item")) {
-            return com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack).getString("unlocks_item");
+        if (stack.hasTag() && stack.getTag().contains("unlocks_item")) {
+            return stack.getTag().getString("unlocks_item");
         }
         return null;
     }
 
     // 设置要解锁的物品ID到蓝图中
     public static void setUnlockedItemId(ItemStack stack, String itemId) {
-        CompoundTag tag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
-        if (tag == null) {
-            tag = new CompoundTag();
-        }
+        CompoundTag tag = stack.getOrCreateTag();
         tag.putString("unlocks_item", itemId);
 
         // 可选：添加一些额外信息
         tag.putString("blueprint_name", "制作图纸");
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, tag);
         // tag.putInt("tier", getTierForItem(itemId));
     }
 

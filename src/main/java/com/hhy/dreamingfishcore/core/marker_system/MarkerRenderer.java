@@ -1,22 +1,23 @@
 package com.hhy.dreamingfishcore.core.marker_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
 import java.util.Collection;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class MarkerRenderer {
     private static final int[] PLAYER_COLORS = {
             0xFFEFB64A,
@@ -43,19 +44,19 @@ public class MarkerRenderer {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) {
+        if (mc.player == null || mc.level == null || mc.options.hideGui || mc.options.renderDebug) {
             return;
         }
 
-        lastModelViewMatrix = new Matrix4f(event.getModelViewMatrix());
-        lastProjectionMatrix = new Matrix4f(event.getProjectionMatrix());
+        lastModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
+        lastProjectionMatrix = new Matrix4f(RenderSystem.getProjectionMatrix());
         lastCameraPosition = event.getCamera().getPosition();
     }
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
+        if (mc.player == null || mc.level == null || mc.options.hideGui || mc.options.renderDebug
                 || lastModelViewMatrix == null || lastProjectionMatrix == null || lastCameraPosition == null) {
             return;
         }

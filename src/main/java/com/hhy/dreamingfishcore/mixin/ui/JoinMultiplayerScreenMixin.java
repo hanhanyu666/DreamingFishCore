@@ -34,9 +34,9 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
             method = "init",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/screens/multiplayer/ServerSelectionList;<init>(Lnet/minecraft/client/gui/screens/multiplayer/JoinMultiplayerScreen;Lnet/minecraft/client/Minecraft;IIII)V"
+                    target = "Lnet/minecraft/client/gui/screens/multiplayer/ServerSelectionList;<init>(Lnet/minecraft/client/gui/screens/multiplayer/JoinMultiplayerScreen;Lnet/minecraft/client/Minecraft;IIIII)V"
             ),
-            index = 5,
+            index = 6,
             require = 0
     )
     private int dreamingFishCore$modernServerRowHeight(int original) {
@@ -44,7 +44,8 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY,
+                                                   float partialTick, CallbackInfo ci) {
         ci.cancel();
 
         ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, false);

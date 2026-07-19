@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.core.playerattributes_system.limb_health_system;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
@@ -291,7 +289,7 @@ public class LimbHitCalculator {
      * @return 攻击点占怪物高度的比例（0.0 ~ 1.0）
      */
     private static double getMobAttackHeightRatio(Mob mob) {
-        String entityId = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+        String entityId = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES
                 .getKey(mob.getType())
                 .toString();
 
@@ -300,7 +298,8 @@ public class LimbHitCalculator {
             // ========== 双足类人怪物 ==========
             case "minecraft:zombie", "minecraft:skeleton", "minecraft:husk",
                  "minecraft:drowned", "minecraft:pillager", "minecraft:vindicator",
-                 "minecraft:villager", "minecraft:witch", "minecraft:illusioner" -> 0.62;
+                 "minecraft:villager", "minecraft:witch", "minecraft:illusioner",
+                 "dreamingfishcore:hive_zombie" -> 0.62;  // 模组的蜂巢丧尸
 
             // ========== 小僵尸 ==========
             case "minecraft:baby_zombie" -> 0.6;

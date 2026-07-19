@@ -6,7 +6,8 @@ import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata.PlayerDataManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -14,16 +15,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class Packet_RequestAllPlayerData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_RequestAllPlayerData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerdata_system/packet_request_all_player_data"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_RequestAllPlayerData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_RequestAllPlayerData.encode(packet, buf), Packet_RequestAllPlayerData::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_RequestAllPlayerData {
     public Packet_RequestAllPlayerData() {}
 
     // 编码（空包，仅用于触发请求）
@@ -35,10 +29,10 @@ public class Packet_RequestAllPlayerData implements net.minecraft.network.protoc
     }
 
     // 服务端处理：遍历所有玩家，批量发送Packet_SyncPlayerData
-    public static void handle(Packet_RequestAllPlayerData msg, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            ServerPlayer requester = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
-            if (requester == null) return;
+    public static void handle(Packet_RequestAllPlayerData msg, Supplier<NetworkEvent.Context> ctx) {
+        ctx.get().enqueueWork(() -> {
+            if (ctx.get().getSender() == null) return;
+            ServerPlayer requester = ctx.get().getSender();
 
             // 1. 读取全服玩家数据（从你的PlayerDataManager）
             Map<UUID, PlayerData> allPlayerData = PlayerDataManager.loadAllPlayerDataFromFile();
@@ -52,8 +46,8 @@ public class Packet_RequestAllPlayerData implements net.minecraft.network.protoc
                 ServerPlayer targetPlayer = requester.getServer().getPlayerList().getPlayer(playerUUID);
                 if (targetPlayer != null) {
                     // 在线玩家：直接用ServerPlayer构造Packet
-                    DreamingFishCore_NetworkManager.sendToClient(
-                            requester,
+                    DreamingFishCore_NetworkManager.INSTANCE.send(
+                            PacketDistributor.PLAYER.with(() -> requester),
                             new Packet_SyncPlayerData(targetPlayer)
                     );
                 } else {
@@ -77,8 +71,8 @@ public class Packet_RequestAllPlayerData implements net.minecraft.network.protoc
                             data.getLastLoginTime(),
                             data.getTotalPlayTime()
                     );
-                    DreamingFishCore_NetworkManager.sendToClient(
-                            requester,
+                    DreamingFishCore_NetworkManager.INSTANCE.send(
+                            PacketDistributor.PLAYER.with(() -> requester),
                             offlinePacket
                     );
                 }
@@ -86,5 +80,6 @@ public class Packet_RequestAllPlayerData implements net.minecraft.network.protoc
             DreamingFishCore.LOGGER.info("已向玩家{}发送全服{}名玩家的同步数据",
                     requester.getScoreboardName(), allPlayerData.size());
         });
+        ctx.get().setPacketHandled(true);
     }
 }

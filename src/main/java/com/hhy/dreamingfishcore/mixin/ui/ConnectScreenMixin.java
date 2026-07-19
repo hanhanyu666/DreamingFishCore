@@ -54,7 +54,7 @@ public abstract class ConnectScreenMixin extends Screen {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getConnection() != null) mc.getConnection().close();
         if (mc.level != null) mc.level.disconnect();
-        mc.disconnect();
+        mc.clearLevel(null);
         mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
     }
 

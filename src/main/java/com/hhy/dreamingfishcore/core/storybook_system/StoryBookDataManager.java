@@ -15,15 +15,12 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.FileReader;
@@ -39,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 配置文件路径: config/dreamingfishcore/data/fragment_data.json
  * 玩家数据路径: config/dreamingfishcore/data/storybook_player_data.json
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class StoryBookDataManager {
 
     private static final File FRAGMENT_DATA_FILE = new File("config/dreamingfishcore/data/fragment_data.json");
@@ -109,8 +106,10 @@ public class StoryBookDataManager {
     }
 
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Post event) {
-        
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
 
         autoSaveCounter++;
         if (autoSaveCounter >= AUTO_SAVE_INTERVAL) {
@@ -650,8 +649,8 @@ public class StoryBookDataManager {
     }
 
     private static void grantJourneyStartedAdvancement(ServerPlayer player) {
-        var advancement = player.server.getAdvancements()
-                .get(ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "storybook/journey_started"));
+        Advancement advancement = player.server.getAdvancements()
+                .getAdvancement(new ResourceLocation(DreamingFishCore.MODID, "storybook/journey_started"));
         if (advancement != null) {
             player.getAdvancements().award(advancement, "triggered");
         }

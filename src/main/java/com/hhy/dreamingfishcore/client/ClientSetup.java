@@ -5,15 +5,15 @@ import com.hhy.dreamingfishcore.item.item_model.CustomRendererBakedModel;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.ModelEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ModelEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientSetup {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientSetup.class);
 
@@ -30,7 +30,7 @@ public class ClientSetup {
         try {
             // 获取蓝图模型的资源位置
             ModelResourceLocation blueprintModel = new ModelResourceLocation(
-                    ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "blueprint"),
+                    new ResourceLocation(DreamingFishCore.MODID, "blueprint"),
                     "inventory"
             );
 

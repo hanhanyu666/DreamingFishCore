@@ -19,20 +19,19 @@ import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class ServerInformationDisplay {
     private static boolean SHOW_UI = true;                  // UI开关
     private static final boolean USE_LEGACY_INFO_BOXES = false;
@@ -90,12 +89,6 @@ public class ServerInformationDisplay {
         return mc.player != null ? mc.player.getUUID() : null;
     }
 
-    // 注册Tick事件
-    static {
-        // 只注册客户端Tick事件
-        NeoForge.EVENT_BUS.addListener(ServerInformationDisplay::onClientTick);
-    }
-
     @SubscribeEvent
     public static void onClientLoginToServer(ClientPlayerNetworkEvent.LoggingIn event) {
         Minecraft mc = Minecraft.getInstance();
@@ -112,7 +105,8 @@ public class ServerInformationDisplay {
 
     //客户端Tick，触发网络请求 =====================
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
@@ -134,7 +128,7 @@ public class ServerInformationDisplay {
         if (!SHOW_UI || mc.isPaused() || mc.screen != null || mc.player == null || mc.options.hideGui) return;
 
         // F3 调试菜单打开时隐藏所有信息栏
-        if (mc.getDebugOverlay().showDebugScreen()) return;
+        if (mc.options.renderDebug) return;
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
         Font font = mc.font;
@@ -252,7 +246,7 @@ public class ServerInformationDisplay {
 
         PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
         if (playerInfo != null) {
-            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), playerBoxX + padding, avatarY, avatarHeight);
+            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkinLocation(), playerBoxX + padding, avatarY, avatarHeight);
         }
 
         poseStack.pushPose();
@@ -286,17 +280,7 @@ public class ServerInformationDisplay {
             return DEFAULT_TPS;
         }
 
-        long[] tickTimes = mc.getSingleplayerServer().getTickTimesNanos();
-        if (tickTimes == null || tickTimes.length == 0) {
-            return DEFAULT_TPS;
-        }
-
-        long totalTickTime = 0L;
-        for (long tickTime : tickTimes) {
-            totalTickTime += tickTime;
-        }
-
-        double averageTickMs = totalTickTime / (double) tickTimes.length / 1_000_000.0D;
+        double averageTickMs = mc.getSingleplayerServer().getAverageTickTime();
         if (averageTickMs <= 0.0D) {
             return DEFAULT_TPS;
         }
@@ -401,7 +385,7 @@ public class ServerInformationDisplay {
         PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
         if (playerInfo != null) {
             // 渲染头像（覆盖前两行）
-            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), avatarX, avatarY, avatarSize);
+            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkinLocation(), avatarX, avatarY, avatarSize);
         }
 
         // ========== 右侧内容区域 ==========

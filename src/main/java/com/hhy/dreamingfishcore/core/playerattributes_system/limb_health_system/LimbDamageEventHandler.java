@@ -9,15 +9,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.ProjectileImpactEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.ProjectileImpactEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.UUID;
@@ -32,12 +29,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * - 腿部: ×0.9
  * - 脚部: ×0.9
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class LimbDamageEventHandler {
 
     /**
      * 存储弹射物击中信息（玩家UUID -> 弹射物位置）
-     * 在 ProjectileImpactEvent 中记录，在 LivingIncomingDamageEvent 中使用
+     * 在 ProjectileImpactEvent 中记录，在 LivingHurtEvent 中使用
      */
     private static final Map<UUID, Vec3> PENDING_PROJECTILE_HITS = new ConcurrentHashMap<>();
 
@@ -72,7 +69,7 @@ public class LimbDamageEventHandler {
      * 监听玩家受伤事件，应用肢体伤害倍率
      */
     @SubscribeEvent(priority = EventPriority.LOW)
-    public static void onPlayerHurt(LivingIncomingDamageEvent event) {
+    public static void onPlayerHurt(LivingHurtEvent event) {
         // 检查是否启用
         if (!ENABLED) {
             return;
@@ -176,8 +173,10 @@ public class LimbDamageEventHandler {
      * 每tick清理过期的弹射物记录
      */
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Post event) {
-        
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
 
         // 简单的清理策略：如果记录超过 1 tick 就删除
         // 实际上在 onPlayerHurt 中会正常清理，这里只是防止意外残留

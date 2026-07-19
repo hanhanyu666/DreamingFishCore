@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDat
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system.Packet_SyncRespawnPointData;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.network.NetworkDirection;
 
 /**
  * 服务端复活点数同步工具类（主动发送同步包给客户端）
@@ -26,9 +27,10 @@ public class RespawnPointSyncManager {
         boolean isInfected = playerData.isInfected();
 
         // 发送同步包（服务端→客户端）
-        DreamingFishCore_NetworkManager.sendToClient(
+        DreamingFishCore_NetworkManager.INSTANCE.sendTo(
                 new Packet_SyncRespawnPointData(respawnPoint, isInfected),
-                serverPlayer
+                serverPlayer.connection.connection,
+                NetworkDirection.PLAY_TO_CLIENT
         );
 
         DreamingFishCore.LOGGER.debug("已同步玩家 {} 的复活点数: {} (感染者: {})",

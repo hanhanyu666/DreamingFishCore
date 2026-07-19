@@ -1,30 +1,24 @@
 package com.hhy.dreamingfishcore.network.packets.notice_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.screen.server_screen.serverscreen.ServerScreenUI_Screen;
 import com.hhy.dreamingfishcore.server.notice.NoticeData;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * 公告列表响应数据包（服务端 -> 客户端）
  * 包含所有公告和玩家已读状态
  */
-public class Packet_NoticeListResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_NoticeListResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "notice_system/packet_notice_list_response"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_NoticeListResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_NoticeListResponse.encode(packet, buf), Packet_NoticeListResponse::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_NoticeListResponse {
 
     private final List<NoticeData> notices;
     private final Set<Integer> readNoticeIds;
@@ -74,15 +68,22 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
         return new Packet_NoticeListResponse(notices, readNoticeIds);
     }
 
-    public static void handle(Packet_NoticeListResponse msg, IPayloadContext context) {
+    public static void handle(Packet_NoticeListResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            handleClient(msg);
+            // 只在客户端处理
+            if (context.getDirection().getReceptionSide().isClient()) {
+                handleClient(msg);
+            }
         });
+        context.setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_NoticeListResponse msg) {
         DreamingFishCore.LOGGER.info("收到 {} 条公告", msg.notices.size());
+        // 将公告数据传递给UI
+        ServerScreenUI_Screen.setNoticeData(msg.notices, msg.readNoticeIds);
     }
 
     public List<NoticeData> getNotices() {

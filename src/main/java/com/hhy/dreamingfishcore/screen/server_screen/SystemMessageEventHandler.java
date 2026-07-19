@@ -6,23 +6,22 @@ import com.hhy.dreamingfishcore.network.packets.Packet_SystemMessage;
 import com.hhy.dreamingfishcore.server.rank.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank.Rank;
 import net.minecraft.advancements.Advancement;
-import net.minecraft.advancements.AdvancementHolder;
-import net.minecraft.advancements.AdvancementType;
-import net.minecraft.advancements.DisplayInfo;
+import net.minecraft.advancements.FrameType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.NetworkDirection;
 
 /**
  * 系统消息事件处理器
  * 监听原版事件，将系统消息发送到右上角显示
  */
-@EventBusSubscriber(modid = DreamingFishCore.MODID)
+@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class SystemMessageEventHandler {
 
     // 颜色定义（与客户端 SystemMessageDisplay 保持一致）
@@ -32,17 +31,15 @@ public class SystemMessageEventHandler {
 
     // ==================== 进度/成就消息 ====================
     @SubscribeEvent
-    public static void onAdvancement(net.neoforged.neoforge.event.entity.player.AdvancementEvent.AdvancementEarnEvent event) {
-        AdvancementHolder holder = event.getAdvancement();
-        Advancement advancement = holder.value();
+    public static void onAdvancement(net.minecraftforge.event.entity.player.AdvancementEvent.AdvancementEarnEvent event) {
+        Advancement advancement = event.getAdvancement();
         ServerPlayer player = (ServerPlayer) event.getEntity();
 
-        if (advancement.display().isEmpty()) return; // 无显示信息的进度跳过
+        if (advancement.getDisplay() == null) return; // 无显示信息的进度跳过
 
         // 获取进度类型和标题
-        DisplayInfo display = advancement.display().get();
-        AdvancementType frame = display.getType();
-        Component title = display.getTitle();
+        FrameType frame = advancement.getDisplay().getFrame();
+        Component title = advancement.getDisplay().getTitle();
 
         // 获取玩家 Rank
         Rank playerRank = PlayerRankManager.getPlayerRankServer(player);
@@ -187,9 +184,10 @@ public class SystemMessageEventHandler {
 
         // 发送到所有在线玩家的右上角
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            DreamingFishCore_NetworkManager.sendToClient(
+            DreamingFishCore_NetworkManager.INSTANCE.sendTo(
                     new Packet_SystemMessage(message, borderColor),
-                    player
+                    player.connection.connection,
+                    NetworkDirection.PLAY_TO_CLIENT
             );
         }
     }

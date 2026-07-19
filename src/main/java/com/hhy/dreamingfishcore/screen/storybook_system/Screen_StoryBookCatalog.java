@@ -508,7 +508,7 @@ public class Screen_StoryBookCatalog extends Screen {
         for (StoryCard card : allCards) {
             orderedIds.add(card.entry.getFragmentId());
         }
-        DreamingFishCore_NetworkManager.sendToServer(new Packet_UpdateStoryBookOrder(orderedIds));
+        DreamingFishCore_NetworkManager.INSTANCE.sendToServer(new Packet_UpdateStoryBookOrder(orderedIds));
         dirtyOrder = false;
     }
 

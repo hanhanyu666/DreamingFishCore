@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.item.item_renderer;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.hhy.dreamingfishcore.item.items.Item_Blueprint;
@@ -16,7 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-
+import net.minecraftforge.registries.ForgeRegistries;
 
 public class BlueprintItemRenderer extends BlockEntityWithoutLevelRenderer {
 
@@ -52,7 +50,7 @@ public class BlueprintItemRenderer extends BlockEntityWithoutLevelRenderer {
 
         // 第二步：如果有目标物品，在蓝图上方叠加渲染目标物品图标
         if (itemId != null && !itemId.isEmpty()) {
-            Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
             if (item != null) {
                 ItemStack targetStack = new ItemStack(item);
 
@@ -82,7 +80,7 @@ public class BlueprintItemRenderer extends BlockEntityWithoutLevelRenderer {
     private void renderBase(ItemStack stack, PoseStack poseStack, MultiBufferSource buffer, int packedLight, int packedOverlay) {
         ModelManager modelManager = Minecraft.getInstance().getModelManager();
         BakedModel blueprintModel = modelManager.getModel(
-                new ModelResourceLocation(ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "blueprint"), "inventory")
+                new ModelResourceLocation(new ResourceLocation("dreamingfishcore", "blueprint"), "inventory")
         );
 
         poseStack.pushPose();

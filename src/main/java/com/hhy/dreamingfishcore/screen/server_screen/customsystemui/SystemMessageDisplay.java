@@ -7,13 +7,10 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -22,7 +19,7 @@ import java.util.List;
 /**
  * 系统消息显示系统 - 在玩家信息框下方显示系统消息（玩家进服、离开、死亡等）
  */
-@EventBusSubscriber(modid = "dreamingfishcore", value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = "dreamingfishcore", value = Dist.CLIENT)
 public class SystemMessageDisplay {
     // 消息显示配置
     private static final int MAX_MESSAGES = 10;
@@ -122,7 +119,8 @@ public class SystemMessageDisplay {
      * 客户端Tick - 清理过期消息
      */
     @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
         // 移除过期消息
         Iterator<SystemMessage> iterator = messages.iterator();
         while (iterator.hasNext()) {
@@ -145,7 +143,7 @@ public class SystemMessageDisplay {
         if (mc.options.hideGui) return;
 
         // F3 调试菜单打开时隐藏系统消息
-        if (mc.getDebugOverlay().showDebugScreen()) return;
+        if (mc.options.renderDebug) return;
 
         PoseStack poseStack = guiGraphics.pose();
         poseStack.pushPose();

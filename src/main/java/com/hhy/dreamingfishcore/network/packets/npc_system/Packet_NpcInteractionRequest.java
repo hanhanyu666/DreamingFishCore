@@ -4,18 +4,11 @@ import com.hhy.dreamingfishcore.core.npc_system.NpcInteractionType;
 import com.hhy.dreamingfishcore.core.npc_system.NpcManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.function.Supplier;
 
-public class Packet_NpcInteractionRequest implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
-
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_NpcInteractionRequest> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "npc_system/packet_npc_interaction_request"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_NpcInteractionRequest> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_NpcInteractionRequest.encode(packet, buf), Packet_NpcInteractionRequest::decode);
-
-    @Override
-    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
-        return TYPE;
-    }
+public class Packet_NpcInteractionRequest {
     private final int npcId;
     private final int entityId;
     private final NpcInteractionType interactionType;
@@ -36,12 +29,14 @@ public class Packet_NpcInteractionRequest implements net.minecraft.network.proto
         return new Packet_NpcInteractionRequest(buf.readVarInt(), buf.readVarInt(), buf.readEnum(NpcInteractionType.class));
     }
 
-    public static void handle(Packet_NpcInteractionRequest packet, IPayloadContext context) {
+    public static void handle(Packet_NpcInteractionRequest packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+            ServerPlayer player = context.getSender();
             if (player != null) {
                 NpcManager.handleInteraction(player, packet.npcId, packet.entityId, packet.interactionType);
             }
         });
+        context.setPacketHandled(true);
     }
 }

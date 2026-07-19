@@ -34,8 +34,8 @@ public abstract class ModScreenBackgroundMixin {
         dreamingFishCore$renderSilentLoadingScreen(screen, guiGraphics);
     }
 
-    @Inject(method = "renderBackground(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$skipVanillaBackgroundForModScreens(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    @Inject(method = "renderBackground(Lnet/minecraft/client/gui/GuiGraphics;)V", at = @At("HEAD"), cancellable = true)
+    private void dreamingFishCore$skipVanillaBackgroundForModScreens(GuiGraphics guiGraphics, CallbackInfo ci) {
         if (((Object) this).getClass().getName().startsWith("com.hhy.dreamingfishcore.")) {
             ci.cancel();
         }
