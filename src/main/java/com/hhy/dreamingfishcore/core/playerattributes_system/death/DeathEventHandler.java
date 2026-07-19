@@ -10,9 +10,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.portal.DimensionTransition;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.server.players.UserBanList;
 import net.minecraft.server.players.UserBanListEntry;
@@ -21,7 +21,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import java.util.Optional;
 import java.util.UUID;
 
 //幸存者死亡，可以花费50点复活点数死亡不掉落
@@ -233,7 +232,6 @@ public class DeathEventHandler {
         BlockPos respawnPos = player.getRespawnPosition();
         ResourceKey<Level> respawnDim = player.getRespawnDimension();
         float respawnAngle = player.getRespawnAngle();
-        boolean respawnForced = player.isRespawnForced();
 
         ServerLevel targetLevel;
         Vec3 targetPos;
@@ -242,11 +240,16 @@ public class DeathEventHandler {
         if (respawnPos != null && respawnDim != null) {
             targetLevel = player.server.getLevel(respawnDim);
             if (targetLevel != null) {
-                targetPos = Vec3.atBottomCenterOf(respawnPos);
-                player.teleportTo(targetLevel, targetPos.x, targetPos.y, targetPos.z, respawnAngle, 0);
-                DreamingFishCore.LOGGER.info("玩家 {} 已传送到复活点: {} {} {}",
-                        player.getScoreboardName(), (int)targetPos.x, (int)targetPos.y, (int)targetPos.z);
-                return;
+                DimensionTransition transition = player.findRespawnPositionAndUseSpawnBlock(
+                        false, DimensionTransition.DO_NOTHING);
+                if (!transition.missingRespawnBlock()) {
+                    targetLevel = transition.newLevel();
+                    targetPos = transition.pos();
+                    player.teleportTo(targetLevel, targetPos.x, targetPos.y, targetPos.z, respawnAngle, 0);
+                    DreamingFishCore.LOGGER.info("玩家 {} 已传送到复活点: {} {} {}",
+                            player.getScoreboardName(), (int)targetPos.x, (int)targetPos.y, (int)targetPos.z);
+                    return;
+                }
             }
         }
 
