@@ -1,7 +1,8 @@
 package com.hhy.dreamingfishcore.item;
 
+
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;

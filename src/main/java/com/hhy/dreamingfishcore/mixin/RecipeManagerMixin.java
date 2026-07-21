@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.mixin;
 
 import com.google.gson.JsonElement;
-import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;

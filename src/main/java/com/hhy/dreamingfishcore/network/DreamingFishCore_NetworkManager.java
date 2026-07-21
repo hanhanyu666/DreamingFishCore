@@ -1,25 +1,27 @@
 package com.hhy.dreamingfishcore.network;
 
+import com.hhy.dreamingfishcore.gameplay.playerlevel_system.network.*;
+
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.network.packets.Packet_OnlinePlayerCountRequest;
-import com.hhy.dreamingfishcore.network.packets.Packet_OnlinePlayerCountResponse;
-import com.hhy.dreamingfishcore.network.packets.Packet_ServerPlayerListRequest;
-import com.hhy.dreamingfishcore.network.packets.Packet_ServerPlayerListResponse;
-import com.hhy.dreamingfishcore.network.packets.Packet_SystemMessage;
-import com.hhy.dreamingfishcore.network.packets.check_system.*;
-import com.hhy.dreamingfishcore.network.packets.login_system.*;
-import com.hhy.dreamingfishcore.network.packets.marker_system.*;
-import com.hhy.dreamingfishcore.network.packets.notice_system.*;
-import com.hhy.dreamingfishcore.network.packets.npc_system.*;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.courage_system.Packet_SyncCourageData;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system.*;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.infection_system.Packet_SyncInfectionData;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.limb_system.Packet_SyncLimbInjury;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.strength_system.*;
-import com.hhy.dreamingfishcore.network.packets.playerdata_system.*;
-import com.hhy.dreamingfishcore.network.packets.storybook_system.*;
-import com.hhy.dreamingfishcore.network.packets.task_system.*;
-import com.hhy.dreamingfishcore.network.packets.tip_system.Packet_SendTipToClient;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_OnlinePlayerCountRequest;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_OnlinePlayerCountResponse;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_ServerPlayerListRequest;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_ServerPlayerListResponse;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
+import com.hhy.dreamingfishcore.server.check_system.network.*;
+import com.hhy.dreamingfishcore.server.login_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.marker_system.network.*;
+import com.hhy.dreamingfishcore.server.notice_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.npc_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.network.Packet_SyncCourageData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.*;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.network.Packet_SyncInfectionData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.network.Packet_SyncLimbInjury;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.network.*;
+import com.hhy.dreamingfishcore.server.playerdata_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
+import com.hhy.dreamingfishcore.server.notice_system.network.Packet_SendTipToClient;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -30,7 +32,8 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public final class DreamingFishCore_NetworkManager {
-    private static final String PROTOCOL_VERSION = "1";
+    // Protocol 4 changes the full task sync layout for shared story progress.
+    private static final String PROTOCOL_VERSION = "4";
 
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(DreamingFishCore.MODID, "network"),

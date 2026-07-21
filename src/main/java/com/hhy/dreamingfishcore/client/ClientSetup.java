@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.client;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.item.item_model.CustomRendererBakedModel;
+import com.hhy.dreamingfishcore.item.client.model.CustomRendererBakedModel;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;

@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.item.items.medicine;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.core.playerattributes_system.health.PlayerCustomHealthManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.health.PlayerCustomHealthManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResultHolder;

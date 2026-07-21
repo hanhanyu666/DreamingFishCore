@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.item.items;
 
-import com.hhy.dreamingfishcore.core.storybook_system.StoryBookDataManager;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;

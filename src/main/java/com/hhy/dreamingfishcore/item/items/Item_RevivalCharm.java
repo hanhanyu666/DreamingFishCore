@@ -2,7 +2,7 @@ package com.hhy.dreamingfishcore.item.items;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system.Packet_OpenRevivalCharmGUI;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_OpenRevivalCharmGUI;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;

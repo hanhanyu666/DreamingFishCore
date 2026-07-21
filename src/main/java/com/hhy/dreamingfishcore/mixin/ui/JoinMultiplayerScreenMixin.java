@@ -53,6 +53,14 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
         ModernSelectionScreenUi.renderBase(guiGraphics, this, layout, ModernSelectionScreenUi.Kind.MULTIPLAYER);
         ModernSelectionScreenUi.prepareTransparentButtons(this);
 
+        // In 1.20.1 this list is registered with addWidget(), not
+        // addRenderableWidget(), so the cancelled vanilla render method must be
+        // replaced with an explicit list render. ModernSelectionScreenUi has
+        // already disabled the list's dirt background.
+        if (this.serverSelectionList != null) {
+            this.serverSelectionList.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
         ModernSelectionScreenUi.setButtonsVisible(this, false);
         try {
             super.render(guiGraphics, mouseX, mouseY, partialTick);

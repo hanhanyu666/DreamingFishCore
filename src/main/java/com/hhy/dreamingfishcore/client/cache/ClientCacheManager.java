@@ -1,10 +1,13 @@
 package com.hhy.dreamingfishcore.client.cache;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesData;
-import com.hhy.dreamingfishcore.core.task_system.TaskPlayerData;
-import com.hhy.dreamingfishcore.core.story_system.StoryStageData;
-import com.hhy.dreamingfishcore.server.playerdata.PlayerData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
+import com.hhy.dreamingfishcore.gameplay.task_system.TaskPlayerData;
+import com.hhy.dreamingfishcore.gameplay.task_system.client.cache.TaskClientCache;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
+import com.hhy.dreamingfishcore.server.playerdata_system.client.cache.PlayerDataClientCache;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -13,203 +16,130 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 客户端缓存生命周期与旧 API 兼容入口。
+ *
+ * <p>真实缓存已经归还给各业务系统；新代码应直接依赖对应的
+ * PlayerDataClientCache、PlayerAttributesClientCache 或 TaskClientCache。</p>
+ */
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
-public class ClientCacheManager {
-    private static final Map<UUID, PlayerData> PLAYER_DATA_CACHE = new ConcurrentHashMap<>();
-    private static final Map<UUID, PlayerAttributesData> PLAYER_ATTRIBUTES_DATA_CACHE = new ConcurrentHashMap<>();
+public final class ClientCacheManager {
+    private ClientCacheManager() {
+    }
 
-    // 额外缓存字段
-    private static final Map<UUID, Integer> EXPLORED_BIOMES_COUNT_CACHE = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> UNLOCKED_RECIPES_COUNT_CACHE = new ConcurrentHashMap<>();
-
-    // 复活点数缓存 (只存储当前本地玩家，UUID为key)
-    private static final Map<UUID, Float> RESPAWN_POINT_CACHE = new ConcurrentHashMap<>();
-    private static final Map<UUID, Boolean> INFECTED_CACHE = new ConcurrentHashMap<>();
-
-    // ==================== 任务系统缓存 ====================
-    private static Map<Integer, TaskPlayerData> PLAYER_TASK_CACHE = new ConcurrentHashMap<>();
-    private static Map<Integer, StoryStageData> STORY_STAGE_CACHE = new ConcurrentHashMap<>();
-
-    // 获取故事阶段列表
     public static Map<Integer, StoryStageData> getStoryStages() {
-        return STORY_STAGE_CACHE;
+        return TaskClientCache.getStoryStages();
     }
 
-    // 设置故事阶段列表
     public static void setStoryStages(Map<Integer, StoryStageData> stages) {
-        STORY_STAGE_CACHE = stages != null ? new ConcurrentHashMap<>(stages) : new ConcurrentHashMap<>();
+        TaskClientCache.setStoryStages(stages);
     }
 
-    // 获取个人任务列表
     public static Map<Integer, TaskPlayerData> getPlayerTasks() {
-        return PLAYER_TASK_CACHE;
+        return TaskClientCache.getPlayerTasks();
     }
 
-    // 设置个人任务列表
     public static void setPlayerTasks(Map<Integer, TaskPlayerData> tasks) {
-        PLAYER_TASK_CACHE = tasks != null ? new ConcurrentHashMap<>(tasks) : new ConcurrentHashMap<>();
+        TaskClientCache.setPlayerTasks(tasks);
     }
 
-    // 获取单个故事阶段
     public static StoryStageData getStoryStage(int stageId) {
-        return STORY_STAGE_CACHE.get(stageId);
+        return TaskClientCache.getStoryStage(stageId);
     }
 
-    // 获取单个个人任务
     public static TaskPlayerData getPlayerTask(int taskId) {
-        return PLAYER_TASK_CACHE.get(taskId);
+        return TaskClientCache.getPlayerTask(taskId);
     }
 
-    // 检查是否有未完成任务
     public static boolean hasUnfinishedTasks() {
-        // 检查故事阶段中的任务
-        for (StoryStageData stage : STORY_STAGE_CACHE.values()) {
-            if (stage != null && stage.getTasks() != null) {
-                for (com.hhy.dreamingfishcore.core.story_system.StoryTaskData task : stage.getTasks()) {
-                    if (task != null && !task.isClientPlayerFinished()) {
-                        return true;
-                    }
-                }
-            }
-        }
-        // 检查个人任务
-        for (TaskPlayerData task : PLAYER_TASK_CACHE.values()) {
-            if (task != null && !task.isClientPlayerFinished()) {
-                return true;
-            }
-        }
-        return false;
+        return TaskClientCache.hasUnfinishedTasks();
     }
 
-    // PlayerData
     public static PlayerData getPlayerData(UUID uuid) {
-        return PLAYER_DATA_CACHE.get(uuid);
+        return PlayerDataClientCache.get(uuid);
     }
 
     public static PlayerData getOrCreatePlayerData(UUID uuid) {
-        return PLAYER_DATA_CACHE.computeIfAbsent(uuid, k -> new PlayerData());
+        return PlayerDataClientCache.getOrCreate(uuid);
     }
 
     public static void setPlayerData(UUID uuid, PlayerData data) {
-        if (data != null) {
-            PLAYER_DATA_CACHE.put(uuid, data);
-        }
+        PlayerDataClientCache.put(uuid, data);
     }
 
-    // PlayerAttributesData
     public static PlayerAttributesData getPlayerAttributesData(UUID uuid) {
-        return PLAYER_ATTRIBUTES_DATA_CACHE.get(uuid);
+        return PlayerAttributesClientCache.get(uuid);
     }
 
     public static PlayerAttributesData getOrCreatePlayerAttributesData(UUID uuid) {
-        return PLAYER_ATTRIBUTES_DATA_CACHE.computeIfAbsent(uuid, k -> new PlayerAttributesData());
+        return PlayerAttributesClientCache.getOrCreate(uuid);
     }
 
     public static void setPlayerAttributesData(UUID uuid, PlayerAttributesData data) {
-        if (data != null) {
-            PLAYER_ATTRIBUTES_DATA_CACHE.put(uuid, data);
-        }
+        PlayerAttributesClientCache.put(uuid, data);
     }
 
-    // 已探索群系数量
     public static Integer getExploredBiomesCount(UUID uuid) {
-        return EXPLORED_BIOMES_COUNT_CACHE.getOrDefault(uuid, 0);
+        return PlayerDataClientCache.getExploredBiomesCount(uuid);
     }
 
     public static void setExploredBiomesCount(UUID uuid, int count) {
-        EXPLORED_BIOMES_COUNT_CACHE.put(uuid, count);
+        PlayerDataClientCache.setExploredBiomesCount(uuid, count);
     }
 
-    // 已解锁蓝图数量
     public static Integer getUnlockedRecipesCount(UUID uuid) {
-        return UNLOCKED_RECIPES_COUNT_CACHE.getOrDefault(uuid, 0);
+        return PlayerDataClientCache.getUnlockedRecipesCount(uuid);
     }
 
     public static void setUnlockedRecipesCount(UUID uuid, int count) {
-        UNLOCKED_RECIPES_COUNT_CACHE.put(uuid, count);
+        PlayerDataClientCache.setUnlockedRecipesCount(uuid, count);
     }
 
-    // ==================== 复活点数缓存 ====================
-    /**
-     * 获取复活点数
-     */
     public static float getRespawnPoint(UUID uuid) {
-        return RESPAWN_POINT_CACHE.getOrDefault(uuid, 100.0f);
+        return PlayerAttributesClientCache.getRespawnPoint(uuid);
     }
 
-    /**
-     * 设置复活点数
-     */
     public static void setRespawnPoint(UUID uuid, float respawnPoint) {
-        RESPAWN_POINT_CACHE.put(uuid, respawnPoint);
+        PlayerAttributesClientCache.setRespawnPoint(uuid, respawnPoint);
     }
 
-    /**
-     * 获取感染状态
-     */
     public static boolean isInfected(UUID uuid) {
-        return INFECTED_CACHE.getOrDefault(uuid, false);
+        return PlayerAttributesClientCache.isInfected(uuid);
     }
 
-    /**
-     * 设置感染状态
-     */
     public static void setInfected(UUID uuid, boolean infected) {
-        INFECTED_CACHE.put(uuid, infected);
+        PlayerAttributesClientCache.setInfected(uuid, infected);
     }
 
-    /**
-     * 获取正常复活消耗
-     */
     public static float getNormalRespawnCost(UUID uuid) {
-        return isInfected(uuid) ? 20.0f : 5.0f;
+        return PlayerAttributesClientCache.getNormalRespawnCost(uuid);
     }
 
-    /**
-     * 获取保留物品复活消耗
-     */
     public static float getKeepInventoryCost(UUID uuid) {
-        return getNormalRespawnCost(uuid) + 30.0f;
+        return PlayerAttributesClientCache.getKeepInventoryCost(uuid);
     }
 
-    /**
-     * 计算重生剩余次数
-     */
     public static int getRespawnTimes(UUID uuid) {
-        float cost = getNormalRespawnCost(uuid);
-        float respawnPoint = getRespawnPoint(uuid);
-        return cost > 0 ? (int) (respawnPoint / cost) : 0;
+        return PlayerAttributesClientCache.getRespawnTimes(uuid);
     }
 
-    // 清理指定UUID的所有缓存
     public static void remove(UUID uuid) {
-        PLAYER_DATA_CACHE.remove(uuid);
-        PLAYER_ATTRIBUTES_DATA_CACHE.remove(uuid);
-        EXPLORED_BIOMES_COUNT_CACHE.remove(uuid);
-        UNLOCKED_RECIPES_COUNT_CACHE.remove(uuid);
-        RESPAWN_POINT_CACHE.remove(uuid);
-        INFECTED_CACHE.remove(uuid);
+        PlayerDataClientCache.remove(uuid);
+        PlayerAttributesClientCache.remove(uuid);
     }
 
-    // 清空所有缓存
     public static void clear() {
-        PLAYER_DATA_CACHE.clear();
-        PLAYER_ATTRIBUTES_DATA_CACHE.clear();
-        EXPLORED_BIOMES_COUNT_CACHE.clear();
-        UNLOCKED_RECIPES_COUNT_CACHE.clear();
-        RESPAWN_POINT_CACHE.clear();
-        INFECTED_CACHE.clear();
-        PLAYER_TASK_CACHE.clear();
-        STORY_STAGE_CACHE.clear();
+        PlayerDataClientCache.clear();
+        PlayerAttributesClientCache.clear();
+        TaskClientCache.clear();
     }
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity().level().isClientSide()) {
-            remove(event.getEntity().getUUID());
+            clear();
         }
     }
 }

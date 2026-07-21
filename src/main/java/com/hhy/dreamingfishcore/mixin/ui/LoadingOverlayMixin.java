@@ -110,14 +110,6 @@ public abstract class LoadingOverlayMixin extends Overlay {
         int progressBarX = barMargin;
         int progressBarWidth = width - barMargin * 2;
         int progressBarY = height - 35;
-        int percent = Mth.clamp(Math.round(this.currentProgress * 100.0F), 0, 100);
-        String statusText = "加载资源中";
-        String progressText = percent + "%";
-        var font = this.minecraft.font;
-        int textAlpha = Mth.ceil(255 * alphaF) << 24;
-        guiGraphics.drawString(font, statusText, progressBarX, progressBarY - 13, textAlpha | 0xFFFFFF, true);
-        guiGraphics.drawString(font, progressText, progressBarX + progressBarWidth - font.width(progressText),
-                progressBarY - 13, textAlpha | 0xFFFFFF, true);
 
         int barBg = (BAR_BACKGROUND & 0x00FFFFFF) | (Mth.ceil(((BAR_BACKGROUND >>> 24) & 255) * alphaF) << 24);
         int barAccent = (ACCENT_BLUE & 0x00FFFFFF) | (Mth.ceil(((ACCENT_BLUE >>> 24) & 255) * alphaF) << 24);
