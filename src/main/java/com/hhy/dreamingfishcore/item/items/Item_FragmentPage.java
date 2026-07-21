@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.item.items;
 
-import com.hhy.dreamingfishcore.core.storybook_system.FragmentData;
-import com.hhy.dreamingfishcore.core.storybook_system.StoryBookDataManager;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;

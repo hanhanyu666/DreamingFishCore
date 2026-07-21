@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.client.util;
 
-import com.hhy.dreamingfishcore.utils.Utf8JsonFileIO;
+import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;

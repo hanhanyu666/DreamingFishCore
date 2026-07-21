@@ -1,0 +1,36 @@
+package com.hhy.dreamingfishcore.server.rank_system;
+
+import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+
+
+/**
+ * 玩家Rank数据管理器（使用全局统一存储）
+ */
+public class PlayerRankManager {
+    public static void setPlayerRankServer(ServerPlayer serverPlayer, Rank rank) {
+        PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());
+        PlayerDataManager.updatePlayerData(serverPlayer, rank, playerData.getTitle(), playerData.getLevel(), playerData.getCurrentExperience());
+    }
+    public static Rank getPlayerRankServer(ServerPlayer serverPlayer) {
+        PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());
+        return playerData.getRank();
+    }
+
+    // 客户端缓存
+    public static void setPlayerRankClient(Player clientPlayer, Rank rank) {
+        if (clientPlayer == null || rank == null) return;
+        PlayerData data = ClientCacheManager.getOrCreatePlayerData(clientPlayer.getUUID());
+        data.setRank(rank);
+        ClientCacheManager.setPlayerData(clientPlayer.getUUID(), data);
+    }
+
+    public static Rank getPlayerRankClient(Player clientPlayer) {
+        if (clientPlayer == null) return RankRegistry.NO_RANK;
+        PlayerData data = ClientCacheManager.getPlayerData(clientPlayer.getUUID());
+        return data != null ? data.getRank() : RankRegistry.NO_RANK;
+    }
+}

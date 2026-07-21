@@ -56,6 +56,13 @@ public abstract class SelectWorldScreenMixin extends Screen {
         ModernSelectionScreenUi.renderBase(guiGraphics, this, layout, ModernSelectionScreenUi.Kind.WORLDS);
         ModernSelectionScreenUi.prepareTransparentButtons(this);
 
+        // In 1.20.1 the world list is registered with addWidget(), so Screen.render()
+        // does not render it. Rendering it explicitly is also what polls the async
+        // level-summary load and replaces the loading row with the actual saves.
+        if (this.list != null) {
+            this.list.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+
         ModernSelectionScreenUi.setButtonsVisible(this, false);
         try {
             super.render(guiGraphics, mouseX, mouseY, partialTick);

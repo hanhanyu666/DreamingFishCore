@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.loot;
 
-import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;

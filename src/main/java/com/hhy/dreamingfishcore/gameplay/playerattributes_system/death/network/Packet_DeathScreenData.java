@@ -1,0 +1,153 @@
+package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network;
+
+import com.hhy.dreamingfishcore.DreamingFishCore;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+
+import java.util.UUID;
+import java.util.function.Supplier;
+
+/**
+ * 死亡屏幕数据包
+ * 服务端 → 客户端
+ * 发送当前复活点数、消耗信息和死亡位置，用于显示自定义死亡屏幕
+ */
+public class Packet_DeathScreenData implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
+
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_DeathScreenData> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "playerattribute_system/death_system/packet_death_screen_data"));
+    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_DeathScreenData> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_DeathScreenData.encode(packet, buf), Packet_DeathScreenData::decode);
+
+    @Override
+    public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
+        return TYPE;
+    }
+
+    private final float respawnPoint;
+    private final float normalCost;
+    private final float keepInventoryCost;
+    private final boolean isInfected;
+    private final Component deathMessage;
+    private final double deathX;
+    private final double deathY;
+    private final double deathZ;
+    private final String dimension;
+    private final UUID deathId;
+
+    public Packet_DeathScreenData(float respawnPoint, float normalCost, float keepInventoryCost,
+                                  boolean isInfected, Component deathMessage,
+                                  double deathX, double deathY, double deathZ, String dimension,
+                                  UUID deathId) {
+        this.respawnPoint = respawnPoint;
+        this.normalCost = normalCost;
+        this.keepInventoryCost = keepInventoryCost;
+        this.isInfected = isInfected;
+        this.deathMessage = deathMessage;
+        this.deathX = deathX;
+        this.deathY = deathY;
+        this.deathZ = deathZ;
+        this.dimension = dimension;
+        this.deathId = deathId;
+    }
+
+    /**
+     * 编码
+     */
+    public static void encode(Packet_DeathScreenData packet, FriendlyByteBuf buf) {
+        buf.writeFloat(packet.respawnPoint);
+        buf.writeFloat(packet.normalCost);
+        buf.writeFloat(packet.keepInventoryCost);
+        buf.writeBoolean(packet.isInfected);
+        ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.encode(buf, packet.deathMessage);
+        buf.writeDouble(packet.deathX);
+        buf.writeDouble(packet.deathY);
+        buf.writeDouble(packet.deathZ);
+        buf.writeUtf(packet.dimension);
+        buf.writeUUID(packet.deathId);
+    }
+
+    /**
+     * 解码
+     */
+    public static Packet_DeathScreenData decode(FriendlyByteBuf buf) {
+        float respawnPoint = buf.readFloat();
+        float normalCost = buf.readFloat();
+        float keepInventoryCost = buf.readFloat();
+        boolean isInfected = buf.readBoolean();
+        Component deathMessage = ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.decode(buf);
+        double deathX = buf.readDouble();
+        double deathY = buf.readDouble();
+        double deathZ = buf.readDouble();
+        String dimension = buf.readUtf();
+        UUID deathId = buf.readUUID();
+        return new Packet_DeathScreenData(respawnPoint, normalCost, keepInventoryCost, isInfected,
+                deathMessage, deathX, deathY, deathZ, dimension, deathId);
+    }
+
+    /**
+     * 处理（客户端）
+     */
+    public static void handle(Packet_DeathScreenData packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            ClientHandler.handle(packet);
+        });
+    }
+
+    /**
+     * 客户端处理器 - 只有客户端会加载这个内部类
+     */
+    @OnlyIn(Dist.CLIENT)
+    private static class ClientHandler {
+        static void handle(Packet_DeathScreenData packet) {
+            DreamingFishCore.LOGGER.info("客户端收到死亡屏幕数据: 复活点={}, 正常={}, 保留={}",
+                packet.respawnPoint, packet.normalCost, packet.keepInventoryCost);
+
+            // 存储死亡屏幕数据，供 DeathScreenMixin 使用
+            com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.DeathScreenDataStorage.setData(
+                packet.respawnPoint,
+                packet.normalCost,
+                packet.keepInventoryCost,
+                packet.isInfected,
+                packet.deathMessage,
+                packet.deathX,
+                packet.deathY,
+                packet.deathZ,
+                packet.dimension,
+                packet.deathId
+            );
+
+            DreamingFishCore.LOGGER.info("死亡屏幕数据已存储");
+        }
+
+        /**
+         * 格式化维度名称
+         */
+        private static String formatDimensionName(String dimension) {
+            return switch (dimension) {
+                case "minecraft:overworld" -> "主世界";
+                case "minecraft:the_nether" -> "下界";
+                case "minecraft:the_end" -> "末地";
+                default -> dimension;
+            };
+        }
+    }
+
+    public float getRespawnPoint() {
+        return respawnPoint;
+    }
+
+    public float getNormalCost() {
+        return normalCost;
+    }
+
+    public float getKeepInventoryCost() {
+        return keepInventoryCost;
+    }
+
+    public boolean isInfected() {
+        return isInfected;
+    }
+}

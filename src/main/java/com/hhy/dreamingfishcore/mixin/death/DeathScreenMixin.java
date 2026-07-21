@@ -3,10 +3,10 @@ package com.hhy.dreamingfishcore.mixin.death;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
-import com.hhy.dreamingfishcore.core.playerattributes_system.death.DeathScreenDataStorage;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.DeathScreenDataStorage;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system.Packet_KeepInventoryRequest;
-import com.hhy.dreamingfishcore.network.packets.playerattribute_system.death_system.Packet_NormalRespawnRequest;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_KeepInventoryRequest;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_NormalRespawnRequest;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -111,7 +111,8 @@ public abstract class DeathScreenMixin extends Screen {
      */
     @Unique
     private void dreamingFishCore$sendNormalRespawn() {
-        DreamingFishCore_NetworkManager.sendToServer(new Packet_NormalRespawnRequest());
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_NormalRespawnRequest(
+                DeathScreenDataStorage.getData().deathId()));
     }
 
     /**
@@ -119,7 +120,8 @@ public abstract class DeathScreenMixin extends Screen {
      */
     @Unique
     private void dreamingFishCore$sendKeepInventory() {
-        DreamingFishCore_NetworkManager.sendToServer(new Packet_KeepInventoryRequest());
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_KeepInventoryRequest(
+                DeathScreenDataStorage.getData().deathId()));
     }
 
     /**

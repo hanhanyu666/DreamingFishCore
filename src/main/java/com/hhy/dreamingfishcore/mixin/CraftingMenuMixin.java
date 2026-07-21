@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.mixin;
 
-import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;

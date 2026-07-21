@@ -124,12 +124,15 @@ public final class ModernSelectionScreenUi {
         }
 
         if (listWidget != null) {
-            listWidget.setRectangle(
-                    toScreen(layout, layout.listW()),
-                    toScreen(layout, layout.listH()),
-                    toScreen(layout, layout.listX()),
-                    toScreen(layout, layout.listY())
-            );
+            // 1.20.1 selection lists paint their own dirt texture over the
+            // screen background. Keep the list functional but let the modern
+            // selection screen's image background remain visible.
+            listWidget.setRenderBackground(false);
+            listWidget.setRenderTopAndBottom(false);
+            int listTop = toScreen(layout, layout.listY());
+            int listBottom = listTop + toScreen(layout, layout.listH());
+            listWidget.updateSize(toScreen(layout, layout.listW()), screen.height, listTop, listBottom);
+            listWidget.setLeftPos(toScreen(layout, layout.listX()));
         }
 
         layoutButtons(screen, layout);

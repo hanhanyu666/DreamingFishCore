@@ -1,11 +1,9 @@
 package com.hhy.dreamingfishcore.item.items;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesData;
-import com.hhy.dreamingfishcore.core.playerattributes_system.PlayerAttributesDataManager;
-import com.hhy.dreamingfishcore.core.playerattributes_system.death.RespawnPointSyncManager;
-import com.hhy.dreamingfishcore.core.playerattributes_system.infection.PlayerInfectionClientSync;
-import com.hhy.dreamingfishcore.core.playerattributes_system.infection.PlayerInfectionManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -72,9 +70,7 @@ public class Potion_RestoreUnInfected extends Item {
         PlayerAttributesDataManager.updatePlayerAttributesData(serverPlayer, attributesData);
 
         // 同步到客户端
-        PlayerInfectionClientSync.sendInfectionDataToClient(serverPlayer, 0);
-        // 同步感染者状态到客户端（UI显示需要）
-        RespawnPointSyncManager.syncRespawnPointToClient(serverPlayer);
+        PlayerInfectionClientSync.sendInfectionDataToClient(serverPlayer, 0, false);
 
         // 消耗物品
         if (!player.getAbilities().instabuild) {

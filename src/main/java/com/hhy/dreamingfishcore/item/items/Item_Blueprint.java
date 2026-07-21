@@ -1,10 +1,8 @@
 package com.hhy.dreamingfishcore.item.items;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-
-import com.hhy.dreamingfishcore.core.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
-import com.hhy.dreamingfishcore.item.item_renderer.BlueprintItemRenderer;
+import com.hhy.dreamingfishcore.item.client.renderer.BlueprintItemRenderer;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
