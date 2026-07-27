@@ -100,7 +100,7 @@ public class Packet_DeathScreenData {
                 packet.respawnPoint, packet.normalCost, packet.keepInventoryCost);
 
             // 存储死亡屏幕数据，供 DeathScreenMixin 使用
-            com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.DeathScreenDataStorage.setData(
+com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage.setData(
                 packet.respawnPoint,
                 packet.normalCost,
                 packet.keepInventoryCost,

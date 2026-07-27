@@ -12,5 +12,9 @@
   "item.dreamingfishcore.revival_charm": "Revival Charm",
   "item.dreamingfishcore.story_book": "Story Book",
   "itemGroup.blueprint.tab": "Dreamingfish Blueprints",
-  "itemGroup.dreamingfishcore.tab": "DreamingfishCore"
+  "itemGroup.dreamingfishcore.tab": "DreamingfishCore",
+  "key.categories.dreamingfishcore": "Dreaming Fish Core",
+  "key.dreamingfishcore.fps_marker": "FPS Marker",
+  "key.dreamingfishcore.open_screen_o": "Open Information Panel",
+  "key.dreamingfishcore.open_terminal_u": "Open Server Terminal"
 }

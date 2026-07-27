@@ -108,9 +108,9 @@ public class PlayerAttributesDataManager {
         markDirty();
     }
 
-    public static void saveIfDirty(MinecraftServer server) {
+    public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty) {
-            return;
+            return true;
         }
         try {
             JsonDataStore.writeAtomic(
@@ -118,8 +118,10 @@ public class PlayerAttributesDataManager {
                     GSON,
                     ATTRIBUTES_CACHE);
             dirty = false;
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入世界玩家属性数据失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 

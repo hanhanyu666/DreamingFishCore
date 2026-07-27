@@ -3,7 +3,7 @@ package com.hhy.dreamingfishcore.server.notice_system.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginData;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -39,8 +39,9 @@ public class NewPlayerGuide {
             DreamingFishCore.LOGGER.info("中断玩家 {} 的旧教程线程", player.getName().getString());
         }
 
-        // 第一条：欢迎与快捷键提示
-        TipPushHelper.sendTipToPlayer(player, "§6欢迎游玩梦鱼服，按下[U]打开服务器菜单，按下[O]切换信息面板", (int) SECONDS);
+        // 第一条：欢迎与快捷键提示（O 键切换信息面板功能已禁用，提示里不再提及 O 键）
+        NotificationPushHelper.sendTopLeftNotification(
+                player, "§6欢迎游玩梦鱼服，按下[U]打开服务器菜单", (int) SECONDS);
 
         // 开启子线程，实现延迟推送
         Thread guideThread = new Thread(() -> {
@@ -86,7 +87,7 @@ public class NewPlayerGuide {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
         if (player != null) {
             // 玩家在线，发送消息（即使死亡也能收到）
-            TipPushHelper.sendTipToPlayer(player, message, (int) SECONDS);
+            NotificationPushHelper.sendTopLeftNotification(player, message, (int) SECONDS);
             DreamingFishCore.LOGGER.info("已向玩家 {} 发送新手教程消息", player.getName().getString());
         } else {
             DreamingFishCore.LOGGER.info("玩家 {} 已离线，跳过新手教程消息", playerUUID);

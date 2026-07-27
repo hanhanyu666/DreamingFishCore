@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import net.minecraft.server.MinecraftServer;
@@ -89,9 +89,9 @@ public class RevivalInfoManager {
         return REVIVAL_INFO_CACHE.containsKey(playerUUID);
     }
 
-    public static void saveIfDirty(MinecraftServer server) {
+    public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty) {
-            return;
+            return true;
         }
         try {
             JsonDataStore.writeAtomic(
@@ -99,8 +99,10 @@ public class RevivalInfoManager {
                     GSON,
                     REVIVAL_INFO_CACHE);
             dirty = false;
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入世界复活信息失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 
@@ -127,7 +129,7 @@ public class RevivalInfoManager {
         String reviverIdentity = info.isReviverInfected() ? "§c感染者" : "§a幸存者";
         String message = String.format("§d§l✦ 复活通知 ✦\n§f%s §e牺牲了自己一半的重生点数复活了您\n§7您现在的身份为：%s",
                 info.getReviverName(), reviverIdentity);
-        TipPushHelper.sendTipToPlayer(player, message, 15000);
+        NotificationPushHelper.sendTopLeftNotification(player, message, 15000);
         removeRevivalInfo(player.getUUID());
         DreamingFishCore.LOGGER.info("已向玩家 {} 发送复活提示", player.getScoreboardName());
     }

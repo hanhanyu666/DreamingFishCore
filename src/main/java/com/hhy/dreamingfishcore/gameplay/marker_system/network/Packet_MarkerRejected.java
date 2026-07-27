@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.marker_system.network;
 
-import com.hhy.dreamingfishcore.server.notice_system.client.tips.TipDisplayManager;
+import com.hhy.dreamingfishcore.server.notice_system.client.NotificationClientDisplay;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -23,7 +23,7 @@ public class Packet_MarkerRejected {
 
     public static void handle(Packet_MarkerRejected packet, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        context.enqueueWork(() -> TipDisplayManager.addMessage(packet.message, 1600));
+        context.enqueueWork(() -> NotificationClientDisplay.showTopLeft(packet.message, 1600));
         context.setPacketHandled(true);
     }
 }

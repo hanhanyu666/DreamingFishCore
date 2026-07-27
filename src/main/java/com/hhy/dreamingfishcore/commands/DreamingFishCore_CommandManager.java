@@ -5,6 +5,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_system.command.Command_Npc;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_Biomes;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_OverAllLevel;
 import com.hhy.dreamingfishcore.gameplay.story_system.command.Command_Story;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.command.Command_TaskLocation;
 import com.hhy.dreamingfishcore.gameplay.task_system.command.Command_Task;
 import com.hhy.dreamingfishcore.server.check_system.command.Command_Check;
 import com.hhy.dreamingfishcore.server.check_system.command.Command_Info;
@@ -32,6 +33,7 @@ public final class DreamingFishCore_CommandManager {
 
         Command_Npc.register(dispatcher);
         Command_Story.register(dispatcher);
+        Command_TaskLocation.register(dispatcher);
         Command_Biomes.register(dispatcher);
         Command_OverAllLevel.register(dispatcher);
         Command_Task.register(dispatcher);

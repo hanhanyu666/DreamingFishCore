@@ -21,7 +21,6 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.networ
 import com.hhy.dreamingfishcore.server.playerdata_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
-import com.hhy.dreamingfishcore.server.notice_system.network.Packet_SendTipToClient;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -32,8 +31,8 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public final class DreamingFishCore_NetworkManager {
-    // Protocol 4 changes the full task sync layout for shared story progress.
-    private static final String PROTOCOL_VERSION = "4";
+    // Protocol 5 replaces the legacy Tip packet with one structured notification packet.
+    private static final String PROTOCOL_VERSION = "5";
 
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(DreamingFishCore.MODID, "network"),
@@ -68,7 +67,6 @@ public final class DreamingFishCore_NetworkManager {
         INSTANCE.registerMessage(id++, Packet_BiomeDiscoveryNotify.class, Packet_BiomeDiscoveryNotify::encode, Packet_BiomeDiscoveryNotify::decode, Packet_BiomeDiscoveryNotify::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_VanillaAdvancementNotify.class, Packet_VanillaAdvancementNotify::encode, Packet_VanillaAdvancementNotify::decode, Packet_VanillaAdvancementNotify::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncStrengthData.class, Packet_SyncStrengthData::encode, Packet_SyncStrengthData::decode, Packet_SyncStrengthData::handle, clientbound());
-        INSTANCE.registerMessage(id++, Packet_SendTipToClient.class, Packet_SendTipToClient::encode, Packet_SendTipToClient::decode, Packet_SendTipToClient::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncCourageData.class, Packet_SyncCourageData::encode, Packet_SyncCourageData::decode, Packet_SyncCourageData::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncInfectionData.class, Packet_SyncInfectionData::encode, Packet_SyncInfectionData::decode, Packet_SyncInfectionData::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncRespawnPointData.class, Packet_SyncRespawnPointData::encode, Packet_SyncRespawnPointData::decode, Packet_SyncRespawnPointData::handle, clientbound());
@@ -99,6 +97,7 @@ public final class DreamingFishCore_NetworkManager {
         INSTANCE.registerMessage(id++, Packet_RequestMarker.class, Packet_RequestMarker::encode, Packet_RequestMarker::decode, Packet_RequestMarker::handle, serverbound());
         INSTANCE.registerMessage(id++, Packet_ShowMarker.class, Packet_ShowMarker::encode, Packet_ShowMarker::decode, Packet_ShowMarker::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_MarkerRejected.class, Packet_MarkerRejected::encode, Packet_MarkerRejected::decode, Packet_MarkerRejected::handle, clientbound());
+        INSTANCE.registerMessage(id++, Packet_SendNotificationToClient.class, Packet_SendNotificationToClient::encode, Packet_SendNotificationToClient::decode, Packet_SendNotificationToClient::handle, clientbound());
     }
 
     private static Optional<NetworkDirection> clientbound() {

@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.client.Screen_StoryFragment;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen.Screen_StoryFragment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;

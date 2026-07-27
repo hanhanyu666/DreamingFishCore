@@ -85,6 +85,12 @@ gameplay/story_system/
 - 已发布版本不要随意调整现有数据包注册顺序；新增包优先追加，协议不兼容时应明确升级协议版本。
 - 所有客户端发往服务端的数据都视为不可信；处理器必须从网络上下文获取发送者并进行权限、状态、长度和频率校验。
 
+## 通知
+
+- 服务端通知统一通过 `server/notice_system/NotificationPushHelper` 发送，不再创建新的 Tip 管理器或单行 Tip 数据包。
+- 普通系统消息、登录提示和操作反馈使用左上角通知；群系发现和任务地点进入使用中上方标题通知；等级提升使用左上角标题通知。
+- 所有服务端通知共用 `Packet_SendNotificationToClient`，客户端最终交给 `client/ui/notification/NotificationManager` 排队和渲染。
+
 ## 内容注册
 
 物品、创造栏、LootModifier 等保持独立注册，不创建包含所有内容的 `ContentInit`：
@@ -106,3 +112,13 @@ content/
 4. 在统一 CommandManager 或 NetworkManager 中完成注册。
 5. 服务端数据包处理器完成权限与输入校验。
 6. 至少执行一次 `gradlew compileJava`；涉及资源或注册内容时执行完整 `gradlew build`。
+
+# 任务地点系统
+
+`gameplay/task_location_system` 管理固定地图中的官方三维剧情区域。全局配置位于
+`config/dreamingfishcore/task_locations.json`，任务定义通过可选 `locationId` 引用地点；
+地图保护、任务结算在场玩家和后续局部尸潮都应查询这一份坐标定义。
+
+任务地点不保存任务成功或失败，也不自动切换故事阶段。故事运行状态仍由
+`StoryManager` 唯一管理，任务执行器可以调用
+`StoryManager.resolveTaskAtConfiguredLocation(...)` 原子收集在场玩家并结算。

@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcDialogueViewData;
-import com.hhy.dreamingfishcore.gameplay.npc_system.client.Screen_NpcDialogue;
+import com.hhy.dreamingfishcore.gameplay.npc_system.client.ui.screen.Screen_NpcDialogue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;

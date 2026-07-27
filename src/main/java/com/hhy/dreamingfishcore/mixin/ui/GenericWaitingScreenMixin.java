@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.LoadingTips;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.GenericWaitingScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -36,8 +36,7 @@ public abstract class GenericWaitingScreenMixin extends Screen {
             tip = LoadingTips.getRandomTip();
         }
 
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
-        guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
+        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().scale(vs.uiScale, vs.uiScale, 1.0f);
@@ -45,7 +44,7 @@ public abstract class GenericWaitingScreenMixin extends Screen {
         int vw = vs.virtualWidth;
         int vh = vs.virtualHeight;
 
-        renderTip(guiGraphics);
+        LoadingScreenUi.renderTip(guiGraphics, this.font, tip);
 
         long now = System.currentTimeMillis();
 
@@ -63,49 +62,16 @@ public abstract class GenericWaitingScreenMixin extends Screen {
             statusText = "请稍候";
         }
         String progressText = fakeProgress + "%";
-        guiGraphics.drawString(this.font, trimToWidth(statusText, Math.max(20, barW - this.font.width(progressText) - 18)),
+        guiGraphics.drawString(this.font, LoadingScreenUi.trimToWidth(statusText, this.font,
+                        Math.max(20, barW - this.font.width(progressText) - 18)),
                 barX, barY - 12, 0xFFFFFFFF, true);
         guiGraphics.drawString(this.font, progressText, barX + barW - this.font.width(progressText), barY - 12,
                 0xFFFFFFFF, true);
 
-        renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, BAR_BG);
-        int fillW = barW * fakeProgress / 100;
-        if (fillW > 0) {
-            renderRoundedBar(guiGraphics, barX, barY, fillW, barHeight, ACCENT_BLUE);
-            if (fillW > 2) {
-                guiGraphics.fill(barX + 2, barY, barX + fillW - 2, barY + 1, BAR_HIGHLIGHT);
-            }
-        }
+        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
+                BAR_BG, ACCENT_BLUE, BAR_HIGHLIGHT);
 
         guiGraphics.pose().popPose();
     }
 
-    @Unique
-    private void renderTip(GuiGraphics guiGraphics) {
-        int tipX = 8;
-        int tipY = 8;
-        guiGraphics.drawString(this.font, "§e💡 提示", tipX, tipY, 0xFFFFFFFF, true);
-        guiGraphics.drawString(this.font, "§7" + tip, tipX, tipY + 13, 0xFFAAAAAA, true);
-    }
-
-    @Unique
-    private static void renderRoundedBar(GuiGraphics g, int x, int y, int w, int h, int color) {
-        if (w <= 0 || h <= 0) return;
-        int r = h >= 6 ? h / 3 : 1;
-        int ih = Math.max(1, h - 2);
-        int left = x + r;
-        int right = x + w - r;
-        if (right > left) g.fill(left, y, right, y + h, color);
-        g.fill(x, y + 1, x + r, y + 1 + ih, color);
-        g.fill(x + w - r, y + 1, x + w, y + 1 + ih, color);
-    }
-
-    @Unique
-    private String trimToWidth(String text, int maxWidth) {
-        if (text == null || this.font.width(text) <= maxWidth) {
-            return text == null ? "" : text;
-        }
-        String ellipsis = "...";
-        return this.font.plainSubstrByWidth(text, Math.max(0, maxWidth - this.font.width(ellipsis))) + ellipsis;
-    }
 }

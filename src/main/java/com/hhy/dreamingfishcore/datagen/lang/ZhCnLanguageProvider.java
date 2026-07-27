@@ -11,6 +11,10 @@ public class ZhCnLanguageProvider extends LanguageProvider {
 
     @Override
     protected void addTranslations() {
+        add("key.categories.dreamingfishcore", "梦屿核心");
+        add("key.dreamingfishcore.open_screen_o", "打开信息面板");
+        add("key.dreamingfishcore.open_terminal_u", "打开服务器终端");
+        add("key.dreamingfishcore.fps_marker", "FPS 标点");
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "梦鱼蓝图");
         add(DreamingFishCore_Items.GUITAR.get(), "吉他");

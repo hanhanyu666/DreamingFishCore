@@ -25,10 +25,16 @@ public class KeybindHandler {
             GLFW.GLFW_KEY_U,
             "key.categories.dreamingfishcore");
 
+    public static final KeyMapping FPS_MARKER_KEY = new KeyMapping(
+            "key.dreamingfishcore.fps_marker",
+            GLFW.GLFW_KEY_G,
+            "key.categories.dreamingfishcore");
+
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(INFORMATION_UI_KEY);
         event.register(TERMINAL_UI_KEY);
+        event.register(FPS_MARKER_KEY);
     }
 
     @Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -36,6 +42,9 @@ public class KeybindHandler {
         @SubscribeEvent
         public static void onKeyInput(InputEvent.Key event) {
             Minecraft minecraft = Minecraft.getInstance();
+            // [已禁用] O 键切换信息面板功能：建筑服不需要，按 O 不再切换、也不再发提示。
+            // 如需恢复，去掉下面这段块注释即可。
+            /*
             if (INFORMATION_UI_KEY.consumeClick()) {
                 ServerInformationDisplay.toggleUI();
                 if (minecraft.player != null) {
@@ -44,6 +53,7 @@ public class KeybindHandler {
                             : Component.literal("§c[DreamingfishCore]信息面板已关闭，再次按下O开启！"));
                 }
             }
+            */
             if (TERMINAL_UI_KEY.consumeClick()) {
                 ServerScreenUI.toggleUI();
             }

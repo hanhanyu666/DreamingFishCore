@@ -4,16 +4,13 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-import java.io.File;
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -45,8 +42,9 @@ public final class StoryManager {
     /** 配置文件结构版本，与世界存档版本是两套独立版本号。 */
     private static final int DEFINITION_SCHEMA_VERSION = 1;
     /** 全局故事定义文件。它属于服务器配置，不属于某个世界。 */
-    private static final File STORY_DEFINITION_FILE =
-            new File("config/dreamingfishcore/story_stage_data.json");
+    private static final Path STORY_DEFINITION_PATH = FMLPaths.CONFIGDIR.get()
+            .resolve(DreamingFishCore.MODID)
+            .resolve("story_stage_data.json");
     /** 当前世界根目录下 data/dreamingfishcore/story/world_state.json。 */
     private static final String[] STATE_PATH = {"story", "world_state.json"};
 
@@ -73,6 +71,8 @@ public final class StoryManager {
     private static boolean dirty;
     /** 配置或存档损坏时设为 false，防止错误默认值覆盖原文件。 */
     private static boolean writesEnabled;
+    /** 当前内存中故事定义的代数；每次成功热重载后递增。 */
+    private static long definitionGeneration;
 
     /** 工具类不需要创建对象，所以构造方法私有。 */
     private StoryManager() {
@@ -90,13 +90,14 @@ public final class StoryManager {
         // 第一步：读取服务器全局配置，并建立阶段、任务索引。
         try {
             installDefinitions(loadDefinitionDocument());
+            definitionGeneration = 1L;
         } catch (Exception exception) {
             installDefinitions(createDefaultDefinitions());
             loaded = true;
             writesEnabled = false;
             DreamingFishCore.LOGGER.error(
                     "故事定义加载失败，已使用只读默认定义；修复配置后重启服务器：{}",
-                    STORY_DEFINITION_FILE.getAbsolutePath(), exception);
+                    STORY_DEFINITION_PATH.toAbsolutePath(), exception);
             return;
         }
 
@@ -136,30 +137,33 @@ public final class StoryManager {
     }
 
     /**
-     * 读取并校验故事定义文件。文件缺失、空文件或空对象会生成最小默认配置；
+     * 读取并校验故事定义文件。只有文件缺失时才生成最小默认配置；
+     * 空文件或空对象会进入只读保护，避免覆盖可能因异常中断而损坏的配置。
      * 非空旧格式会先备份，再明确拒绝启动写入，避免猜错旧数据含义。
      */
     private static StoryDefinitionDocument loadDefinitionDocument() throws Exception {
-        Path path = STORY_DEFINITION_FILE.toPath().toAbsolutePath().normalize();
+        Path path = STORY_DEFINITION_PATH.toAbsolutePath().normalize();
         Path parent = path.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
 
-        if (Files.notExists(path) || Files.size(path) == 0L) {
+        if (Files.notExists(path)) {
             StoryDefinitionDocument defaults = createDefaultDefinitions();
             writeDefinitionDocument(defaults);
             return defaults;
+        }
+        if (Files.size(path) == 0L) {
+            throw new IllegalStateException("故事定义文件为空，已拒绝覆盖原文件");
         }
 
-        JsonElement root;
-        try (Reader reader = Utf8JsonFileIO.openReader(STORY_DEFINITION_FILE)) {
-            root = JsonParser.parseReader(reader);
-        }
+        JsonElement root = JsonDataStore.read(
+                path,
+                GSON,
+                JsonElement.class,
+                JsonObject::new);
         if (root != null && root.isJsonObject() && root.getAsJsonObject().size() == 0) {
-            StoryDefinitionDocument defaults = createDefaultDefinitions();
-            writeDefinitionDocument(defaults);
-            return defaults;
+            throw new IllegalStateException("故事定义对象为空，已拒绝覆盖原文件");
         }
         if (root == null || !root.isJsonObject()) {
             backupLegacyDefinition(path);
@@ -178,11 +182,9 @@ public final class StoryManager {
         return document;
     }
 
-    /** 将默认故事定义按 UTF-8 写入配置目录。 */
+    /** 将默认故事定义原子写入配置目录，并保留上一版备份。 */
     private static void writeDefinitionDocument(StoryDefinitionDocument document) throws Exception {
-        try (Writer writer = Utf8JsonFileIO.openWriter(STORY_DEFINITION_FILE)) {
-            GSON.toJson(document, writer);
-        }
+        JsonDataStore.writeAtomic(STORY_DEFINITION_PATH, GSON, document);
     }
 
     /** 在同目录生成 .legacy-backup，保留无法自动迁移的旧配置。 */
@@ -296,11 +298,106 @@ public final class StoryManager {
         }
         boolean changed = false;
         for (StoryTaskData task : stage.getTasks()) {
-            if (task.isPublishedByDefault()) {
-                changed |= state.activateTask(task.getTaskKey());
+            if (task.isPublishedByDefault() && state.activateTask(task.getTaskKey())) {
+                changed = true;
+                recordHistory(
+                        WorldHistoryLog.EventType.TASK_PUBLISHED,
+                        task.getTaskKey(),
+                        "system",
+                        Map.of("reason", "publishedByDefault"));
             }
         }
         return changed;
+    }
+
+    /**
+     * 只校验磁盘上的候选定义，不替换当前正在运行的定义。
+     * 这给管理员提供“先检查、后发布”的安全入口。
+     */
+    public static synchronized DefinitionSummary validateDefinitions() {
+        ensureLoaded();
+        StoryDefinitionDocument candidate = readDefinitionForReload();
+        validateDefinitionCompatibility(candidate);
+        return createDefinitionSummary(candidate);
+    }
+
+    /**
+     * 校验并一次性替换故事定义。
+     *
+     * <p>候选文件在本方法中只存在于局部变量里。只有解析、结构校验、ID 唯一性校验以及
+     * 与已经发布任务的兼容性校验全部通过后，才会调用 installDefinitions 修改索引；
+     * 所以半份坏配置不会把服务器切换到半旧半新的状态。</p>
+     */
+    public static synchronized DefinitionSummary reloadDefinitions() {
+        ensureWritable();
+        StoryDefinitionDocument candidate = readDefinitionForReload();
+        validateDefinitionCompatibility(candidate);
+        installDefinitions(candidate);
+        definitionGeneration = Math.max(1L, definitionGeneration + 1L);
+        if (activateDefaultTasks(state.getCurrentStageId())) {
+            dirty = true;
+        }
+        return createDefinitionSummary(candidate);
+    }
+
+    /** 当前成功安装的故事定义代数。 */
+    public static synchronized long getDefinitionGeneration() {
+        ensureLoaded();
+        return definitionGeneration;
+    }
+
+    /** 内容包管理器需要写一条带执行者的历史事件；实际事件仍由本类集中组织。 */
+    static synchronized void recordHistory(
+            WorldHistoryLog.EventType type,
+            String subjectId,
+            String actor,
+            Map<String, String> details) {
+        if (!loaded) {
+            return;
+        }
+        WorldHistoryLog.append(state.getActiveTicks(), type, subjectId, actor, details);
+    }
+
+    /** 热重载使用的定义文件读取包装，统一把 checked exception 转成管理员可读错误。 */
+    private static StoryDefinitionDocument readDefinitionForReload() {
+        try {
+            return loadDefinitionDocument();
+        } catch (Exception exception) {
+            throw new IllegalStateException("故事定义校验失败：" + exception.getMessage(), exception);
+        }
+    }
+
+    /** 旧任务已经发布后不能在热重载时凭空消失，否则历史进度将失去含义。 */
+    private static void validateDefinitionCompatibility(StoryDefinitionDocument candidate) {
+        Set<String> stageIds = new HashSet<>();
+        Set<String> taskKeys = new HashSet<>();
+        for (StoryStageData stage : candidate.stages) {
+            stageIds.add(stage.getStageId());
+            for (StoryTaskData task : stage.getTasks()) {
+                taskKeys.add(task.getTaskKey());
+            }
+        }
+        if (!stageIds.contains(state.getCurrentStageId())) {
+            throw new IllegalStateException(
+                    "候选故事定义删除了当前世界阶段：" + state.getCurrentStageId());
+        }
+        for (String publishedTaskKey : state.getTaskProgressView().keySet()) {
+            if (!taskKeys.contains(publishedTaskKey)) {
+                throw new IllegalStateException(
+                        "候选故事定义删除了已发布任务：" + publishedTaskKey);
+            }
+        }
+    }
+
+    private static DefinitionSummary createDefinitionSummary(StoryDefinitionDocument document) {
+        int taskCount = document.stages.stream()
+                .mapToInt(stage -> stage.getTasks().size())
+                .sum();
+        return new DefinitionSummary(
+                document.schemaVersion,
+                document.stages.size(),
+                taskCount,
+                definitionGeneration);
     }
 
     /**
@@ -320,15 +417,17 @@ public final class StoryManager {
      * 只有状态发生变化时才原子写入世界存档。
      * 写入失败会保留 dirty=true，等待下一次自动保存重试。
      */
-    public static synchronized void saveIfDirty(MinecraftServer server) {
+    public static synchronized boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty || !writesEnabled) {
-            return;
+            return true;
         }
         try {
             JsonDataStore.writeAtomic(statePath(server), GSON, state);
             dirty = false;
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入世界故事状态失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 
@@ -343,6 +442,7 @@ public final class StoryManager {
         loaded = false;
         dirty = false;
         writesEnabled = false;
+        definitionGeneration = 0L;
     }
 
     /**
@@ -351,14 +451,25 @@ public final class StoryManager {
      * @return 阶段确实发生变化时返回 true
      */
     public static synchronized boolean changeStage(String stageId) {
+        return changeStage(stageId, "system");
+    }
+
+    /** 带执行者名称的阶段切换入口，供服主命令写入可追溯的历史记录。 */
+    public static synchronized boolean changeStage(String stageId, String actor) {
         ensureWritable();
         if (!STAGES_BY_ID.containsKey(stageId)) {
             throw new IllegalArgumentException("故事阶段不存在：" + stageId);
         }
+        String previousStageId = state.getCurrentStageId();
         if (!state.changeStage(stageId)) {
             return false;
         }
         activateDefaultTasks(stageId);
+        recordHistory(
+                WorldHistoryLog.EventType.STAGE_CHANGED,
+                stageId,
+                actor,
+                Map.of("previousStageId", previousStageId));
         dirty = true;
         return true;
     }
@@ -369,6 +480,11 @@ public final class StoryManager {
         if (!state.setWorldFlag(flagId, enabled)) {
             return false;
         }
+        recordHistory(
+                WorldHistoryLog.EventType.WORLD_FLAG_CHANGED,
+                flagId,
+                "system",
+                Map.of("enabled", Boolean.toString(enabled)));
         dirty = true;
         return true;
     }
@@ -379,6 +495,11 @@ public final class StoryManager {
         if (!state.beginOperationRound(sourceId)) {
             return false;
         }
+        recordHistory(
+                WorldHistoryLog.EventType.OPERATION_ROUND_STARTED,
+                sourceId,
+                "system",
+                Map.of("roundNumber", Long.toString(state.getOperationRound().getNumber())));
         dirty = true;
         return true;
     }
@@ -389,6 +510,11 @@ public final class StoryManager {
         if (!state.publishOperationRound(contentId)) {
             return false;
         }
+        recordHistory(
+                WorldHistoryLog.EventType.OPERATION_ROUND_PUBLISHED,
+                contentId,
+                "system",
+                Map.of("roundNumber", Long.toString(state.getOperationRound().getNumber())));
         dirty = true;
         return true;
     }
@@ -396,9 +522,19 @@ public final class StoryManager {
     /** 写入当前世界达成的结局 ID；传入空字符串可以清空。 */
     public static synchronized boolean setEndingId(String endingId) {
         ensureWritable();
+        String previousEndingId = state.getEndingId();
         if (!state.setEndingId(endingId)) {
             return false;
         }
+        String subjectId = endingId == null || endingId.isEmpty()
+                ? "dreamingfishcore:none"
+                : endingId;
+        recordHistory(
+                WorldHistoryLog.EventType.ENDING_CHANGED,
+                subjectId,
+                "system",
+                Map.of("previousEndingId", previousEndingId,
+                        "endingId", endingId == null ? "" : endingId));
         dirty = true;
         return true;
     }
@@ -414,6 +550,7 @@ public final class StoryManager {
         if (!state.activateTask(taskKey)) {
             return false;
         }
+        recordHistory(WorldHistoryLog.EventType.TASK_PUBLISHED, taskKey, "system", Map.of());
         dirty = true;
         return true;
     }
@@ -437,8 +574,38 @@ public final class StoryManager {
         if (!state.resolveTask(taskKey, outcome, participants)) {
             return false;
         }
+        recordHistory(
+                outcome == StoryTaskOutcome.SUCCEEDED
+                        ? WorldHistoryLog.EventType.TASK_SUCCEEDED
+                        : WorldHistoryLog.EventType.TASK_FAILED,
+                taskKey,
+                "system",
+                Map.of("participantCount", Integer.toString(participants == null ? 0 : participants.size())));
         dirty = true;
         return true;
+    }
+
+    /**
+     * 按任务定义中的 {@code locationId} 结算，并在同一个服务器 tick 内取得区域参与者快照。
+     *
+     * <p>任务脚本不应该自行复制“生存/冒险、同维度、位于三维边界内”的筛选规则。
+     * 没有配置地点的任务仍可调用 {@link #resolveTask(String, StoryTaskOutcome, Collection)}
+     * 显式传入其他来源的参与者。</p>
+     */
+    public static synchronized boolean resolveTaskAtConfiguredLocation(
+            MinecraftServer server, String taskKey, StoryTaskOutcome outcome) {
+        ensureWritable();
+        StoryTaskData task = TASKS_BY_KEY.get(taskKey);
+        if (task == null) {
+            throw new IllegalArgumentException("故事任务不存在：" + taskKey);
+        }
+        if (task.getLocationId().isBlank()) {
+            throw new IllegalStateException("故事任务没有配置任务地点：" + taskKey);
+        }
+        return resolveTask(
+                taskKey,
+                outcome,
+                TaskLocationManager.collectTaskParticipants(server, task.getLocationId()));
     }
 
     /**
@@ -866,6 +1033,14 @@ public final class StoryManager {
             String endingId,
             ProgressSnapshot currentStageProgress,
             boolean writesEnabled) {
+    }
+
+    /** 故事定义校验或热重载后的摘要，避免把内部 Map 暴露给命令层。 */
+    public record DefinitionSummary(
+            int schemaVersion,
+            int stageCount,
+            int taskCount,
+            long generation) {
     }
 
     /**

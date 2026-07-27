@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network;
 
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.Screen_RevivalCharm;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.ui.screen.Screen_RevivalCharm;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;

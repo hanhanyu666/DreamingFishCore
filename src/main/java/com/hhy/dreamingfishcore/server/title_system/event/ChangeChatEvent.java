@@ -73,6 +73,9 @@ public class ChangeChatEvent {
         for (ServerPlayer onlinePlayer : player.getServer().getPlayerList().getPlayers()) {
             onlinePlayer.sendSystemMessage(customMessage, false);
         }
+
+        // 将格式化后的聊天消息打印到控制台，方便服主查看
+        DreamingFishCore.LOGGER.info("<{}> {}", player.getScoreboardName(), event.getRawText());
     }
 
 

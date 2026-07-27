@@ -3,7 +3,7 @@ package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.PlayerStrengthClientSync;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.Packet_RequestPlayerStats;

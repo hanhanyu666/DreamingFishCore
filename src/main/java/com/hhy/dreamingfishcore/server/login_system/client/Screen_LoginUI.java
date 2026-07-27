@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.server.login_system.client;
 
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -32,6 +34,7 @@ public class Screen_LoginUI extends Screen {
     private boolean isSubmitting = false;  // 防止重复提交
 
     private final boolean requireRegistration;
+    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
 
     public Screen_LoginUI(boolean requireRegistration) {
         super(Component.literal("登录界面"));
@@ -41,11 +44,12 @@ public class Screen_LoginUI extends Screen {
     @Override
     protected void init() {
         super.init();
+        updateVirtualSize();
 
-        int centerX = this.width / 2;
-        int centerY = this.height / 2;
+        int centerX = virtualSize.virtualWidth / 2;
+        int centerY = virtualSize.virtualHeight / 2;
 
-        int boxWidth = Math.min(680, Math.max(360, (int) (this.width * 0.78f)));
+        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
         int boxHeight = requireRegistration ? 330 : 290;
         int boxX = centerX - boxWidth / 2;
         int boxY = centerY - boxHeight / 2;
@@ -92,6 +96,28 @@ public class Screen_LoginUI extends Screen {
         updatePromptMessage();
     }
 
+    private void updateVirtualSize() {
+        VirtualCoordinateHelper.calculateDownscaledVirtualSize(this, virtualSize);
+    }
+
+    private void updateFieldLayout() {
+        int centerX = virtualSize.virtualWidth / 2;
+        int centerY = virtualSize.virtualHeight / 2;
+        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
+        int boxHeight = requireRegistration ? 330 : 290;
+        int boxY = centerY - boxHeight / 2;
+        int fieldWidth = Math.min(430, boxWidth - 120);
+        int fieldX = centerX - fieldWidth / 2;
+        int startY = boxY + 164;
+
+        passwordField.setWidth(fieldWidth - 16);
+        passwordField.setX(fieldX + 8);
+        passwordField.setY(startY + 7);
+        confirmPasswordField.setWidth(fieldWidth - 16);
+        confirmPasswordField.setX(fieldX + 8);
+        confirmPasswordField.setY(startY + 55);
+    }
+
     private void updatePromptMessage() {
         if (requireRegistration) {
             statusMessage = Component.literal("首次接入梦屿网络，请设置终端访问密码");
@@ -104,16 +130,22 @@ public class Screen_LoginUI extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        int centerX = this.width / 2;
-        int centerY = this.height / 2;
+        updateVirtualSize();
+        updateFieldLayout();
 
-        int boxWidth = Math.min(680, Math.max(360, (int) (this.width * 0.78f)));
+        int centerX = virtualSize.virtualWidth / 2;
+        int centerY = virtualSize.virtualHeight / 2;
+
+        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
         int boxHeight = requireRegistration ? 330 : 290;
         int boxX = centerX - boxWidth / 2;
         int boxY = centerY - boxHeight / 2;
         int headerHeight = 34;
 
         guiGraphics.fill(RenderType.gui(), 0, 0, this.width, this.height, TERMINAL_BACKGROUND);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(virtualSize.uiScale, virtualSize.uiScale, 1.0f);
+
         drawSoftRect(guiGraphics, boxX + 5, boxY + 6, boxWidth, boxHeight, 3, 0x66000000, 0x00000000);
         drawSoftRect(guiGraphics, boxX, boxY, boxWidth, boxHeight, 3, TERMINAL_SHELL, 0x66526372);
         drawSoftRect(guiGraphics, boxX + 6, boxY + 6, boxWidth - 12, headerHeight, 2, TERMINAL_HEADER, 0x224A5A68);
@@ -158,7 +190,58 @@ public class Screen_LoginUI extends Screen {
 
         drawTerminalFooter(guiGraphics, centerX, boxY + boxHeight - 23);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, toVirtual(mouseX), toVirtual(mouseY), partialTick);
+        guiGraphics.pose().popPose();
+    }
+
+    private int toVirtual(double coordinate) {
+        return (int) (coordinate / virtualSize.uiScale);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        updateVirtualSize();
+        updateFieldLayout();
+        return super.mouseClicked(mouseX / virtualSize.uiScale, mouseY / virtualSize.uiScale, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        updateVirtualSize();
+        updateFieldLayout();
+        return super.mouseReleased(mouseX / virtualSize.uiScale, mouseY / virtualSize.uiScale, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        updateVirtualSize();
+        updateFieldLayout();
+        return super.mouseDragged(
+                mouseX / virtualSize.uiScale,
+                mouseY / virtualSize.uiScale,
+                button,
+                dragX / virtualSize.uiScale,
+                dragY / virtualSize.uiScale
+        );
+    }
+
+    @Override
+    public void resize(Minecraft minecraft, int width, int height) {
+        String password = passwordField == null ? "" : passwordField.getValue();
+        String confirmation = confirmPasswordField == null ? "" : confirmPasswordField.getValue();
+        boolean confirmationFocused = confirmPasswordField != null && confirmPasswordField.isFocused();
+        Component previousStatus = statusMessage;
+        int previousMessageColor = messageColor;
+
+        super.resize(minecraft, width, height);
+
+        passwordField.setValue(password);
+        confirmPasswordField.setValue(confirmation);
+        statusMessage = previousStatus;
+        messageColor = previousMessageColor;
+        if (confirmationFocused && confirmPasswordField.isVisible()) {
+            this.setFocused(confirmPasswordField);
+        }
     }
 
     private void renderInputBackground(GuiGraphics guiGraphics, int x, int y, int width, int height, boolean focused) {

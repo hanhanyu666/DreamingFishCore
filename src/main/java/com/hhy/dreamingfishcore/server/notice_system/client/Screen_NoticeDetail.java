@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.server.notice_system.client;
 
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI_Screen;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
@@ -63,6 +64,7 @@ public class Screen_NoticeDetail extends Screen {
 
     // 标记：初始化是否完成
     private boolean initialized = false;
+    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
 
     // 日期格式化器
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -83,12 +85,13 @@ public class Screen_NoticeDetail extends Screen {
     protected void init() {
         super.init();
         initialized = true;
+        updateLayout();
+    }
 
-        // 计算弹窗位置（居中）
-        boxX = (this.width - boxWidth) / 2;
-        boxY = (this.height - boxHeight) / 2;
-
-        // 设置关闭按钮区域
+    private void updateLayout() {
+        VirtualCoordinateHelper.calculateDownscaledVirtualSize(this, virtualSize);
+        boxX = (virtualSize.virtualWidth - boxWidth) / 2;
+        boxY = (virtualSize.virtualHeight - boxHeight) / 2;
         closeButtonWidth = boxWidth - 2 * PADDING;
         closeButtonHeight = 24;
         closeButtonX = boxX + PADDING;
@@ -97,9 +100,17 @@ public class Screen_NoticeDetail extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        boolean transformed = false;
         try {
+            updateLayout();
             // 1. 背景填充（屏幕坐标）
             guiGraphics.fillGradient(0, 0, this.width, this.height, BG_OUTER, BG_OUTER);
+
+            guiGraphics.pose().pushPose();
+            transformed = true;
+            guiGraphics.pose().scale(virtualSize.uiScale, virtualSize.uiScale, 1.0f);
+            int virtualMouseX = (int) (mouseX / virtualSize.uiScale);
+            int virtualMouseY = (int) (mouseY / virtualSize.uiScale);
 
             // 2. 主面板（双层边框 + 圆角效果）
             // 外层深色边框
@@ -158,7 +169,7 @@ public class Screen_NoticeDetail extends Screen {
             renderWrappedText(guiGraphics, safeContent, contentX, contentY, contentWidth);
 
             // 9. 绘制关闭按钮
-            renderCustomButton(guiGraphics, mouseX, mouseY, closeButtonX, closeButtonY, closeButtonWidth, closeButtonHeight, "§b关闭");
+            renderCustomButton(guiGraphics, virtualMouseX, virtualMouseY, closeButtonX, closeButtonY, closeButtonWidth, closeButtonHeight, "§b关闭");
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -166,6 +177,10 @@ public class Screen_NoticeDetail extends Screen {
                 Minecraft.getInstance().player.displayClientMessage(
                     Component.literal("§c公告渲染出错: " + e.getMessage()), false
                 );
+            }
+        } finally {
+            if (transformed) {
+                guiGraphics.pose().popPose();
             }
         }
     }
@@ -284,21 +299,25 @@ public class Screen_NoticeDetail extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        updateLayout();
         long timeSinceOpen = System.currentTimeMillis() - openTime;
         if (timeSinceOpen < CLICK_COOLDOWN || !initialized) {
             return true;
         }
 
+        double virtualMouseX = mouseX / virtualSize.uiScale;
+        double virtualMouseY = mouseY / virtualSize.uiScale;
+
         // 检查是否点击关闭按钮
-        if (mouseX >= closeButtonX && mouseX <= closeButtonX + closeButtonWidth &&
-            mouseY >= closeButtonY && mouseY <= closeButtonY + closeButtonHeight) {
+        if (virtualMouseX >= closeButtonX && virtualMouseX <= closeButtonX + closeButtonWidth &&
+            virtualMouseY >= closeButtonY && virtualMouseY <= closeButtonY + closeButtonHeight) {
             onClose();
             return true;
         }
 
         // 点击弹窗外区域关闭
-        if (mouseX < boxX || mouseX > boxX + boxWidth ||
-            mouseY < boxY || mouseY > boxY + boxHeight) {
+        if (virtualMouseX < boxX || virtualMouseX > boxX + boxWidth ||
+            virtualMouseY < boxY || virtualMouseY > boxY + boxHeight) {
             onClose();
             return true;
         }

@@ -6,7 +6,10 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.ContentPackManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.WorldHistoryLog;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
 import com.hhy.dreamingfishcore.server.notice_system.PlayerNoticeDataManager;
@@ -18,6 +21,7 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -41,11 +45,14 @@ public final class WorldDataLifecycleEvents {
         JsonDataStore.resetSession();
         autoSaveCounter = 0;
 
+        runSafely("加载世界历史日志", () -> WorldHistoryLog.loadWorldData(server));
         runSafely("加载登录数据", PlayerLoginDataManager::loadServerData);
         runSafely("加载玩家数据", () -> PlayerDataManager.loadWorldData(server));
         runSafely("加载玩家属性", () -> PlayerAttributesDataManager.loadWorldData(server));
         runSafely("加载群系探索", () -> PlayerBiomesDataManager.loadWorldData(server));
+        runSafely("加载任务地点", TaskLocationManager::load);
         runSafely("加载故事系统", () -> StoryManager.loadWorldData(server));
+        runSafely("加载故事内容包", ContentPackManager::loadWorldData);
         runSafely("加载玩家任务", () -> TaskDataManager.loadWorldData(server));
         runSafely("加载随记本", () -> StoryBookDataManager.loadWorldData(server));
         runSafely("加载 NPC 关系", () -> NpcRelationManager.loadWorldData(server));
@@ -74,23 +81,41 @@ public final class WorldDataLifecycleEvents {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onServerStopping(ServerStoppingEvent event) {
-        saveDirtyData(event.getServer());
+        if (!saveDirtyData(event.getServer())) {
+            DreamingFishCore.LOGGER.error("服务器停止前的数据保存不完整；将保留缓存并在玩家退出后重试");
+        }
+    }
+
+    /**
+     * Minecraft 会在 {@link ServerStoppingEvent} 之后才分发玩家退出事件。
+     * 退出监听器会结算在线时长、登录元数据和可变属性，因此必须在这里
+     * 再保存一次，且仅在所有写入成功后释放世界级缓存。
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onServerStopped(ServerStoppedEvent event) {
+        if (!saveDirtyData(event.getServer())) {
+            DreamingFishCore.LOGGER.error("服务器已停止，但仍有数据未成功写入；保留缓存以避免丢弃未保存状态");
+            return;
+        }
+
         clearWorldCaches();
         JsonDataStore.resetSession();
         autoSaveCounter = 0;
     }
 
-    private static void saveDirtyData(MinecraftServer server) {
-        runSafely("保存登录数据", PlayerLoginDataManager::saveIfDirty);
-        runSafely("保存玩家数据", () -> PlayerDataManager.saveIfDirty(server));
-        runSafely("保存玩家属性", () -> PlayerAttributesDataManager.saveIfDirty(server));
-        runSafely("保存群系探索", () -> PlayerBiomesDataManager.saveIfDirty(server));
-        runSafely("保存故事系统", () -> StoryManager.saveIfDirty(server));
-        runSafely("保存玩家任务", () -> TaskDataManager.saveIfDirty(server));
-        runSafely("保存随记本", () -> StoryBookDataManager.saveIfDirty(server));
-        runSafely("保存 NPC 关系", () -> NpcRelationManager.saveIfDirty(server));
-        runSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
-        runSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
+    private static boolean saveDirtyData(MinecraftServer server) {
+        boolean saved = true;
+        saved &= runSaveSafely("保存登录数据", PlayerLoginDataManager::saveIfDirty);
+        saved &= runSaveSafely("保存玩家数据", () -> PlayerDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存玩家属性", () -> PlayerAttributesDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存群系探索", () -> PlayerBiomesDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存故事系统", () -> StoryManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存玩家任务", () -> TaskDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存随记本", () -> StoryBookDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存 NPC 关系", () -> NpcRelationManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
+        return saved;
     }
 
     private static void clearWorldCaches() {
@@ -99,11 +124,27 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理玩家属性缓存", PlayerAttributesDataManager::clearWorldCache);
         runSafely("清理群系探索缓存", PlayerBiomesDataManager::clearWorldCache);
         runSafely("清理故事系统缓存", StoryManager::clearWorldCache);
+        runSafely("清理故事内容包缓存", ContentPackManager::clearWorldCache);
+        runSafely("清理世界历史日志缓存", WorldHistoryLog::clearWorldCache);
+        runSafely("清理任务地点缓存", TaskLocationManager::clearWorldCache);
         runSafely("清理任务缓存", TaskDataManager::clearWorldCache);
         runSafely("清理随记本缓存", StoryBookDataManager::clearWorldCache);
         runSafely("清理 NPC 关系缓存", NpcRelationManager::clearWorldCache);
         runSafely("清理复活信息缓存", RevivalInfoManager::clearWorldCache);
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
+    }
+
+    private static boolean runSaveSafely(String actionName, SaveAction action) {
+        try {
+            if (!action.save()) {
+                DreamingFishCore.LOGGER.error("{}失败，保留缓存等待重试", actionName);
+                return false;
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.error("{}失败", actionName, exception);
+            return false;
+        }
     }
 
     private static void runSafely(String actionName, Runnable action) {
@@ -112,5 +153,10 @@ public final class WorldDataLifecycleEvents {
         } catch (RuntimeException exception) {
             DreamingFishCore.LOGGER.error("{}失败", actionName, exception);
         }
+    }
+
+    @FunctionalInterface
+    private interface SaveAction {
+        boolean save();
     }
 }

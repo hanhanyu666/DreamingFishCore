@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.LoadingTips;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -48,19 +48,15 @@ public abstract class ModScreenBackgroundMixin {
             dreamingFishCore$genericTip = LoadingTips.getRandomTip();
         }
 
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, screen.width, screen.height);
-        guiGraphics.fillGradient(0, 0, screen.width, screen.height, 0x88000000, 0xCC000000);
+        LoadingScreenUi.renderBackground(guiGraphics, screen.width, screen.height);
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().scale(DREAMINGFISHCORE_VIRTUAL_SIZE.uiScale, DREAMINGFISHCORE_VIRTUAL_SIZE.uiScale, 1.0f);
 
         int vw = DREAMINGFISHCORE_VIRTUAL_SIZE.virtualWidth;
         int vh = DREAMINGFISHCORE_VIRTUAL_SIZE.virtualHeight;
-        int tipX = 8;
-        int tipY = 8;
         var font = Minecraft.getInstance().font;
-        guiGraphics.drawString(font, "§e💡 提示", tipX, tipY, 0xFFFFFFFF, true);
-        guiGraphics.drawString(font, "§7" + dreamingFishCore$genericTip, tipX, tipY + 13, 0xFFAAAAAA, true);
+        LoadingScreenUi.renderTip(guiGraphics, font, dreamingFishCore$genericTip);
 
         int barMargin = 32;
         int barHeight = 6;
@@ -73,44 +69,15 @@ public abstract class ModScreenBackgroundMixin {
             statusText = "处理中";
         }
         String progressText = fakeProgress + "%";
-        guiGraphics.drawString(font, dreamingFishCore$trimToWidth(statusText, font, Math.max(20, barW - font.width(progressText) - 18)),
+        guiGraphics.drawString(font, LoadingScreenUi.trimToWidth(statusText, font,
+                        Math.max(20, barW - font.width(progressText) - 18)),
                 barX, barY - 12, 0xFFFFFFFF, true);
         guiGraphics.drawString(font, progressText, barX + barW - font.width(progressText), barY - 12, 0xFFFFFFFF, true);
 
-        dreamingFishCore$renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, DREAMINGFISHCORE_BAR_BG);
-        int fillW = barW * fakeProgress / 100;
-        if (fillW > 0) {
-            dreamingFishCore$renderRoundedBar(guiGraphics, barX, barY, fillW, barHeight, DREAMINGFISHCORE_ACCENT_BLUE);
-            if (fillW > 2) {
-                guiGraphics.fill(barX + 2, barY, barX + fillW - 2, barY + 1, DREAMINGFISHCORE_BAR_HIGHLIGHT);
-            }
-        }
+        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
+                DREAMINGFISHCORE_BAR_BG, DREAMINGFISHCORE_ACCENT_BLUE, DREAMINGFISHCORE_BAR_HIGHLIGHT);
 
         guiGraphics.pose().popPose();
     }
 
-    @Unique
-    private static void dreamingFishCore$renderRoundedBar(GuiGraphics guiGraphics, int x, int y, int w, int h, int color) {
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        int radius = h >= 6 ? h / 3 : 1;
-        int innerHeight = Math.max(1, h - 2);
-        int left = x + radius;
-        int right = x + w - radius;
-        if (right > left) {
-            guiGraphics.fill(left, y, right, y + h, color);
-        }
-        guiGraphics.fill(x, y + 1, x + radius, y + 1 + innerHeight, color);
-        guiGraphics.fill(x + w - radius, y + 1, x + w, y + 1 + innerHeight, color);
-    }
-
-    @Unique
-    private static String dreamingFishCore$trimToWidth(String text, net.minecraft.client.gui.Font font, int maxWidth) {
-        if (text == null || font.width(text) <= maxWidth) {
-            return text == null ? "" : text;
-        }
-        String ellipsis = "...";
-        return font.plainSubstrByWidth(text, Math.max(0, maxWidth - font.width(ellipsis))) + ellipsis;
-    }
 }

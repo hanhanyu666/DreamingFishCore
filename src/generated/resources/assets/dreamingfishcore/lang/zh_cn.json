@@ -12,5 +12,9 @@
   "item.dreamingfishcore.revival_charm": "复活护符",
   "item.dreamingfishcore.story_book": "随记本",
   "itemGroup.blueprint.tab": "梦鱼蓝图",
-  "itemGroup.dreamingfishcore.tab": "DreamingfishCore"
+  "itemGroup.dreamingfishcore.tab": "DreamingfishCore",
+  "key.categories.dreamingfishcore": "梦屿核心",
+  "key.dreamingfishcore.fps_marker": "FPS 标点",
+  "key.dreamingfishcore.open_screen_o": "打开信息面板",
+  "key.dreamingfishcore.open_terminal_u": "打开服务器终端"
 }
