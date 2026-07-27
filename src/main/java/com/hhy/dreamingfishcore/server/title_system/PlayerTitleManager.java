@@ -28,6 +28,6 @@ public class PlayerTitleManager {
     public static Title getPlayerTitleClient(Player clientPlayer) {
         if (clientPlayer == null) return TitleRegistry.getDefaultTitle();
         PlayerData data = ClientCacheManager.getPlayerData(clientPlayer.getUUID());
-        return data != null ? data.getTitle() : TitleRegistry.getDefaultTitle();
+        return data != null && data.getTitle() != null ? data.getTitle() : TitleRegistry.getDefaultTitle();
     }
 }

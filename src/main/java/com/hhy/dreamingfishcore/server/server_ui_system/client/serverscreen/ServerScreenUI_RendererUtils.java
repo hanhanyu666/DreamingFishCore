@@ -635,6 +635,7 @@ public class ServerScreenUI_RendererUtils {
             case 2 -> 0xFF00FFFF;  // FISH+ - 青色
             case 3 -> 0xFF4FC3F7;  // FISH++ - 金色
             case 4 -> 0xFFFF0000;  // OPERATOR - 红色
+            case 5 -> 0xFFFFAA00;  // BUILDER FISH - 金色
             default -> 0xFF888888;
         };
     }

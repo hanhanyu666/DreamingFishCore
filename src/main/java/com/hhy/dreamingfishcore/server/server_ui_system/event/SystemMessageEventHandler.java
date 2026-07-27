@@ -205,6 +205,7 @@ public class SystemMessageEventHandler {
             case "FISH" -> "FISH";
             case "FISH+" -> "FISH+";
             case "FISH++" -> "FISH++";
+            case "BUILDER FISH" -> "BUILDER FISH";
             case "OPERATOR" -> "OPERATOR";
             default -> null;
         };
@@ -220,6 +221,7 @@ public class SystemMessageEventHandler {
             case "FISH" -> ChatFormatting.GREEN;
             case "FISH+" -> ChatFormatting.AQUA;
             case "FISH++" -> ChatFormatting.YELLOW; // 使用 YELLOW，然后通过自定义颜色覆盖为金色
+            case "BUILDER FISH" -> ChatFormatting.GOLD;
             case "OPERATOR" -> ChatFormatting.RED;
             default -> ChatFormatting.GRAY;
         };
@@ -232,7 +234,7 @@ public class SystemMessageEventHandler {
     private static Integer getRankCustomColor(Rank rank) {
         if (rank == null) return null;
         return switch (rank.getRankName()) {
-            case "FISH++" -> 0xFFAA00;  // 真正的金色
+            case "FISH++", "BUILDER FISH" -> 0xFFAA00;  // 真正的金色
             default -> null;
         };
     }
@@ -247,6 +249,7 @@ public class SystemMessageEventHandler {
             case "FISH" -> 0x55FF55;        // 绿色
             case "FISH+" -> 0x55FFFF;       // 蓝色
             case "FISH++" -> 0xFFAA00;      // 金色
+            case "BUILDER FISH" -> 0xFFAA00;
             case "OPERATOR" -> 0xFF5555;    // 红色
             default -> 0xAAAAAA;
         };

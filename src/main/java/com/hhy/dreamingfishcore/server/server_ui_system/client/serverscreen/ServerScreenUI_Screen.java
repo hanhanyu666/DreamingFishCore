@@ -12,6 +12,8 @@ import com.hhy.dreamingfishcore.server.title_system.Title;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
+import com.hhy.dreamingfishcore.server.rank_system.RankRegistry;
+import com.hhy.dreamingfishcore.server.rank_system.network.Packet_EquipPlayerRank;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -127,13 +129,13 @@ public class ServerScreenUI_Screen extends Screen {
     // ==================== 左侧灵动岛按钮 ====================
     private static final String NOTICE_UI_NAME = "梦屿广播";
     private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "🎒", "⚙️"};
-    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "背包", "设置"};
+    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "Rank 管理", "服务器成就", "服务器商店", "领地", "背包", "设置"};
     private static final int[] LEFT_BUTTON_COLORS = {
         0xFFAAAAAA,  // 个人档案 - 灰色
         0xFF55FF55,  // 帮助 - 绿色
         0xFF4FC3F7,  // 梦屿广播 - 淡蓝色
         0xFFAAFFAA,  // 故事进展 - 绿色
-        0xFF4FC3F7,  // 玩家与排行 - 金色
+        0xFFFFAA00,  // Rank 管理 - 金色
         0xFFFFFFAA,  // 服务器成就 - 黄色
         0xFF4FC3F7,  // 服务器商店 - 橙色
         0xFF4FC3F7,  // 领地 - 紫色
@@ -176,6 +178,10 @@ public class ServerScreenUI_Screen extends Screen {
     // ==================== 帮助系统数据 ====================
     private static long helpScrollOffset = 0;  // 帮助页面滚动偏移量
     private static final int HELP_LINE_HEIGHT = 18;  // 帮助页面每行高度
+
+    // ==================== Rank 管理页面 ====================
+    private final List<Rank> displayedRankOptions = new ArrayList<>();
+    private final List<int[]> rankOptionClickAreas = new ArrayList<>();
 
     private final Minecraft mc = Minecraft.getInstance();
 
@@ -777,7 +783,7 @@ public class ServerScreenUI_Screen extends Screen {
             case 2 -> renderNoticeFeedPage(guiGraphics, x, y, width, height);
             case 3 -> renderStoryTaskPage(guiGraphics, mouseX, mouseY, x, y, width, height);
             case 1 -> renderHelpTerminalPage(guiGraphics, x, y, width, height);
-            case 4 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "玩家与排行", "排行面板还在接入数据");
+            case 4 -> renderRankManagementPage(guiGraphics, mouseX, mouseY, x, y, width, height);
             case 5 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "服务器成就", "成就面板还在接入数据");
             default -> renderPlaceholderPage(guiGraphics, x, y, width, height, LEFT_BUTTON_NAMES[selectedLeftButtonIndex], "该模块将打开独立界面");
         }
@@ -851,7 +857,8 @@ public class ServerScreenUI_Screen extends Screen {
 
         tileY += tileH + gap;
         drawStatTile(guiGraphics, rightX, tileY, tileW, tileH, "蓝图", String.valueOf(ClientCacheManager.getUnlockedRecipesCount(player.getUUID())), 0xFF8EA7FF);
-        drawStatTile(guiGraphics, rightX + tileW + gap, tileY, tileW, tileH, "Rank", rank.getRankName(), getRankColor(rank.getRankLevel()));
+        drawStatTile(guiGraphics, rightX + tileW + gap, tileY, tileW, tileH, "Rank",
+            rank == RankRegistry.NO_RANK ? "未装配" : rank.getRankName(), 0xFF000000 | rank.getRankColor());
         drawStatTile(guiGraphics, rightX + (tileW + gap) * 2, tileY, tileW, tileH, "称号", title.getTitleName(), 0xFF000000 | title.getColor());
 
         int attrY = tileY + tileH + gap;
@@ -893,6 +900,75 @@ public class ServerScreenUI_Screen extends Screen {
             String.format("%.1f/100", infection), 0xFF8B5CF6);
         drawMiniBar(guiGraphics, innerX + barW + columnGap, innerY + (rowH + rowGap) * 2, barW, rowH, "分裂", respawnPoint / 100.0f,
             String.format("%.1f/%d次", respawnPoint, respawnTimes), infected ? 0xFFFF6677 : 0xFF7AA8C7);
+    }
+
+    private void renderRankManagementPage(GuiGraphics guiGraphics, int mouseX, int mouseY,
+                                          int x, int y, int width, int height) {
+        LocalPlayer player = mc.player;
+        if (player == null) return;
+
+        float virtualMouseX = mouseX / uiScale;
+        float virtualMouseY = mouseY / uiScale;
+        Rank equippedRank = PlayerRankManager.getPlayerRankClient(player);
+        Set<String> ownedRankNames = PlayerRankManager.getOwnedRankNamesClient(player);
+
+        displayedRankOptions.clear();
+        rankOptionClickAreas.clear();
+        displayedRankOptions.add(RankRegistry.NO_RANK);
+        for (Rank registeredRank : RankRegistry.getRegisteredRanks()) {
+            if (registeredRank != RankRegistry.NO_RANK && ownedRankNames.contains(registeredRank.getRankName())) {
+                displayedRankOptions.add(registeredRank);
+            }
+        }
+
+        int headerH = 48;
+        drawSoftRect(guiGraphics, x, y, width, headerH, 2, 0xFF202B36, TABLET_CARD_BORDER_COLOR);
+        guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + headerH, 0xFFFFAA00);
+        drawText(guiGraphics, "Rank 装配", x + 14, y + 9, TABLET_TEXT_COLOR);
+        String equippedText = equippedRank == RankRegistry.NO_RANK ? "当前未装配" : "当前装配: " + equippedRank.getRankName();
+        drawText(guiGraphics, equippedText, x + 14, y + 27,
+            equippedRank == RankRegistry.NO_RANK ? TABLET_MUTED_TEXT_COLOR : 0xFF000000 | equippedRank.getRankColor());
+        String ownedCountText = "已拥有 " + ownedRankNames.size();
+        drawText(guiGraphics, ownedCountText, x + width - mc.font.width(ownedCountText) - 14, y + 19, TABLET_MUTED_TEXT_COLOR);
+
+        int listY = y + headerH + 10;
+        int columns = width >= 400 ? 2 : 1;
+        int gap = 10;
+        int cardW = (width - gap * (columns - 1)) / columns;
+        int cardH = 58;
+
+        for (int index = 0; index < displayedRankOptions.size(); index++) {
+            Rank rank = displayedRankOptions.get(index);
+            int column = index % columns;
+            int row = index / columns;
+            int cardX = x + column * (cardW + gap);
+            int cardY = listY + row * (cardH + gap);
+            if (cardY + cardH > y + height) break;
+
+            boolean equipped = equippedRank.getRankName().equals(rank.getRankName());
+            boolean hovered = virtualMouseX >= cardX && virtualMouseX <= cardX + cardW
+                && virtualMouseY >= cardY && virtualMouseY <= cardY + cardH;
+            int accentColor = rank == RankRegistry.NO_RANK ? 0xFF8B96A3 : 0xFF000000 | rank.getRankColor();
+            int backgroundColor = equipped ? 0xFF2D3741 : (hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR);
+            drawSoftRect(guiGraphics, cardX, cardY, cardW, cardH, 2, backgroundColor,
+                equipped || hovered ? accentColor : TABLET_CARD_BORDER_COLOR);
+            guiGraphics.fill(RenderType.gui(), cardX, cardY, cardX + 4, cardY + cardH, accentColor);
+
+            String rankName = rank == RankRegistry.NO_RANK ? "未装配" : rank.getRankName();
+            drawText(guiGraphics, rankName, cardX + 14, cardY + 12, accentColor);
+            drawText(guiGraphics, rank == RankRegistry.NO_RANK ? "隐藏聊天与展示中的 Rank" : "已拥有",
+                cardX + 14, cardY + 34, TABLET_MUTED_TEXT_COLOR);
+
+            String actionText = equipped ? "已装配" : "装配";
+            int actionW = mc.font.width(actionText) + 14;
+            int actionX = cardX + cardW - actionW - 10;
+            drawSoftRect(guiGraphics, actionX, cardY + 19, actionW, 20, 2,
+                equipped ? 0x332E9D68 : 0x3324313E, equipped ? 0xFF50D890 : accentColor);
+            drawCenteredText(guiGraphics, actionText, actionX + actionW / 2, cardY + 25,
+                equipped ? 0xFF50D890 : TABLET_TEXT_COLOR);
+
+            rankOptionClickAreas.add(new int[]{cardX, cardY, cardX + cardW, cardY + cardH});
+        }
     }
 
     private void renderStoryTaskPage(GuiGraphics guiGraphics, int mouseX, int mouseY, int x, int y, int width, int height) {
@@ -2063,6 +2139,24 @@ public class ServerScreenUI_Screen extends Screen {
             }
         }
 
+        if (selectedLeftButtonIndex == 4) {
+            int optionCount = Math.min(displayedRankOptions.size(), rankOptionClickAreas.size());
+            for (int index = 0; index < optionCount; index++) {
+                int[] area = rankOptionClickAreas.get(index);
+                if (virtualMouseX >= area[0] && virtualMouseX <= area[2]
+                        && virtualMouseY >= area[1] && virtualMouseY <= area[3]) {
+                    Rank selectedRank = displayedRankOptions.get(index);
+                    Rank currentRank = mc.player == null
+                        ? RankRegistry.NO_RANK
+                        : PlayerRankManager.getPlayerRankClient(mc.player);
+                    if (!currentRank.getRankName().equals(selectedRank.getRankName())) {
+                        DreamingFishCore_NetworkManager.sendToServer(new Packet_EquipPlayerRank(selectedRank.getRankName()));
+                    }
+                    return true;
+                }
+            }
+        }
+
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -2085,8 +2179,7 @@ public class ServerScreenUI_Screen extends Screen {
             case 3: // 故事进展
                 // TODO: 打开故事界面
                 break;
-            case 4: // 玩家与排行
-                // 显示排行榜页面（不打开新界面）
+            case 4: // Rank 管理
                 break;
             case 5: // 服务器成就
                 // 显示成就页面（不打开新界面）

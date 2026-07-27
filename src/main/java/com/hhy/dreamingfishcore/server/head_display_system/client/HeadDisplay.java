@@ -63,6 +63,7 @@ public class HeadDisplay {
             case "FISH" -> ChatFormatting.GREEN;
             case "FISH+" -> ChatFormatting.AQUA;
             case "FISH++" -> ChatFormatting.GOLD;
+            case "BUILDER FISH" -> ChatFormatting.GOLD;
             case "OPERATOR" -> ChatFormatting.RED;
             default -> ChatFormatting.WHITE;
         };

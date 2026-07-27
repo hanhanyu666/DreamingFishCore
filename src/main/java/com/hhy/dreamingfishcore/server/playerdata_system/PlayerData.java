@@ -6,12 +6,17 @@ import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.rank_system.RankRegistry;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 public class PlayerData {
     private UUID uuid;
     private String playerName;
     private Rank rank;
+    private Set<String> ownedRanks;
     private Title title;
     private int level;
     private long currentExperience;
@@ -22,7 +27,9 @@ public class PlayerData {
     public PlayerData() {
         long now = System.currentTimeMillis();
         this.rank = RankRegistry.NO_RANK;
-        this.title = TitleRegistry.getDefaultTitle();
+        this.ownedRanks = new LinkedHashSet<>();
+        // Gson uses this constructor before hydrating persisted fields.
+        this.title = null;
         this.level = 1;
         this.currentExperience = 0;
         this.registrationTime = now;
@@ -31,11 +38,21 @@ public class PlayerData {
     }
 
     public PlayerData(ServerPlayer player) {
+        this(player.getUUID(), player.getScoreboardName(), TitleRegistry.getDefaultTitle());
+    }
+
+    public PlayerData(UUID uuid, String playerName) {
+        this(uuid, playerName, TitleRegistry.getDefaultTitle());
+    }
+
+    public PlayerData(UUID uuid, String playerName, Title defaultTitle) {
         long now = System.currentTimeMillis();
-        this.uuid = player.getUUID();
-        this.playerName = player.getScoreboardName();
-        this.rank = RankRegistry.NO_RANK;
-        this.title = TitleRegistry.getDefaultTitle();
+        this.uuid = uuid;
+        this.playerName = playerName;
+        this.rank = RankRegistry.BUILDER_FISH;
+        this.ownedRanks = new LinkedHashSet<>();
+        this.ownedRanks.add(RankRegistry.BUILDER_FISH.getRankName());
+        this.title = defaultTitle;
         this.level = 1;
         this.registrationTime = now;
         this.lastLoginTime = now;  //登录时记录当前时间
@@ -46,12 +63,94 @@ public class PlayerData {
         this.uuid = uuid;
         this.playerName = playerName;
         this.rank = rank;
+        this.ownedRanks = new LinkedHashSet<>();
+        grantRank(rank);
         this.title = title;
         this.level = level;
     }
 
     public void setRank(Rank rank) {
-        this.rank = rank;
+        this.rank = rank == null ? RankRegistry.NO_RANK : RankRegistry.getRankByName(rank.getRankName());
+        grantRank(this.rank);
+    }
+
+    public boolean grantRank(Rank rank) {
+        if (rank == null || !RankRegistry.isRegistered(rank.getRankName())) {
+            return false;
+        }
+        Rank registeredRank = RankRegistry.getRankByName(rank.getRankName());
+        if (registeredRank == RankRegistry.NO_RANK) return false;
+        ensureOwnedRanks();
+        return ownedRanks.add(registeredRank.getRankName());
+    }
+
+    public boolean ownsRank(Rank rank) {
+        if (rank == null || !RankRegistry.isRegistered(rank.getRankName())) return false;
+        Rank registeredRank = RankRegistry.getRankByName(rank.getRankName());
+        if (registeredRank == RankRegistry.NO_RANK) return true;
+        ensureOwnedRanks();
+        return ownedRanks.contains(registeredRank.getRankName());
+    }
+
+    public Set<String> getOwnedRankNames() {
+        ensureOwnedRanks();
+        return Collections.unmodifiableSet(ownedRanks);
+    }
+
+    public void setOwnedRankNames(Collection<String> rankNames) {
+        this.ownedRanks = new LinkedHashSet<>();
+        if (rankNames == null) {
+            return;
+        }
+        for (String rankName : rankNames) {
+            if (RankRegistry.isRegistered(rankName)) {
+                Rank registeredRank = RankRegistry.getRankByName(rankName);
+                if (registeredRank != RankRegistry.NO_RANK) {
+                    this.ownedRanks.add(registeredRank.getRankName());
+                }
+            }
+        }
+    }
+
+    /**
+     * Migrates legacy saves that only stored the equipped Rank.
+     */
+    public boolean repairRankData() {
+        boolean repaired = ownedRanks == null;
+        ensureOwnedRanks();
+
+        Rank canonicalRank = rank == null
+                ? RankRegistry.NO_RANK
+                : RankRegistry.getRankByName(rank.getRankName());
+        if (rank == null || !canonicalRank.getRankName().equals(rank.getRankName())
+                || canonicalRank.getRankColor() != rank.getRankColor()) {
+            rank = canonicalRank;
+            repaired = true;
+        }
+        if (canonicalRank != RankRegistry.NO_RANK && ownedRanks.add(canonicalRank.getRankName())) {
+            repaired = true;
+        }
+
+        Set<String> normalizedRanks = new LinkedHashSet<>();
+        for (String rankName : ownedRanks) {
+            if (RankRegistry.isRegistered(rankName)) {
+                Rank registeredRank = RankRegistry.getRankByName(rankName);
+                if (registeredRank != RankRegistry.NO_RANK) {
+                    normalizedRanks.add(registeredRank.getRankName());
+                }
+            }
+        }
+        if (!normalizedRanks.equals(ownedRanks)) {
+            ownedRanks = normalizedRanks;
+            repaired = true;
+        }
+        return repaired;
+    }
+
+    private void ensureOwnedRanks() {
+        if (ownedRanks == null) {
+            ownedRanks = new LinkedHashSet<>();
+        }
     }
     public void setTitle(Title title) {
         this.title = title;

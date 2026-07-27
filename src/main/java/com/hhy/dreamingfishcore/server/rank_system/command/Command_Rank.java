@@ -43,14 +43,7 @@ public class Command_Rank {
     private static int executeSetRank(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer targetPlayer = EntityArgument.getPlayer(context, "target");
         String rankName = StringArgumentType.getString(context, "rankName");
-        Rank targetRank = switch (rankName.toUpperCase()) {
-            case "NO_RANK" -> RankRegistry.NO_RANK;
-            case "FISH" -> RankRegistry.FISH;
-            case "FISH+" -> RankRegistry.FISH_PLUS;
-            case "FISH++" -> RankRegistry.FISH_PLUS_PLUS;
-            case "OPERATOR" -> RankRegistry.OPERATOR;
-            default -> null;
-        };
+        Rank targetRank = RankRegistry.isRegistered(rankName) ? RankRegistry.getRankByName(rankName) : null;
 
         if (targetRank == null) {
             context.getSource().sendFailure(net.minecraft.network.chat.Component.literal("无效的等级名！"));
@@ -60,7 +53,8 @@ public class Command_Rank {
         // 使用PlayerRankManager设置等级
         PlayerRankManager.setPlayerRankServer(targetPlayer, targetRank);
         context.getSource().sendSuccess(
-                () -> net.minecraft.network.chat.Component.literal("已将玩家 " + targetPlayer.getName().getString() + " 的等级设置为：" + rankName),
+                () -> net.minecraft.network.chat.Component.literal("已授予并装配玩家 " + targetPlayer.getName().getString()
+                        + " 的 Rank：" + targetRank.getRankName()),
                 true
         );
         return 1;

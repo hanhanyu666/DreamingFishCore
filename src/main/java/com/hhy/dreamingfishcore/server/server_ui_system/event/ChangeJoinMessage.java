@@ -23,18 +23,20 @@ public class ChangeJoinMessage {
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE;   //同上
 
     // Rank专属进服消息
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
-    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_BUILDER_FISH;
 
     // Rank专属离开消息
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
-    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
+    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_BUILDER_FISH;
 
     // 静态代码块，类初始化只会执行一次
     static {
@@ -71,6 +73,10 @@ public class ChangeJoinMessage {
                 .comment("OPERATOR玩家进服消息 | 占位符：%player%=玩家名")
                 .define("join_message_operator", "§c[§cOPERATOR§c]§b鱼友§6%player%§b来和你VAN辣！");
 
+        JOIN_MESSAGE_BUILDER_FISH = configBuilder
+                .comment("BUILDER FISH玩家进服消息 | 占位符：%player%=玩家名")
+                .define("join_message_builder_fish", "§6[BUILDER FISH] §b建筑师§6%player%§b来到梦屿！");
+
         // Rank专属离开消息配置
         LEAVE_MESSAGE_NO_RANK = configBuilder
                 .comment("NO_RANK玩家离开消息 | 占位符：%player%=玩家名")
@@ -91,6 +97,10 @@ public class ChangeJoinMessage {
         LEAVE_MESSAGE_OPERATOR = configBuilder
                 .comment("OPERATOR玩家离开消息 | 占位符：%player%=玩家名")
                 .define("leave_message_operator", "§c[§cOPERATOR§c]§B鱼友§6%player%§b不想和你VAN辣！");
+
+        LEAVE_MESSAGE_BUILDER_FISH = configBuilder
+                .comment("BUILDER FISH玩家离开消息 | 占位符：%player%=玩家名")
+                .define("leave_message_builder_fish", "§6[BUILDER FISH] §b建筑师§6%player%§b离开了梦屿！");
 
         COMMON_CONFIG_SPEC = configBuilder.build();         //configbuilder又有进服消息，也有出服消息，再全部统一构建成配置规则
     }
@@ -113,6 +123,7 @@ public class ChangeJoinMessage {
             case 2 -> getConfigValue(JOIN_MESSAGE_FISH_PLUS);
             case 3 -> getConfigValue(JOIN_MESSAGE_FISH_PLUS_PLUS);
             case 4 -> getConfigValue(JOIN_MESSAGE_OPERATOR);
+            case 5 -> getConfigValue(JOIN_MESSAGE_BUILDER_FISH);
             default -> getConfigValue(JOIN_MESSAGE); // 默认消息
         };
     }
@@ -125,6 +136,7 @@ public class ChangeJoinMessage {
             case 2 -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS);
             case 3 -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS_PLUS);
             case 4 -> getConfigValue(LEAVE_MESSAGE_OPERATOR);
+            case 5 -> getConfigValue(LEAVE_MESSAGE_BUILDER_FISH);
             default -> getConfigValue(LEAVE_MESSAGE); // 默认消息
         };
     }
@@ -203,6 +215,7 @@ public class ChangeJoinMessage {
             case "FISH" -> 0x55FF55;        // 绿色
             case "FISH+" -> 0x55FFFF;       // 蓝色
             case "FISH++" -> 0xFFAA00;      // 金色
+            case "BUILDER FISH" -> 0xFFAA00;
             case "OPERATOR" -> 0xFF5555;    // 红色
             default -> 0xAAAAAA;
         };

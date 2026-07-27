@@ -38,6 +38,7 @@ public class ChangeChatEvent {
             case "FISH" -> ChatFormatting.GREEN;
             case "FISH+" -> ChatFormatting.AQUA;
             case "FISH++" -> ChatFormatting.GOLD;
+            case "BUILDER FISH" -> ChatFormatting.GOLD;
             case "OPERATOR" -> ChatFormatting.RED;
             default -> ChatFormatting.GRAY; // NO_RANK/NULL默认白色
         };

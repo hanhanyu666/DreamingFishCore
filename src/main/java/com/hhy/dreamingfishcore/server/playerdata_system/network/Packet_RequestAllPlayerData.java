@@ -75,7 +75,8 @@ public class Packet_RequestAllPlayerData implements net.minecraft.network.protoc
                             lastOnlineTime,
                             data.getRegistrationTime() > 0 ? data.getRegistrationTime() : data.getLastLoginTime(),
                             data.getLastLoginTime(),
-                            data.getTotalPlayTime()
+                            data.getTotalPlayTime(),
+                            data.getOwnedRankNames()
                     );
                     DreamingFishCore_NetworkManager.sendToClient(
                             requester,

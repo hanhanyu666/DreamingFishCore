@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.Set;
 
 /**
  * 玩家Rank数据管理器（使用全局统一存储）
@@ -13,7 +14,22 @@ import net.minecraft.world.entity.player.Player;
 public class PlayerRankManager {
     public static void setPlayerRankServer(ServerPlayer serverPlayer, Rank rank) {
         PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());
+        playerData.grantRank(rank);
         PlayerDataManager.updatePlayerData(serverPlayer, rank, playerData.getTitle(), playerData.getLevel(), playerData.getCurrentExperience());
+    }
+
+    public static boolean equipPlayerRankServer(ServerPlayer serverPlayer, Rank rank) {
+        PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());
+        Rank targetRank = rank == null ? RankRegistry.NO_RANK : rank;
+        if (!playerData.ownsRank(targetRank)) {
+            return false;
+        }
+        PlayerDataManager.updatePlayerData(serverPlayer, targetRank, playerData.getTitle(), playerData.getLevel(), playerData.getCurrentExperience());
+        return true;
+    }
+
+    public static Set<String> getOwnedRankNamesServer(ServerPlayer serverPlayer) {
+        return PlayerDataManager.getPlayerData(serverPlayer.getUUID()).getOwnedRankNames();
     }
     public static Rank getPlayerRankServer(ServerPlayer serverPlayer) {
         PlayerData playerData = PlayerDataManager.getPlayerData(serverPlayer.getUUID());
@@ -32,5 +48,11 @@ public class PlayerRankManager {
         if (clientPlayer == null) return RankRegistry.NO_RANK;
         PlayerData data = ClientCacheManager.getPlayerData(clientPlayer.getUUID());
         return data != null ? data.getRank() : RankRegistry.NO_RANK;
+    }
+
+    public static Set<String> getOwnedRankNamesClient(Player clientPlayer) {
+        if (clientPlayer == null) return Set.of();
+        PlayerData data = ClientCacheManager.getPlayerData(clientPlayer.getUUID());
+        return data == null ? Set.of() : data.getOwnedRankNames();
     }
 }
