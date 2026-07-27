@@ -19,6 +19,8 @@ import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class Packet_SyncPlayerData {
@@ -26,6 +28,7 @@ public class Packet_SyncPlayerData {
     private final String playerName;
     private final boolean isOnline;
     private final String rankName;
+    private final Set<String> ownedRankNames;
     private final String titleName;
     private final int level;
     private final long experience; // 当前等级内的经验
@@ -41,6 +44,7 @@ public class Packet_SyncPlayerData {
         this.playerName = serverPlayer.getScoreboardName();
         this.isOnline = true;
         this.rankName = PlayerRankManager.getPlayerRankServer(serverPlayer).getRankName();
+        this.ownedRankNames = new LinkedHashSet<>(data.getOwnedRankNames());
         this.titleName = PlayerTitleManager.getPlayerTitleServer(serverPlayer).getTitleName();
         this.level = PlayerLevelManager.getPlayerLevelServer(serverPlayer);
         this.experience = PlayerLevelManager.getPlayerExperienceServer(serverPlayer);
@@ -52,22 +56,25 @@ public class Packet_SyncPlayerData {
 
     // 离线玩家构造器
     public Packet_SyncPlayerData(UUID playerUUID, String playerName, String rankName, String titleName, int level, long experience, String onlineTime) {
-        this(playerUUID, playerName, false, rankName, titleName, level, experience, onlineTime, 0L, 0L, 0L);
+        this(playerUUID, playerName, false, rankName, Set.of(), titleName, level, experience, onlineTime, 0L, 0L, 0L);
     }
 
     public Packet_SyncPlayerData(UUID playerUUID, String playerName, String rankName, String titleName, int level, long experience,
-                                 String onlineTime, long registrationTime, long lastLoginTime, long totalPlayTime) {
-        this(playerUUID, playerName, false, rankName, titleName, level, experience, onlineTime,
+                                 String onlineTime, long registrationTime, long lastLoginTime, long totalPlayTime,
+                                 Set<String> ownedRankNames) {
+        this(playerUUID, playerName, false, rankName, ownedRankNames, titleName, level, experience, onlineTime,
                 registrationTime, lastLoginTime, totalPlayTime);
     }
 
-    private Packet_SyncPlayerData(UUID playerUUID, String playerName, boolean isOnline, String rankName, String titleName,
+    private Packet_SyncPlayerData(UUID playerUUID, String playerName, boolean isOnline, String rankName,
+                                  Set<String> ownedRankNames, String titleName,
                                   int level, long experience, String onlineTime, long registrationTime,
                                   long lastLoginTime, long totalPlayTime) {
         this.playerUUID = playerUUID;
         this.playerName = playerName;
         this.isOnline = isOnline;
         this.rankName = rankName;
+        this.ownedRankNames = ownedRankNames == null ? Set.of() : Set.copyOf(ownedRankNames);
         this.titleName = titleName;
         this.level = level;
         this.experience = experience;
@@ -102,6 +109,10 @@ public class Packet_SyncPlayerData {
         buf.writeUtf(packet.playerName);
         buf.writeBoolean(packet.isOnline);
         buf.writeUtf(packet.rankName);
+        buf.writeVarInt(packet.ownedRankNames.size());
+        for (String ownedRankName : packet.ownedRankNames) {
+            buf.writeUtf(ownedRankName, 64);
+        }
         buf.writeUtf(packet.titleName);
         buf.writeInt(packet.level);
         buf.writeLong(packet.experience); // 写入经验
@@ -117,6 +128,11 @@ public class Packet_SyncPlayerData {
         String playerName = buf.readUtf();
         boolean isOnline = buf.readBoolean();
         String rankName = buf.readUtf();
+        int ownedRankCount = buf.readVarInt();
+        Set<String> ownedRankNames = new LinkedHashSet<>();
+        for (int index = 0; index < ownedRankCount; index++) {
+            ownedRankNames.add(buf.readUtf(64));
+        }
         String titleName = buf.readUtf();
         int level = buf.readInt();
         long experience = buf.readLong(); // 读取经验
@@ -124,7 +140,7 @@ public class Packet_SyncPlayerData {
         long registrationTime = buf.readLong();
         long lastLoginTime = buf.readLong();
         long totalPlayTime = buf.readLong();
-        return new Packet_SyncPlayerData(uuid, playerName, isOnline, rankName, titleName, level, experience, onlineTime,
+        return new Packet_SyncPlayerData(uuid, playerName, isOnline, rankName, ownedRankNames, titleName, level, experience, onlineTime,
                 registrationTime, lastLoginTime, totalPlayTime);
     }
 
@@ -139,6 +155,7 @@ public class Packet_SyncPlayerData {
         final String safePlayerName = packet.playerName;
         final boolean safeIsOnline = packet.isOnline;
         final String safeRank = packet.rankName;
+        final Set<String> safeOwnedRanks = Set.copyOf(packet.ownedRankNames);
         final String safeTitle = packet.titleName;
         final int safeLevel = packet.level;
         final long safeExperience = packet.experience; // 添加经验
@@ -148,16 +165,17 @@ public class Packet_SyncPlayerData {
         final long safeTotalPlayTime = packet.totalPlayTime;
 
         // 主线程执行（仅分发，无客户端逻辑）
-        context.enqueueWork(() -> processOnMainThread(safeUUID, safePlayerName, safeIsOnline, safeRank, safeTitle, safeLevel,
+        context.enqueueWork(() -> processOnMainThread(safeUUID, safePlayerName, safeIsOnline, safeRank, safeOwnedRanks, safeTitle, safeLevel,
                 safeExperience, safeOnlineTime, safeRegistrationTime, safeLastLoginTime, safeTotalPlayTime));
     }
 
     //分发方法，无客户端类引用
-    private static void processOnMainThread(UUID playerUUID, String playerName, boolean isOnline, String rankName, String titleName,
+    private static void processOnMainThread(UUID playerUUID, String playerName, boolean isOnline, String rankName,
+                                            Set<String> ownedRankNames, String titleName,
                                             int level, long experience, String onlineTime, long registrationTime,
                                             long lastLoginTime, long totalPlayTime) {
         //用SafeRunnable隔离客户端逻辑，服务器端仅加载接口，不加载实现
-        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName,
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName, ownedRankNames,
                 titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime));
     }
 
@@ -168,6 +186,7 @@ public class Packet_SyncPlayerData {
         private final String playerName;
         private final boolean isOnline;
         private final String rankName;
+        private final Set<String> ownedRankNames;
         private final String titleName;
         private final int level;
         private final long experience; // 添加经验字段
@@ -176,13 +195,15 @@ public class Packet_SyncPlayerData {
         private final long lastLoginTime;
         private final long totalPlayTime;
 
-        public ClientSyncRunnable(UUID playerUUID, String playerName, boolean isOnline, String rankName, String titleName,
+        public ClientSyncRunnable(UUID playerUUID, String playerName, boolean isOnline, String rankName,
+                                  Set<String> ownedRankNames, String titleName,
                                   int level, long experience, String onlineTime, long registrationTime,
                                   long lastLoginTime, long totalPlayTime) {
             this.playerUUID = playerUUID;
             this.playerName = playerName;
             this.isOnline = isOnline;
             this.rankName = rankName;
+            this.ownedRankNames = Set.copyOf(ownedRankNames);
             this.titleName = titleName;
             this.level = level;
             this.experience = experience;
@@ -194,14 +215,15 @@ public class Packet_SyncPlayerData {
 
         @Override
         public void run() {
-            syncPlayerDataOnClient(playerUUID, playerName, isOnline, rankName, titleName, level, experience, onlineTime,
+            syncPlayerDataOnClient(playerUUID, playerName, isOnline, rankName, ownedRankNames, titleName, level, experience, onlineTime,
                     registrationTime, lastLoginTime, totalPlayTime);
         }
     }
 
     // 客户端方法
     @OnlyIn(Dist.CLIENT)
-    private static void syncPlayerDataOnClient(UUID playerUUID, String playerName, boolean isOnline, String rankName, String titleName,
+    private static void syncPlayerDataOnClient(UUID playerUUID, String playerName, boolean isOnline, String rankName,
+                                               Set<String> ownedRankNames, String titleName,
                                                int level, long experience, String onlineTime, long registrationTime,
                                                long lastLoginTime, long totalPlayTime) {
         try {
@@ -237,6 +259,8 @@ public class Packet_SyncPlayerData {
             PlayerLevelManager.setPlayerLevelClient(targetPlayer, level);
             PlayerLevelManager.setPlayerExperienceClient(targetPlayer, experience); // 同步经验
             PlayerData cachedData = com.hhy.dreamingfishcore.client.cache.ClientCacheManager.getOrCreatePlayerData(playerUUID);
+            cachedData.setOwnedRankNames(ownedRankNames);
+            cachedData.setRank(rank);
             cachedData.setRegistrationTime(registrationTime);
             cachedData.setLastLoginTime(lastLoginTime);
             cachedData.setTotalPlayTime(totalPlayTime);

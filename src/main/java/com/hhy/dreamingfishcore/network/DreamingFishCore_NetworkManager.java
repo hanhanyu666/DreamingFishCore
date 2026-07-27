@@ -19,6 +19,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.netwo
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.network.Packet_SyncLimbInjury;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.network.*;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.*;
+import com.hhy.dreamingfishcore.server.rank_system.network.Packet_EquipPlayerRank;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
 import net.minecraft.resources.ResourceLocation;
@@ -31,8 +32,8 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public final class DreamingFishCore_NetworkManager {
-    // Protocol 5 replaces the legacy Tip packet with one structured notification packet.
-    private static final String PROTOCOL_VERSION = "5";
+    // Protocol 6 synchronizes owned Ranks and supports server-validated loadout changes.
+    private static final String PROTOCOL_VERSION = "6";
 
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(DreamingFishCore.MODID, "network"),
@@ -60,6 +61,7 @@ public final class DreamingFishCore_NetworkManager {
         INSTANCE.registerMessage(id++, Packet_OnlinePlayerCountRequest.class, Packet_OnlinePlayerCountRequest::encode, Packet_OnlinePlayerCountRequest::decode, Packet_OnlinePlayerCountRequest::handle, serverbound());
         INSTANCE.registerMessage(id++, Packet_OnlinePlayerCountResponse.class, Packet_OnlinePlayerCountResponse::encode, Packet_OnlinePlayerCountResponse::decode, Packet_OnlinePlayerCountResponse::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncPlayerData.class, Packet_SyncPlayerData::encode, Packet_SyncPlayerData::decode, Packet_SyncPlayerData::handle, clientbound());
+        INSTANCE.registerMessage(id++, Packet_EquipPlayerRank.class, Packet_EquipPlayerRank::encode, Packet_EquipPlayerRank::decode, Packet_EquipPlayerRank::handle, serverbound());
         INSTANCE.registerMessage(id++, Packet_SyncFullTaskData.class, Packet_SyncFullTaskData::encode, Packet_SyncFullTaskData::decode, Packet_SyncFullTaskData::handle, clientbound());
         INSTANCE.registerMessage(id++, Packet_SyncCompleteTask.class, Packet_SyncCompleteTask::encode, Packet_SyncCompleteTask::decode, Packet_SyncCompleteTask::handle, serverbound());
         INSTANCE.registerMessage(id++, Packet_CantRun.class, Packet_CantRun::encode, Packet_CantRun::decode, Packet_CantRun::handle, clientbound());

@@ -172,7 +172,7 @@ public class ServerScreenUI_PageRenderer {
      */
     public void renderRankBox(GuiGraphics guiGraphics, LocalPlayer player, int boxX, int boxY, int boxWidth, int mouseX, int mouseY, float uiScale) {
         Rank rank = PlayerRankManager.getPlayerRankClient(player);
-        int rankColor = getRankColor(rank.getRankLevel());
+        int rankColor = 0xFF000000 | rank.getRankColor();
 
         int innerMargin = 10;
         int lineHeight = mc.font.lineHeight;
@@ -186,7 +186,8 @@ public class ServerScreenUI_PageRenderer {
         drawGameCard(guiGraphics, boxX, boxY, boxWidth, boxHeight, CARD_RANK_GOLD, isHovered);
 
         String rankIcon = "🏆 ";
-        String rankText = rank.getRankName();
+        String rankText = rank == com.hhy.dreamingfishcore.server.rank_system.RankRegistry.NO_RANK
+            ? "未装配" : rank.getRankName();
         String fullRankText = rankIcon + rankText;
 
         drawText(guiGraphics, fullRankText, boxX + innerMargin + 4, boxY + innerMargin, rankColor);

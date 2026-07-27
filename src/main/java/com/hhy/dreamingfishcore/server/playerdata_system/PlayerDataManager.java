@@ -51,9 +51,11 @@ public class PlayerDataManager {
                     PLAYER_DATA_TYPE,
                     ConcurrentHashMap::new);
             PLAYER_DATA_CACHE.putAll(loadedData);
-            dirty = repairStoredTitles(PLAYER_DATA_CACHE);
+            boolean repairedRanks = repairStoredRanks(PLAYER_DATA_CACHE);
+            boolean repairedTitles = repairStoredTitles(PLAYER_DATA_CACHE);
+            dirty = repairedRanks || repairedTitles;
             if (dirty) {
-                DreamingFishCore.LOGGER.info("已在内存中修复玩家数据的旧版称号，等待下次世界保存");
+                DreamingFishCore.LOGGER.info("已在内存中迁移玩家 Rank/称号数据，等待下次世界保存");
             }
             DreamingFishCore.LOGGER.info("玩家数据加载完成，共 {} 条", PLAYER_DATA_CACHE.size());
         } catch (Exception exception) {
@@ -176,6 +178,16 @@ public class PlayerDataManager {
                     || storedTitle.getColor() != configuredTitle.getColor()
                     || !Objects.equals(storedTitle.getTitleName(), configuredTitle.getTitleName())) {
                 playerData.setTitle(configuredTitle);
+                repaired = true;
+            }
+        }
+        return repaired;
+    }
+
+    private static boolean repairStoredRanks(Map<UUID, PlayerData> allPlayerData) {
+        boolean repaired = false;
+        for (PlayerData playerData : allPlayerData.values()) {
+            if (playerData != null && playerData.repairRankData()) {
                 repaired = true;
             }
         }

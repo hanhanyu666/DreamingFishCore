@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.server.rank_system;
 
-import net.minecraft.world.effect.MobEffects;
+import java.util.List;
+import java.util.Locale;
 
 public class RankRegistry {
     //5个等级
@@ -29,17 +30,42 @@ public class RankRegistry {
     public static final Rank OPERATOR = new Rank(
             "OPERATOR", 4, 0xFF5555
     );
+    public static final Rank BUILDER_FISH = new Rank(
+            "BUILDER FISH", 5, 0xFFAA00
+    );
+
+    private static final List<Rank> REGISTERED_RANKS = List.of(
+            NO_RANK, FISH, FISH_PLUS, FISH_PLUS_PLUS, OPERATOR, BUILDER_FISH
+    );
 
     // 按名称查找
     public static Rank getRankByName(String name) {
-        return switch (name) {
+        if (name == null) {
+            return NO_RANK;
+        }
+        return switch (name.trim().toUpperCase(Locale.ROOT)) {
             case "NO_RANK" -> NO_RANK;
             case "FISH" -> FISH;
             case "FISH+" -> FISH_PLUS;
             case "FISH++" -> FISH_PLUS_PLUS;
             case "OPERATOR" -> OPERATOR;
+            case "BUILDER FISH", "BUILDER_FISH" -> BUILDER_FISH;
             default -> NO_RANK;
         };
+    }
+
+    public static boolean isRegistered(String name) {
+        if (name == null) {
+            return false;
+        }
+        String normalizedName = name.trim().toUpperCase(Locale.ROOT);
+        return REGISTERED_RANKS.stream()
+                .anyMatch(rank -> rank.getRankName().equals(normalizedName)
+                        || (rank == BUILDER_FISH && "BUILDER_FISH".equals(normalizedName)));
+    }
+
+    public static List<Rank> getRegisteredRanks() {
+        return REGISTERED_RANKS;
     }
 
     // 按等级查找
@@ -50,6 +76,7 @@ public class RankRegistry {
             case 2 -> FISH_PLUS;
             case 3 -> FISH_PLUS_PLUS;
             case 4 -> OPERATOR;
+            case 5 -> BUILDER_FISH;
             default -> NO_RANK;
         };
     }

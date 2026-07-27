@@ -69,7 +69,8 @@ public class Packet_RequestAllPlayerData {
                             lastOnlineTime,
                             data.getRegistrationTime() > 0 ? data.getRegistrationTime() : data.getLastLoginTime(),
                             data.getLastLoginTime(),
-                            data.getTotalPlayTime()
+                            data.getTotalPlayTime(),
+                            data.getOwnedRankNames()
                     );
                     DreamingFishCore_NetworkManager.INSTANCE.send(
                             PacketDistributor.PLAYER.with(() -> requester),

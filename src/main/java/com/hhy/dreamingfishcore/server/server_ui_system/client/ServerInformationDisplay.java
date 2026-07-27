@@ -614,6 +614,7 @@ public class ServerInformationDisplay {
             case "FISH" -> 0xFF55FF55;
             case "FISH+" -> 0xFF55FFFF;
             case "FISH++" -> 0xFFFFAA00;  // 金色（与 SystemMessage 保持一致）
+            case "BUILDER FISH" -> 0xFFFFAA00;
             case "OPERATOR" -> 0xFFFF5555;
             default -> 0xAAAAAA;
         };
