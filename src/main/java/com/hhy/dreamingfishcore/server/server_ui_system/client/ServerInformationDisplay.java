@@ -10,7 +10,6 @@ import com.hhy.dreamingfishcore.server.title_system.TitleRegistry;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay;
-import com.hhy.dreamingfishcore.server.notice_system.client.tips.TipDisplayManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -104,10 +103,10 @@ public class ServerInformationDisplay {
         SHOW_UI = true;
         System.out.println("玩家进服：默认显示信息面板");
 
-        // 单人游戏发送提示消息
-        if (mc.isSingleplayer() && mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal("§e[DreamingfishCore]§f信息面板默认显示，可以按§6O§f临时关闭"));
-        }
+        // [已禁用] 进服“按 O 关闭信息面板”提示：O 键功能已禁用，不再发这条提示。
+        // if (mc.isSingleplayer() && mc.player != null) {
+        //     mc.player.sendSystemMessage(Component.literal("§e[DreamingfishCore]§f信息面板默认显示，可以按§6O§f临时关闭"));
+        // }
     }
 
     //客户端Tick，触发网络请求 =====================
@@ -175,7 +174,6 @@ public class ServerInformationDisplay {
         } else {
             Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
             systemMessageAnchor = renderCompactTopInfo(guiGraphics, font, screenWidth, screenHeight, mc, playerLevel, playerRank);
-            TipDisplayManager.setServerInfoHeight(TOP_OFFSET + font.lineHeight);
         }
 
         // ========== 第三部分：系统消息显示（玩家信息框下方）==========
@@ -319,17 +317,12 @@ public class ServerInformationDisplay {
         int currentX = TOP_OFFSET;
         int baseY = TOP_OFFSET;
 
-        // 计算服务器信息框总高度（供Tips使用）
-        int serverInfoHeight = BOX_HEIGHT;
-
         // 渲染所有小框
         for (InfoBox box : boxes) {
             renderEnhancedSmallBox(guiGraphics, font, currentX, baseY, box);
             currentX += box.boxWidth + BOX_SPACING;
         }
 
-        // 设置服务器信息高度（包含间距）
-        TipDisplayManager.setServerInfoHeight(serverInfoHeight + BOX_SPACING);
     }
 
     // 渲染右上角玩家信息框

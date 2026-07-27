@@ -182,9 +182,9 @@ public class PlayerDataManager {
         return repaired;
     }
 
-    public static void saveIfDirty(MinecraftServer server) {
+    public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty) {
-            return;
+            return true;
         }
         try {
             JsonDataStore.writeAtomic(
@@ -192,8 +192,10 @@ public class PlayerDataManager {
                     GSON,
                     PLAYER_DATA_CACHE);
             dirty = false;
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入世界玩家数据失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 
@@ -214,6 +216,14 @@ public class PlayerDataManager {
         }
     }
 
+    /**
+     * 玩家数据是否已随世界加载。
+     * 供迟到的退出事件做防御性检查。正常关服会在玩家退出后才释放缓存。
+     */
+    public static boolean isLoaded() {
+        return loaded;
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
@@ -228,6 +238,10 @@ public class PlayerDataManager {
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        // 缓存通常会保留至 ServerStoppedEvent；该检查仅保护异常的迟到事件。
+        if (!loaded) {
+            return;
+        }
         if (event.getEntity() instanceof ServerPlayer player) {
             PlayerData data = getPlayerData(player.getUUID());
             long onlineTime = System.currentTimeMillis() - data.getLastLoginTime();

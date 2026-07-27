@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.UiBackgroundRenderer;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,8 +13,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -170,8 +168,10 @@ public abstract class DisconnectedScreenMixin extends Screen {
     private void renderCustomScreen(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 每帧重新计算虚拟尺寸（支持窗口大小变化）
         VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
+        dreamingFishCore$updateReturnButtonBounds();
 
         // ========== 背景（使用屏幕坐标） ==========
+        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
         guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
 
         // ========== 应用虚拟坐标缩放 ==========
@@ -236,6 +236,24 @@ public abstract class DisconnectedScreenMixin extends Screen {
         if (dreamingFishCore$returnButton != null) {
             dreamingFishCore$returnButton.render(guiGraphics, mouseX, mouseY, partialTick);
         }
+    }
+
+    @Unique
+    private void dreamingFishCore$updateReturnButtonBounds() {
+        if (dreamingFishCore$returnButton == null) {
+            return;
+        }
+
+        int centerX = virtualSize.virtualWidth / 2;
+        int centerY = virtualSize.virtualHeight / 2;
+        int boxX = centerX - 420 / 2;
+        int boxY = centerY - 200 / 2;
+        float scale = virtualSize.uiScale;
+
+        dreamingFishCore$returnButton.setX((int) ((boxX + 20) * scale));
+        dreamingFishCore$returnButton.setY((int) ((boxY + 160) * scale));
+        dreamingFishCore$returnButton.setWidth((int) (380 * scale));
+        dreamingFishCore$returnButton.setHeight((int) (24 * scale));
     }
 
     /**

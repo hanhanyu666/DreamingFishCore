@@ -31,6 +31,8 @@ public class StoryTaskData {
     private long endTime;
     /** 进入所属阶段时，是否自动将该任务发布到世界。 */
     private boolean publishedByDefault;
+    /** 可选的任务地点 ID；空字符串表示该任务不依赖固定地点。 */
+    private String locationId = "";
 
     // 以下字段只是某一次查询生成的“视图”，不属于配置文件，也不直接持久化。
     private transient boolean published;
@@ -67,6 +69,7 @@ public class StoryTaskData {
     StoryTaskData copyForView() {
         StoryTaskData copy = new StoryTaskData(taskKey, taskId, taskName, taskContent, startTime, endTime);
         copy.publishedByDefault = publishedByDefault;
+        copy.locationId = locationId;
         copy.published = published;
         copy.completed = completed;
         copy.failed = failed;
@@ -89,6 +92,11 @@ public class StoryTaskData {
         }
         if (startTime < 0L || endTime < 0L || endTime > 0L && endTime < startTime) {
             throw new IllegalStateException("故事任务时间范围非法：" + taskKey);
+        }
+        if (locationId == null) {
+            locationId = "";
+        } else if (!locationId.isBlank()) {
+            StoryWorldState.requireValidId(locationId, "任务地点");
         }
     }
 
@@ -160,6 +168,14 @@ public class StoryTaskData {
 
     public void setPublishedByDefault(boolean publishedByDefault) {
         this.publishedByDefault = publishedByDefault;
+    }
+
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId == null ? "" : locationId;
     }
 
     public boolean isTaskState() {

@@ -37,6 +37,8 @@ minecraft_src/
 
 ### Minecraft Modding ###
 run/
+run-data/
+logs/
 !**/src/**/run/
 **/src/generated/**/.cache/
 repo/

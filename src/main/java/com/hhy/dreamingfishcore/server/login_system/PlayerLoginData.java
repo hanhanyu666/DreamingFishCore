@@ -41,7 +41,7 @@ public class PlayerLoginData {
      * @param plainPassword 明文密码
      */
     public void setPassword(String plainPassword) {
-        DreamingFishCore.LOGGER.info("setPassword方法开始执行，明文密码长度={}", plainPassword.length());
+        // DreamingFishCore.LOGGER.info("setPassword方法开始执行，明文密码长度={}", plainPassword.length());
 
         try {
             // 使用 UUID 作为盐值，确保每个玩家的哈希值不同
@@ -62,7 +62,7 @@ public class PlayerLoginData {
             }
 
             this.passwordAfterHash = hexString.toString();
-            DreamingFishCore.LOGGER.info("密码哈希完成，SHA-256哈希值={}", passwordAfterHash);
+            // DreamingFishCore.LOGGER.info("密码哈希完成，SHA-256哈希值={}", passwordAfterHash);
         } catch (NoSuchAlgorithmException e) {
             DreamingFishCore.LOGGER.error("SHA-256算法不可用", e);
             throw new RuntimeException("SHA-256 algorithm not available", e);

@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network;
 
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.DeathScreenDataStorage;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;

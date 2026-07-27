@@ -14,8 +14,12 @@ public final class UpdateCheckerEventHandler {
 
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        // [已禁用] 进服模组更新检查提示：建筑服不需要，不再检查更新、不再发提示。
+        // 如需恢复，去掉下面这段块注释即可。
+        /*
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             UpdateChecker.checkForUpdates(serverPlayer);
         }
+        */
     }
 }

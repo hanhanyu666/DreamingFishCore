@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSelectionList;
 import org.spongepowered.asm.mixin.Mixin;

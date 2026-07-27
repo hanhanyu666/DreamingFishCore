@@ -8,7 +8,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalIn
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.login_system.network.Packet_PlayerLoginRequest;
 import com.hhy.dreamingfishcore.server.notice_system.event.NewPlayerGuide;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -74,7 +74,8 @@ public class PlayerLoginEvent {
                 PlayerLoginDataManager.saveLoginData(playerUUID, loginData);
 
                 // 发送提示消息
-                TipPushHelper.sendTipToPlayer(player, "§a欢迎回来！已自动登录（5分钟内重连）");
+                NotificationPushHelper.sendTopLeftNotification(
+                        player, "§a欢迎回来！已自动登录（5分钟内重连）");
                 player.sendSystemMessage(Component.literal("§a欢迎回来！已自动登录（5分钟内同IP重连）"));
 
                 // 检查并发送复活提示

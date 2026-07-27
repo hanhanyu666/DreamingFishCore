@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;

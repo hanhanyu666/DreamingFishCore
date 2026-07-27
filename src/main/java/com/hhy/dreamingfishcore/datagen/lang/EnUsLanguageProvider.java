@@ -11,6 +11,10 @@ public class EnUsLanguageProvider extends LanguageProvider {
 
     @Override
     protected void addTranslations() {
+        add("key.categories.dreamingfishcore", "Dreaming Fish Core");
+        add("key.dreamingfishcore.open_screen_o", "Open Information Panel");
+        add("key.dreamingfishcore.open_terminal_u", "Open Server Terminal");
+        add("key.dreamingfishcore.fps_marker", "FPS Marker");
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "Dreamingfish Blueprints");
         add(DreamingFishCore_Items.DREAMINGFISH.get(), "Dreaming Fish");

@@ -1,9 +1,15 @@
 package com.hhy.dreamingfishcore.gameplay.playerlevel_system.network;
 
-import com.hhy.dreamingfishcore.server.notice_system.client.tips.TipDisplayManager;
+import com.hhy.dreamingfishcore.client.ui.notification.Notification;
+import com.hhy.dreamingfishcore.client.ui.notification.NotificationManager;
+import com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition;
+import com.hhy.dreamingfishcore.client.ui.notification.NotificationQueuePolicy;
+import com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme;
 import net.minecraft.network.FriendlyByteBuf;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.network.NetworkEvent;
 
 
 /**
@@ -41,9 +47,16 @@ public class Packet_LevelUpNotify implements net.minecraft.network.protocol.comm
     public static void handle(Packet_LevelUpNotify packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             // 仅在客户端执行，调用提示管理器显示文字
-            // 自定义提示文本，可携带新等级
-            String tipText = "§6您的等级提升了！\n" + "§b当前等级：" + packet.newLevel + "，您的属性增加了";
-            TipDisplayManager.addMessage(tipText, 8000); // 调用你已有的提示管理器
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                NotificationManager.show(Notification.builder()
+                        .title(Component.literal("§6您的等级提升了！"))
+                        .message(Component.literal("§b当前等级：" + packet.newLevel + "，您的属性增加了"))
+                        .position(NotificationPosition.TOP_LEFT)
+                        .theme(NotificationTheme.DEFAULT)
+                        .queuePolicy(NotificationQueuePolicy.STACK)
+                        .durationMs(8000L)
+                        .build());
+            });
         });
     }
 

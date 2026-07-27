@@ -5,7 +5,7 @@ import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
 import com.hhy.dreamingfishcore.server.notice_system.PlayerNoticeDataManager;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -40,7 +40,8 @@ public class NoticeEventHandler {
                 NoticeData latestNotice = NoticeManager.getLatestNotice();
                 if (latestNotice != null) {
                     // 发送新公告提醒（左上角提示框，持续15秒）
-                    TipPushHelper.sendTipToPlayer(player, "§b§l您有新的公告需要查看", 15000);
+                    NotificationPushHelper.sendTopLeftNotification(
+                            player, "§b§l您有新的公告需要查看", 15000);
                     DreamingFishCore.LOGGER.info("玩家 {} 有新公告 #{} 待阅读",
                         player.getScoreboardName(), maxNoticeId);
                 }

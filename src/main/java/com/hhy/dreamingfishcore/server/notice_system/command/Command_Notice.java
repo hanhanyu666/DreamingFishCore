@@ -2,7 +2,7 @@ package com.hhy.dreamingfishcore.server.notice_system.command;
 
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -100,7 +100,8 @@ public class Command_Notice {
                     true
             );
             // 向全服广播新公告提示
-            TipPushHelper.broadcastTipToAllPlayers("§b§l您有新的公告需要查看", 15000);
+            NotificationPushHelper.broadcastTopLeftNotification(
+                    "§b§l您有新的公告需要查看", 15000);
             return 1;
         } else {
             context.getSource().sendFailure(Component.literal("§c添加公告失败"));
@@ -147,6 +148,11 @@ public class Command_Notice {
     private static int executeDeleteNotice(CommandContext<CommandSourceStack> context) {
         int noticeId = IntegerArgumentType.getInteger(context, "id");
 
+        if (NoticeManager.getNoticeById(noticeId) == null) {
+            context.getSource().sendFailure(Component.literal("§c删除失败：未找到ID为 " + noticeId + " 的公告"));
+            return 0;
+        }
+
         if (NoticeManager.deleteNotice(noticeId)) {
             context.getSource().sendSuccess(
                     () -> Component.literal("§a成功删除公告 [ID:" + noticeId + "]"),
@@ -154,7 +160,7 @@ public class Command_Notice {
             );
             return 1;
         } else {
-            context.getSource().sendFailure(Component.literal("§c删除失败：未找到ID为 " + noticeId + " 的公告"));
+            context.getSource().sendFailure(Component.literal("§c删除失败：配置文件写入失败，操作已回滚"));
             return 0;
         }
     }
@@ -207,7 +213,8 @@ public class Command_Notice {
 
         // 向全服广播新公告提示
         if (count > 0) {
-            TipPushHelper.broadcastTipToAllPlayers("§b§l您有新的公告需要查看", 15000);
+            NotificationPushHelper.broadcastTopLeftNotification(
+                    "§b§l您有新的公告需要查看", 15000);
         }
 
         return 1;

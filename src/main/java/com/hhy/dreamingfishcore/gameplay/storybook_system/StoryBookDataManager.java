@@ -1,7 +1,5 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system;
 
-import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
-
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -23,12 +21,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-import java.io.File;
-import java.io.Reader;
-import java.io.Writer;
-import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +38,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class StoryBookDataManager {
 
-    private static final File FRAGMENT_DATA_FILE = new File("config/dreamingfishcore/data/fragment_data.json");
+    private static final Path FRAGMENT_DATA_PATH = FMLPaths.CONFIGDIR.get()
+            .resolve(DreamingFishCore.MODID)
+            .resolve("data")
+            .resolve("fragment_data.json");
 
     // ==================== 片段配置数据 ====================
     // 片段缓存：fragmentId -> FragmentData
@@ -62,6 +61,7 @@ public class StoryBookDataManager {
     private static final Set<UUID> DIRTY_PLAYERS = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private static boolean loaded;
+    private static boolean fragmentConfigWritable;
 
     public static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -79,36 +79,6 @@ public class StoryBookDataManager {
         }
     }
 
-    // ==================== 文件操作 ====================
-
-    /**
-     * 确保片段配置文件存在
-     */
-    private static void ensureFragmentFileExists() {
-        try {
-            File parentDir = FRAGMENT_DATA_FILE.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                boolean dirCreated = parentDir.mkdirs();
-                if (dirCreated) {
-                    DreamingFishCore.LOGGER.info("片段数据目录创建成功：{}", parentDir.getPath());
-                }
-            }
-
-            if (!FRAGMENT_DATA_FILE.exists()) {
-                boolean fileCreated = FRAGMENT_DATA_FILE.createNewFile();
-                if (fileCreated) {
-                    DreamingFishCore.LOGGER.info("片段数据文件创建成功：{}", FRAGMENT_DATA_FILE.getPath());
-                    saveDefaultFragmentConfig();
-                }
-            } else if (FRAGMENT_DATA_FILE.length() == 0) {
-                DreamingFishCore.LOGGER.info("片段数据文件为空，创建默认配置");
-                saveDefaultFragmentConfig();
-            }
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("初始化片段数据文件失败", e);
-        }
-    }
-
     // ==================== 片段配置数据加载/保存 ====================
 
     /**
@@ -119,15 +89,27 @@ public class StoryBookDataManager {
         STAGE_INDEX.clear();
         CHAPTER_INDEX.clear();
 
-        try (Reader reader = Utf8JsonFileIO.openReader(FRAGMENT_DATA_FILE)) {
-            if (FRAGMENT_DATA_FILE.length() == 0) {
-                saveDefaultFragmentConfig();
+        if (Files.notExists(FRAGMENT_DATA_PATH) && !saveDefaultFragmentConfig()) {
+            return;
+        }
+
+        try {
+            if (Files.size(FRAGMENT_DATA_PATH) == 0L) {
+                fragmentConfigWritable = false;
+                DreamingFishCore.LOGGER.error("片段配置为空，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
                 return;
             }
 
-            List<FragmentData> fragmentList = GSON.fromJson(reader, FRAGMENT_LIST_TYPE);
+            List<FragmentData> fragmentList = JsonDataStore.read(
+                    FRAGMENT_DATA_PATH,
+                    GSON,
+                    FRAGMENT_LIST_TYPE,
+                    ArrayList::new);
             if (fragmentList != null) {
                 for (FragmentData fragment : fragmentList) {
+                    if (fragment == null) {
+                        continue;
+                    }
                     FRAGMENT_CACHE.put(fragment.getId(), fragment);
                     // 构建阶段索引
                     STAGE_INDEX.computeIfAbsent(fragment.getStageId(), k -> new ArrayList<>()).add(fragment);
@@ -135,9 +117,13 @@ public class StoryBookDataManager {
                     CHAPTER_INDEX.computeIfAbsent(fragment.getChapterId(), k -> new ArrayList<>()).add(fragment);
                 }
             }
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("加载片段数据失败", e);
-            saveDefaultFragmentConfig();
+            fragmentConfigWritable = true;
+        } catch (Exception exception) {
+            fragmentConfigWritable = false;
+            DreamingFishCore.LOGGER.error(
+                    "片段配置及备份读取失败，拒绝覆盖原文件：{}",
+                    FRAGMENT_DATA_PATH,
+                    exception);
         }
 
         DreamingFishCore.LOGGER.info("片段数据加载完成，共 {} 条片段，{} 个阶段，{} 个章节",
@@ -147,21 +133,27 @@ public class StoryBookDataManager {
     /**
      * 保存片段配置数据
      */
-    public static void saveFragmentData() {
-        try (Writer writer = Utf8JsonFileIO.openWriter(FRAGMENT_DATA_FILE)) {
-            List<FragmentData> fragmentList = new ArrayList<>(FRAGMENT_CACHE.values());
-            // 按ID排序
-            fragmentList.sort(Comparator.comparingInt(FragmentData::getId));
-            GSON.toJson(fragmentList, writer);
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("保存片段数据失败", e);
+    public static boolean saveFragmentData() {
+        if (!fragmentConfigWritable) {
+            DreamingFishCore.LOGGER.error("片段配置未安全加载，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
+            return false;
+        }
+
+        List<FragmentData> fragmentList = new ArrayList<>(FRAGMENT_CACHE.values());
+        fragmentList.sort(Comparator.comparingInt(FragmentData::getId));
+        try {
+            JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, fragmentList);
+            return true;
+        } catch (Exception exception) {
+            DreamingFishCore.LOGGER.error("保存片段数据失败：{}", FRAGMENT_DATA_PATH, exception);
+            return false;
         }
     }
 
     /**
      * 保存默认片段配置
      */
-    private static void saveDefaultFragmentConfig() {
+    private static boolean saveDefaultFragmentConfig() {
         List<FragmentData> defaultFragments = new ArrayList<>();
 
         // 序章片段（使用4次残页解锁）
@@ -205,11 +197,15 @@ public class StoryBookDataManager {
                 "我终于明白了真相...\n\n那些感染者...他们不是怪物。\n\n他们是在进化。\n\n如果你看到了这个，请继续往北走...那里有答案..."
         ));
 
-        try (Writer writer = Utf8JsonFileIO.openWriter(FRAGMENT_DATA_FILE)) {
-            GSON.toJson(defaultFragments, writer);
+        try {
+            JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);
+            fragmentConfigWritable = true;
             DreamingFishCore.LOGGER.info("默认片段配置已保存");
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("保存默认片段配置失败", e);
+            return true;
+        } catch (Exception exception) {
+            fragmentConfigWritable = false;
+            DreamingFishCore.LOGGER.error("保存默认片段配置失败：{}", FRAGMENT_DATA_PATH, exception);
+            return false;
         }
     }
 
@@ -219,7 +215,6 @@ public class StoryBookDataManager {
      * 加载当前世界的玩家随记本数据。片段定义仍从全局配置加载。
      */
     public static void loadWorldData(MinecraftServer server) {
-        ensureFragmentFileExists();
         loadFragmentData();
         PLAYER_DATA_CACHE.clear();
         DIRTY_PLAYERS.clear();
@@ -247,9 +242,9 @@ public class StoryBookDataManager {
     /**
      * 只在玩家随记本数据发生变化时保存。
      */
-    public static void saveIfDirty(MinecraftServer server) {
+    public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || DIRTY_PLAYERS.isEmpty()) {
-            return;
+            return true;
         }
 
         Map<String, StoryBookData> dataMap = new HashMap<>();
@@ -260,8 +255,10 @@ public class StoryBookDataManager {
         try {
             JsonDataStore.writeAtomic(playerDataPath(server), GSON, dataMap);
             DIRTY_PLAYERS.clear();
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入世界随记本数据失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 

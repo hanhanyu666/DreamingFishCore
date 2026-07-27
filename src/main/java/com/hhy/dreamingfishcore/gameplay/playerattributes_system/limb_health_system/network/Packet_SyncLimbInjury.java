@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.network;
 
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.LimbClientInjurySync;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.sync.LimbClientInjurySync;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.api.distmarker.Dist;

@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.network;
 
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.PlayerStrengthClientSync;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.PlayerStrengthManager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.FriendlyByteBuf;

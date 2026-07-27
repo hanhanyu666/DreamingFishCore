@@ -6,9 +6,10 @@
   "item.dreamingfishcore.blueprint": "Blueprint",
   "item.dreamingfishcore.fragment_page": "Fragment Page",
   "item.dreamingfishcore.story_book": "Story Book",
-  "item.dreamingfishcore.easy_aid_kit": "Easy Aid Kit",
-  "item.dreamingfishcore.advanced_aid_kit": "Advanced Aid Kit",
-  "item.dreamingfishcore.professional_aid_kit": "Professional Aid Kit",
-  "item.dreamingfishcore.revival_charm": "Revival Charm",
-  "item.dreamingfishcore.restore_uninfected_potion": "Gene Resurgence Potion"
+  "itemGroup.blueprint.tab": "Dreamingfish Blueprints",
+  "itemGroup.dreamingfishcore.tab": "DreamingfishCore",
+  "key.categories.dreamingfishcore": "Dreaming Fish Core",
+  "key.dreamingfishcore.fps_marker": "FPS Marker",
+  "key.dreamingfishcore.open_screen_o": "Open Information Panel",
+  "key.dreamingfishcore.open_terminal_u": "Open Server Terminal"
 }

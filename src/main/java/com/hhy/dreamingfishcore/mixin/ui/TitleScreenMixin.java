@@ -2,8 +2,8 @@ package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.UiBackgroundRenderer;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;

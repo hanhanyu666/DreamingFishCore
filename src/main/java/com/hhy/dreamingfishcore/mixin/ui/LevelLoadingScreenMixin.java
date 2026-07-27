@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.LoadingTips;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -42,8 +42,7 @@ public abstract class LevelLoadingScreenMixin extends Screen {
             tip = LoadingTips.getRandomTip();
         }
 
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
-        guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
+        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().scale(vs.uiScale, vs.uiScale, 1.0f);
@@ -52,7 +51,7 @@ public abstract class LevelLoadingScreenMixin extends Screen {
         int vh = vs.virtualHeight;
 
         // 左上角提示
-        renderTip(guiGraphics);
+        LoadingScreenUi.renderTip(guiGraphics, this.font, tip);
 
         // 底部进度条
         int barMargin = 32;
@@ -68,39 +67,10 @@ public abstract class LevelLoadingScreenMixin extends Screen {
         int labelW = this.font.width(label);
         guiGraphics.drawString(this.font, label, barX + barW - labelW, barY - 12, 0xFFFFFFFF, true);
 
-        // 背景条
-        renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, BAR_BG);
-
-        // 进度条
-        int fillW = barW * progress / 100;
-        if (fillW > 0) {
-            renderRoundedBar(guiGraphics, barX, barY, fillW, barHeight, ACCENT_BLUE);
-            if (fillW > 2) {
-                guiGraphics.fill(barX + 2, barY, barX + fillW - 2, barY + 1, BAR_HIGHLIGHT);
-            }
-        }
+        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, progress,
+                BAR_BG, ACCENT_BLUE, BAR_HIGHLIGHT);
 
         guiGraphics.pose().popPose();
     }
 
-    @Unique
-    private void renderTip(GuiGraphics guiGraphics) {
-        int tipX = 8;
-        int tipY = 8;
-        String header = "§e💡 提示";
-        guiGraphics.drawString(this.font, header, tipX, tipY, 0xFFFFFFFF, true);
-        guiGraphics.drawString(this.font, "§7" + tip, tipX, tipY + 13, 0xFFAAAAAA, true);
-    }
-
-    @Unique
-    private static void renderRoundedBar(GuiGraphics g, int x, int y, int w, int h, int color) {
-        if (w <= 0 || h <= 0) return;
-        int r = h >= 6 ? h / 3 : 1;
-        int ih = Math.max(1, h - 2);
-        int left = x + r;
-        int right = x + w - r;
-        if (right > left) g.fill(left, y, right, y + h, color);
-        g.fill(x, y + 1, x + r, y + 1 + ih, color);
-        g.fill(x + w - r, y + 1, x + w, y + 1 + ih, color);
-    }
 }

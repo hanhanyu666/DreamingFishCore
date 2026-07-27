@@ -147,15 +147,17 @@ public final class PlayerLoginDataManager {
     /**
      * 保存尚未落盘的修改。保存失败时 dirty 状态保持不变，等待下次重试。
      */
-    public static synchronized void saveIfDirty() {
+    public static synchronized boolean saveIfDirty() {
         if (!loaded || !dirty) {
-            return;
+            return true;
         }
         try {
             JsonDataStore.writeAtomic(LOGIN_DATA_PATH, GSON, LOGIN_DATA_CACHE);
             dirty = false;
+            return true;
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("写入登录数据失败，保留 dirty 状态等待下次保存", exception);
+            return false;
         }
     }
 

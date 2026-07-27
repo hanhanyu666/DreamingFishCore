@@ -5,7 +5,7 @@ import com.hhy.dreamingfishcore.server.login_system.PlayerLoginData;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.server.notice_system.event.NewPlayerGuide;
-import com.hhy.dreamingfishcore.server.notice_system.TipPushHelper;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -71,10 +71,10 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
 
         DreamingFishCore.LOGGER.info("准备提交到主线程执行，loginOrRegister={}", loginOrRegister);
         context.enqueueWork(() -> {
-            DreamingFishCore.LOGGER.info("进入主线程执行，loginOrRegister={}", loginOrRegister);
+            // DreamingFishCore.LOGGER.info("进入主线程执行，loginOrRegister={}", loginOrRegister);
             if (loginOrRegister) {
                 //注册
-                DreamingFishCore.LOGGER.info("执行注册流程");
+                // DreamingFishCore.LOGGER.info("执行注册流程");
                 if (playerLoginData != null) {
                     // 已注册
                     DreamingFishCore.LOGGER.info("玩家已注册，拒绝重复注册");
@@ -93,23 +93,24 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
                 PlayerLoginData newPlayerLoginData = new PlayerLoginData(playerUUID, null, serverPlayer.getIpAddress(), null, null, GameType.SURVIVAL);
                 newPlayerLoginData.setPlayerUUID(playerUUID);
 
-                DreamingFishCore.LOGGER.info("开始哈希密码（这可能需要几秒钟）");
+                // DreamingFishCore.LOGGER.info("开始哈希密码（这可能需要几秒钟）");
                 newPlayerLoginData.setPassword(password);
-                DreamingFishCore.LOGGER.info("密码哈希完成");
+                // DreamingFishCore.LOGGER.info("密码哈希完成");
 
-                DreamingFishCore.LOGGER.info("保存登录数据到文件");
+                // DreamingFishCore.LOGGER.info("保存登录数据到文件");
                 // 标记登录验证已完成
                 newPlayerLoginData.setLoginSessionCompleted(true);
                 PlayerLoginDataManager.saveLoginData(playerUUID, newPlayerLoginData);
-                DreamingFishCore.LOGGER.info("登录数据保存完成");
+                // DreamingFishCore.LOGGER.info("登录数据保存完成");
 
                 // 使用服务器的默认游戏模式
                 GameType defaultGameMode = serverPlayer.getServer().getDefaultGameType();
                 serverPlayer.setGameMode(defaultGameMode);
-                DreamingFishCore.LOGGER.info("游戏模式已设置为: " + defaultGameMode);
+                DreamingFishCore.LOGGER.info("玩家 {} 注册成功，游戏模式: {}", serverPlayer.getName().getString(), defaultGameMode);
 
-                DreamingFishCore.LOGGER.info("发送提示消息");
-                TipPushHelper.sendTipToPlayer(serverPlayer, "§a注册成功！享受服务器吧！");
+                // DreamingFishCore.LOGGER.info("发送提示消息");
+                NotificationPushHelper.sendTopLeftNotification(
+                        serverPlayer, "§a注册成功！享受服务器吧！");
 
                 // 检查并发送复活提示
                 RevivalInfoManager.checkAndSendRevivalTip(serverPlayer);
@@ -120,7 +121,7 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
                 } else {
                     DreamingFishCore.LOGGER.info("玩家已完成过新手教程，跳过推送");
                 }
-                DreamingFishCore.LOGGER.info("发送注册结果包");
+                // DreamingFishCore.LOGGER.info("发送注册结果包");
                 sendResult(serverPlayer, true, "注册成功！");
             } else {
                 //登录
@@ -145,7 +146,8 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
                     playerLoginData.setLoginSessionCompleted(true);
                     PlayerLoginDataManager.saveLoginData(playerUUID, playerLoginData);
 
-                    TipPushHelper.sendTipToPlayer(serverPlayer, "§a登录成功！欢迎回来！");
+                    NotificationPushHelper.sendTopLeftNotification(
+                            serverPlayer, "§a登录成功！欢迎回来！");
 
                     // 检查并发送复活提示
                     RevivalInfoManager.checkAndSendRevivalTip(serverPlayer);

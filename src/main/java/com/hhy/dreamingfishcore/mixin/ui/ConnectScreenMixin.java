@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.util.LoadingTips;
-import com.hhy.dreamingfishcore.client.util.UiBackgroundRenderer;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -66,15 +66,15 @@ public abstract class ConnectScreenMixin extends Screen {
         float scale = vs.uiScale;
         int vw = vs.virtualWidth;
         int vh = vs.virtualHeight;
+        dreamingFishCore$updateCancelButtonPosition();
 
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
-        guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
+        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().scale(scale, scale, 1.0f);
 
         // 左上角提示
-        renderTip(guiGraphics);
+        LoadingScreenUi.renderTip(guiGraphics, this.font, tip);
 
         // 底部进度条（循环动画）
         int barMargin = 32;
@@ -90,14 +90,8 @@ public abstract class ConnectScreenMixin extends Screen {
         int labelW = this.font.width(label);
         guiGraphics.drawString(this.font, label, barX + barW - labelW, barY - 12, 0xFFFFFFFF, true);
 
-        renderRoundedBar(guiGraphics, barX, barY, barW, barHeight, BAR_BG);
-        int fillW = barW * fakeProgress / 100;
-        if (fillW > 0) {
-            renderRoundedBar(guiGraphics, barX, barY, fillW, barHeight, ACCENT_GREEN);
-            if (fillW > 2) {
-                guiGraphics.fill(barX + 2, barY, barX + fillW - 2, barY + 1, BAR_HIGHLIGHT);
-            }
-        }
+        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
+                BAR_BG, ACCENT_GREEN, BAR_HIGHLIGHT);
 
         guiGraphics.pose().popPose();
 
@@ -108,23 +102,12 @@ public abstract class ConnectScreenMixin extends Screen {
     }
 
     @Unique
-    private void renderTip(GuiGraphics guiGraphics) {
-        int tipX = 8;
-        int tipY = 8;
-        guiGraphics.drawString(this.font, "§e💡 提示", tipX, tipY, 0xFFFFFFFF, true);
-        guiGraphics.drawString(this.font, "§7" + tip, tipX, tipY + 13, 0xFFAAAAAA, true);
-    }
-
-    @Unique
-    private static void renderRoundedBar(GuiGraphics g, int x, int y, int w, int h, int color) {
-        if (w <= 0 || h <= 0) return;
-        int r = h >= 6 ? h / 3 : 1;
-        int ih = Math.max(1, h - 2);
-        int left = x + r;
-        int right = x + w - r;
-        if (right > left) g.fill(left, y, right, y + h, color);
-        g.fill(x, y + 1, x + r, y + 1 + ih, color);
-        g.fill(x + w - r, y + 1, x + w, y + 1 + ih, color);
+    private void dreamingFishCore$updateCancelButtonPosition() {
+        if (dreamingFishCore$cancelBtn == null) {
+            return;
+        }
+        dreamingFishCore$cancelBtn.setX((int) (8 * vs.uiScale));
+        dreamingFishCore$cancelBtn.setY(this.height - (int) (50 * vs.uiScale));
     }
 
     @Unique

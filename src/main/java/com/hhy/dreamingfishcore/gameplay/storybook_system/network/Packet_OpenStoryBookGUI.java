@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookEntryViewData;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.client.Screen_StoryBookCatalog;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen.Screen_StoryBookCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.api.distmarker.Dist;

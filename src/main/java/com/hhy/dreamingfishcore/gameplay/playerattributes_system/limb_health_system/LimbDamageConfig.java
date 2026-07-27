@@ -1,17 +1,13 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system;
 
-import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-import java.io.Reader;
-import java.io.Writer;
-import java.io.IOException;
 import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +20,7 @@ import java.util.Map;
 public class LimbDamageConfig {
 
     private static final String CONFIG_FILE = "dreamingfishcore_limb_damage.json";
-    private static final Path CONFIG_PATH = Path.of("config", CONFIG_FILE);
+    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE);
 
     /**
      * 默认伤害倍率
@@ -76,19 +72,21 @@ public class LimbDamageConfig {
      * 从文件加载配置
      */
     private static void loadFromFile() {
-        try (Reader reader = Utf8JsonFileIO.openReader(CONFIG_PATH.toFile())) {
+        try {
             Type mapType = new TypeToken<Map<String, Float>>() {
             }.getType();
-            Map<String, Float> loaded = GSON.fromJson(reader, mapType);
+            Map<String, Float> loaded = JsonDataStore.read(
+                    CONFIG_PATH,
+                    GSON,
+                    mapType,
+                    HashMap::new);
 
-            if (loaded != null) {
-                multipliers.clear();
-                multipliers.putAll(DEFAULT_MULTIPLIERS); // 先填充默认值
-                multipliers.putAll(loaded); // 覆盖文件中的值
-                DreamingFishCore.LOGGER.info("肢体伤害配置已从文件加载: {}", CONFIG_PATH);
-            }
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.warn("加载肢体伤害配置文件失败: {}", e.getMessage());
+            multipliers.clear();
+            multipliers.putAll(DEFAULT_MULTIPLIERS);
+            multipliers.putAll(loaded);
+            DreamingFishCore.LOGGER.info("肢体伤害配置已从文件加载: {}", CONFIG_PATH);
+        } catch (Exception exception) {
+            DreamingFishCore.LOGGER.warn("加载肢体伤害配置文件失败: {}", exception.getMessage());
             multipliers.putAll(DEFAULT_MULTIPLIERS);
         }
     }
@@ -98,15 +96,10 @@ public class LimbDamageConfig {
      */
     public static void saveToFile() {
         try {
-            // 确保 config 目录存在
-            Files.createDirectories(Path.of("config"));
-
-            try (Writer writer = Utf8JsonFileIO.openWriter(CONFIG_PATH.toFile())) {
-                GSON.toJson(multipliers, writer);
-                DreamingFishCore.LOGGER.info("肢体伤害配置已保存到文件: {}", CONFIG_PATH);
-            }
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.warn("保存肢体伤害配置文件失败: {}", e.getMessage());
+            JsonDataStore.writeAtomic(CONFIG_PATH, GSON, multipliers);
+            DreamingFishCore.LOGGER.info("肢体伤害配置已保存到文件: {}", CONFIG_PATH);
+        } catch (Exception exception) {
+            DreamingFishCore.LOGGER.warn("保存肢体伤害配置文件失败: {}", exception.getMessage());
         }
     }
 

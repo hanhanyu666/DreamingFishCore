@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.server.server_ui_system.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import net.minecraft.network.chat.Component;
@@ -161,6 +162,11 @@ public class ChangeJoinMessage {
     // 监听玩家离开事件
     @SubscribeEvent
     public static void onPlayerLeaveServer(PlayerEvent.PlayerLoggedOutEvent event) {
+
+        // 正常关服会把缓存保留到玩家退出之后；该检查仅保护异常的迟到事件。
+        if (!PlayerDataManager.isLoaded()) {
+            return;
+        }
 
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) {
             return;

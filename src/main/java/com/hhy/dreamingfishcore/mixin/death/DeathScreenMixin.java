@@ -2,8 +2,8 @@ package com.hhy.dreamingfishcore.mixin.death;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.util.VirtualCoordinateHelper;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.DeathScreenDataStorage;
+import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_KeepInventoryRequest;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_NormalRespawnRequest;

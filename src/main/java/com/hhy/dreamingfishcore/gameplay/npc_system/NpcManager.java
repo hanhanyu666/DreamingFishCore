@@ -1,25 +1,21 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system;
 
-import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
-
-import net.minecraft.core.registries.BuiltInRegistries;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_OpenNpcDialogueGUI;
+import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-
-import java.io.File;
-import java.io.Reader;
-import java.io.Writer;
-import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -31,39 +27,67 @@ import java.util.concurrent.ConcurrentHashMap;
 public class NpcManager {
     public static final String ENTITY_NPC_ID_TAG = "DreamingFishCoreNpcId";
     private static final double MAX_INTERACTION_DISTANCE_SQR = 8.0D * 8.0D;
-    private static final File NPC_DATA_FILE = new File("config/dreamingfishcore/npc_data.json");
+    private static final Path NPC_DATA_PATH = FMLPaths.CONFIGDIR.get()
+            .resolve(DreamingFishCore.MODID)
+            .resolve("npc_data.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
     private static final Type NPC_MAP_TYPE = new TypeToken<Map<Integer, NpcData>>() {}.getType();
 
     private static Map<Integer, NpcData> npcCache = new ConcurrentHashMap<>();
+    private static boolean configWritable;
 
     public static void init() {
-        ensureFile();
         load();
     }
 
-    public static void load() {
-        ensureFile();
-        try (Reader reader = Utf8JsonFileIO.openReader(NPC_DATA_FILE)) {
-            Map<Integer, NpcData> loaded = GSON.fromJson(reader, NPC_MAP_TYPE);
-            npcCache = loaded == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(loaded);
+    public static synchronized void load() {
+        if (Files.notExists(NPC_DATA_PATH)) {
+            npcCache = new ConcurrentHashMap<>();
+            createDefaultNpc();
+            configWritable = true;
+            save();
+            return;
+        }
+
+        try {
+            if (Files.size(NPC_DATA_PATH) == 0L) {
+                configWritable = false;
+                DreamingFishCore.LOGGER.error("NPC 配置为空，保留当前内存数据并拒绝覆盖文件：{}", NPC_DATA_PATH);
+                return;
+            }
+
+            Map<Integer, NpcData> loaded = JsonDataStore.read(
+                    NPC_DATA_PATH,
+                    GSON,
+                    NPC_MAP_TYPE,
+                    ConcurrentHashMap::new);
+            npcCache = new ConcurrentHashMap<>(loaded);
+            configWritable = true;
             if (npcCache.isEmpty()) {
                 createDefaultNpc();
                 save();
             }
             DreamingFishCore.LOGGER.info("NPC数据加载完成，共 {} 个NPC", npcCache.size());
-        } catch (IOException e) {
-            npcCache = new ConcurrentHashMap<>();
-            DreamingFishCore.LOGGER.error("加载NPC数据失败", e);
+        } catch (Exception exception) {
+            configWritable = false;
+            DreamingFishCore.LOGGER.error(
+                    "NPC 配置及备份读取失败，保留当前内存数据并拒绝覆盖文件：{}",
+                    NPC_DATA_PATH,
+                    exception);
         }
     }
 
-    public static void save() {
-        ensureFile();
-        try (Writer writer = Utf8JsonFileIO.openWriter(NPC_DATA_FILE)) {
-            GSON.toJson(npcCache, writer);
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("保存NPC数据失败", e);
+    public static synchronized boolean save() {
+        if (!configWritable) {
+            DreamingFishCore.LOGGER.error("NPC 配置未安全加载，拒绝覆盖文件：{}", NPC_DATA_PATH);
+            return false;
+        }
+        try {
+            JsonDataStore.writeAtomic(NPC_DATA_PATH, GSON, npcCache);
+            return true;
+        } catch (Exception exception) {
+            DreamingFishCore.LOGGER.error("保存NPC数据失败：{}", NPC_DATA_PATH, exception);
+            return false;
         }
     }
 
@@ -210,17 +234,4 @@ public class NpcManager {
         npcCache.put(npc.getNpcId(), npc);
     }
 
-    private static void ensureFile() {
-        try {
-            File parent = NPC_DATA_FILE.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs();
-            }
-            if (!NPC_DATA_FILE.exists()) {
-                NPC_DATA_FILE.createNewFile();
-            }
-        } catch (IOException e) {
-            DreamingFishCore.LOGGER.error("初始化NPC数据文件失败", e);
-        }
-    }
 }

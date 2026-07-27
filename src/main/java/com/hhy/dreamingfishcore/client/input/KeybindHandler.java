@@ -30,11 +30,16 @@ public class KeybindHandler {
             "key.categories.dreamingfishcore"
     );
 
-    // 注册按键绑定到 Minecraft 系统
+    public static final KeyMapping FPS_MARKER_KEY = new KeyMapping(
+            "key.dreamingfishcore.fps_marker",
+            GLFW.GLFW_KEY_G,
+            "key.categories.dreamingfishcore");
+
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(INFORMATION_UI_KEY);
         event.register(TERMINAL_UI_KEY);
+        event.register(FPS_MARKER_KEY);
     }
 
     // 监听按键事件
@@ -42,7 +47,10 @@ public class KeybindHandler {
     public static class KeyInputHandler {
         @SubscribeEvent
         public static void onKeyInput(InputEvent.Key event) {
-            Minecraft mc = Minecraft.getInstance();
+            Minecraft minecraft = Minecraft.getInstance();
+            // [已禁用] O 键切换信息面板功能：建筑服不需要，按 O 不再切换、也不再发提示。
+            // 如需恢复，去掉下面这段块注释即可。
+            /*
             if (INFORMATION_UI_KEY.consumeClick()) {
                 ServerInformationDisplay.toggleUI();
                 if (mc.player != null) {
@@ -53,6 +61,7 @@ public class KeybindHandler {
                     );
                 }
             }
+            */
             if (TERMINAL_UI_KEY.consumeClick()) {
                 ServerScreenUI.toggleUI();
             }

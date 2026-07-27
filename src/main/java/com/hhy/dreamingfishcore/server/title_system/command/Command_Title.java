@@ -71,14 +71,16 @@ public class Command_Title {
             return 0;
         }
 
-        Title titleToDelete = TitleRegistry.getTitleById(titleId);
-        if (titleToDelete == null) {
+        if (!TitleConfig.containsTitleId(titleId)) {
             context.getSource().sendFailure(Component.literal("错误：不存在ID为 " + titleId + " 的称号！"));
             return 0;
         }
+        Title titleToDelete = TitleRegistry.getTitleById(titleId);
 
-        TitleConfig.removeTitleById(titleId);
-        TitleConfig.saveConfig();
+        if (!TitleConfig.removeTitleById(titleId)) {
+            context.getSource().sendFailure(Component.literal("错误：称号配置写入失败，删除操作已回滚！"));
+            return 0;
+        }
 
         context.getSource().sendSuccess(
                 () -> Component.literal("成功删除称号：" + titleToDelete.getTitleName() + "（ID=" + titleId + "）"),
