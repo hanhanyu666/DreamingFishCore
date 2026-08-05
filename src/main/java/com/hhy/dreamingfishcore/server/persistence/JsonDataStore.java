@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.server.persistence;
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -66,7 +67,7 @@ public final class JsonDataStore {
     }
 
     private static <T> T readExisting(Path path, Gson gson, Type type, Supplier<T> emptyValue) throws IOException {
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+        try (Reader reader = Utf8JsonFileIO.openReader(path)) {
             T value = gson.fromJson(reader, type);
             return value == null ? emptyValue.get() : value;
         }

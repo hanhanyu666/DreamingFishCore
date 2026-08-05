@@ -1,6 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.item.items.Item_AidKit;
+import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
+import com.hhy.dreamingfishcore.item.items.medicine.Easy_Aid_Kit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -8,11 +11,13 @@ import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
@@ -39,9 +44,30 @@ public class CustomHotbarGUI {
     private static final long HOTBAR_SCALE_DOWN_MS = 320L;
     private static final long HOTBAR_ANIMATION_TOTAL_MS =
             HOTBAR_SCALE_UP_MS + HOTBAR_ACTIVE_HOLD_MS + HOTBAR_SCALE_DOWN_MS;
+    private static final int MEDICINE_HUD_WIDTH = 76;
+    private static final int MEDICINE_HUD_HEIGHT = 26;
+    private static final int MEDICINE_HUD_GAP = 5;
+    private static final int BOTTOM_STATUS_BAR_HEIGHT = 5;
+    private static final int BOTTOM_STATUS_HOTBAR_GAP = 4;
+    private static final int MEDICINE_RING_RADIUS = 9;
+    private static final int MEDICINE_RING_THICKNESS = 3;
+    private static final int MEDICINE_PANEL_BG = 0x64060809;
+    private static final int MEDICINE_PANEL_INNER = 0x2AFFFFFF;
+    private static final int MEDICINE_RING_TRACK = 0x6850524D;
+    private static final int MEDICINE_RING_FILL = 0xFFE1E9DD;
+    private static final int MEDICINE_RING_HEAD = 0xFFFFFFFF;
+    private static final int MEDICINE_TEXT_COLOR = 0xFFECE8DD;
+    private static final int MEDICINE_DIM_TEXT_COLOR = 0xFF929891;
 
     private static int lastSelectedSlot = -1;
     private static long lastHotbarInteractionTime = 0L;
+    private static Item localMedicineUseItem = null;
+    private static InteractionHand localMedicineUseHand = InteractionHand.MAIN_HAND;
+    private static long localMedicineUseStartTime = 0L;
+    private static long localMedicineUseEndTime = 0L;
+    private static int localMedicineUseMaxActiveTicks = 0;
+    private static boolean localMedicineUsePersistent = false;
+    private static long lastMedicineInputTime = 0L;
 
     @SubscribeEvent
     public static void replaceVanillaHotbar(RenderGuiLayerEvent.Pre event) {
@@ -66,6 +92,10 @@ public class CustomHotbarGUI {
 
         Player player = mc.player;
         updateHotbarInteraction(player);
+        MedicineUseInfo medicineUseInfo = getMedicineUseInfo(player);
+        if (medicineUseInfo != null) {
+            registerHotbarInteraction();
+        }
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
         int screenWidth = mc.getWindow().getGuiScaledWidth();
@@ -85,6 +115,8 @@ public class CustomHotbarGUI {
         drawOffhandSlot(guiGraphics, mc, player, x, y);
 
         guiGraphics.pose().popPose();
+
+        drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
     }
 
     @SubscribeEvent
@@ -107,17 +139,19 @@ public class CustomHotbarGUI {
     }
 
     @SubscribeEvent
-    public static void hideVanillaSurvivalBars(RenderGuiOverlayEvent.Pre event) {
+    public static void hideVanillaSurvivalBars(RenderGuiLayerEvent.Pre event) {
         // These overlays are redrawn by the custom status HUD.
-        if (!VanillaGuiOverlay.EXPERIENCE_BAR.id().equals(event.getOverlay().id())
-                && !VanillaGuiOverlay.FOOD_LEVEL.id().equals(event.getOverlay().id())
-                && !VanillaGuiOverlay.ARMOR_LEVEL.id().equals(event.getOverlay().id())
-                && !VanillaGuiOverlay.AIR_LEVEL.id().equals(event.getOverlay().id())) {
+        if (!VanillaGuiLayers.EXPERIENCE_BAR.equals(event.getName())
+                && !VanillaGuiLayers.EXPERIENCE_LEVEL.equals(event.getName())
+                && !VanillaGuiLayers.FOOD_LEVEL.equals(event.getName())
+                && !VanillaGuiLayers.ARMOR_LEVEL.equals(event.getName())
+                && !VanillaGuiLayers.AIR_LEVEL.equals(event.getName())) {
             return;
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || !isHudVisibleScreen(mc) || mc.options.hideGui || mc.options.renderDebug
+        if (mc.player == null || !isHudVisibleScreen(mc) || mc.options.hideGui
+                || mc.getDebugOverlay().showDebugScreen()
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.SPECTATOR) {
             return;
         }
@@ -147,6 +181,16 @@ public class CustomHotbarGUI {
     public static int getAnimatedHotbarTopY(int screenHeight) {
         int scaledHeight = Math.round(HOTBAR_HEIGHT * getHotbarAnimationScale());
         return screenHeight - HOTBAR_BOTTOM_MARGIN - scaledHeight;
+    }
+
+    public static int getMedicineUseVerticalOffset() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null || mc.options.hideGui
+                || mc.getDebugOverlay().showDebugScreen()) {
+            return 0;
+        }
+
+        return 0;
     }
 
     private static int getHotbarBaseTopY(int screenHeight) {
@@ -250,7 +294,7 @@ public class CustomHotbarGUI {
         if (player.isUsingItem()) {
             ItemStack useStack = player.getUseItem();
             if (isMedicineStack(useStack)) {
-                int totalTicks = useStack.getUseDuration();
+                int totalTicks = useStack.getUseDuration(player);
                 int remainingTicks = player.getUseItemRemainingTicks();
                 if (totalTicks > 0 && remainingTicks >= 0) {
                     float progress = (totalTicks - remainingTicks) / (float) totalTicks;
@@ -276,7 +320,7 @@ public class CustomHotbarGUI {
         }
         lastMedicineInputTime = now;
 
-        int durationTicks = stack.getUseDuration();
+        int durationTicks = stack.getUseDuration(player);
         if (durationTicks <= 0) {
             durationTicks = 40;
         }
@@ -430,7 +474,7 @@ public class CustomHotbarGUI {
 
     private static int getMedicineActiveBudgetTicks(Player player, ItemStack stack) {
         if (!isAidKitStack(stack)) {
-            return Math.max(1, stack.getUseDuration());
+            return Math.max(1, stack.getUseDuration(player));
         }
 
         int maxUses = Math.max(1, getRemainingMedicineUses(player, stack));
@@ -551,5 +595,8 @@ public class CustomHotbarGUI {
         guiGraphics.fill(x + width - 2, y + 1, x + width - 1, y + 2, color);
         guiGraphics.fill(x + 1, y + height - 2, x + 2, y + height - 1, color);
         guiGraphics.fill(x + width - 2, y + height - 2, x + width - 1, y + height - 1, color);
+    }
+
+    private record MedicineUseInfo(float progress, int timeTicks, String label) {
     }
 }

@@ -102,7 +102,7 @@ public final class DeathItemStorage {
             List<ItemStack> stacks = new ArrayList<>(inventory.size());
             for (int i = 0; i < inventory.size(); i++) {
                 CompoundTag itemTag = inventory.getCompound(i);
-                ItemStack stack = ItemStack.of(itemTag);
+                ItemStack stack = ItemStack.parseOptional(player.registryAccess(), itemTag);
                 if (!stack.isEmpty()) {
                     stacks.add(stack.copy());
                 }

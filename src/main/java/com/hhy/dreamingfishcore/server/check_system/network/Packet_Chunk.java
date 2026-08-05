@@ -1,16 +1,24 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.check_system.FileInspectionSessionManager;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.Base64;
-import java.util.function.Supplier;
 
-public class Packet_Chunk {
+public class Packet_Chunk implements CustomPacketPayload {
+    public static final Type<Packet_Chunk> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_chunk"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_Chunk> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_Chunk::decode);
+
     private final String requestId;
     private final int chunkIndex;
     private final int totalChunks;
@@ -21,6 +29,11 @@ public class Packet_Chunk {
         this.chunkIndex = chunkIndex;
         this.totalChunks = totalChunks;
         this.chunkData = chunkData;
+    }
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
     public static void encode(Packet_Chunk msg, FriendlyByteBuf buf) {
@@ -39,10 +52,9 @@ public class Packet_Chunk {
         );
     }
 
-    public static void handle(Packet_Chunk msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_Chunk msg, IPayloadContext context) {
         context.enqueueWork(() -> {
-            ServerPlayer responder = context.getSender();
+            ServerPlayer responder = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
             if (responder == null || !isValidChunk(msg)) {
                 return;
             }
@@ -59,8 +71,7 @@ public class Packet_Chunk {
             if (requester == null || !requester.hasPermissions(2)) {
                 return;
             }
-            DreamingFishCore_NetworkManager.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> requester),
+            DreamingFishCore_NetworkManager.sendToClient(
                     new Packet_ChunkResponse(
                             session.requestId(),
                             session.targetName(),
@@ -70,10 +81,9 @@ public class Packet_Chunk {
                             msg.chunkIndex,
                             msg.totalChunks,
                             msg.chunkData
-                    )
+                    ), requester
             );
         });
-        context.setPacketHandled(true);
     }
 
     private static boolean isValidChunk(Packet_Chunk msg) {

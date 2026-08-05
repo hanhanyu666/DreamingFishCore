@@ -300,7 +300,8 @@ public class LimbHitCalculator {
             // ========== 双足类人怪物 ==========
             case "minecraft:zombie", "minecraft:skeleton", "minecraft:husk",
                  "minecraft:drowned", "minecraft:pillager", "minecraft:vindicator",
-                 "minecraft:villager", "minecraft:witch", "minecraft:illusioner" -> 0.62;
+                 "minecraft:villager", "minecraft:witch", "minecraft:illusioner",
+                 "dreamingfishcore:hive_zombie" -> 0.62;  // 模组的蜂巢丧尸
 
             // ========== 小僵尸 ==========
             case "minecraft:baby_zombie" -> 0.6;

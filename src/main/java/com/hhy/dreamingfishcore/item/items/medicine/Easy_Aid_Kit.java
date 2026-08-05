@@ -44,7 +44,7 @@ public class Easy_Aid_Kit extends Item {
     // 禁用原版使用流程
     @Override
     public int getUseDuration(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
-        return 0;
+        return START_DELAY_TICKS;
     }
 
     //none无原版使用动画
@@ -58,6 +58,13 @@ public class Easy_Aid_Kit extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack heldItemStack = player.getItemInHand(hand);
         if (level.isClientSide()) {
+            if (player.isUsingItem() && player.getUsedItemHand() == hand && player.getUseItem().getItem() == this) {
+                player.stopUsingItem();
+            } else if (heldItemStack.getDamageValue() < heldItemStack.getMaxDamage()
+                    && player.getHealth() < player.getMaxHealth()) {
+                player.startUsingItem(hand);
+            }
+
             //返回右键操作成功
             return InteractionResultHolder.sidedSuccess(heldItemStack, true);
         }

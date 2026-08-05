@@ -6,9 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskPlayerData;
 import com.hhy.dreamingfishcore.gameplay.task_system.client.cache.TaskClientCache;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -174,18 +172,11 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
         return new Packet_SyncFullTaskData(playerUUID, playerTaskMap, stageMap);
     }
 
-    public static void handle(Packet_SyncFullTaskData packet, Supplier<NetworkEvent.Context> ctxSupplier) {
-        NetworkEvent.Context ctx = ctxSupplier.get();
-        ctx.setPacketHandled(true);
-
-        ctx.enqueueWork(() -> {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                TaskClientCache.update(
-                        packet.getTaskPlayerData(),
-                        packet.getStoryStageData()
-                );
-            });
-        });
+    public static void handle(Packet_SyncFullTaskData packet, IPayloadContext context) {
+        context.enqueueWork(() -> TaskClientCache.update(
+                packet.getTaskPlayerData(),
+                packet.getStoryStageData()
+        ));
     }
 
     private static String safeUtf(String value) {

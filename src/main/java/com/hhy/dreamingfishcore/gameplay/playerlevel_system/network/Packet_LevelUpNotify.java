@@ -7,9 +7,7 @@ import com.hhy.dreamingfishcore.client.ui.notification.NotificationQueuePolicy;
 import com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 
 /**
@@ -46,17 +44,14 @@ public class Packet_LevelUpNotify implements net.minecraft.network.protocol.comm
     // 处理包（客户端执行：收到通知后，显示升级提示）
     public static void handle(Packet_LevelUpNotify packet, IPayloadContext context) {
         context.enqueueWork(() -> {
-            // 仅在客户端执行，调用提示管理器显示文字
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                NotificationManager.show(Notification.builder()
-                        .title(Component.literal("§6您的等级提升了！"))
-                        .message(Component.literal("§b当前等级：" + packet.newLevel + "，您的属性增加了"))
-                        .position(NotificationPosition.TOP_LEFT)
-                        .theme(NotificationTheme.DEFAULT)
-                        .queuePolicy(NotificationQueuePolicy.STACK)
-                        .durationMs(8000L)
-                        .build());
-            });
+            NotificationManager.show(Notification.builder()
+                    .title(Component.literal("§6您的等级提升了！"))
+                    .message(Component.literal("§b当前等级：" + packet.newLevel + "，您的属性增加了"))
+                    .position(NotificationPosition.TOP_LEFT)
+                    .theme(NotificationTheme.DEFAULT)
+                    .queuePolicy(NotificationQueuePolicy.STACK)
+                    .durationMs(8000L)
+                    .build());
         });
     }
 

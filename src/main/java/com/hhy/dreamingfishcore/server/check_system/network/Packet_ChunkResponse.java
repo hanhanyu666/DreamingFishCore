@@ -1,9 +1,14 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -16,9 +21,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 
-public class Packet_ChunkResponse {
+public class Packet_ChunkResponse implements CustomPacketPayload {
+    public static final Type<Packet_ChunkResponse> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_chunk_response"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_ChunkResponse> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_ChunkResponse::decode);
+
     private static final Map<String, DownloadAccumulator> DOWNLOADS = new HashMap<>();
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dreamingfishcore-chunk-save");
@@ -47,6 +56,11 @@ public class Packet_ChunkResponse {
         this.chunkData = chunkData;
     }
 
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
     public static void encode(Packet_ChunkResponse msg, FriendlyByteBuf buf) {
         buf.writeUtf(msg.requestId, FileInspectionSecurity.REQUEST_ID_LENGTH);
         buf.writeUtf(msg.targetName, 64);
@@ -71,10 +85,8 @@ public class Packet_ChunkResponse {
         );
     }
 
-    public static void handle(Packet_ChunkResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_ChunkResponse msg, IPayloadContext context) {
         context.enqueueWork(() -> EXECUTOR.execute(() -> receiveChunk(msg)));
-        context.setPacketHandled(true);
     }
 
     private static void receiveChunk(Packet_ChunkResponse msg) {

@@ -14,10 +14,10 @@ import com.hhy.dreamingfishcore.server.title_system.Title;
 import com.hhy.dreamingfishcore.server.title_system.TitleRegistry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 玩家基础数据管理器。数据在服务器启动时一次性加载，在世界生命周期内以内存缓存为准。
  */
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class PlayerDataManager {
     private static final Map<UUID, PlayerData> PLAYER_DATA_CACHE = new ConcurrentHashMap<>();
     private static final Type PLAYER_DATA_TYPE = new TypeToken<Map<UUID, PlayerData>>() {}.getType();

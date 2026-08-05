@@ -41,11 +41,10 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         final boolean safeInfected = packet.infected;
 
         context.enqueueWork(() -> processOnMainThread(safeCurrentInfection, safeInfected));
-        context.setPacketHandled(true);
     }
 
     private static void processOnMainThread(float currentInfection, boolean infected) {
-        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientRunnable(currentInfection, infected));
+        new ClientRunnable(currentInfection, infected).run();
     }
 
     @OnlyIn(Dist.CLIENT)

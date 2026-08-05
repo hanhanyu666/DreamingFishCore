@@ -39,7 +39,10 @@ public class ModItemModelProvider extends ItemModelProvider {
 
     @Override
     protected void registerModels() {
+        simpleItem(DreamingFishCore_Items.GUITAR);
         simpleItem(DreamingFishCore_Items.BLUEPRINT_ITEM);
+        withExistingParent(DreamingFishCore_Items.BLANK_BLUEPRINT.getId().getPath(), mcLoc("item/generated"))
+                .texture("layer0", modLoc("item/blueprint"));
         simpleItem(DreamingFishCore_Items.FRAGMENT_PAGE);
         simpleItem(DreamingFishCore_Items.STORY_BOOK);
         simpleItem(DreamingFishCore_Items.EASY_AID_KIT);

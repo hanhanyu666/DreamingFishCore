@@ -1,9 +1,11 @@
 package com.hhy.dreamingfishcore.item.items;
 
+import com.hhy.dreamingfishcore.common.util.ItemStackDataHelper;
 import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import com.hhy.dreamingfishcore.item.client.renderer.BlueprintItemRenderer;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -128,21 +130,21 @@ public class Item_Blueprint extends Item {
         ItemStack stack = new ItemStack(DreamingFishCore_Items.BLUEPRINT_ITEM.get());
         CompoundTag tag = new CompoundTag();
         tag.putString("unlocks_item", itemId);
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, tag);
+        ItemStackDataHelper.setTag(stack, tag);
         return stack;
     }
 
     // 获取蓝图中要解锁的物品ID
     public static String getUnlockedItemId(ItemStack stack) {
-        if (com.hhy.dreamingfishcore.utils.ItemStackDataHelper.hasTag(stack) && com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack).contains("unlocks_item")) {
-            return com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack).getString("unlocks_item");
+        if (ItemStackDataHelper.hasTag(stack) && ItemStackDataHelper.getTag(stack).contains("unlocks_item")) {
+            return ItemStackDataHelper.getTag(stack).getString("unlocks_item");
         }
         return null;
     }
 
     // 设置要解锁的物品ID到蓝图中
     public static void setUnlockedItemId(ItemStack stack, String itemId) {
-        CompoundTag tag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
+        CompoundTag tag = ItemStackDataHelper.getTag(stack);
         if (tag == null) {
             tag = new CompoundTag();
         }
@@ -150,7 +152,7 @@ public class Item_Blueprint extends Item {
 
         // 可选：添加一些额外信息
         tag.putString("blueprint_name", "制作图纸");
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, tag);
+        ItemStackDataHelper.setTag(stack, tag);
         // tag.putInt("tier", getTierForItem(itemId));
     }
 

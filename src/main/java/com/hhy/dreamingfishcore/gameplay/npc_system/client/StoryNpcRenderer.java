@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -28,7 +29,7 @@ public class StoryNpcRenderer extends MobRenderer<StoryNpcEntity, PlayerModel<St
     public ResourceLocation getTextureLocation(StoryNpcEntity entity) {
         ResourceLocation configured = getAvailableConfiguredSkin(entity);
         if (configured != null) return configured;
-        return DefaultPlayerSkin.getDefaultSkin(entity.getUUID());
+        return DefaultPlayerSkin.get(entity.getUUID()).texture();
     }
 
     /**
@@ -48,7 +49,7 @@ public class StoryNpcRenderer extends MobRenderer<StoryNpcEntity, PlayerModel<St
                        net.minecraft.client.renderer.MultiBufferSource buffer, int packedLight) {
         boolean slim = getAvailableConfiguredSkin(entity) != null
                 ? entity.isSlimModel()
-                : "slim".equals(DefaultPlayerSkin.getSkinModelName(entity.getUUID()));
+                : DefaultPlayerSkin.get(entity.getUUID()).model() == PlayerSkin.Model.SLIM;
         this.model = slim ? slimModel : wideModel;
         super.render(entity, yaw, partialTick, poseStack, buffer, packedLight);
     }

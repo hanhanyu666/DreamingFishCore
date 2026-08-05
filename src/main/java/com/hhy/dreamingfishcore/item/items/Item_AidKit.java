@@ -51,7 +51,12 @@ public class Item_AidKit extends Item {
         ItemStack heldItemStack = player.getItemInHand(hand);
 
         if (level.isClientSide()) {
-            // 客户端播放动画
+            if (player.isUsingItem() && player.getUsedItemHand() == hand && player.getUseItem().getItem() == this) {
+                player.stopUsingItem();
+            } else if (canShowUseProgress(player, heldItemStack)) {
+                player.startUsingItem(hand);
+            }
+
             player.swing(hand);
             return InteractionResultHolder.sidedSuccess(heldItemStack, true);
         }
@@ -165,11 +170,16 @@ public class Item_AidKit extends Item {
 
     @Override
     public int getUseDuration(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
-        return 0;
+        return Math.max(1, START_DELAY_TICKS);
     }
 
     @Override
     public UseAnim getUseAnimation(ItemStack stack) {
         return UseAnim.NONE;
+    }
+
+    private boolean canShowUseProgress(Player player, ItemStack stack) {
+        return stack.getDamageValue() < stack.getMaxDamage()
+                && player.getHealth() < player.getMaxHealth();
     }
 }

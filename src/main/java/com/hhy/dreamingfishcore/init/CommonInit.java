@@ -4,7 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbDamageConfig;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.file.Files;

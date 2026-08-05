@@ -3,13 +3,18 @@ package com.hhy.dreamingfishcore.server.check_system.network;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,10 +34,14 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-public class Packet_CheckResultResponse {
+public class Packet_CheckResultResponse implements CustomPacketPayload {
+    public static final Type<Packet_CheckResultResponse> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_check_result_response"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_CheckResultResponse> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_CheckResultResponse::decode);
+
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dreamingfishcore-check-result");
         thread.setDaemon(true);
@@ -54,6 +63,11 @@ public class Packet_CheckResultResponse {
         this.payload = payload;
     }
 
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
     public static void encode(Packet_CheckResultResponse msg, FriendlyByteBuf buf) {
         buf.writeUtf(msg.targetName, 64);
         buf.writeUtf(msg.targetUuid, 36);
@@ -72,10 +86,8 @@ public class Packet_CheckResultResponse {
         );
     }
 
-    public static void handle(Packet_CheckResultResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_CheckResultResponse msg, IPayloadContext context) {
         context.enqueueWork(() -> EXECUTOR.execute(() -> processResult(msg)));
-        context.setPacketHandled(true);
     }
 
     private static void processResult(Packet_CheckResultResponse msg) {

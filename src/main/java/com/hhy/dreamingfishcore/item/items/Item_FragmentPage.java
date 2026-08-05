@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.item.items;
 
+import com.hhy.dreamingfishcore.common.util.ItemStackDataHelper;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
@@ -70,22 +71,22 @@ public class Item_FragmentPage extends Item {
     }
 
     public static void setFragmentId(ItemStack stack, int fragmentId) {
-        CompoundTag rootTag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
+        CompoundTag rootTag = ItemStackDataHelper.getTag(stack);
         if (rootTag == null) {
             rootTag = new CompoundTag();
         }
         CompoundTag fragmentPageTag = rootTag.getCompound(FRAGMENT_PAGE_TAG);
         fragmentPageTag.putInt(FRAGMENT_ID_KEY, fragmentId);
         rootTag.put(FRAGMENT_PAGE_TAG, fragmentPageTag);
-        com.hhy.dreamingfishcore.utils.ItemStackDataHelper.setTag(stack, rootTag);
+        ItemStackDataHelper.setTag(stack, rootTag);
     }
 
     public static Integer getFragmentId(ItemStack stack) {
-        if (!com.hhy.dreamingfishcore.utils.ItemStackDataHelper.hasTag(stack)) {
+        if (!ItemStackDataHelper.hasTag(stack)) {
             return null;
         }
 
-        CompoundTag rootTag = com.hhy.dreamingfishcore.utils.ItemStackDataHelper.getTag(stack);
+        CompoundTag rootTag = ItemStackDataHelper.getTag(stack);
         if (rootTag == null || !rootTag.contains(FRAGMENT_PAGE_TAG)) {
             return null;
         }

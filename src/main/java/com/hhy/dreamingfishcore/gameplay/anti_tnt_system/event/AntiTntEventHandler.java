@@ -8,14 +8,15 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraftforge.common.Tags;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.event.level.BlockEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.common.Tags;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.ICancellableEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
 import java.util.UUID;
@@ -35,7 +36,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>管理员（权限等级 &gt;= 2）豁免上述所有规则，方便服主测试与维护。
  * 如需对所有人生效，删除 canBypass 判断即可。</p>
  */
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class AntiTntEventHandler {
 
     /** 踢人提示语。§c 是红色样式码。 */
@@ -57,9 +58,8 @@ public final class AntiTntEventHandler {
      * 先做反 TNT 检测（持有即踢），未踢再检查矿物玩笑提醒。</p>
      */
     @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END
-                || !(event.player instanceof ServerPlayer player)
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().isClientSide()) {
             return;
         }
@@ -94,7 +94,7 @@ public final class AntiTntEventHandler {
     }
 
     /** 统一处理右键使用 TNT：取消事件并踢人。 */
-    private static void handleUse(PlayerInteractEvent event) {
+    private static <T extends PlayerInteractEvent & ICancellableEvent> void handleUse(T event) {
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || canBypass(player)) {
             return;

@@ -98,8 +98,8 @@ public class Command_Check {
 
         source.sendSuccess(() -> Component.literal("检查请求已发送至 " + session.targetName()), false);
 
-        DreamingFishCore_NetworkManager.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
-                new Packet_Check(session.requestId(), session.actionType()));
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_Check(session.requestId(), session.actionType()), player);
 
         return Command.SINGLE_SUCCESS;
     }
@@ -131,8 +131,8 @@ public class Command_Check {
 
         source.sendSuccess(() -> Component.literal("获取请求已发送至 " + session.targetName()), false);
 
-        DreamingFishCore_NetworkManager.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
-                new Packet_Get(session.requestId(), session.actionType(), session.fileName()));
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_Get(session.requestId(), session.actionType(), session.fileName()), player);
 
         return Command.SINGLE_SUCCESS;
     }

@@ -3,11 +3,11 @@ package com.hhy.dreamingfishcore.server.update_checker_system.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.server.update_checker_system.UpdateChecker;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
+@EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class UpdateCheckerEventHandler {
     private UpdateCheckerEventHandler() {
     }

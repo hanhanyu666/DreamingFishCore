@@ -12,11 +12,11 @@ import com.hhy.dreamingfishcore.server.check_system.command.Command_Info;
 import com.hhy.dreamingfishcore.server.notice_system.command.Command_Notice;
 import com.hhy.dreamingfishcore.server.rank_system.command.Command_Rank;
 import com.hhy.dreamingfishcore.server.title_system.command.Command_Title;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID)
+@EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class DreamingFishCore_CommandManager {
     private DreamingFishCore_CommandManager() {
     }

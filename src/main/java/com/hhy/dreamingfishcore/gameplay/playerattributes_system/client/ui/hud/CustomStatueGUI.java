@@ -85,17 +85,17 @@ public class CustomStatueGUI {
     private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
     private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
     private static final ResourceLocation HEALTH_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/health_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/health_v2.png");
     private static final ResourceLocation FOOD_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/food_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/food_v2.png");
     private static final ResourceLocation ARMOR_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/armor_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/armor_v2.png");
     private static final ResourceLocation INFECTION_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/infection_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/infection_v2.png");
     private static final ResourceLocation STAMINA_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina_v2.png");
     private static final ResourceLocation COURAGE_ICON =
-            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/courage_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/courage_v2.png");
 
     // 肢体受伤标记配置（老贴图上的红色脉冲点）
     private static final int INJURY_DOT_COLOR = 0x90D64038;
@@ -167,7 +167,7 @@ public class CustomStatueGUI {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null || !CustomHotbarGUI.isHudVisibleScreen(mc) || player.isDeadOrDying()
-                || mc.options.hideGui || mc.options.renderDebug
+                || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.CREATIVE) {
             return;
         }

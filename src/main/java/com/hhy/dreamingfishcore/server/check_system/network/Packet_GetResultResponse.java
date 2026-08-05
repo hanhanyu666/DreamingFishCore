@@ -1,18 +1,27 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 
-public class Packet_GetResultResponse {
+public class Packet_GetResultResponse implements CustomPacketPayload {
+    public static final Type<Packet_GetResultResponse> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_get_result_response"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_GetResultResponse> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_GetResultResponse::decode);
+
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dreamingfishcore-file-save");
         thread.setDaemon(true);
@@ -36,6 +45,11 @@ public class Packet_GetResultResponse {
         this.payload = payload;
     }
 
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
     public static void encode(Packet_GetResultResponse msg, FriendlyByteBuf buf) {
         buf.writeUtf(msg.targetName, 64);
         buf.writeUtf(msg.targetUuid, 36);
@@ -56,10 +70,8 @@ public class Packet_GetResultResponse {
         );
     }
 
-    public static void handle(Packet_GetResultResponse msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_GetResultResponse msg, IPayloadContext context) {
         context.enqueueWork(() -> EXECUTOR.execute(() -> saveResult(msg)));
-        context.setPacketHandled(true);
     }
 
     private static void saveResult(Packet_GetResultResponse msg) {

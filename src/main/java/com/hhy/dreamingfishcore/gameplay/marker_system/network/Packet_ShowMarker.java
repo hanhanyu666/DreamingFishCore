@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.marker_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;

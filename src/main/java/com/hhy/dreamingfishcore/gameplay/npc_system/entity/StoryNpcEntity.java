@@ -37,13 +37,13 @@ public class StoryNpcEntity extends PathfinderMob {
 
     /** SynchedEntityData 是服务端到客户端的轻量状态通道，避免客户端接触 npc_data.json。 */
     @Override
-    protected void defineSynchedData() {
-        super.defineSynchedData();
-        entityData.define(NPC_ID, 0);
-        entityData.define(SKIN, "");
-        entityData.define(MODEL, "wide");
-        entityData.define(SHOW_NAME, true);
-        entityData.define(NPC_NAME, "");
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(NPC_ID, 0);
+        builder.define(SKIN, "");
+        builder.define(MODEL, "wide");
+        builder.define(SHOW_NAME, true);
+        builder.define(NPC_NAME, "");
     }
 
     public void applyNpcData(NpcData npc) {

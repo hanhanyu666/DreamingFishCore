@@ -63,6 +63,15 @@ public class ServerScreenUI_PageRenderer {
         this.leftButtonClickAreas = new int[buttonCount][4];
     }
 
+    private void drawText(GuiGraphics guiGraphics, String text, int x, int y, int color) {
+        guiGraphics.drawString(mc.font, text, x, y, color, false);
+    }
+
+    private void drawText(GuiGraphics guiGraphics, net.minecraft.network.chat.Component text,
+                          int x, int y, int color) {
+        guiGraphics.drawString(mc.font, text, x, y, color, false);
+    }
+
     // ==================== 点击区域访问方法 ====================
     public int[] getRankBoxClick() { return rankBoxClick; }
     public int[] getGoldBoxClick() { return goldBoxClick; }

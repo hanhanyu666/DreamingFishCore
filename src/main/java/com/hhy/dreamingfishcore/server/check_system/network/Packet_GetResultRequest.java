@@ -1,16 +1,24 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.check_system.FileInspectionSessionManager;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.Base64;
-import java.util.function.Supplier;
 
-public class Packet_GetResultRequest {
+public class Packet_GetResultRequest implements CustomPacketPayload {
+    public static final Type<Packet_GetResultRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_get_result_request"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_GetResultRequest> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_GetResultRequest::decode);
+
     private final String requestId;
     private final boolean success;
     private final String payload;
@@ -19,6 +27,11 @@ public class Packet_GetResultRequest {
         this.requestId = requestId;
         this.success = success;
         this.payload = payload;
+    }
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
     public static void encode(Packet_GetResultRequest msg, FriendlyByteBuf buf) {
@@ -35,10 +48,9 @@ public class Packet_GetResultRequest {
         );
     }
 
-    public static void handle(Packet_GetResultRequest msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_GetResultRequest msg, IPayloadContext context) {
         context.enqueueWork(() -> {
-            ServerPlayer responder = context.getSender();
+            ServerPlayer responder = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
             FileInspectionSessionManager.Session session = FileInspectionSessionManager.consumeSingleResult(
                     msg.requestId,
                     responder,
@@ -56,8 +68,7 @@ public class Packet_GetResultRequest {
             String payload = validSuccess
                     ? msg.payload
                     : limitMessage(msg.success ? "文件内容编码无效" : msg.payload);
-            DreamingFishCore_NetworkManager.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> requester),
+            DreamingFishCore_NetworkManager.sendToClient(
                     new Packet_GetResultResponse(
                             session.targetName(),
                             session.targetUuid(),
@@ -65,10 +76,9 @@ public class Packet_GetResultRequest {
                             session.fileName(),
                             validSuccess,
                             payload
-                    )
+                    ), requester
             );
         });
-        context.setPacketHandled(true);
     }
 
     private static boolean isValidSmallPayload(String payload) {

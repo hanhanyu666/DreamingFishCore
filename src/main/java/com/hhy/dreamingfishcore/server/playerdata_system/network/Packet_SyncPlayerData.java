@@ -180,8 +180,8 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
                                             int level, long experience, String onlineTime, long registrationTime,
                                             long lastLoginTime, long totalPlayTime) {
         //用SafeRunnable隔离客户端逻辑，服务器端仅加载接口，不加载实现
-        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName, ownedRankNames,
-                titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime));
+        new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName, ownedRankNames,
+                titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime).run();
     }
 
     //纯客户端逻辑（@OnlyIn标记，服务器完全不加载）=

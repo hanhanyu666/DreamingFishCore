@@ -1,8 +1,8 @@
 package com.hhy.dreamingfishcore.server.playerdata_system.client.cache;
 
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 
 import java.util.Map;
 import java.util.UUID;

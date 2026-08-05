@@ -5,16 +5,23 @@ import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.rank_system.RankRegistry;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
-
-import java.util.function.Supplier;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
  * Requests a Rank loadout change. Ownership is always validated on the server.
  */
-public final class Packet_EquipPlayerRank {
+public final class Packet_EquipPlayerRank implements CustomPacketPayload {
+    public static final Type<Packet_EquipPlayerRank> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "rank_system/packet_equip_player_rank"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_EquipPlayerRank> STREAM_CODEC =
+            StreamCodec.of((buffer, packet) -> encode(packet, buffer), Packet_EquipPlayerRank::decode);
+
     private final String rankName;
 
     public Packet_EquipPlayerRank(String rankName) {
@@ -29,10 +36,14 @@ public final class Packet_EquipPlayerRank {
         return new Packet_EquipPlayerRank(buffer.readUtf(64));
     }
 
-    public static void handle(Packet_EquipPlayerRank packet, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        context.enqueueWork(() -> handleServer(packet, context.getSender()));
-        context.setPacketHandled(true);
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
+    public static void handle(Packet_EquipPlayerRank packet, IPayloadContext context) {
+        context.enqueueWork(() -> handleServer(packet,
+                context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null));
     }
 
     private static void handleServer(Packet_EquipPlayerRank packet, ServerPlayer player) {

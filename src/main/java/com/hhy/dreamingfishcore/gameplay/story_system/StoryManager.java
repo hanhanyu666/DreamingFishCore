@@ -9,7 +9,7 @@ import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManage
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

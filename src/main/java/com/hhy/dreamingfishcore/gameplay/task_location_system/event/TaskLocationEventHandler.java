@@ -15,20 +15,19 @@ import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.event.entity.EntityMobGriefingEvent;
-import net.minecraftforge.event.entity.living.LivingAttackEvent;
-import net.minecraftforge.event.entity.player.AttackEntityEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.event.level.BlockEvent;
-import net.minecraftforge.event.level.ExplosionEvent;
-import net.minecraftforge.event.level.PistonEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.Event;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.entity.EntityMobGriefingEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.ExplosionEvent;
+import net.neoforged.neoforge.event.level.PistonEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Set;
 import java.util.Map;
@@ -36,7 +35,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Forge 事件层：负责选区点击和任务地点的基础地图保护。 */
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class TaskLocationEventHandler {
     /** 只记录由任务地点系统主动切换过的玩家，离开时才能安全恢复生存模式。 */
     private static final Set<UUID> FORCED_ADVENTURE_PLAYERS = ConcurrentHashMap.newKeySet();
@@ -54,9 +53,8 @@ public final class TaskLocationEventHandler {
      * 现有方块/实体事件保护仍保留，用于处理模组方块、爆炸和非标准破坏路径。</p>
      */
     @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END
-                || !(event.player instanceof ServerPlayer player)
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().isClientSide()) {
             return;
         }
@@ -239,7 +237,7 @@ public final class TaskLocationEventHandler {
 
     /** 枪械、投射物和怪物攻击最终都会经过伤害事件，剧情 NPC 因此不会被意外杀死。 */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void onNpcAttacked(LivingAttackEvent event) {
+    public static void onNpcAttacked(LivingIncomingDamageEvent event) {
         Entity target = event.getEntity();
         if (target.getPersistentData().contains(NpcManager.ENTITY_NPC_ID_TAG)
                 && TaskLocationManager.isProtected(target.level(), target.blockPosition())) {
@@ -252,7 +250,7 @@ public final class TaskLocationEventHandler {
     public static void onMobGriefing(EntityMobGriefingEvent event) {
         Entity entity = event.getEntity();
         if (TaskLocationManager.isProtected(entity.level(), entity.blockPosition())) {
-            event.setResult(Event.Result.DENY);
+            event.setCanGrief(false);
         }
     }
 

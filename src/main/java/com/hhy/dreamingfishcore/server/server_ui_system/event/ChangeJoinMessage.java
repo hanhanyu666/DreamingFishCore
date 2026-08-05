@@ -23,20 +23,20 @@ public class ChangeJoinMessage {
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE;   //同上
 
     // Rank专属进服消息
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
-    private static ForgeConfigSpec.ConfigValue<String> JOIN_MESSAGE_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_NO_RANK;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_BUILDER_FISH;
 
     // Rank专属离开消息
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
-    private static ForgeConfigSpec.ConfigValue<String> LEAVE_MESSAGE_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_BUILDER_FISH;
 
     // 静态代码块，类初始化只会执行一次
     static {

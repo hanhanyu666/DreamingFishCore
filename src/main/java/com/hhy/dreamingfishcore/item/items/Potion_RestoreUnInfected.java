@@ -6,12 +6,16 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 
 import java.util.List;
@@ -21,6 +25,7 @@ import java.util.List;
  * 使用后解除感染者身份，并将感染值重置为0
  */
 public class Potion_RestoreUnInfected extends Item {
+    private static final int USE_DURATION_TICKS = 60;
 
     public Potion_RestoreUnInfected(Properties properties) {
         super(properties);
@@ -40,9 +45,8 @@ public class Potion_RestoreUnInfected extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
 
-        // 只在服务端处理逻辑
         if (level.isClientSide) {
-            return InteractionResultHolder.success(stack);
+            return ItemUtils.startUsingInstantly(level, player, hand);
         }
 
         if (!(player instanceof ServerPlayer serverPlayer)) {
@@ -62,6 +66,30 @@ public class Potion_RestoreUnInfected extends Item {
             return InteractionResultHolder.fail(stack);
         }
 
+        return ItemUtils.startUsingInstantly(level, player, hand);
+    }
+
+    @Override
+    public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity livingEntity) {
+        if (level.isClientSide) {
+            return stack;
+        }
+
+        if (!(livingEntity instanceof ServerPlayer serverPlayer)) {
+            return stack;
+        }
+
+        PlayerAttributesData attributesData = PlayerAttributesDataManager.getPlayerAttributesData(serverPlayer.getUUID());
+        if (attributesData == null) {
+            serverPlayer.sendSystemMessage(Component.literal("§c无法获取玩家数据！"));
+            return stack;
+        }
+
+        if (!attributesData.isInfected()) {
+            serverPlayer.sendSystemMessage(Component.literal("§c你并不是感染者，无需使用此药剂！"));
+            return stack;
+        }
+
         // 解除感染状态
         attributesData.setInfected(false);
         attributesData.setCurrentInfection(0);
@@ -73,16 +101,26 @@ public class Potion_RestoreUnInfected extends Item {
         PlayerInfectionClientSync.sendInfectionDataToClient(serverPlayer, 0, false);
 
         // 消耗物品
-        if (!player.getAbilities().instabuild) {
+        if (!serverPlayer.getAbilities().instabuild) {
             stack.shrink(1);
-            player.setItemInHand(hand, stack);
         }
+        serverPlayer.awardStat(Stats.ITEM_USED.get(this));
 
         // 发送成功消息
         serverPlayer.sendSystemMessage(Component.literal("§a§l基因复苏成功！你已不再是感染者。"));
 
         DreamingFishCore.LOGGER.info("玩家 {} 使用基因复苏药剂，感染状态已解除", serverPlayer.getScoreboardName());
 
-        return InteractionResultHolder.success(stack);
+        return stack;
+    }
+
+    @Override
+    public int getUseDuration(ItemStack stack, LivingEntity entity) {
+        return USE_DURATION_TICKS;
+    }
+
+    @Override
+    public UseAnim getUseAnimation(ItemStack stack) {
+        return UseAnim.NONE;
     }
 }

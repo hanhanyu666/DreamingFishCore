@@ -1,10 +1,10 @@
 package com.hhy.dreamingfishcore.client.ui.notification;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -13,7 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class NotificationManager {
     private static final Map<NotificationPosition, Channel> CHANNELS = new EnumMap<>(NotificationPosition.class);
 

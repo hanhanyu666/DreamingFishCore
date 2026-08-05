@@ -1,9 +1,14 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -11,9 +16,13 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 
-public class Packet_Get {
+public class Packet_Get implements CustomPacketPayload {
+    public static final Type<Packet_Get> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_get"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_Get> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_Get::decode);
+
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dreamingfishcore-file-read");
         thread.setDaemon(true);
@@ -30,6 +39,11 @@ public class Packet_Get {
         this.fileName = fileName;
     }
 
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
     public static void encode(Packet_Get msg, FriendlyByteBuf buf) {
         buf.writeUtf(msg.requestId, FileInspectionSecurity.REQUEST_ID_LENGTH);
         buf.writeUtf(msg.actionType, FileInspectionSecurity.MAX_ACTION_TYPE_LENGTH);
@@ -44,10 +58,8 @@ public class Packet_Get {
         );
     }
 
-    public static void handle(Packet_Get msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_Get msg, IPayloadContext context) {
         context.enqueueWork(() -> EXECUTOR.execute(() -> readAndSend(msg)));
-        context.setPacketHandled(true);
     }
 
     private static void readAndSend(Packet_Get msg) {
@@ -66,7 +78,7 @@ public class Packet_Get {
             byte[] fileBytes = Files.readAllBytes(file);
             String base64 = Base64.getEncoder().encodeToString(fileBytes);
             if (base64.length() <= FileInspectionSecurity.CHUNK_CHARS) {
-                DreamingFishCore_NetworkManager.INSTANCE.sendToServer(
+                DreamingFishCore_NetworkManager.sendToServer(
                         new Packet_GetResultRequest(msg.requestId, true, base64)
                 );
                 return;
@@ -81,7 +93,7 @@ public class Packet_Get {
             for (int i = 0; i < totalChunks; i++) {
                 int start = i * FileInspectionSecurity.CHUNK_CHARS;
                 int end = Math.min(start + FileInspectionSecurity.CHUNK_CHARS, base64.length());
-                DreamingFishCore_NetworkManager.INSTANCE.sendToServer(
+                DreamingFishCore_NetworkManager.sendToServer(
                         new Packet_Chunk(msg.requestId, i, totalChunks, base64.substring(start, end))
                 );
             }
@@ -91,7 +103,7 @@ public class Packet_Get {
     }
 
     private static void sendFailure(String requestId, String message) {
-        DreamingFishCore_NetworkManager.INSTANCE.sendToServer(
+        DreamingFishCore_NetworkManager.sendToServer(
                 new Packet_GetResultRequest(requestId, false, message)
         );
     }

@@ -112,7 +112,7 @@ public final class TaskLocationDefinition {
     }
 
     public ResourceKey<Level> getDimensionKey() {
-        return ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimension));
+        return ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension));
     }
 
     public BlockPos getMin() {

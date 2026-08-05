@@ -4,8 +4,7 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.notice_system.network.Packet_SendNotificationToClient;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkDirection;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /** 服务端向客户端推送统一通知的入口。 */
 public final class NotificationPushHelper {
@@ -44,8 +43,7 @@ public final class NotificationPushHelper {
         Packet_SendNotificationToClient packet =
                 new Packet_SendNotificationToClient("", message, displayDuration, TOP_LEFT);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            DreamingFishCore_NetworkManager.INSTANCE.sendTo(
-                    packet, player.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
+            DreamingFishCore_NetworkManager.sendToClient(packet, player);
         }
     }
 
@@ -60,7 +58,6 @@ public final class NotificationPushHelper {
                 message == null ? "" : message,
                 displayDuration,
                 position);
-        DreamingFishCore_NetworkManager.INSTANCE.sendTo(
-                packet, targetPlayer.connection.connection, NetworkDirection.PLAY_TO_CLIENT);
+        DreamingFishCore_NetworkManager.sendToClient(packet, targetPlayer);
     }
 }

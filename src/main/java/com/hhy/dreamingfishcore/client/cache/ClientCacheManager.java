@@ -8,11 +8,11 @@ import com.hhy.dreamingfishcore.gameplay.task_system.TaskPlayerData;
 import com.hhy.dreamingfishcore.gameplay.task_system.client.cache.TaskClientCache;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata_system.client.cache.PlayerDataClientCache;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
 import java.util.UUID;
@@ -24,7 +24,7 @@ import java.util.UUID;
  * PlayerDataClientCache、PlayerAttributesClientCache 或 TaskClientCache。</p>
  */
 @OnlyIn(Dist.CLIENT)
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class ClientCacheManager {
     private ClientCacheManager() {
     }

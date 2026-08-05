@@ -8,15 +8,15 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RenderGuiEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Mod.EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class NotificationRenderer {
     private static final int LEFT_MARGIN = 5;
     private static final int TOP_MARGIN = 5;
@@ -36,7 +36,7 @@ public final class NotificationRenderer {
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.options.renderDebug || mc.screen != null) {
+        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
             return;
         }
 
@@ -48,7 +48,7 @@ public final class NotificationRenderer {
     public static void renderTopRight(GuiGraphics guiGraphics, Font font, int screenWidth,
                                       int anchorY, int anchorHeight) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.options.renderDebug || mc.screen != null) {
+        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
             return;
         }
 

@@ -58,7 +58,7 @@ public class PlayerCustomHealthManager {
             // 记录冷却结束时间（当前时间 + 传入的冷却毫秒数）
             MEDICINE_COOLDOWN_MAP.put(playerUUID, currentTime + cooldownMillis);
             // 消耗主手物品（1个），若需要副手可自行修改
-            heldItemStack.hurt(durabilityCost, player.getRandom(), player);;
+            heldItemStack.hurtAndBreak(durabilityCost, player, EquipmentSlot.MAINHAND);
             PlayerAttributesDataManager.markDirty();
 //            DreamingFishCore.LOGGER.info("玩家 {} 药品回血成功：+{}血量，冷却{}毫秒",
 //                    player.getScoreboardName(), healAmount, cooldownMillis);

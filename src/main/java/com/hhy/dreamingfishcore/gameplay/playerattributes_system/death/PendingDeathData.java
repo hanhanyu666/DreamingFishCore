@@ -51,7 +51,7 @@ public final class PendingDeathData {
         record.putDouble("DeathY", player.getY());
         record.putDouble("DeathZ", player.getZ());
         record.putString("DeathDimension", player.level().dimension().location().toString());
-        record.putString("DeathMessage", Component.Serializer.toJson(deathMessage));
+        record.putString("DeathMessage", Component.Serializer.toJson(deathMessage, player.registryAccess()));
 
         player.getPersistentData().put(ROOT_KEY, record);
         clearLegacyTags(player.getPersistentData());
@@ -177,7 +177,7 @@ public final class PendingDeathData {
         String json = requireRecord(player).getString("DeathMessage");
         if (!json.isBlank()) {
             try {
-                Component message = Component.Serializer.fromJson(json);
+                Component message = Component.Serializer.fromJson(json, player.registryAccess());
                 if (message != null) {
                     return message;
                 }

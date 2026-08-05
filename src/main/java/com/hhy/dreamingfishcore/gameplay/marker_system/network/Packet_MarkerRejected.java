@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.marker_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.server.notice_system.client.NotificationClientDisplay;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -34,9 +35,7 @@ public class Packet_MarkerRejected implements CustomPacketPayload {
         return new Packet_MarkerRejected(buf.readUtf());
     }
 
-    public static void handle(Packet_MarkerRejected packet, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_MarkerRejected packet, IPayloadContext context) {
         context.enqueueWork(() -> NotificationClientDisplay.showTopLeft(packet.message, 1600));
-        context.setPacketHandled(true);
     }
 }

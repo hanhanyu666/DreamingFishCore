@@ -84,6 +84,8 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_NoticeListResponse msg) {
         DreamingFishCore.LOGGER.info("收到 {} 条公告", msg.notices.size());
+        // 将公告数据传递给UI
+        ServerScreenUI_Screen.setNoticeData(msg.notices, msg.readNoticeIds);
     }
 
     public List<NoticeData> getNotices() {

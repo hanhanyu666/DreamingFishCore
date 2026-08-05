@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.playerlevel_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.client.ui.notification.BiomeDiscoveryToast;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -52,11 +53,9 @@ public class Packet_BiomeDiscoveryNotify implements CustomPacketPayload {
     }
 
     public static void handle(Packet_BiomeDiscoveryNotify packet,
-                              Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+                              IPayloadContext context) {
         context.enqueueWork(() -> BiomeDiscoveryToast.show(
                 packet.biomeId, packet.biomeName, packet.totalExplored,
                 packet.experienceReward, packet.newlyDiscovered));
-        context.setPacketHandled(true);
     }
 }

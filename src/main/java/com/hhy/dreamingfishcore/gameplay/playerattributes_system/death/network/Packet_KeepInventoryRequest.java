@@ -8,21 +8,35 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.DeathItem
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
-import java.util.function.Supplier;
 
 /**
  * 死亡不掉落请求包
  * 客户端点击"保留物品"按钮后发送到服务端
  */
-public class Packet_KeepInventoryRequest {
+public class Packet_KeepInventoryRequest implements CustomPacketPayload {
+    public static final Type<Packet_KeepInventoryRequest> TYPE = new Type<>(
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID,
+                    "playerattribute_system/death_system/packet_keep_inventory_request"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_KeepInventoryRequest> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_KeepInventoryRequest::decode);
+
     private final UUID deathId;
 
     public Packet_KeepInventoryRequest(UUID deathId) {
         this.deathId = deathId;
+    }
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
     /**

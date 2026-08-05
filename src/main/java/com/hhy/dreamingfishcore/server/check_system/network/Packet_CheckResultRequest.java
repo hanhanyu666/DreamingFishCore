@@ -1,15 +1,22 @@
 package com.hhy.dreamingfishcore.server.check_system.network;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.check_system.FileInspectionSessionManager;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-import java.util.function.Supplier;
+public class Packet_CheckResultRequest implements CustomPacketPayload {
+    public static final Type<Packet_CheckResultRequest> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_check_result_request"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_CheckResultRequest> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_CheckResultRequest::decode);
 
-public class Packet_CheckResultRequest {
     private final String requestId;
     private final boolean success;
     private final String payload;
@@ -18,6 +25,11 @@ public class Packet_CheckResultRequest {
         this.requestId = requestId;
         this.success = success;
         this.payload = payload;
+    }
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
     public static void encode(Packet_CheckResultRequest msg, FriendlyByteBuf buf) {
@@ -34,10 +46,9 @@ public class Packet_CheckResultRequest {
         );
     }
 
-    public static void handle(Packet_CheckResultRequest msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_CheckResultRequest msg, IPayloadContext context) {
         context.enqueueWork(() -> {
-            ServerPlayer responder = context.getSender();
+            ServerPlayer responder = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
             FileInspectionSessionManager.Session session = FileInspectionSessionManager.consumeSingleResult(
                     msg.requestId,
                     responder,
@@ -53,18 +64,16 @@ public class Packet_CheckResultRequest {
             String payload = msg.success
                     ? msg.payload
                     : limitMessage(msg.payload);
-            DreamingFishCore_NetworkManager.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> requester),
+            DreamingFishCore_NetworkManager.sendToClient(
                     new Packet_CheckResultResponse(
                             session.targetName(),
                             session.targetUuid(),
                             session.actionType(),
                             msg.success,
                             payload
-                    )
+                    ), requester
             );
         });
-        context.setPacketHandled(true);
     }
 
     private static String limitMessage(String message) {

@@ -2,10 +2,15 @@ package com.hhy.dreamingfishcore.server.check_system.network;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,10 +24,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-public class Packet_Check {
+public class Packet_Check implements CustomPacketPayload {
+    public static final Type<Packet_Check> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
+            DreamingFishCore.MODID, "check_system/packet_check"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, Packet_Check> STREAM_CODEC =
+            StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_Check::decode);
+
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dreamingfishcore-file-check");
         thread.setDaemon(true);
@@ -37,6 +46,11 @@ public class Packet_Check {
         this.actionType = actionType;
     }
 
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
     public static void encode(Packet_Check msg, FriendlyByteBuf buf) {
         buf.writeUtf(msg.requestId, FileInspectionSecurity.REQUEST_ID_LENGTH);
         buf.writeUtf(msg.actionType, FileInspectionSecurity.MAX_ACTION_TYPE_LENGTH);
@@ -49,10 +63,8 @@ public class Packet_Check {
         );
     }
 
-    public static void handle(Packet_Check msg, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(Packet_Check msg, IPayloadContext context) {
         context.enqueueWork(() -> EXECUTOR.execute(() -> inspectFiles(msg)));
-        context.setPacketHandled(true);
     }
 
     private static void inspectFiles(Packet_Check msg) {
@@ -93,7 +105,7 @@ public class Packet_Check {
                 sendFailure(msg.requestId, "检查结果超过安全上限");
                 return;
             }
-            DreamingFishCore_NetworkManager.INSTANCE.sendToServer(
+            DreamingFishCore_NetworkManager.sendToServer(
                     new Packet_CheckResultRequest(msg.requestId, true, json)
             );
         } catch (IOException | NoSuchAlgorithmException e) {
@@ -102,7 +114,7 @@ public class Packet_Check {
     }
 
     private static void sendFailure(String requestId, String message) {
-        DreamingFishCore_NetworkManager.INSTANCE.sendToServer(
+        DreamingFishCore_NetworkManager.sendToServer(
                 new Packet_CheckResultRequest(requestId, false, message)
         );
     }
