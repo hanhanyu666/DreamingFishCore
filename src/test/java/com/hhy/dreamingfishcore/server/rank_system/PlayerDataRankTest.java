@@ -24,7 +24,7 @@ class PlayerDataRankTest {
     }
 
     @Test
-    void legacyPlayerOnlyKeepsPreviouslyEquippedRank() {
+    void existingPlayerReceivesBuilderOnLoginWithoutChangingEquippedRank() {
         String legacyJson = """
                 {
                   "uuid": "%s",
@@ -42,6 +42,11 @@ class PlayerDataRankTest {
         assertEquals(RankRegistry.FISH_PLUS_PLUS.getRankName(), existingPlayer.getRank().getRankName());
         assertEquals(Set.of(RankRegistry.FISH_PLUS_PLUS.getRankName()), existingPlayer.getOwnedRankNames());
         assertFalse(existingPlayer.ownsRank(RankRegistry.BUILDER_FISH));
+
+        assertTrue(existingPlayer.grantRank(RankRegistry.BUILDER_FISH));
+        assertEquals(RankRegistry.FISH_PLUS_PLUS.getRankName(), existingPlayer.getRank().getRankName());
+        assertEquals(Set.of(RankRegistry.FISH_PLUS_PLUS.getRankName(), RankRegistry.BUILDER_FISH.getRankName()),
+                existingPlayer.getOwnedRankNames());
     }
 
     @Test
@@ -49,6 +54,18 @@ class PlayerDataRankTest {
         PlayerData player = new PlayerData(UUID.randomUUID(), "NewBuilder", null);
 
         player.setRank(RankRegistry.NO_RANK);
+
+        assertEquals(RankRegistry.NO_RANK.getRankName(), player.getRank().getRankName());
+        assertTrue(player.ownsRank(RankRegistry.BUILDER_FISH));
+    }
+
+    @Test
+    void loginGrantDoesNotEquipBuilderForPlayerWhoChoseNoRank() {
+        PlayerData player = GSON.fromJson("{\"rank\":{\"rankName\":\"NO_RANK\",\"rankLevel\":0,\"rankColor\":11184810}}",
+                PlayerData.class);
+        player.repairRankData();
+
+        assertTrue(player.grantRank(RankRegistry.BUILDER_FISH));
 
         assertEquals(RankRegistry.NO_RANK.getRankName(), player.getRank().getRankName());
         assertTrue(player.ownsRank(RankRegistry.BUILDER_FISH));

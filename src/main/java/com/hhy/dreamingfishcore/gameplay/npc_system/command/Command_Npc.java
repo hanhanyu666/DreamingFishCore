@@ -10,6 +10,8 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
+import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntity;
 
 public class Command_Npc {
     private static final String COMMAND_NPC = "npc";
@@ -18,6 +20,7 @@ public class Command_Npc {
     private static final String COMMAND_UNBIND = "unbind";
     private static final String COMMAND_RELOAD = "reload";
     private static final String COMMAND_LIST = "list";
+    private static final String COMMAND_SPAWN = "spawn";
     private static final String ARG_NPC_ID = "npcId";
     private static final String ARG_TARGET = "target";
     private static final String ARG_ENTITY = "entity";
@@ -49,6 +52,12 @@ public class Command_Npc {
                                                 IntegerArgumentType.getInteger(context, ARG_NPC_ID),
                                                 context.getSource()
                                         )))))
+                .then(Commands.literal(COMMAND_SPAWN)
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.argument(ARG_NPC_ID, IntegerArgumentType.integer(1))
+                                .executes(context -> spawn(
+                                        context.getSource(),
+                                        IntegerArgumentType.getInteger(context, ARG_NPC_ID)))))
                 .then(Commands.literal(COMMAND_UNBIND)
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument(ARG_ENTITY, EntityArgument.entity())
@@ -91,7 +100,30 @@ public class Command_Npc {
 
     private static int reload(CommandSourceStack source) {
         NpcManager.load();
-        source.sendSuccess(() -> Component.literal(MSG_NPC_RELOADED), true);
+        int refreshed = NpcManager.refreshLoadedStoryNpcs(source.getServer());
+        source.sendSuccess(() -> Component.literal(MSG_NPC_RELOADED + "，已刷新 " + refreshed + " 个剧情NPC"), true);
+        return 1;
+    }
+
+    private static int spawn(CommandSourceStack source, int npcId) {
+        NpcData npc = NpcManager.getNpc(npcId).orElse(null);
+        if (npc == null) {
+            source.sendFailure(Component.literal(MSG_NPC_NOT_FOUND + npcId));
+            return 0;
+        }
+        StoryNpcEntity entity = StoryNpcEntities.STORY_NPC.get().create(source.getLevel());
+        if (entity == null) {
+            source.sendFailure(Component.literal("剧情NPC实体创建失败"));
+            return 0;
+        }
+        entity.moveTo(source.getPosition().x, source.getPosition().y, source.getPosition().z,
+                source.getRotation().y, 0.0F);
+        entity.applyNpcData(npc);
+        if (!source.getLevel().addFreshEntity(entity)) {
+            source.sendFailure(Component.literal("剧情NPC生成失败"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("已生成剧情NPC: [" + npcId + "] " + npc.getNpcName()), true);
         return 1;
     }
 

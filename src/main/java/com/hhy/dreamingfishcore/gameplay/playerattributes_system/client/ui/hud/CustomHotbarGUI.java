@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,6 +31,8 @@ public class CustomHotbarGUI {
     private static final int HOTBAR_HEIGHT = 24;
     private static final int HOTBAR_BOTTOM_MARGIN = 4;
     private static final int ITEM_SIZE = 16;
+    private static final int OFFHAND_SLOT_WIDTH = HOTBAR_PADDING * 2 + SLOT_STEP;
+    private static final int OFFHAND_SLOT_GAP = 4;
     private static final int HOTBAR_BG = 0x48060708;
     private static final int HOTBAR_BG_INNER = 0x22101012;
     private static final int HOTBAR_DIVIDER = 0x185E5E62;
@@ -109,6 +112,7 @@ public class CustomHotbarGUI {
 
         drawHotbarFrame(guiGraphics, x, y);
         drawHotbarItems(guiGraphics, mc, player, x, y);
+        drawOffhandSlot(guiGraphics, mc, player, x, y);
 
         guiGraphics.pose().popPose();
 
@@ -136,15 +140,16 @@ public class CustomHotbarGUI {
 
     @SubscribeEvent
     public static void hideVanillaSurvivalBars(RenderGuiOverlayEvent.Pre event) {
-        // EXPERIENCE_BAR is redrawn as a three-part bar in CustomStatueGUI.
+        // These overlays are redrawn by the custom status HUD.
         if (!VanillaGuiOverlay.EXPERIENCE_BAR.id().equals(event.getOverlay().id())
                 && !VanillaGuiOverlay.FOOD_LEVEL.id().equals(event.getOverlay().id())
-                && !VanillaGuiOverlay.ARMOR_LEVEL.id().equals(event.getOverlay().id())) {
+                && !VanillaGuiOverlay.ARMOR_LEVEL.id().equals(event.getOverlay().id())
+                && !VanillaGuiOverlay.AIR_LEVEL.id().equals(event.getOverlay().id())) {
             return;
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null || mc.options.hideGui || mc.options.renderDebug
+        if (mc.player == null || !isHudVisibleScreen(mc) || mc.options.hideGui || mc.options.renderDebug
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.SPECTATOR) {
             return;
         }
@@ -191,14 +196,14 @@ public class CustomHotbarGUI {
 
     private static boolean shouldRenderCustomHotbar(Minecraft mc) {
         return mc.player != null
-                && isHotbarVisibleScreen(mc)
+                && isHudVisibleScreen(mc)
                 && !mc.player.isDeadOrDying()
                 && !mc.options.hideGui
                 && !mc.options.renderDebug
                 && (mc.gameMode == null || mc.gameMode.getPlayerMode() != GameType.SPECTATOR);
     }
 
-    private static boolean isHotbarVisibleScreen(Minecraft mc) {
+    static boolean isHudVisibleScreen(Minecraft mc) {
         return mc.screen == null
                 || mc.screen instanceof PauseScreen
                 || mc.screen instanceof ChatScreen;
@@ -260,6 +265,26 @@ public class CustomHotbarGUI {
                 guiGraphics.renderItemDecorations(mc.font, stack, itemX, itemY);
             }
         }
+    }
+
+    private static void drawOffhandSlot(GuiGraphics guiGraphics, Minecraft mc, Player player, int hotbarX, int y) {
+        ItemStack stack = player.getOffhandItem();
+        if (stack.isEmpty()) {
+            return;
+        }
+
+        boolean renderOnLeft = player.getMainArm().getOpposite() == HumanoidArm.LEFT;
+        int x = renderOnLeft
+                ? hotbarX - OFFHAND_SLOT_GAP - OFFHAND_SLOT_WIDTH
+                : hotbarX + HOTBAR_WIDTH + OFFHAND_SLOT_GAP;
+
+        drawSoftRoundedRect(guiGraphics, x, y, OFFHAND_SLOT_WIDTH, HOTBAR_HEIGHT, HOTBAR_BG);
+        guiGraphics.fill(x + 3, y + 2, x + OFFHAND_SLOT_WIDTH - 3, y + HOTBAR_HEIGHT - 2, HOTBAR_BG_INNER);
+
+        int itemX = x + (OFFHAND_SLOT_WIDTH - ITEM_SIZE) / 2;
+        int itemY = y + (HOTBAR_HEIGHT - ITEM_SIZE) / 2;
+        guiGraphics.renderItem(stack, itemX, itemY);
+        guiGraphics.renderItemDecorations(mc.font, stack, itemX, itemY);
     }
 
     private static MedicineUseInfo getMedicineUseInfo(Player player) {

@@ -32,7 +32,7 @@ public class MarkerClientHandler {
     }
 
     @SubscribeEvent
-    public static void onMouseButton(InputEvent.MouseButton event) {
+    public static void onMouseButton(InputEvent.MouseButton.Pre event) {
         if (event.getAction() != InputConstants.PRESS
                 || !KeybindHandler.FPS_MARKER_KEY.matchesMouse(event.getButton())) {
             return;
@@ -50,9 +50,8 @@ public class MarkerClientHandler {
             return;
         }
 
-        if (createMarker(Minecraft.getInstance())) {
-            event.setCanceled(true);
-        }
+        // Forge 的 InputEvent.Key 不可取消；处理键位即可，调用 setCanceled 会直接使客户端崩溃。
+        createMarker(Minecraft.getInstance());
     }
 
     private static boolean createMarker(Minecraft mc) {

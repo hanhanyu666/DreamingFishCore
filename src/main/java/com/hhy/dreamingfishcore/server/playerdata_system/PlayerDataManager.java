@@ -244,6 +244,10 @@ public class PlayerDataManager {
         initPlayerData(player);
 
         PlayerData data = getPlayerData(player.getUUID());
+        if (data.grantRank(RankRegistry.BUILDER_FISH)) {
+            DreamingFishCore.LOGGER.info("玩家 {} 进服，已授予 Rank：{}",
+                    player.getScoreboardName(), RankRegistry.BUILDER_FISH.getRankName());
+        }
         data.setLastLoginTime(System.currentTimeMillis());
         markDirty();
     }

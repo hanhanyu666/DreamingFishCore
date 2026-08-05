@@ -84,6 +84,8 @@ public class CustomStatueGUI {
     private static final int ARMOR_BAR_COLOR = 0xFF7F95A1;
     private static final int EXPERIENCE_BAR_COLOR = 0xFF6E9A70;
     private static final int COURAGE_BAR_COLOR = 0xFF8170A7;
+    private static final int OXYGEN_BAR_COLOR = 0xFF4D9BC9;
+    private static final int OXYGEN_BAR_VERTICAL_OFFSET = 15;
     private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
     private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
     private static final ResourceLocation HEALTH_ICON =
@@ -168,7 +170,7 @@ public class CustomStatueGUI {
     public static void renderCustomPlayerIcon(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        if (player == null || mc.screen != null || player.isDeadOrDying()
+        if (player == null || !CustomHotbarGUI.isHudVisibleScreen(mc) || player.isDeadOrDying()
                 || mc.options.hideGui || mc.options.renderDebug
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.CREATIVE) {
             return;
@@ -207,6 +209,7 @@ public class CustomStatueGUI {
         int experienceBarY = splitBarY;
         int courageActionBarX = experienceBarX + SPLIT_EXPERIENCE_CENTER_WIDTH + SPLIT_EXPERIENCE_SEGMENT_GAP;
         int courageActionBarY = splitBarY;
+        int oxygenBarY = courageActionBarY - OXYGEN_BAR_VERTICAL_OFFSET;
 
         //获取玩家当前血量和最大血量
         float currentHealth = player.getHealth();
@@ -216,6 +219,9 @@ public class CustomStatueGUI {
         int currentArmor = player.getArmorValue();
         int experienceLevel = player.experienceLevel;
         float experienceProgress = player.experienceProgress;
+        int currentAir = player.getAirSupply();
+        int maxAir = player.getMaxAirSupply();
+        boolean showOxygen = player.isUnderWater() || currentAir < maxAir;
 
         // 检查是否在受伤闪烁时间内（闪烁两下）
         long currentTime = System.currentTimeMillis();
@@ -260,6 +266,11 @@ public class CustomStatueGUI {
                 experienceProgress, EXPERIENCE_BAR_COLOR, false);
         drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
                 courageRatio, COURAGE_BAR_COLOR, courageDanger);
+        if (showOxygen) {
+            float oxygenRatio = maxAir > 0 ? currentAir / (float) maxAir : 0.0f;
+            drawSplitExperienceSegment(guiGraphics, courageActionBarX, oxygenBarY,
+                    SPLIT_EXPERIENCE_SIDE_WIDTH, oxygenRatio, OXYGEN_BAR_COLOR, oxygenRatio <= 0.25f);
+        }
         drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
                 strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
         drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
@@ -887,7 +898,7 @@ public class CustomStatueGUI {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null) {
+        if (mc.player == null || !CustomHotbarGUI.isHudVisibleScreen(mc)) {
             return;
         }
 

@@ -32,8 +32,8 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public final class DreamingFishCore_NetworkManager {
-    // Protocol 6 synchronizes owned Ranks and supports server-validated loadout changes.
-    private static final String PROTOCOL_VERSION = "6";
+    // Keep this aligned with releases that require every player to update their client mod.
+    private static final String PROTOCOL_VERSION = "0.2.0";
 
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(DreamingFishCore.MODID, "network"),

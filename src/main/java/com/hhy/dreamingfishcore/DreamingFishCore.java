@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.item.DreamingFishCore_CreativeTabs;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import com.hhy.dreamingfishcore.loot.DreamingFishCore_LootModifiers;
 import com.hhy.dreamingfishcore.init.CommonInit;
+import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -24,6 +25,7 @@ public class DreamingFishCore {
         DreamingFishCore_NetworkManager.register();
         DreamingFishCore_CreativeTabs.register(modEventBus);
         DreamingFishCore_LootModifiers.register(modEventBus);
+        StoryNpcEntities.register(modEventBus);
         CommonInit.initialize();
 
         LOGGER.info("DreamingfishCore Mod Initialized!");

@@ -18,6 +18,7 @@ public class NpcData {
     private Map<String, Integer> actionFavorabilityRequirements = new HashMap<>();
     private NpcThoughtData currentThought;
     private NpcWarningRuleData warningRules = new NpcWarningRuleData();
+    private NpcAppearanceData appearance = new NpcAppearanceData();
 
     public NpcData() {
     }
@@ -120,5 +121,17 @@ public class NpcData {
 
     public void setWarningRules(NpcWarningRuleData warningRules) {
         this.warningRules = warningRules;
+    }
+
+    /** 旧配置没有 appearance 时，Gson 会留下 null；getter 在这里补上安全默认值。 */
+    public NpcAppearanceData getAppearance() {
+        if (appearance == null) {
+            appearance = new NpcAppearanceData();
+        }
+        return appearance;
+    }
+
+    public void setAppearance(NpcAppearanceData appearance) {
+        this.appearance = appearance;
     }
 }
