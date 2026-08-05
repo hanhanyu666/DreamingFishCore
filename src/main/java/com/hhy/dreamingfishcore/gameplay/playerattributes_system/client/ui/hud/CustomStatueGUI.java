@@ -22,17 +22,13 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomStatueGUI {
-    // 左下角玩家贴图布局
-    private static final int PLAYER_MODEL_ANCHOR_HALF_WIDTH = 14;
-    private static final int PLAYER_ICON_WIDTH = 27;
-    private static final int PLAYER_MODEL_HEIGHT = 59;
-    private static final int PLAYER_UV_X_NORMAL = 0;
-    private static final int PLAYER_UV_X_INJURED = 27;
-    private static final int PLAYER_UV_Y = 0;
-    private static final int PLAYER_TEXTURE_TOTAL_WIDTH = 256;
-    private static final int PLAYER_TEXTURE_TOTAL_HEIGHT = 256;
-    private static final ResourceLocation PLAYER_HEALTH_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/health/health.png");
+    // 左下角玩家线框布局
+    private static final int PLAYER_MODEL_ANCHOR_HALF_WIDTH = 20;
+    private static final int PLAYER_ICON_WIDTH = 39;
+    private static final int PLAYER_MODEL_HEIGHT = 72;
+    private static final int PLAYER_MODEL_HORIZONTAL_OFFSET = 5;
+    private static final boolean SHOW_EQUIPMENT_DURABILITY = false;
+    private static final boolean SHOW_LEFT_STATUS_BARS = true;
     private static final int EQUIPMENT_DURABILITY_BAR_WIDTH = 4;
     private static final int EQUIPMENT_DURABILITY_BAR_GAP = 3;
     private static final int EQUIPMENT_ICON_SIZE = 8;
@@ -89,31 +85,31 @@ public class CustomStatueGUI {
     private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
     private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
     private static final ResourceLocation HEALTH_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/health.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/health_v2.png");
     private static final ResourceLocation FOOD_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/food.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/food_v2.png");
     private static final ResourceLocation ARMOR_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/armor.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/armor_v2.png");
     private static final ResourceLocation INFECTION_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/infection.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/infection_v2.png");
     private static final ResourceLocation STAMINA_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina_v2.png");
     private static final ResourceLocation COURAGE_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/courage.png");
+            new ResourceLocation(DreamingFishCore.MODID, "textures/gui/hud_icons/courage_v2.png");
 
     // 肢体受伤标记配置（老贴图上的红色脉冲点）
     private static final int INJURY_DOT_COLOR = 0x90D64038;
     private static final int INJURY_DOT_BASE_SIZE = 3;
     private static final int INJURY_DOT_PULSE_SIZE = 2;
     private static final long PULSE_CYCLE = 500;
-    private static final int HEAD_OFFSET_X = 13;
-    private static final int HEAD_OFFSET_Y = 5;
-    private static final int CHEST_OFFSET_X = 13;
-    private static final int CHEST_OFFSET_Y = 22;
-    private static final int LEGS_OFFSET_X = 13;
-    private static final int LEGS_OFFSET_Y = 38;
-    private static final int FEET_OFFSET_X = 13;
-    private static final int FEET_OFFSET_Y = 52;
+    private static final int HEAD_OFFSET_X = PLAYER_ICON_WIDTH / 2;
+    private static final int HEAD_OFFSET_Y = 14;
+    private static final int CHEST_OFFSET_X = PLAYER_ICON_WIDTH / 2;
+    private static final int CHEST_OFFSET_Y = 36;
+    private static final int LEGS_OFFSET_X = PLAYER_ICON_WIDTH / 2;
+    private static final int LEGS_OFFSET_Y = 57;
+    private static final int FEET_OFFSET_X = PLAYER_ICON_WIDTH / 2;
+    private static final int FEET_OFFSET_Y = 68;
 
     //缓存坐标，优化
     // 缓存上一次的屏幕宽高和GUI缩放（用于判断是否需要重新计算）
@@ -189,14 +185,13 @@ public class CustomStatueGUI {
             calculateAndCachePlayerCoords();
         }
 
-        boolean showEquipmentDurability = hasDamageableArmor(player);
-        int modelCenterX = LEFT_OFFSET + PLAYER_MODEL_ANCHOR_HALF_WIDTH;
+        boolean showEquipmentDurability = SHOW_EQUIPMENT_DURABILITY && hasDamageableArmor(player);
+        int modelCenterX = LEFT_OFFSET + PLAYER_MODEL_ANCHOR_HALF_WIDTH + PLAYER_MODEL_HORIZONTAL_OFFSET;
         if (showEquipmentDurability) {
             modelCenterX += EQUIPMENT_DURABILITY_WIDTH + EQUIPMENT_DURABILITY_GAP;
         }
         int statusBarY = screenHeight - LEFT_STATUS_BOTTOM_OFFSET - STATUS_STACK_HEIGHT;
-        int modelFootY = statusBarY + STATUS_STACK_HEIGHT
-                + (PLAYER_MODEL_HEIGHT - STATUS_STACK_HEIGHT) / 2;
+        int modelFootY = screenHeight - 5;
         int modelTopY = modelFootY - PLAYER_MODEL_HEIGHT;
         int statusBarX = modelCenterX + PLAYER_MODEL_ANCHOR_HALF_WIDTH + STATUS_BAR_TO_PLAYER_SPACING;
 
@@ -244,8 +239,7 @@ public class CustomStatueGUI {
         float currentInfection = PlayerInfectionManager.getCurrentInfectionClient(player);
         int maxInfection = 100;
         int infectionColor = getInfectionColor((int) currentInfection, maxInfection);
-        int playerTintColor = getHealthColor(healthPercent);
-
+        int playerModelColor = getPlayerModelHealthColor(healthPercent);
         boolean courageDanger = currentCourage / maxCourage <= COURAGE_DANGER_THRESHOLD;
         boolean infectionDanger = currentInfection / maxInfection >= INFECTION_DANGER_THRESHOLD;
         float statusFade = 1.0f;
@@ -254,7 +248,8 @@ public class CustomStatueGUI {
             drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
         }
         drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
-        drawPlayerIcon(guiGraphics, modelCenterX, modelTopY, playerTintColor, isFlashing);
+        HudPlayerWireframeRenderer.render(
+                guiGraphics, player, modelCenterX, modelFootY, playerModelColor, isFlashing);
         cleanupAndDrawLimbInjuryIcons(guiGraphics, player, modelCenterX, modelTopY);
 
         float strengthRatio = currentStrength / (float) maxStrength;
@@ -288,11 +283,14 @@ public class CustomStatueGUI {
                     Integer.toString(experienceLevel), EXPERIENCE_BAR_COLOR);
         }
 
-        updateLeftStatusFlashTimes(currentTime, currentHealth, maxHealth, currentFood, currentArmor, currentInfection);
-        drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
-                currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
-                currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
-                currentTime);
+        if (SHOW_LEFT_STATUS_BARS) {
+            updateLeftStatusFlashTimes(currentTime, currentHealth, maxHealth,
+                    currentFood, currentArmor, currentInfection);
+            drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
+                    currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
+                    currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
+                    currentTime);
+        }
     }
 
     /**
@@ -338,6 +336,26 @@ public class CustomStatueGUI {
 
         int rawColor = (255 << 24) | (ri << 16) | (gi << 8);
         return blendColor(rawColor, 0xFF8D8F86, 0.28f);
+    }
+
+    private static int getPlayerModelHealthColor(float percent) {
+        float clamped = Math.max(0.0f, Math.min(1.0f, percent));
+        if (clamped >= 0.5f) {
+            return interpolateColor(0xFFF0C84B, 0xFF69BC7B, (clamped - 0.5f) / 0.5f);
+        }
+        if (clamped >= 0.25f) {
+            return interpolateColor(0xFFC53A2E, 0xFFF0C84B, (clamped - 0.25f) / 0.25f);
+        }
+        return interpolateColor(0xFF210606, 0xFFC53A2E, clamped / 0.25f);
+    }
+
+    private static int interpolateColor(int from, int to, float amount) {
+        float t = Math.max(0.0f, Math.min(1.0f, amount));
+        int a = Math.round((from >>> 24) + ((to >>> 24) - (from >>> 24)) * t);
+        int r = Math.round((from >> 16 & 0xFF) + ((to >> 16 & 0xFF) - (from >> 16 & 0xFF)) * t);
+        int g = Math.round((from >> 8 & 0xFF) + ((to >> 8 & 0xFF) - (from >> 8 & 0xFF)) * t);
+        int b = Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
+        return a << 24 | r << 16 | g << 8 | b;
     }
 
     private static boolean shouldRevealBottomSideValues(long currentTime, int currentStrength, int maxStrength,
@@ -518,31 +536,6 @@ public class CustomStatueGUI {
         guiGraphics.pose().popPose();
     }
 
-    private static void drawPlayerIcon(GuiGraphics guiGraphics, int centerX, int topY,
-                                       int healthColor, boolean flashing) {
-        int iconX = centerX - PLAYER_ICON_WIDTH / 2;
-        int uvX = flashing ? PLAYER_UV_X_INJURED : PLAYER_UV_X_NORMAL;
-
-        guiGraphics.setColor(
-                (healthColor >> 16 & 0xFF) / 255.0f,
-                (healthColor >> 8 & 0xFF) / 255.0f,
-                (healthColor & 0xFF) / 255.0f,
-                1.0F
-        );
-        guiGraphics.blit(
-                PLAYER_HEALTH_TEXTURE,
-                iconX,
-                topY,
-                uvX,
-                PLAYER_UV_Y,
-                PLAYER_ICON_WIDTH,
-                PLAYER_MODEL_HEIGHT,
-                PLAYER_TEXTURE_TOTAL_WIDTH,
-                PLAYER_TEXTURE_TOTAL_HEIGHT
-        );
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-    }
-
     private static void cleanupAndDrawLimbInjuryIcons(GuiGraphics guiGraphics, Player player,
                                                       int centerX, int topY) {
         LimbClientInjurySync.cleanupExpiredInjuries(player);
@@ -594,9 +587,9 @@ public class CustomStatueGUI {
 
     private static void drawPlayerGroundShadow(GuiGraphics guiGraphics, int centerX, int footY) {
         int y = footY - 2;
-        guiGraphics.fill(centerX - 13, y, centerX + 13, y + 1, 0x2A000000);
-        guiGraphics.fill(centerX - 10, y - 1, centerX + 10, y, 0x20000000);
-        guiGraphics.fill(centerX - 6, y - 2, centerX + 6, y - 1, 0x16000000);
+        guiGraphics.fill(centerX - 18, y, centerX + 18, y + 1, 0x2A000000);
+        guiGraphics.fill(centerX - 14, y - 1, centerX + 14, y, 0x20000000);
+        guiGraphics.fill(centerX - 9, y - 2, centerX + 9, y - 1, 0x16000000);
     }
 
     private static void drawSplitExperienceSegment(GuiGraphics guiGraphics, int x, int y, int width, float ratio,
@@ -691,10 +684,12 @@ public class CustomStatueGUI {
             drawStatusSegment(guiGraphics, x, y, animatedSignalWidth, progress, activeColor, trackAlpha, fillAlpha,
                     warning, warningPulse, flashAlpha);
         }
-        int iconAlpha = Math.min(255, (int) (((warning ? 218 : 196) + warningPulse * 37 + flashAlpha / 3) * fade));
+        float collapsedIconFactor = 0.72f + expandProgress * 0.28f;
+        int iconAlpha = Math.min(255, (int) (((warning ? 218 : 196) + warningPulse * 37 + flashAlpha / 3)
+                * fade * collapsedIconFactor));
         drawHudIcon(guiGraphics, icon, iconX, iconY, iconAlpha);
         drawStatusValue(guiGraphics, mc, valueX, y - 1, valueText, activeColor, warning,
-                Math.min(1.0f, fade * (0.72f + warningPulse * 0.22f + flashAlpha / 420.0f)));
+                Math.min(1.0f, fade * (0.78f + warningPulse * 0.18f + flashAlpha / 420.0f)));
     }
 
     private static boolean isStatusBarRevealVisible(long currentTime, long revealStartTime, long revealLastChangeTime) {
@@ -736,7 +731,7 @@ public class CustomStatueGUI {
 
     private static void drawStatusValue(GuiGraphics guiGraphics, Minecraft mc, int x, int y, String text,
                                         int color, boolean warning, float fade) {
-        if (text == null || text.isEmpty()) {
+        if (text == null || text.isEmpty() || fade <= 0.01f) {
             return;
         }
 
