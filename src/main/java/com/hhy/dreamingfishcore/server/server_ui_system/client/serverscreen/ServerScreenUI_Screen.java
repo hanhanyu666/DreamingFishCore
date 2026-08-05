@@ -121,21 +121,20 @@ public class ServerScreenUI_Screen extends Screen {
     private int LEFT_PANEL_SLIDE_DISTANCE;   // 左面板向左滑动的最大距离
     private int RIGHT_PANEL_SLIDE_DISTANCE;  // 右面板向右滑动的最大距离
 
-    // 卡片可点击区域（虚拟坐标）- 现在由 PageRenderer 管理
-    // 保留 rankBox 变量以备将来使用
+    // 个人档案 Rank 卡片可点击区域（虚拟坐标）
     private int rankBoxClickX1, rankBoxClickY1;
     private int rankBoxClickX2, rankBoxClickY2;
 
     // ==================== 左侧灵动岛按钮 ====================
     private static final String NOTICE_UI_NAME = "梦屿广播";
     private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "🎒", "⚙️"};
-    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "Rank 管理", "服务器成就", "服务器商店", "领地", "背包", "设置"};
+    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "背包", "设置"};
     private static final int[] LEFT_BUTTON_COLORS = {
         0xFFAAAAAA,  // 个人档案 - 灰色
         0xFF55FF55,  // 帮助 - 绿色
         0xFF4FC3F7,  // 梦屿广播 - 淡蓝色
         0xFFAAFFAA,  // 故事进展 - 绿色
-        0xFFFFAA00,  // Rank 管理 - 金色
+        0xFF4FC3F7,  // 玩家与排行 - 淡蓝色
         0xFFFFFFAA,  // 服务器成就 - 黄色
         0xFF4FC3F7,  // 服务器商店 - 橙色
         0xFF4FC3F7,  // 领地 - 紫色
@@ -180,6 +179,7 @@ public class ServerScreenUI_Screen extends Screen {
     private static final int HELP_LINE_HEIGHT = 18;  // 帮助页面每行高度
 
     // ==================== Rank 管理页面 ====================
+    private boolean profileRankManagerOpen = false;
     private final List<Rank> displayedRankOptions = new ArrayList<>();
     private final List<int[]> rankOptionClickAreas = new ArrayList<>();
 
@@ -415,9 +415,11 @@ public class ServerScreenUI_Screen extends Screen {
         if (selectedLeftButtonIndex < 0) {
             drawBrandTitle(guiGraphics, tabletX + 18, tabletY + 15);
         } else {
-            String pageTitle = selectedLeftButtonIndex < LEFT_BUTTON_NAMES.length
-                ? LEFT_BUTTON_NAMES[selectedLeftButtonIndex]
-                : "梦屿终端";
+            String pageTitle = profileRankManagerOpen
+                ? "Rank 管理"
+                : (selectedLeftButtonIndex < LEFT_BUTTON_NAMES.length
+                    ? LEFT_BUTTON_NAMES[selectedLeftButtonIndex]
+                    : "梦屿终端");
             drawText(guiGraphics, pageTitle, tabletX + 34, tabletY + 15, TABLET_TEXT_COLOR);
         }
 
@@ -779,11 +781,17 @@ public class ServerScreenUI_Screen extends Screen {
 
     private void renderModulePage(GuiGraphics guiGraphics, int mouseX, int mouseY, int x, int y, int width, int height) {
         switch (selectedLeftButtonIndex) {
-            case 0 -> renderProfilePage(guiGraphics, mouseX, mouseY, x, y, width, height);
+            case 0 -> {
+                if (profileRankManagerOpen) {
+                    renderRankManagementPage(guiGraphics, mouseX, mouseY, x, y, width, height);
+                } else {
+                    renderProfilePage(guiGraphics, mouseX, mouseY, x, y, width, height);
+                }
+            }
             case 2 -> renderNoticeFeedPage(guiGraphics, x, y, width, height);
             case 3 -> renderStoryTaskPage(guiGraphics, mouseX, mouseY, x, y, width, height);
             case 1 -> renderHelpTerminalPage(guiGraphics, x, y, width, height);
-            case 4 -> renderRankManagementPage(guiGraphics, mouseX, mouseY, x, y, width, height);
+            case 4 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "玩家与排行", "排行面板还在接入数据");
             case 5 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "服务器成就", "成就面板还在接入数据");
             default -> renderPlaceholderPage(guiGraphics, x, y, width, height, LEFT_BUTTON_NAMES[selectedLeftButtonIndex], "该模块将打开独立界面");
         }
@@ -857,8 +865,17 @@ public class ServerScreenUI_Screen extends Screen {
 
         tileY += tileH + gap;
         drawStatTile(guiGraphics, rightX, tileY, tileW, tileH, "蓝图", String.valueOf(ClientCacheManager.getUnlockedRecipesCount(player.getUUID())), 0xFF8EA7FF);
-        drawStatTile(guiGraphics, rightX + tileW + gap, tileY, tileW, tileH, "Rank",
-            rank == RankRegistry.NO_RANK ? "未装配" : rank.getRankName(), 0xFF000000 | rank.getRankColor());
+        int rankTileX = rightX + tileW + gap;
+        float virtualMouseX = mouseX / uiScale;
+        float virtualMouseY = mouseY / uiScale;
+        boolean rankTileHovered = virtualMouseX >= rankTileX && virtualMouseX <= rankTileX + tileW
+            && virtualMouseY >= tileY && virtualMouseY <= tileY + tileH;
+        drawStatTile(guiGraphics, rankTileX, tileY, tileW, tileH, "Rank",
+            rank == RankRegistry.NO_RANK ? "未装配" : rank.getRankName(), 0xFF000000 | rank.getRankColor(), rankTileHovered);
+        rankBoxClickX1 = rankTileX;
+        rankBoxClickY1 = tileY;
+        rankBoxClickX2 = rankTileX + tileW;
+        rankBoxClickY2 = tileY + tileH;
         drawStatTile(guiGraphics, rightX + (tileW + gap) * 2, tileY, tileW, tileH, "称号", title.getTitleName(), 0xFF000000 | title.getColor());
 
         int attrY = tileY + tileH + gap;
@@ -1393,7 +1410,14 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     private void drawStatTile(GuiGraphics guiGraphics, int x, int y, int width, int height, String label, String value, int accentColor) {
-        drawSoftRect(guiGraphics, x, y, width, height, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
+        drawStatTile(guiGraphics, x, y, width, height, label, value, accentColor, false);
+    }
+
+    private void drawStatTile(GuiGraphics guiGraphics, int x, int y, int width, int height,
+                              String label, String value, int accentColor, boolean hovered) {
+        drawSoftRect(guiGraphics, x, y, width, height, 2,
+            hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR,
+            hovered ? accentColor : TABLET_CARD_BORDER_COLOR);
         guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + height, accentColor);
         drawText(guiGraphics, label, x + 12, y + 9, TABLET_MUTED_TEXT_COLOR);
         int valueMaxWidth = Math.max(18, width - 24);
@@ -1873,10 +1897,17 @@ public class ServerScreenUI_Screen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // ESC 键：二级界面返回终端主页，主页关闭 UI
+        // ESC 键：Rank 管理返回个人档案，二级界面返回终端主页，主页关闭 UI
         if (keyCode == 256) {
+            if (selectedLeftButtonIndex == 0 && profileRankManagerOpen) {
+                profileRankManagerOpen = false;
+                rankOptionClickAreas.clear();
+                displayedRankOptions.clear();
+                return true;
+            }
             if (selectedLeftButtonIndex >= 0) {
                 selectedLeftButtonIndex = -1;
+                profileRankManagerOpen = false;
                 selectedStageId = null;
                 taskScrollOffset = 0;
                 stageScrollOffset = 0;
@@ -1920,7 +1951,14 @@ public class ServerScreenUI_Screen extends Screen {
         if (selectedLeftButtonIndex >= 0 &&
             virtualMouseX >= tabletMarginX + 12 && virtualMouseX <= tabletMarginX + 30 &&
             virtualMouseY >= tabletMarginY + 10 && virtualMouseY <= tabletMarginY + 30) {
+            if (selectedLeftButtonIndex == 0 && profileRankManagerOpen) {
+                profileRankManagerOpen = false;
+                rankOptionClickAreas.clear();
+                displayedRankOptions.clear();
+                return true;
+            }
             selectedLeftButtonIndex = -1;
+            profileRankManagerOpen = false;
             selectedStageId = null;
             taskScrollOffset = 0;
             stageScrollOffset = 0;
@@ -1950,19 +1988,24 @@ public class ServerScreenUI_Screen extends Screen {
 
         // 检查是否点击了金币框（仅主页面可点击）
         int[] goldBoxClick = pageRenderer.getGoldBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2] &&
-            virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
-            // 经济系统已剥离，保留原始入口区域作为占位。
+        if (selectedLeftButtonIndex == 0 && !profileRankManagerOpen
+                && virtualMouseX >= goldBoxClick[0] && virtualMouseX <= goldBoxClick[2]
+                && virtualMouseY >= goldBoxClick[1] + rightOffsetY && virtualMouseY <= goldBoxClick[3] + rightOffsetY) {
             return true;
         }
 
         // 检查是否点击了领地框（仅主页面可点击）
         int[] territoryBoxClick = pageRenderer.getTerritoryBoxClick();
-        if (selectedLeftButtonIndex == 0 &&
-            virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2] &&
-            virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
-            // 领地系统已剥离，保留原始入口区域作为占位。
+        if (selectedLeftButtonIndex == 0 && !profileRankManagerOpen
+                && virtualMouseX >= territoryBoxClick[0] && virtualMouseX <= territoryBoxClick[2]
+                && virtualMouseY >= territoryBoxClick[1] + rightOffsetY && virtualMouseY <= territoryBoxClick[3] + rightOffsetY) {
+            return true;
+        }
+
+        if (selectedLeftButtonIndex == 0 && !profileRankManagerOpen
+                && virtualMouseX >= rankBoxClickX1 && virtualMouseX <= rankBoxClickX2
+                && virtualMouseY >= rankBoxClickY1 && virtualMouseY <= rankBoxClickY2) {
+            profileRankManagerOpen = true;
             return true;
         }
 
@@ -2139,7 +2182,7 @@ public class ServerScreenUI_Screen extends Screen {
             }
         }
 
-        if (selectedLeftButtonIndex == 4) {
+        if (selectedLeftButtonIndex == 0 && profileRankManagerOpen) {
             int optionCount = Math.min(displayedRankOptions.size(), rankOptionClickAreas.size());
             for (int index = 0; index < optionCount; index++) {
                 int[] area = rankOptionClickAreas.get(index);
@@ -2179,7 +2222,8 @@ public class ServerScreenUI_Screen extends Screen {
             case 3: // 故事进展
                 // TODO: 打开故事界面
                 break;
-            case 4: // Rank 管理
+            case 4: // 玩家与排行
+                // 排行面板保留为独立一级入口。
                 break;
             case 5: // 服务器成就
                 // 显示成就页面（不打开新界面）

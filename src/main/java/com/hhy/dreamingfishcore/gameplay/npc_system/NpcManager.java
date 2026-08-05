@@ -8,6 +8,9 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_OpenNpcDialogueGUI;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntity;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -141,6 +144,23 @@ public class NpcManager {
         }
 
         openNpcDialogue(player, npcId, entityId);
+    }
+
+    /** reload 后把新配置重新写入所有当前已加载的专用 NPC，并由实体数据自动同步给客户端。 */
+    public static int refreshLoadedStoryNpcs(MinecraftServer server) {
+        int refreshed = 0;
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity loadedEntity : level.getEntities().getAll()) {
+                if (loadedEntity instanceof StoryNpcEntity entity) {
+                    Optional<NpcData> npc = getNpc(entity.getNpcId());
+                    if (npc.isPresent()) {
+                        entity.applyNpcData(npc.get());
+                        refreshed++;
+                    }
+                }
+            }
+        }
+        return refreshed;
     }
 
     /**

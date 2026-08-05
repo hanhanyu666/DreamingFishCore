@@ -32,8 +32,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import java.util.Optional;
 
 public final class DreamingFishCore_NetworkManager {
-    // Protocol 6 synchronizes owned Ranks and supports server-validated loadout changes.
-    private static final String PROTOCOL_VERSION = "6";
+    // Keep this aligned with releases that require every player to update their client mod.
+    private static final String PROTOCOL_VERSION = "0.2.0";
 
     public static void register(IEventBus modEventBus) {
         modEventBus.addListener(DreamingFishCore_NetworkManager::registerPayloadHandlers);
