@@ -98,7 +98,7 @@ public class Packet_SyncStrengthData implements net.minecraft.network.protocol.c
             } else {
                 // 体力耗尽，设置耗尽标记并强制停止疾跑
                 PlayerStrengthManager.ClientTickHandler.setClientStrengthExhausted(player.getUUID(), true);
-                if (player.isSprinting()) {
+                if (!player.isSpectator() && player.isSprinting()) {
                     player.setSprinting(false);
                 }
             }

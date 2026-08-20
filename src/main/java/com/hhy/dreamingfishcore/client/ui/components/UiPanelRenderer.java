@@ -16,8 +16,17 @@ public final class UiPanelRenderer {
         int r = Math.max(0, Math.min(radius, Math.min(width / 2, height / 2)));
         int right = x + width;
         int bottom = y + height;
-        guiGraphics.fill(x + r, y, right - r, bottom, color);
+
+        if (r == 0) {
+            guiGraphics.fill(x, y, right, bottom, color);
+            return;
+        }
+
+        // Draw the rounded rectangle as non-overlapping regions. This is important for
+        // translucent colors: overlapping fills would blend twice and create a darker inner layer.
+        guiGraphics.fill(x + r, y, right - r, y + r, color);
         guiGraphics.fill(x, y + r, right, bottom - r, color);
+        guiGraphics.fill(x + r, bottom - r, right - r, bottom, color);
 
         if (r >= 2) {
             guiGraphics.fill(x + 1, y + 1, x + r, y + r, color);

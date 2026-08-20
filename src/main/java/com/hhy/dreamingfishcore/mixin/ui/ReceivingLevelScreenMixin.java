@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ReceivingLevelScreen;
@@ -16,55 +16,38 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ReceivingLevelScreen.class)
 public abstract class ReceivingLevelScreenMixin extends Screen {
 
-    @Unique private static final int ACCENT_BLUE = 0xFF0088FF;
-    @Unique private static final int BAR_BG = 0x66000000;
-    @Unique private static final int BAR_HIGHLIGHT = 0xFF55AAFF;
-
+    @Unique private static final String SERVER_STATUS = "正在搜寻梦屿信号";
     @Unique private final VirtualCoordinateHelper.VirtualSizeResult vs = new VirtualCoordinateHelper.VirtualSizeResult();
     @Unique private String tip = "";
+    @Unique private long dreamingFishCore$receivingStartedAt = -1L;
 
     protected ReceivingLevelScreenMixin(Component title) {
         super(title);
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick,
+                                         CallbackInfo ci) {
         ci.cancel();
 
         VirtualCoordinateHelper.calculateVirtualSize(this, vs);
         if (tip.isEmpty()) {
             tip = LoadingTips.getRandomTip();
         }
-
-        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
-
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(vs.uiScale, vs.uiScale, 1.0f);
-
-        int vw = vs.virtualWidth;
-        int vh = vs.virtualHeight;
-
-        // 左上角提示
-        LoadingScreenUi.renderTip(guiGraphics, this.font, tip);
-
-        // 底部进度条（循环动画）
-        int barMargin = 32;
-        int barHeight = 6;
-        int barX = barMargin;
-        int barW = vw - barMargin * 2;
-        int barY = vh - 28;
+        if (dreamingFishCore$receivingStartedAt < 0L) {
+            dreamingFishCore$receivingStartedAt = System.currentTimeMillis();
+        }
 
         long now = System.currentTimeMillis();
-        int fakeProgress = (int) ((now % 5000) * 100 / 5000);
+        int progress = LoadingScreenUi.estimateProgress(
+                dreamingFishCore$receivingStartedAt, now, 90, 99, 3_600L);
 
-        String label = "正在接收世界数据... " + fakeProgress + "%";
-        int labelW = this.font.width(label);
-        guiGraphics.drawString(this.font, label, barX + barW - labelW, barY - 12, 0xFFFFFFFF, true);
-
-        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
-                BAR_BG, ACCENT_BLUE, BAR_HIGHLIGHT);
-
+        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(vs.uiScale, vs.uiScale, 1.0f);
+        LoadingScreenUi.renderTip(guiGraphics, this.font, tip, Math.min(250, vs.virtualWidth - 52));
+        LoadingScreenUi.renderStatusWaveform(guiGraphics, this.font, vs.virtualWidth, vs.virtualHeight,
+                SERVER_STATUS, progress, now);
         guiGraphics.pose().popPose();
     }
-
 }

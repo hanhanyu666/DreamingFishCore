@@ -25,7 +25,9 @@
     "ui.OnlineServerEntryMixin",
     "ui.NetworkServerEntryMixin",
     "ui.LanHeaderMixin",
-    "ui.TitleScreenMixin"
+    "ui.TitleScreenMixin",
+    "ui.ChatComponentMixin",
+    "ui.ChatScreenMixin"
   ],
   "server": [
 

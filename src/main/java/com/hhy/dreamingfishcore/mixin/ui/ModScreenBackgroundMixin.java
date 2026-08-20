@@ -15,9 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Screen.class)
 public abstract class ModScreenBackgroundMixin {
     @Unique private static final String GENERIC_MESSAGE_SCREEN = "net.minecraft.client.gui.screens.GenericMessageScreen";
-    @Unique private static final int DREAMINGFISHCORE_ACCENT_BLUE = 0xFF0088FF;
-    @Unique private static final int DREAMINGFISHCORE_BAR_BG = 0x66000000;
-    @Unique private static final int DREAMINGFISHCORE_BAR_HIGHLIGHT = 0xFF55AAFF;
     @Unique private static final VirtualCoordinateHelper.VirtualSizeResult DREAMINGFISHCORE_VIRTUAL_SIZE =
             new VirtualCoordinateHelper.VirtualSizeResult();
     @Unique private static String dreamingFishCore$genericTip = "";
@@ -58,24 +55,11 @@ public abstract class ModScreenBackgroundMixin {
         var font = Minecraft.getInstance().font;
         LoadingScreenUi.renderTip(guiGraphics, font, dreamingFishCore$genericTip);
 
-        int barMargin = 32;
-        int barHeight = 6;
-        int barX = barMargin;
-        int barW = vw - barMargin * 2;
-        int barY = vh - 28;
-        int fakeProgress = (int) ((System.currentTimeMillis() % 5000) * 100 / 5000);
         String statusText = screen.getTitle() == null ? "处理中" : screen.getTitle().getString();
         if (statusText == null || statusText.isBlank()) {
             statusText = "处理中";
         }
-        String progressText = fakeProgress + "%";
-        guiGraphics.drawString(font, LoadingScreenUi.trimToWidth(statusText, font,
-                        Math.max(20, barW - font.width(progressText) - 18)),
-                barX, barY - 12, 0xFFFFFFFF, true);
-        guiGraphics.drawString(font, progressText, barX + barW - font.width(progressText), barY - 12, 0xFFFFFFFF, true);
-
-        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
-                DREAMINGFISHCORE_BAR_BG, DREAMINGFISHCORE_ACCENT_BLUE, DREAMINGFISHCORE_BAR_HIGHLIGHT);
+        LoadingScreenUi.renderBottomStatusText(guiGraphics, font, vw, vh, statusText);
 
         guiGraphics.pose().popPose();
     }

@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerC
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.network.Packet_WorldHistoryRequest;
+import com.hhy.dreamingfishcore.gameplay.story_system.network.Packet_WorldHistoryResponse;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.Packet_RequestPlayerStats;
 import com.hhy.dreamingfishcore.server.title_system.PlayerTitleManager;
@@ -127,8 +129,8 @@ public class ServerScreenUI_Screen extends Screen {
 
     // ==================== 左侧灵动岛按钮 ====================
     private static final String NOTICE_UI_NAME = "梦屿广播";
-    private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "🎒", "⚙️"};
-    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "背包", "设置"};
+    private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "◷", "⚙️"};
+    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "世界历史", "设置"};
     private static final int[] LEFT_BUTTON_COLORS = {
         0xFFAAAAAA,  // 个人档案 - 灰色
         0xFF55FF55,  // 帮助 - 绿色
@@ -138,7 +140,7 @@ public class ServerScreenUI_Screen extends Screen {
         0xFFFFFFAA,  // 服务器成就 - 黄色
         0xFF4FC3F7,  // 服务器商店 - 橙色
         0xFF4FC3F7,  // 领地 - 紫色
-        0xFFFFAAAA,  // 背包 - 粉色
+        0xFFFFC857,  // 世界历史 - 金色
         0xFF888888   // 设置 - 深灰色
     };
 
@@ -164,6 +166,17 @@ public class ServerScreenUI_Screen extends Screen {
     private static final int VISIBLE_NOTICES = 5;  // 可见公告数量
     private static boolean hasUnreadNoticesGlobal = false;  // 全局未读公告标记（用于按钮感叹号）
     // 注意：公告点击区域已移至 PageRenderer.noticeClickArea
+
+    // ==================== 世界历史数据 ====================
+    /** 历史由服务端筛选后发送，客户端不直接读取世界存档文件。 */
+    private static List<Packet_WorldHistoryResponse.HistoryEntry> cachedHistory = List.of();
+    private static long historyTotalEventCount = 0L;
+    private static boolean historyLoaded = false;
+    private static boolean historyWritesEnabled = false;
+    private static long historyScrollOffset = 0L;
+    private static int historyVisibleEntries = 5;
+    private static final int HISTORY_CARD_HEIGHT = 32;
+    private static final int HISTORY_CARD_GAP = 5;
 
     // ==================== 任务系统数据 ====================
     private static final int TASK_CARD_HEIGHT = 48;  // 任务卡片高度
@@ -223,6 +236,8 @@ public class ServerScreenUI_Screen extends Screen {
         DreamingFishCore_NetworkManager.sendToServer(new Packet_RequestPlayerStats());
         // 请求公告数据（用于更新感叹号状态）
         DreamingFishCore_NetworkManager.sendToServer(new Packet_NoticeListRequest());
+        // 请求公开世界历史，供“世界历史”页面显示。
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_WorldHistoryRequest());
     }
 
     /**
@@ -793,6 +808,7 @@ public class ServerScreenUI_Screen extends Screen {
             case 1 -> renderHelpTerminalPage(guiGraphics, x, y, width, height);
             case 4 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "玩家与排行", "排行面板还在接入数据");
             case 5 -> renderPlaceholderPage(guiGraphics, x, y, width, height, "服务器成就", "成就面板还在接入数据");
+            case 8 -> renderHistoryPage(guiGraphics, x, y, width, height);
             default -> renderPlaceholderPage(guiGraphics, x, y, width, height, LEFT_BUTTON_NAMES[selectedLeftButtonIndex], "该模块将打开独立界面");
         }
     }
@@ -1348,6 +1364,173 @@ public class ServerScreenUI_Screen extends Screen {
         drawSoftRect(guiGraphics, x, y, width, height, 3, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
         drawCenteredText(guiGraphics, title, x + width / 2, y + height / 2 - 12, TABLET_TEXT_COLOR);
         drawCenteredText(guiGraphics, hint, x + width / 2, y + height / 2 + 6, TABLET_MUTED_TEXT_COLOR);
+    }
+
+    /**
+     * 绘制当前世界已经公开发生的重大事件。
+     *
+     * <p>这里展示的是服务端提供的只读视图。内部世界旗标、内容热重载等运营记录不会进入该列表，
+     * 避免历史页面提前泄露仍在调查中的剧情判断。</p>
+     */
+    private void renderHistoryPage(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+        int summaryHeight = 38;
+        int gap = 8;
+        drawSoftRect(guiGraphics, x, y, width, summaryHeight, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
+        guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + summaryHeight, 0xFFFFC857);
+
+        drawText(guiGraphics, "梦屿世界年表", x + 13, y + 7, TABLET_TEXT_COLOR);
+        String statusText;
+        int statusColor;
+        if (!historyLoaded) {
+            statusText = "正在同步服务器记录";
+            statusColor = TABLET_MUTED_TEXT_COLOR;
+        } else if (!historyWritesEnabled) {
+            statusText = "历史日志处于只读保护";
+            statusColor = 0xFFFF7A88;
+        } else {
+            statusText = "持续记录中";
+            statusColor = 0xFF50D890;
+        }
+        drawText(guiGraphics, statusText, x + 13, y + 22, statusColor);
+
+        String countText = historyTotalEventCount + " 条公开历史 / 当前载入 " + cachedHistory.size() + " 条";
+        drawText(guiGraphics, countText, x + width - mc.font.width(countText) - 12, y + 14, TABLET_MUTED_TEXT_COLOR);
+
+        int listY = y + summaryHeight + gap;
+        int listHeight = height - summaryHeight - gap;
+        historyVisibleEntries = Math.max(1, (listHeight + HISTORY_CARD_GAP) / (HISTORY_CARD_HEIGHT + HISTORY_CARD_GAP));
+
+        if (!historyLoaded) {
+            renderHistoryEmptyState(guiGraphics, x, listY, width, listHeight, "正在读取世界历史...");
+            return;
+        }
+        if (cachedHistory.isEmpty()) {
+            renderHistoryEmptyState(guiGraphics, x, listY, width, listHeight, "这个世界的公开历史尚未开始");
+            return;
+        }
+
+        int maxOffset = Math.max(0, cachedHistory.size() - historyVisibleEntries);
+        historyScrollOffset = Math.max(0L, Math.min(historyScrollOffset, maxOffset));
+        int startIndex = cachedHistory.size() - 1 - (int) historyScrollOffset;
+        int cardsToDraw = Math.min(historyVisibleEntries, startIndex + 1);
+
+        guiGraphics.enableScissor(
+                (int) (x * uiScale),
+                (int) (listY * uiScale),
+                (int) ((x + width) * uiScale),
+                (int) ((listY + listHeight) * uiScale));
+        for (int index = 0; index < cardsToDraw; index++) {
+            Packet_WorldHistoryResponse.HistoryEntry entry = cachedHistory.get(startIndex - index);
+            int cardY = listY + index * (HISTORY_CARD_HEIGHT + HISTORY_CARD_GAP);
+            renderHistoryCard(guiGraphics, x, cardY, width, HISTORY_CARD_HEIGHT, entry);
+        }
+        guiGraphics.disableScissor();
+
+        if (cachedHistory.size() > historyVisibleEntries) {
+            int scrollTrackX = x + width - 3;
+            int thumbHeight = Math.max(12, listHeight * historyVisibleEntries / cachedHistory.size());
+            int travel = Math.max(0, listHeight - thumbHeight);
+            int thumbY = listY + (maxOffset == 0 ? 0 : (int) (travel * historyScrollOffset / maxOffset));
+            guiGraphics.fill(RenderType.gui(), scrollTrackX, listY, scrollTrackX + 2, listY + listHeight, 0x44344555);
+            guiGraphics.fill(RenderType.gui(), scrollTrackX, thumbY, scrollTrackX + 2, thumbY + thumbHeight, 0xFFFFC857);
+        }
+    }
+
+    private void renderHistoryEmptyState(
+            GuiGraphics guiGraphics, int x, int y, int width, int height, String text) {
+        drawSoftRect(guiGraphics, x, y, width, height, 2, 0x5524313E, TABLET_CARD_BORDER_COLOR);
+        drawCenteredText(guiGraphics, text, x + width / 2, y + height / 2 - mc.font.lineHeight / 2, TABLET_MUTED_TEXT_COLOR);
+    }
+
+    private void renderHistoryCard(
+            GuiGraphics guiGraphics,
+            int x,
+            int y,
+            int width,
+            int height,
+            Packet_WorldHistoryResponse.HistoryEntry entry) {
+        HistoryPresentation presentation = getHistoryPresentation(entry);
+        drawSoftRect(guiGraphics, x, y, width - 6, height, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
+        guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + height, presentation.color());
+
+        int badgeWidth = 28;
+        drawSoftRect(guiGraphics, x + 11, y + 7, badgeWidth, 18, 2, 0x442E3C49, 0x55344555);
+        drawCenteredText(guiGraphics, presentation.icon(), x + 11 + badgeWidth / 2, y + 12, presentation.color());
+
+        int textX = x + 48;
+        int timeWidth = mc.font.width(formatHistoryDate(entry.recordedAtEpochMillis()));
+        int textWidth = Math.max(20, width - 66 - timeWidth);
+        drawText(guiGraphics, fitText(presentation.title(), textWidth), textX, y + 6, TABLET_TEXT_COLOR);
+        drawText(guiGraphics, fitText(presentation.subtitle(), textWidth), textX, y + 19, TABLET_MUTED_TEXT_COLOR);
+        drawText(guiGraphics, formatHistoryDate(entry.recordedAtEpochMillis()), x + width - timeWidth - 12, y + 12, TABLET_MUTED_TEXT_COLOR);
+    }
+
+    private HistoryPresentation getHistoryPresentation(Packet_WorldHistoryResponse.HistoryEntry entry) {
+        String subject = getHistorySubjectName(entry.subjectId());
+        String actor = formatHistoryActor(entry.actor());
+        return switch (entry.type()) {
+            case "STAGE_CHANGED" -> new HistoryPresentation("章", "故事进入「" + subject + "」", actor + " 发布了新的世界阶段", 0xFFB58BFF);
+            case "OPERATION_ROUND_STARTED" -> new HistoryPresentation("议", "一次公共讨论形成记录", "梦屿正在等待世界作出回应", 0xFF4FC3F7);
+            case "OPERATION_ROUND_PUBLISHED" -> new HistoryPresentation("答", "世界回应了玩家的讨论", actor + " 发布了新的回应", 0xFF50D890);
+            case "TASK_PUBLISHED" -> new HistoryPresentation("令", "新的行动「" + subject + "」已发布", "等待参与者前往现场", 0xFFFFC857);
+            case "TASK_SUCCEEDED" -> new HistoryPresentation("成", "行动「" + subject + "」成功", formatParticipantText(entry), 0xFF50D890);
+            case "TASK_FAILED" -> new HistoryPresentation("失", "行动「" + subject + "」失败", formatParticipantText(entry) + "，结果已写入历史", 0xFFFF7A88);
+            case "ENDING_CHANGED" -> new HistoryPresentation("终", "世界进入「" + subject + "」", "这个选择将长期留在梦屿", 0xFFFFC857);
+            default -> new HistoryPresentation("记", subject, actor, 0xFF7AA8C7);
+        };
+    }
+
+    private String formatParticipantText(Packet_WorldHistoryResponse.HistoryEntry entry) {
+        String count = entry.details().get("participantCount");
+        return count == null ? "参与者共同完成了这次行动" : count + " 名参与者被记录在场";
+    }
+
+    private String getHistorySubjectName(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) {
+            return "未命名事件";
+        }
+        for (var stage : ClientCacheManager.getStoryStages().values()) {
+            if (subjectId.equals(stage.getStageId())) {
+                return stage.getStageName();
+            }
+            if (stage.getTasks() == null) {
+                continue;
+            }
+            for (var task : stage.getTasks()) {
+                if (subjectId.equals(task.getTaskKey())) {
+                    return task.getTaskName();
+                }
+            }
+        }
+        int separator = subjectId.indexOf(':');
+        String path = separator >= 0 ? subjectId.substring(separator + 1) : subjectId;
+        return path.replace('_', ' ').replace('-', ' ');
+    }
+
+    private String formatHistoryActor(String actor) {
+        return actor == null || actor.isBlank() || "system".equalsIgnoreCase(actor) ? "梦屿系统" : actor;
+    }
+
+    private String formatHistoryDate(long epochMillis) {
+        if (epochMillis <= 0L) {
+            return "--";
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("MM.dd HH:mm"));
+    }
+
+    private String fitText(String text, int maxWidth) {
+        if (text == null) {
+            return "";
+        }
+        if (mc.font.width(text) <= maxWidth) {
+            return text;
+        }
+        int ellipsisWidth = mc.font.width("...");
+        return ServerScreenUI_RendererUtils.truncateText(mc.font, text, Math.max(0, maxWidth - ellipsisWidth)) + "...";
+    }
+
+    private record HistoryPresentation(String icon, String title, String subtitle, int color) {
     }
 
     private void drawProfileTimeRow(GuiGraphics guiGraphics, int x, int y, int width, String label, String value, int accentColor) {
@@ -2234,10 +2417,8 @@ public class ServerScreenUI_Screen extends Screen {
             case 7: // 领地
                 // 领地系统已剥离，按钮保留为占位入口。
                 break;
-            case 8: // 背包
-                // Minecraft 原版背包
-                this.onClose();
-                mc.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player));
+            case 8: // 世界历史
+                DreamingFishCore_NetworkManager.sendToServer(new Packet_WorldHistoryRequest());
                 break;
             case 9: // 设置
                 // Minecraft 原版设置
@@ -2325,6 +2506,14 @@ public class ServerScreenUI_Screen extends Screen {
                 helpScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
                 return true;
             }
+        }
+
+        // 世界历史按“最新事件在上”排列，向下滚动查看更早的记录。
+        if (selectedLeftButtonIndex == 8 && cachedHistory.size() > historyVisibleEntries) {
+            int maxScrollOffset = Math.max(0, cachedHistory.size() - historyVisibleEntries);
+            int newOffset = (int) (historyScrollOffset - scrollY);
+            historyScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
+            return true;
         }
 
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -2462,6 +2651,24 @@ public class ServerScreenUI_Screen extends Screen {
                 break;
             }
         }
+    }
+
+    /** 接收服务端筛选后的公开世界历史。 */
+    public static void setHistoryData(
+            List<Packet_WorldHistoryResponse.HistoryEntry> entries,
+            long totalEventCount,
+            boolean loaded,
+            boolean writesEnabled) {
+        List<Packet_WorldHistoryResponse.HistoryEntry> safeEntries = entries == null
+                ? List.of()
+                : List.copyOf(entries);
+        if (!cachedHistory.equals(safeEntries)) {
+            historyScrollOffset = 0L;
+        }
+        cachedHistory = safeEntries;
+        historyTotalEventCount = Math.max(0L, totalEventCount);
+        historyLoaded = loaded;
+        historyWritesEnabled = writesEnabled;
     }
 
 }

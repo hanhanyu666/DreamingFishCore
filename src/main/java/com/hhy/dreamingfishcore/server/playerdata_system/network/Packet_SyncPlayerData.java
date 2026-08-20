@@ -247,10 +247,22 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
             }
             */
 
-            //客户端缓存更新
-            Rank rank = RankRegistry.getRankByName(rankName);
-            Title title = TitleRegistry.getTitleByName(titleName);
+            // 客户端与服务端版本不一致时，未知 Rank 不能静默降级成 NO_RANK。
             PlayerData cachedData = com.hhy.dreamingfishcore.client.cache.ClientCacheManager.getOrCreatePlayerData(playerUUID);
+            Rank rank;
+            if (RankRegistry.isRegistered(rankName)) {
+                rank = RankRegistry.getRankByName(rankName);
+            } else {
+                rank = cachedData.getRank();
+                DreamingFishCore.LOGGER.error(
+                        "服务端同步了客户端未注册的 Rank={}，请更新客户端 DreamingFishCore；保留原 Rank={}",
+                        rankName,
+                        rank == null ? RankRegistry.NO_RANK.getRankName() : rank.getRankName());
+                if (rank == null) {
+                    rank = RankRegistry.NO_RANK;
+                }
+            }
+            Title title = TitleRegistry.getTitleByName(titleName);
             cachedData.setOwnedRankNames(ownedRankNames);
             cachedData.setRank(rank);
             cachedData.setRegistrationTime(registrationTime);

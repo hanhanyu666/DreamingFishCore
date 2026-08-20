@@ -29,6 +29,9 @@ public class ChangeJoinMessage {
     private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_FISH_PLUS_PLUS;
     private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_OPERATOR;
     private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_SUPER_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_WORLD_SHAPER_FISH;
+    private static ModConfigSpec.ConfigValue<String> JOIN_MESSAGE_MYTH_SHAPER_FISH;
 
     // Rank专属离开消息
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_NO_RANK;
@@ -37,6 +40,9 @@ public class ChangeJoinMessage {
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_FISH_PLUS_PLUS;
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_OPERATOR;
     private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_SUPER_BUILDER_FISH;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_WORLD_SHAPER_FISH;
+    private static ModConfigSpec.ConfigValue<String> LEAVE_MESSAGE_MYTH_SHAPER_FISH;
 
     // 静态代码块，类初始化只会执行一次
     static {
@@ -75,7 +81,19 @@ public class ChangeJoinMessage {
 
         JOIN_MESSAGE_BUILDER_FISH = configBuilder
                 .comment("BUILDER FISH玩家进服消息 | 占位符：%player%=玩家名")
-                .define("join_message_builder_fish", "§6[BUILDER FISH] §b建筑师§6%player%§b来到梦屿！");
+                .define("join_message_builder_fish", "§a[BUILDER FISH] §b建筑师§a%player%§b来到梦屿！");
+
+        JOIN_MESSAGE_SUPER_BUILDER_FISH = configBuilder
+                .comment("SUPER BUILDER FISH玩家进服消息 | 占位符：%player%=玩家名")
+                .define("join_message_super_builder_fish", "§b[SUPER BUILDER FISH] §b筑梦师§b%player%§b来到梦屿！");
+
+        JOIN_MESSAGE_WORLD_SHAPER_FISH = configBuilder
+                .comment("WORLD SHAPER FISH玩家进服消息 | 占位符：%player%=玩家名")
+                .define("join_message_world_shaper_fish", "§6[WORLD SHAPER FISH] §b塑界者§6%player%§b来到梦屿！");
+
+        JOIN_MESSAGE_MYTH_SHAPER_FISH = configBuilder
+                .comment("MYTH SHAPER FISH玩家进服消息 | 占位符：%player%=玩家名")
+                .define("join_message_myth_shaper_fish", "§d[MYTH SHAPER FISH] §b神话缔造者§d%player%§b降临梦屿！");
 
         // Rank专属离开消息配置
         LEAVE_MESSAGE_NO_RANK = configBuilder
@@ -100,7 +118,19 @@ public class ChangeJoinMessage {
 
         LEAVE_MESSAGE_BUILDER_FISH = configBuilder
                 .comment("BUILDER FISH玩家离开消息 | 占位符：%player%=玩家名")
-                .define("leave_message_builder_fish", "§6[BUILDER FISH] §b建筑师§6%player%§b离开了梦屿！");
+                .define("leave_message_builder_fish", "§a[BUILDER FISH] §b建筑师§a%player%§b离开了梦屿！");
+
+        LEAVE_MESSAGE_SUPER_BUILDER_FISH = configBuilder
+                .comment("SUPER BUILDER FISH玩家离开消息 | 占位符：%player%=玩家名")
+                .define("leave_message_super_builder_fish", "§b[SUPER BUILDER FISH] §b筑梦师§b%player%§b离开了梦屿！");
+
+        LEAVE_MESSAGE_WORLD_SHAPER_FISH = configBuilder
+                .comment("WORLD SHAPER FISH玩家离开消息 | 占位符：%player%=玩家名")
+                .define("leave_message_world_shaper_fish", "§6[WORLD SHAPER FISH] §b塑界者§6%player%§b离开了梦屿！");
+
+        LEAVE_MESSAGE_MYTH_SHAPER_FISH = configBuilder
+                .comment("MYTH SHAPER FISH玩家离开消息 | 占位符：%player%=玩家名")
+                .define("leave_message_myth_shaper_fish", "§d[MYTH SHAPER FISH] §b神话缔造者§d%player%§b离开了梦屿！");
 
         COMMON_CONFIG_SPEC = configBuilder.build();         //configbuilder又有进服消息，也有出服消息，再全部统一构建成配置规则
     }
@@ -124,6 +154,9 @@ public class ChangeJoinMessage {
             case 3 -> getConfigValue(JOIN_MESSAGE_FISH_PLUS_PLUS);
             case 4 -> getConfigValue(JOIN_MESSAGE_OPERATOR);
             case 5 -> getConfigValue(JOIN_MESSAGE_BUILDER_FISH);
+            case 6 -> getConfigValue(JOIN_MESSAGE_SUPER_BUILDER_FISH);
+            case 7 -> getConfigValue(JOIN_MESSAGE_WORLD_SHAPER_FISH);
+            case 8 -> getConfigValue(JOIN_MESSAGE_MYTH_SHAPER_FISH);
             default -> getConfigValue(JOIN_MESSAGE); // 默认消息
         };
     }
@@ -137,6 +170,9 @@ public class ChangeJoinMessage {
             case 3 -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS_PLUS);
             case 4 -> getConfigValue(LEAVE_MESSAGE_OPERATOR);
             case 5 -> getConfigValue(LEAVE_MESSAGE_BUILDER_FISH);
+            case 6 -> getConfigValue(LEAVE_MESSAGE_SUPER_BUILDER_FISH);
+            case 7 -> getConfigValue(LEAVE_MESSAGE_WORLD_SHAPER_FISH);
+            case 8 -> getConfigValue(LEAVE_MESSAGE_MYTH_SHAPER_FISH);
             default -> getConfigValue(LEAVE_MESSAGE); // 默认消息
         };
     }
@@ -215,7 +251,10 @@ public class ChangeJoinMessage {
             case "FISH" -> 0x55FF55;        // 绿色
             case "FISH+" -> 0x55FFFF;       // 蓝色
             case "FISH++" -> 0xFFAA00;      // 金色
-            case "BUILDER FISH" -> 0xFFAA00;
+            case "BUILDER FISH" -> 0x55FF55;
+            case "SUPER BUILDER FISH" -> 0x55FFFF;
+            case "WORLD SHAPER FISH" -> 0xFFAA00;
+            case "MYTH SHAPER FISH" -> 0xFF69B4;
             case "OPERATOR" -> 0xFF5555;    // 红色
             default -> 0xAAAAAA;
         };

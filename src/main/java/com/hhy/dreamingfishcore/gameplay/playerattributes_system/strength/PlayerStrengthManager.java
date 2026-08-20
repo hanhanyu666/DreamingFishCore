@@ -57,8 +57,13 @@ public class PlayerStrengthManager {
             return;
         }
 
+        GameType gameType = serverPlayer.gameMode.getGameModeForPlayer();
+        if (gameType == GameType.SPECTATOR) {
+            return;
+        }
+
         //创造模式强制设为满体力并直接返回
-        if (serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+        if (gameType == GameType.CREATIVE) {
             UUID uuid = serverPlayer.getUUID();
             PlayerAttributesData attrData = PlayerAttributesDataManager.getPlayerAttributesData(uuid);
             if (attrData != null) {
@@ -93,8 +98,9 @@ public class PlayerStrengthManager {
             return;
         }
 
-        //创造模式跳过跳跃体力消耗
-        if (serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+        //创造和旁观模式跳过跳跃体力消耗
+        GameType gameType = serverPlayer.gameMode.getGameModeForPlayer();
+        if (gameType == GameType.CREATIVE || gameType == GameType.SPECTATOR) {
             return;
         }
 
@@ -250,8 +256,10 @@ public class PlayerStrengthManager {
 
     //手动消耗体力
     public static boolean consumeStrength(ServerPlayer player, int amount) {
-        //创造模式直接返回false
-        if (player == null || !player.isAlive() || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+        //创造和旁观模式不受体力消耗影响
+        if (player == null || !player.isAlive()
+                || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
+                || player.gameMode.getGameModeForPlayer() == GameType.SPECTATOR) {
             return false;
         }
         PlayerAttributesData data = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
@@ -281,8 +289,10 @@ public class PlayerStrengthManager {
 
     //手动恢复体力
     public static void restoreStrength(ServerPlayer player, int amount) {
-        //创造模式直接返回，不执行恢复
-        if (player == null || !player.isAlive() || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+        //创造和旁观模式不执行体力恢复
+        if (player == null || !player.isAlive()
+                || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
+                || player.gameMode.getGameModeForPlayer() == GameType.SPECTATOR) {
             return;
         }
         PlayerAttributesData data = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
@@ -311,7 +321,7 @@ public class PlayerStrengthManager {
         public static void onClientTick(ClientTickEvent.Post event) {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer player = mc.player;
-            if (player == null || !player.isAlive()) return;
+            if (player == null || !player.isAlive() || player.isSpectator()) return;
 
             UUID uuid = player.getUUID();
             boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);
@@ -336,6 +346,8 @@ public class PlayerStrengthManager {
         public static void onPlayerJump(LivingEvent.LivingJumpEvent event) {
             // 仅在客户端执行
             if (event.getEntity().level().isClientSide() && event.getEntity() instanceof LocalPlayer player) {
+                if (player.isSpectator()) return;
+
                 UUID uuid = player.getUUID();
                 boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);
 
@@ -370,7 +382,7 @@ public class PlayerStrengthManager {
         public static void onPlayerInput(InputEvent.Key event) {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer player = mc.player;
-            if (player == null || !player.isAlive()) return;
+            if (player == null || !player.isAlive() || player.isSpectator()) return;
 
             UUID uuid = player.getUUID();
             boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);
@@ -392,7 +404,7 @@ public class PlayerStrengthManager {
 
             // 只处理本地玩家，忽略其他玩家（RemotePlayer）
             if (!(event.getEntity() instanceof LocalPlayer player)) return;
-            if (player == null || !player.isAlive()) return;
+            if (!player.isAlive() || player.isSpectator()) return;
 
             UUID uuid = player.getUUID();
             boolean isExhausted = IS_STRENGTH_EXHAUSTED_CLIENT.getOrDefault(uuid, false);

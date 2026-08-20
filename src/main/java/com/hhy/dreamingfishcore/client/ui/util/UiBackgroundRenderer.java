@@ -13,9 +13,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class UiBackgroundRenderer {
 
     private static final ResourceLocation LOADING_BACKGROUND =
-            ResourceLocation.fromNamespaceAndPath("dreamingfishcore", "background_1.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID,
+                    "textures/gui/loading/world_loading.png");
+    private static final ResourceLocation RADIO_ICON =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID,
+                    "textures/gui/loading/radio.png");
+    private static final ResourceLocation MENU_DEFAULT_BACKGROUND =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "background_1.png");
     private static final ResourceLocation[] MENU_BG_TEXTURES = {
-            LOADING_BACKGROUND,
+            MENU_DEFAULT_BACKGROUND,
             ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "background_4.png"),
             ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "background_5.png"),
             ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "background_6.png"),
@@ -43,6 +49,19 @@ public final class UiBackgroundRenderer {
     /** 加载界面固定使用大合照，避免加载时背景随机跳动。 */
     public static void renderLoadingBackground(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
         renderCover(guiGraphics, LOADING_BACKGROUND, screenWidth, screenHeight);
+    }
+
+    /** 游戏首次启动进入标题界面时，保留原来的背景。 */
+    public static void renderStartupBackground(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
+        renderCover(guiGraphics, MENU_DEFAULT_BACKGROUND, screenWidth, screenHeight);
+    }
+
+    public static void renderRadioIcon(GuiGraphics guiGraphics, int x, int y, int size) {
+        if (size <= 0) {
+            return;
+        }
+        guiGraphics.blit(RADIO_ICON, x, y, size, size,
+                0.0F, 0.0F, 32, 32, 32, 32);
     }
 
     /**

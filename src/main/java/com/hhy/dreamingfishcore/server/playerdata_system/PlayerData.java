@@ -49,9 +49,8 @@ public class PlayerData {
         long now = System.currentTimeMillis();
         this.uuid = uuid;
         this.playerName = playerName;
-        this.rank = RankRegistry.BUILDER_FISH;
+        this.rank = RankRegistry.NO_RANK;
         this.ownedRanks = new LinkedHashSet<>();
-        this.ownedRanks.add(RankRegistry.BUILDER_FISH.getRankName());
         this.title = defaultTitle;
         this.level = 1;
         this.registrationTime = now;

@@ -15,16 +15,15 @@ class PlayerDataRankTest {
     private static final Gson GSON = new Gson();
 
     @Test
-    void newPlayerStartsWithGoldBuilderFishEquipped() {
-        PlayerData newPlayer = new PlayerData(UUID.randomUUID(), "NewBuilder", null);
+    void newPlayerStartsWithoutRank() {
+        PlayerData newPlayer = new PlayerData(UUID.randomUUID(), "NewPlayer", null);
 
-        assertEquals(RankRegistry.BUILDER_FISH.getRankName(), newPlayer.getRank().getRankName());
-        assertEquals(0xFFAA00, newPlayer.getRank().getRankColor());
-        assertEquals(Set.of(RankRegistry.BUILDER_FISH.getRankName()), newPlayer.getOwnedRankNames());
+        assertEquals(RankRegistry.NO_RANK.getRankName(), newPlayer.getRank().getRankName());
+        assertEquals(Set.of(), newPlayer.getOwnedRankNames());
     }
 
     @Test
-    void existingPlayerReceivesBuilderOnLoginWithoutChangingEquippedRank() {
+    void existingPlayerCanReceiveBuilderWithoutChangingEquippedRank() {
         String legacyJson = """
                 {
                   "uuid": "%s",
@@ -53,6 +52,7 @@ class PlayerDataRankTest {
     void unequippingDoesNotRemoveOwnedRank() {
         PlayerData player = new PlayerData(UUID.randomUUID(), "NewBuilder", null);
 
+        player.setRank(RankRegistry.BUILDER_FISH);
         player.setRank(RankRegistry.NO_RANK);
 
         assertEquals(RankRegistry.NO_RANK.getRankName(), player.getRank().getRankName());
@@ -60,7 +60,7 @@ class PlayerDataRankTest {
     }
 
     @Test
-    void loginGrantDoesNotEquipBuilderForPlayerWhoChoseNoRank() {
+    void grantingBuilderDoesNotEquipItForPlayerWhoChoseNoRank() {
         PlayerData player = GSON.fromJson("{\"rank\":{\"rankName\":\"NO_RANK\",\"rankLevel\":0,\"rankColor\":11184810}}",
                 PlayerData.class);
         player.repairRankData();
@@ -69,5 +69,32 @@ class PlayerDataRankTest {
 
         assertEquals(RankRegistry.NO_RANK.getRankName(), player.getRank().getRankName());
         assertTrue(player.ownsRank(RankRegistry.BUILDER_FISH));
+    }
+
+    @Test
+    void superBuilderFishIsRegisteredAtLevelSixWithAquaColor() {
+        assertEquals(RankRegistry.SUPER_BUILDER_FISH,
+                RankRegistry.getRankByName("SUPER_BUILDER_FISH"));
+        assertEquals(RankRegistry.SUPER_BUILDER_FISH, RankRegistry.getRankByLevel(6));
+        assertEquals(0x55FFFF, RankRegistry.SUPER_BUILDER_FISH.getRankColor());
+        assertTrue(RankRegistry.isRegistered("SUPER BUILDER FISH"));
+    }
+
+    @Test
+    void worldShaperFishIsRegisteredAtLevelSevenWithGoldColor() {
+        assertEquals(RankRegistry.WORLD_SHAPER_FISH,
+                RankRegistry.getRankByName("WORLD_SHAPER_FISH"));
+        assertEquals(RankRegistry.WORLD_SHAPER_FISH, RankRegistry.getRankByLevel(7));
+        assertEquals(0xFFAA00, RankRegistry.WORLD_SHAPER_FISH.getRankColor());
+        assertTrue(RankRegistry.isRegistered("WORLD SHAPER FISH"));
+    }
+
+    @Test
+    void mythShaperFishIsRegisteredAtLevelEightWithHotPinkColor() {
+        assertEquals(RankRegistry.MYTH_SHAPER_FISH,
+                RankRegistry.getRankByName("MYTH_SHAPER_FISH"));
+        assertEquals(RankRegistry.MYTH_SHAPER_FISH, RankRegistry.getRankByLevel(8));
+        assertEquals(0xFF69B4, RankRegistry.MYTH_SHAPER_FISH.getRankColor());
+        assertTrue(RankRegistry.isRegistered("MYTH SHAPER FISH"));
     }
 }

@@ -390,8 +390,7 @@ public abstract class TitleScreenMixin extends Screen {
         // 渲染左下角版权（屏幕空间，无居中偏移）
         dreamingFishCore$renderFooter(guiGraphics, scale);
 
-        // ========== 步骤4: 手动调用super.render()来渲染右上角原版/模组按钮 ==========
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // 右上角辅助按钮由梦鱼核心统一绘制，避免原版控件与自定义外观重复叠加。
         dreamingFishCore$renderRelayedAuxButtons(guiGraphics, mouseX, mouseY);
 
         dreamingFishCore$scale = scale;
@@ -507,10 +506,12 @@ public abstract class TitleScreenMixin extends Screen {
         guiGraphics.fill(x + 10, y + 95, x + Math.min(maxWidth, 118), y + 96,
                 dreamingFishCore$withAlpha(ACCENT_GOLD, pulse));
 
-        String line1 = dreamingFishCore$fitText("一片曾让人慢下来生活、重新开始做梦的大陆。", textMax);
-        String line2 = dreamingFishCore$fitText("如今，它正在风暴与沉默之间，等待新的幸存者。", textMax);
-        guiGraphics.drawString(this.font, line1, x + 10, y + 108, 0xFFE8DDBD, true);
-        guiGraphics.drawString(this.font, line2, x + 10, y + 121, 0xFFE8DDBD, true);
+        if (!dreamingFishCore$donateExpanded) {
+            String line1 = dreamingFishCore$fitText("一片曾让人慢下来生活、重新开始做梦的大陆。", textMax);
+            String line2 = dreamingFishCore$fitText("如今，它正在风暴与沉默之间，等待新的幸存者。", textMax);
+            guiGraphics.drawString(this.font, line1, x + 10, y + 108, 0xFFE8DDBD, true);
+            guiGraphics.drawString(this.font, line2, x + 10, y + 121, 0xFFE8DDBD, true);
+        }
     }
 
     @Unique
@@ -565,7 +566,7 @@ public abstract class TitleScreenMixin extends Screen {
     @Unique
     private void dreamingFishCore$drawDonateDetailPanel(GuiGraphics guiGraphics, int x, int y, int w, int h) {
         dreamingFishCore$drawPixelCutRect(guiGraphics, x + 3, y + 4, w, h, 0x62000000);
-        dreamingFishCore$drawPixelCutRect(guiGraphics, x, y, w, h, 0xE0090C10);
+        dreamingFishCore$drawPixelCutRect(guiGraphics, x, y, w, h, 0xFF090C10);
         guiGraphics.fill(x + 8, y, x + w - 8, y + 1, 0x42FFFFFF);
         guiGraphics.fill(x + 8, y + h - 2, x + w - 8, y + h - 1, dreamingFishCore$withAlpha(ACCENT_GOLD, 110));
 

@@ -29,11 +29,13 @@ public class Packet_CantRun implements net.minecraft.network.protocol.common.cus
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;
 
-            // 强制停止客户端疾跑
-            mc.player.setSprinting(false);
-
             // 设置客户端耗尽标记
             PlayerStrengthManager.ClientTickHandler.setClientStrengthExhausted(mc.player.getUUID(), true);
+
+            if (mc.player.isSpectator()) return;
+
+            // 强制停止客户端疾跑
+            mc.player.setSprinting(false);
 
             // 显示提示消息
             mc.player.displayClientMessage(

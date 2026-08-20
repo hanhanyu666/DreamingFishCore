@@ -89,7 +89,7 @@ public abstract class LoadingOverlayMixin extends Overlay {
 
         RenderSystem.enableBlend();
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alphaF);
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, width, height);
+        UiBackgroundRenderer.renderStartupBackground(guiGraphics, width, height);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         guiGraphics.fillGradient(0, 0, width, height,
                 (Mth.ceil(0x88 * alphaF) << 24),
@@ -104,49 +104,28 @@ public abstract class LoadingOverlayMixin extends Overlay {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        // Progress bar at bottom
         int barMargin = 40;
         int progressBarHeight = 8;
         int progressBarX = barMargin;
         int progressBarWidth = width - barMargin * 2;
         int progressBarY = height - 35;
 
-        int barBg = (BAR_BACKGROUND & 0x00FFFFFF) | (Mth.ceil(((BAR_BACKGROUND >>> 24) & 255) * alphaF) << 24);
-        int barAccent = (ACCENT_BLUE & 0x00FFFFFF) | (Mth.ceil(((ACCENT_BLUE >>> 24) & 255) * alphaF) << 24);
+        int barBg = (BAR_BACKGROUND & 0x00FFFFFF)
+                | (Mth.ceil(((BAR_BACKGROUND >>> 24) & 255) * alphaF) << 24);
+        int barAccent = (ACCENT_BLUE & 0x00FFFFFF)
+                | (Mth.ceil(((ACCENT_BLUE >>> 24) & 255) * alphaF) << 24);
 
-        dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressBarWidth, progressBarHeight, barBg);
+        dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY,
+                progressBarWidth, progressBarHeight, barBg);
 
-        // Progress bar (blue)
         int progressWidth = (int) (this.currentProgress * progressBarWidth);
         if (progressWidth > 0) {
-            dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight, barAccent);
-
-            // Top highlight line
+            dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY,
+                    progressWidth, progressBarHeight, barAccent);
             if (progressWidth > 2) {
-                guiGraphics.fill(progressBarX + 2, progressBarY, progressBarX + progressWidth - 2, progressBarY + 1,
+                guiGraphics.fill(progressBarX + 2, progressBarY,
+                        progressBarX + progressWidth - 2, progressBarY + 1,
                         (Mth.ceil(255 * alphaF) << 24) | 0x55AAFF);
-            }
-
-            // Pulsing glow effect
-            if ((now / 500) % 2 == 0) {
-                dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY, progressWidth, progressBarHeight,
-                        (Mth.ceil(0x33 * alphaF) << 24) | 0x0055FF);
-            }
-
-            // Star-like sparkles
-            if (progressWidth > 2) {
-                int sparkleCount = Math.min(8, Math.max(4, progressWidth / 40));
-                int sparkleY1 = progressBarY + 1;
-                int sparkleY2 = progressBarY + progressBarHeight - 1;
-                for (int i = 0; i < sparkleCount; i++) {
-                    int offset = (int) ((now / 220 + i * 13) % 1000);
-                    int sx = progressBarX + (offset * 37 + i * 53) % Math.max(1, progressWidth);
-                    int sy = sparkleY1 + (i * 3 + (int) (now / 350)) % Math.max(1, (sparkleY2 - sparkleY1));
-                    guiGraphics.fill(sx, sy, sx + 1, sy + 1, (Mth.ceil(0x33 * alphaF) << 24) | 0xFFFFFF);
-                    if ((now / 700 + i) % 2 == 0) {
-                        guiGraphics.fill(sx - 1, sy, sx, sy + 1, (Mth.ceil(0x22 * alphaF) << 24) | 0x00FFFF);
-                    }
-                }
             }
         }
 
@@ -157,7 +136,8 @@ public abstract class LoadingOverlayMixin extends Overlay {
     }
 
     @Unique
-    private void dreamingFishCore$renderRoundedBar(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
+    private void dreamingFishCore$renderRoundedBar(GuiGraphics guiGraphics, int x, int y,
+                                                    int width, int height, int color) {
         if (width <= 0 || height <= 0) {
             return;
         }
@@ -171,4 +151,5 @@ public abstract class LoadingOverlayMixin extends Overlay {
         guiGraphics.fill(x, y + 1, x + radius, y + 1 + innerHeight, color);
         guiGraphics.fill(x + width - radius, y + 1, x + width, y + 1 + innerHeight, color);
     }
+
 }

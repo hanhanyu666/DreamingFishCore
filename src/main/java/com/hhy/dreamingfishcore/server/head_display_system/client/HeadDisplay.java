@@ -58,15 +58,7 @@ public class HeadDisplay {
             return null;
         }
 
-        // 获取rank颜色
-        ChatFormatting rankColorFormatting = switch (playerRank.getRankName()) {
-            case "FISH" -> ChatFormatting.GREEN;
-            case "FISH+" -> ChatFormatting.AQUA;
-            case "FISH++" -> ChatFormatting.GOLD;
-            case "BUILDER FISH" -> ChatFormatting.GOLD;
-            case "OPERATOR" -> ChatFormatting.RED;
-            default -> ChatFormatting.WHITE;
-        };
+        int rankColor = playerRank.getRankColor();
 
         // 获取称号颜色
         int titleColor = playerTitle.getColor();
@@ -82,9 +74,9 @@ public class HeadDisplay {
         } else {
             // 有特殊rank：等级和rank用rank颜色，称号用称号自己的颜色
             return Component.literal("[" + "Lv" + playerLevel + "] ")
-                    .withStyle(rankColorFormatting)
+                    .withStyle(style -> style.withColor(rankColor))
                     .append(Component.literal("[" + playerRank.getRankName() + "] ")
-                            .withStyle(rankColorFormatting))
+                            .withStyle(style -> style.withColor(rankColor)))
                     .append(Component.literal("[" + playerTitle.getTitleName() + "]")
                             .withStyle(s -> s.withColor(titleColor)));
         }

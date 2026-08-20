@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Locale;
 
 public class RankRegistry {
-    //5个等级
     // 颜色定义：
     // NO_RANK: 灰色 (0xAAAAAA)
     // FISH: 绿色 (0x55FF55 - §a)
@@ -31,11 +30,21 @@ public class RankRegistry {
             "OPERATOR", 4, 0xFF5555
     );
     public static final Rank BUILDER_FISH = new Rank(
-            "BUILDER FISH", 5, 0xFFAA00
+            "BUILDER FISH", 5, 0x55FF55
+    );
+    public static final Rank SUPER_BUILDER_FISH = new Rank(
+            "SUPER BUILDER FISH", 6, 0x55FFFF
+    );
+    public static final Rank WORLD_SHAPER_FISH = new Rank(
+            "WORLD SHAPER FISH", 7, 0xFFAA00
+    );
+    public static final Rank MYTH_SHAPER_FISH = new Rank(
+            "MYTH SHAPER FISH", 8, 0xFF69B4
     );
 
     private static final List<Rank> REGISTERED_RANKS = List.of(
-            NO_RANK, FISH, FISH_PLUS, FISH_PLUS_PLUS, OPERATOR, BUILDER_FISH
+            NO_RANK, FISH, FISH_PLUS, FISH_PLUS_PLUS, OPERATOR, BUILDER_FISH, SUPER_BUILDER_FISH,
+            WORLD_SHAPER_FISH, MYTH_SHAPER_FISH
     );
 
     // 按名称查找
@@ -50,6 +59,9 @@ public class RankRegistry {
             case "FISH++" -> FISH_PLUS_PLUS;
             case "OPERATOR" -> OPERATOR;
             case "BUILDER FISH", "BUILDER_FISH" -> BUILDER_FISH;
+            case "SUPER BUILDER FISH", "SUPER_BUILDER_FISH" -> SUPER_BUILDER_FISH;
+            case "WORLD SHAPER FISH", "WORLD_SHAPER_FISH" -> WORLD_SHAPER_FISH;
+            case "MYTH SHAPER FISH", "MYTH_SHAPER_FISH" -> MYTH_SHAPER_FISH;
             default -> NO_RANK;
         };
     }
@@ -61,7 +73,10 @@ public class RankRegistry {
         String normalizedName = name.trim().toUpperCase(Locale.ROOT);
         return REGISTERED_RANKS.stream()
                 .anyMatch(rank -> rank.getRankName().equals(normalizedName)
-                        || (rank == BUILDER_FISH && "BUILDER_FISH".equals(normalizedName)));
+                        || (rank == BUILDER_FISH && "BUILDER_FISH".equals(normalizedName))
+                        || (rank == SUPER_BUILDER_FISH && "SUPER_BUILDER_FISH".equals(normalizedName))
+                        || (rank == WORLD_SHAPER_FISH && "WORLD_SHAPER_FISH".equals(normalizedName))
+                        || (rank == MYTH_SHAPER_FISH && "MYTH_SHAPER_FISH".equals(normalizedName)));
     }
 
     public static List<Rank> getRegisteredRanks() {
@@ -77,6 +92,9 @@ public class RankRegistry {
             case 3 -> FISH_PLUS_PLUS;
             case 4 -> OPERATOR;
             case 5 -> BUILDER_FISH;
+            case 6 -> SUPER_BUILDER_FISH;
+            case 7 -> WORLD_SHAPER_FISH;
+            case 8 -> MYTH_SHAPER_FISH;
             default -> NO_RANK;
         };
     }

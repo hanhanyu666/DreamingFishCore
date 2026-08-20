@@ -16,10 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(GenericWaitingScreen.class)
 public abstract class GenericWaitingScreenMixin extends Screen {
 
-    @Unique private static final int ACCENT_BLUE = 0xFF0088FF;
-    @Unique private static final int BAR_BG = 0x66000000;
-    @Unique private static final int BAR_HIGHLIGHT = 0xFF55AAFF;
-
     @Unique private final VirtualCoordinateHelper.VirtualSizeResult vs = new VirtualCoordinateHelper.VirtualSizeResult();
     @Unique private String tip = "";
 
@@ -46,30 +42,11 @@ public abstract class GenericWaitingScreenMixin extends Screen {
 
         LoadingScreenUi.renderTip(guiGraphics, this.font, tip);
 
-        long now = System.currentTimeMillis();
-
-        // 底部进度条（循环动画）
-        int barMargin = 32;
-        int barHeight = 6;
-        int barX = barMargin;
-        int barW = vw - barMargin * 2;
-        int barY = vh - 28;
-
-        int fakeProgress = (int) ((now % 6000) * 100 / 6000);
-
         String statusText = this.title == null ? "请稍候" : this.title.getString();
         if (statusText == null || statusText.isBlank()) {
             statusText = "请稍候";
         }
-        String progressText = fakeProgress + "%";
-        guiGraphics.drawString(this.font, LoadingScreenUi.trimToWidth(statusText, this.font,
-                        Math.max(20, barW - this.font.width(progressText) - 18)),
-                barX, barY - 12, 0xFFFFFFFF, true);
-        guiGraphics.drawString(this.font, progressText, barX + barW - this.font.width(progressText), barY - 12,
-                0xFFFFFFFF, true);
-
-        LoadingScreenUi.renderProgressBar(guiGraphics, barX, barY, barW, barHeight, fakeProgress,
-                BAR_BG, ACCENT_BLUE, BAR_HIGHLIGHT);
+        LoadingScreenUi.renderBottomStatusText(guiGraphics, this.font, vw, vh, statusText);
 
         guiGraphics.pose().popPose();
     }

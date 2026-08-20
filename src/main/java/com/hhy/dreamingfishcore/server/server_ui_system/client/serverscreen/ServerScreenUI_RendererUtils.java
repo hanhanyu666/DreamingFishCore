@@ -635,7 +635,10 @@ public class ServerScreenUI_RendererUtils {
             case 2 -> 0xFF00FFFF;  // FISH+ - 青色
             case 3 -> 0xFF4FC3F7;  // FISH++ - 金色
             case 4 -> 0xFFFF0000;  // OPERATOR - 红色
-            case 5 -> 0xFFFFAA00;  // BUILDER FISH - 金色
+            case 5 -> 0xFF55FF55;  // BUILDER FISH - 绿色
+            case 6 -> 0xFF55FFFF;  // SUPER BUILDER FISH - 水蓝色
+            case 7 -> 0xFFFFAA00;  // WORLD SHAPER FISH - 金色
+            case 8 -> 0xFFFF69B4;  // MYTH SHAPER FISH - 红粉色
             default -> 0xFF888888;
         };
     }

@@ -9,6 +9,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_sys
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.network.*;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.story_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
 import com.hhy.dreamingfishcore.server.check_system.network.*;
 import com.hhy.dreamingfishcore.server.login_system.network.*;
@@ -16,6 +17,7 @@ import com.hhy.dreamingfishcore.server.notice_system.network.*;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.*;
 import com.hhy.dreamingfishcore.server.rank_system.network.Packet_EquipPlayerRank;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.*;
+import com.hhy.dreamingfishcore.server.title_system.network.Packet_RichChatMessage;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
@@ -25,7 +27,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    private static final String PROTOCOL_VERSION = "0.2.0";
+    // 世界历史请求/响应加入了新的客户端-服务端契约，旧客户端应在握手时明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.4.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -49,6 +52,7 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToServer(Packet_ServerPlayerListRequest.TYPE, Packet_ServerPlayerListRequest.STREAM_CODEC, Packet_ServerPlayerListRequest::handle);
         registrar.playToClient(Packet_ServerPlayerListResponse.TYPE, Packet_ServerPlayerListResponse.STREAM_CODEC, Packet_ServerPlayerListResponse::handle);
         registrar.playToClient(Packet_SystemMessage.TYPE, Packet_SystemMessage.STREAM_CODEC, Packet_SystemMessage::handle);
+        registrar.playToClient(Packet_RichChatMessage.TYPE, Packet_RichChatMessage.STREAM_CODEC, Packet_RichChatMessage::handle);
         registrar.playToServer(Packet_OnlinePlayerCountRequest.TYPE, Packet_OnlinePlayerCountRequest.STREAM_CODEC, Packet_OnlinePlayerCountRequest::handle);
         registrar.playToClient(Packet_OnlinePlayerCountResponse.TYPE, Packet_OnlinePlayerCountResponse.STREAM_CODEC, Packet_OnlinePlayerCountResponse::handle);
 
@@ -92,6 +96,8 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_OpenStoryBookGUI.TYPE, Packet_OpenStoryBookGUI.STREAM_CODEC, Packet_OpenStoryBookGUI::handle);
         registrar.playToClient(Packet_OpenStoryFragmentGUI.TYPE, Packet_OpenStoryFragmentGUI.STREAM_CODEC, Packet_OpenStoryFragmentGUI::handle);
         registrar.playToServer(Packet_UpdateStoryBookOrder.TYPE, Packet_UpdateStoryBookOrder.STREAM_CODEC, Packet_UpdateStoryBookOrder::handle);
+        registrar.playToServer(Packet_WorldHistoryRequest.TYPE, Packet_WorldHistoryRequest.STREAM_CODEC, Packet_WorldHistoryRequest::handle);
+        registrar.playToClient(Packet_WorldHistoryResponse.TYPE, Packet_WorldHistoryResponse.STREAM_CODEC, Packet_WorldHistoryResponse::handle);
         registrar.playToClient(Packet_OpenNpcDialogueGUI.TYPE, Packet_OpenNpcDialogueGUI.STREAM_CODEC, Packet_OpenNpcDialogueGUI::handle);
         registrar.playToServer(Packet_NpcInteractionRequest.TYPE, Packet_NpcInteractionRequest.STREAM_CODEC, Packet_NpcInteractionRequest::handle);
 

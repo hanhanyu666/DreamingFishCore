@@ -168,6 +168,7 @@ public class CustomStatueGUI {
         Player player = mc.player;
         if (player == null || !CustomHotbarGUI.isHudVisibleScreen(mc) || player.isDeadOrDying()
                 || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
+                || player.isSpectator()
                 || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.CREATIVE) {
             return;
         }
@@ -874,7 +875,7 @@ public class CustomStatueGUI {
     @SubscribeEvent
     public static void interceptVanillaHealthAndFoodUI(RenderGuiLayerEvent.Pre event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
+        if (mc.player == null || mc.player.isSpectator()) {
             return;
         }
         //拦截原版玩家血量UI
@@ -891,7 +892,7 @@ public class CustomStatueGUI {
         
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || !CustomHotbarGUI.isHudVisibleScreen(mc)) {
+        if (mc.player == null || mc.player.isSpectator() || !CustomHotbarGUI.isHudVisibleScreen(mc)) {
             return;
         }
 
