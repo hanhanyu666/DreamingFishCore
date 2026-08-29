@@ -72,29 +72,62 @@ class PlayerDataRankTest {
     }
 
     @Test
-    void superBuilderFishIsRegisteredAtLevelSixWithAquaColor() {
+    void originalFishRanksKeepLevelsOneTwoAndThree() {
+        assertEquals(1, RankRegistry.FISH.getRankLevel());
+        assertEquals(2, RankRegistry.FISH_PLUS.getRankLevel());
+        assertEquals(3, RankRegistry.FISH_PLUS_PLUS.getRankLevel());
+    }
+
+    @Test
+    void builderRanksShareTheFishAndFishPlusTiers() {
+        assertEquals(1, RankRegistry.BUILDER_FISH.getRankLevel());
         assertEquals(RankRegistry.SUPER_BUILDER_FISH,
                 RankRegistry.getRankByName("SUPER_BUILDER_FISH"));
-        assertEquals(RankRegistry.SUPER_BUILDER_FISH, RankRegistry.getRankByLevel(6));
+        assertEquals(RankRegistry.SUPER_BUILDER_FISH, RankRegistry.getRankByName("super"));
+        assertEquals(2, RankRegistry.SUPER_BUILDER_FISH.getRankLevel());
+        assertEquals(RankRegistry.FISH_PLUS, RankRegistry.getRankByLevel(2));
+        assertEquals(Set.of(RankRegistry.FISH_PLUS, RankRegistry.SUPER_BUILDER_FISH),
+                Set.copyOf(RankRegistry.getRanksByLevel(2)));
         assertEquals(0x55FFFF, RankRegistry.SUPER_BUILDER_FISH.getRankColor());
         assertTrue(RankRegistry.isRegistered("SUPER BUILDER FISH"));
     }
 
     @Test
-    void worldShaperFishIsRegisteredAtLevelSevenWithGoldColor() {
+    void worldShaperFishSharesTheFishPlusPlusTier() {
         assertEquals(RankRegistry.WORLD_SHAPER_FISH,
                 RankRegistry.getRankByName("WORLD_SHAPER_FISH"));
-        assertEquals(RankRegistry.WORLD_SHAPER_FISH, RankRegistry.getRankByLevel(7));
+        assertEquals(3, RankRegistry.WORLD_SHAPER_FISH.getRankLevel());
+        assertEquals(RankRegistry.FISH_PLUS_PLUS, RankRegistry.getRankByLevel(3));
         assertEquals(0xFFAA00, RankRegistry.WORLD_SHAPER_FISH.getRankColor());
         assertTrue(RankRegistry.isRegistered("WORLD SHAPER FISH"));
     }
 
     @Test
-    void mythShaperFishIsRegisteredAtLevelEightWithHotPinkColor() {
+    void mythAndOperatorShareTheHighestTier() {
         assertEquals(RankRegistry.MYTH_SHAPER_FISH,
                 RankRegistry.getRankByName("MYTH_SHAPER_FISH"));
-        assertEquals(RankRegistry.MYTH_SHAPER_FISH, RankRegistry.getRankByLevel(8));
+        assertEquals(RankRegistry.MYTH_SHAPER_FISH, RankRegistry.getRankByName("myth"));
+        assertEquals(4, RankRegistry.MYTH_SHAPER_FISH.getRankLevel());
+        assertEquals(4, RankRegistry.OPERATOR.getRankLevel());
+        assertEquals(RankRegistry.OPERATOR, RankRegistry.getRankByLevel(4));
         assertEquals(0xFF69B4, RankRegistry.MYTH_SHAPER_FISH.getRankColor());
         assertTrue(RankRegistry.isRegistered("MYTH SHAPER FISH"));
+    }
+
+    @Test
+    void legacyStoredAliasLevelIsRepairedFromItsRankName() {
+        PlayerData player = GSON.fromJson("""
+                {
+                  "rank": {
+                    "rankName": "BUILDER FISH",
+                    "rankLevel": 5,
+                    "rankColor": 5635925
+                  }
+                }
+                """, PlayerData.class);
+
+        assertTrue(player.repairRankData());
+        assertEquals(RankRegistry.BUILDER_FISH.getRankName(), player.getRank().getRankName());
+        assertEquals(1, player.getRank().getRankLevel());
     }
 }

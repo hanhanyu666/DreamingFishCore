@@ -2,13 +2,17 @@ package com.hhy.dreamingfishcore.gameplay.task_location_system.command;
 
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationMode;
 import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -32,8 +36,19 @@ public final class Command_TaskLocation {
                                 .then(Commands.literal("reload")
                                         .executes(Command_TaskLocation::reload))
                                 .then(Commands.literal("select")
+                                        .then(Commands.literal("buildable")
+                                                .then(locationNameArgument()
+                                                        .executes(context -> beginSelection(
+                                                                context, TaskLocationMode.BUILDABLE))))
+                                        .then(Commands.literal("protected")
+                                                .then(locationNameArgument()
+                                                        .executes(context -> beginSelection(
+                                                                context, TaskLocationMode.PROTECTED))))
                                         .then(locationNameArgument()
-                                                .executes(Command_TaskLocation::beginSelection)))
+                                                .executes(context -> beginSelection(
+                                                        context, null))))
+                                .then(pointCommand("pos1", true))
+                                .then(pointCommand("pos2", false))
                                 .then(Commands.literal("confirm")
                                         .executes(Command_TaskLocation::confirm))
                                 .then(Commands.literal("cancel")
@@ -41,6 +56,38 @@ public final class Command_TaskLocation {
                                 .then(Commands.literal("remove")
                                         .then(locationNameArgument()
                                                 .executes(Command_TaskLocation::remove)))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> pointCommand(
+            String literal, boolean firstPoint) {
+        return Commands.literal(literal)
+                .executes(context -> selectPoint(context, firstPoint, false))
+                .then(Commands.argument("position", BlockPosArgument.blockPos())
+                        .executes(context -> selectPoint(context, firstPoint, true)));
+    }
+
+    private static int selectPoint(
+            CommandContext<CommandSourceStack> context,
+            boolean firstPoint,
+            boolean useArgument) {
+        try {
+            ServerPlayer player = context.getSource().getPlayerOrException();
+            BlockPos position = useArgument
+                    ? BlockPosArgument.getBlockPos(context, "position")
+                    : player.blockPosition();
+            boolean handled = firstPoint
+                    ? TaskLocationManager.selectFirstPoint(player, position)
+                    : TaskLocationManager.selectSecondPoint(player, position);
+            if (!handled) {
+                context.getSource().sendFailure(Component.literal(
+                        "请先使用 task_location select 开始设置任务地点"));
+                return 0;
+            }
+            return 1;
+        } catch (Exception exception) {
+            context.getSource().sendFailure(Component.literal(exception.getMessage()));
+            return 0;
+        }
     }
 
     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String>
@@ -52,10 +99,19 @@ public final class Command_TaskLocation {
     }
 
     private static int beginSelection(CommandContext<CommandSourceStack> context) {
+        return beginSelection(context, null);
+    }
+
+    private static int beginSelection(
+            CommandContext<CommandSourceStack> context, TaskLocationMode requestedMode) {
         try {
             ServerPlayer player = context.getSource().getPlayerOrException();
             String locationName = StringArgumentType.getString(context, "name");
-            TaskLocationManager.beginSelection(player, locationName);
+            if (requestedMode == null) {
+                TaskLocationManager.beginSelection(player, locationName);
+            } else {
+                TaskLocationManager.beginSelection(player, locationName, requestedMode);
+            }
             context.getSource().sendSuccess(
                     () -> Component.literal("已开始设置任务地点：" + locationName), false);
             return 1;
@@ -156,6 +212,7 @@ public final class Command_TaskLocation {
     private static String describe(TaskLocationDefinition location) {
         return location.getName() + " / " + location.getDimension()
                 + " / " + format(location.getMin()) + " -> " + format(location.getMax())
+                + " / " + (location.isBuildable() ? "可建造" : "强制保护")
                 + (location.isEnabled() ? "" : " / 已停用");
     }
 

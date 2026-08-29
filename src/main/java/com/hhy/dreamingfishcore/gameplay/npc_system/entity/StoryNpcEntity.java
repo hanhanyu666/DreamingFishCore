@@ -20,6 +20,8 @@ import net.minecraft.world.level.Level;
  * 本类只保存身份、站立行为和外观的同步状态；真正画出玩家模型是客户端 renderer 的职责。
  */
 public class StoryNpcEntity extends PathfinderMob {
+    /** 由 /npc spawn 写入；锁定后 NPC 保持生成者指定的朝向，不被近距离玩家的注视逻辑改写。 */
+    private static final String LOCK_SPAWN_FACING_TAG = "DreamingFishCoreLockSpawnFacing";
     private static final EntityDataAccessor<Integer> NPC_ID = SynchedEntityData.defineId(StoryNpcEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> SKIN = SynchedEntityData.defineId(StoryNpcEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> MODEL = SynchedEntityData.defineId(StoryNpcEntity.class, EntityDataSerializers.STRING);
@@ -64,16 +66,46 @@ public class StoryNpcEntity extends PathfinderMob {
     public boolean shouldShowNpcName() { return entityData.get(SHOW_NAME); }
     public String getNpcName() { return entityData.get(NPC_NAME); }
 
+    /**
+     * 设置由生成者决定的初始朝向，并同步 Mob 渲染所使用的身体/头部旋转字段。
+     * Entity#moveTo 只更新 yRot/xRot，直接创建 Mob 时若不补齐这些字段，模型会
+     * 采用构造阶段的随机或 0 度身体朝向。锁定标记会随实体 NBT 保存。
+     */
+    public void setSpawnFacing(float yaw, float pitch) {
+        setYRot(yaw);
+        setXRot(pitch);
+        setYHeadRot(yaw);
+        setYBodyRot(yaw);
+        yRotO = yaw;
+        xRotO = pitch;
+        yHeadRotO = yaw;
+        yBodyRotO = yaw;
+        getPersistentData().putBoolean(LOCK_SPAWN_FACING_TAG, true);
+    }
+
     @Override
     public void tick() {
         super.tick();
-        if (!level().isClientSide && tickCount % 10 == 0) {
+        if (!level().isClientSide
+                && !getPersistentData().getBoolean(LOCK_SPAWN_FACING_TAG)
+                && tickCount % 10 == 0) {
             Player player = level().getNearestPlayer(this, 8.0D);
             if (player != null) getLookControl().setLookAt(player, 30.0F, 30.0F);
         }
     }
 
     @Override public boolean hurt(DamageSource source, float amount) { return false; }
+
+    /**
+     * LivingEntity.kill() 默认会再次调用 hurt(genericKill)。剧情 NPC 为了防止玩家误伤而
+     * 拒绝所有 hurt，因此如果不覆盖这里，原版 /kill 会显示执行成功但实体仍然存在。
+     * 管理员的显式清理命令必须直接走实体移除路径，同时保留普通攻击免疫。
+     */
+    @Override
+    public void kill() {
+        remove(net.minecraft.world.entity.Entity.RemovalReason.KILLED);
+    }
+
     @Override public boolean isPushable() { return false; }
     @Override protected void doPush(net.minecraft.world.entity.Entity entity) { }
     @Override public boolean removeWhenFarAway(double distance) { return false; }

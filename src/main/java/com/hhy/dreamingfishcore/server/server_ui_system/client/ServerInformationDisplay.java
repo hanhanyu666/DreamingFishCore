@@ -1,15 +1,19 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client;
 
+import com.google.common.collect.Ordering;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_OnlinePlayerCountRequest;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
+import com.hhy.dreamingfishcore.gameplay.npc_system.client.ui.screen.Screen_NpcDialogue;
 import com.hhy.dreamingfishcore.server.title_system.PlayerTitleManager;
 import com.hhy.dreamingfishcore.server.title_system.Title;
 import com.hhy.dreamingfishcore.server.title_system.TitleRegistry;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -17,17 +21,26 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 
@@ -46,7 +59,8 @@ public class ServerInformationDisplay {
     private static final String TPS_ICON = "⚡";
     private static final String ONLINE_ICON = "👤";
     private static final String UNKNOWN_TIME_TEXT = "未知";
-    private static final int COMPACT_INFO_BG = 0xA012121A;
+    private static final int COMPACT_INFO_OUTLINE = 0xFF555555;
+    private static final int COMPACT_INFO_BG = 0xFF212121;
     private static final int COMPACT_INFO_TEXT = 0xFFE6E6E6;
     private static final int COMPACT_INFO_MUTED = 0xFF9A9A9A;
     private static final int COMPACT_INFO_LEVEL = 0xFFFFAA33;
@@ -58,8 +72,9 @@ public class ServerInformationDisplay {
     private static final int COMPACT_INFO_PADDING = 4;
     private static final int COMPACT_INFO_MESSAGE_GAP = 4;
     private static final int COMPACT_INFO_LINE_SPACING = 2;
-    private static final int COMPACT_INFO_AVATAR_SIZE = 8;
+    private static final int COMPACT_INFO_AVATAR_SIZE = 9;
     private static final int COMPACT_INFO_AVATAR_SPACING = 3;
+    private static final int COMPACT_INFO_RADIUS = 4;
     private static final int DEFAULT_TPS = 20;
     private static final int BOX_PADDING = 8;              // 框内边距
     private static final int BOX_SPACING = 3;              // 框之间间距
@@ -67,10 +82,18 @@ public class ServerInformationDisplay {
     private static final int TOP_OFFSET = 3;               // 顶部偏移
     private static final int LEFT_OFFSET = 2;              // 左侧偏移
     private static final int BOTTOM_OFFSET = 2;            // 底部偏移
-    private static final int BOX_HEIGHT = 10;              // 框高度
-    private static final int INFO_BOX_TEXT_PADDING = 4;    // 文字左右内边距
-    private static final float INFO_TEXT_SCALE = 0.75f;    // 文字缩放比例
+    private static final int BOX_HEIGHT = 12;              // 框高度
+    private static final int INFO_BOX_TEXT_PADDING = 5;    // 文字左右内边距
+    private static final float INFO_TEXT_SCALE = 0.82f;    // 文字缩放比例
     private static final int PROGRESS_BAR_HEIGHT = 5;      // 进度条高度
+    private static final float COMPACT_EFFECT_SCALE = 0.75f;
+    private static final int COMPACT_EFFECT_SIZE = 18;
+    private static final int COMPACT_EFFECT_GAP = 2;
+    private static final int COMPACT_EFFECT_INFO_GAP = 3;
+    private static final ResourceLocation EFFECT_BACKGROUND_AMBIENT_SPRITE =
+            ResourceLocation.withDefaultNamespace("hud/effect_background_ambient");
+    private static final ResourceLocation EFFECT_BACKGROUND_SPRITE =
+            ResourceLocation.withDefaultNamespace("hud/effect_background");
 
     // 客户端缓存数据（从网络包获取）
     public static int ONLINE_PLAYERS = 0;
@@ -82,6 +105,29 @@ public class ServerInformationDisplay {
     private static int CACHED_DYNAMIC_COLOR = 0xFFDDAA55;
     private static long LAST_COLOR_UPDATE = 0;
     private static final long COLOR_UPDATE_INTERVAL = 100; // 100ms更新一次颜色
+    private static float CACHED_CLIENT_TPS = DEFAULT_TPS;
+    private static long LAST_TPS_UPDATE = Long.MIN_VALUE;
+    private static final long TPS_CACHE_INTERVAL = 250L;
+    private static String CACHED_GAME_TIME = UNKNOWN_TIME_TEXT;
+    private static long LAST_GAME_TIME_UPDATE = Long.MIN_VALUE;
+    private static final long GAME_TIME_CACHE_INTERVAL = 1000L;
+    private static float LAST_FORMATTED_TPS = Float.NaN;
+    private static String CACHED_TPS_TEXT = TPS_ICON + "20.0";
+    private static int CACHED_ONLINE_PLAYER_COUNT = Integer.MIN_VALUE;
+    private static String CACHED_ONLINE_TEXT = ONLINE_ICON + "0";
+    private static Font CACHED_COMPACT_FONT;
+    private static String CACHED_COMPACT_ONLINE_TEXT;
+    private static String CACHED_COMPACT_TIME_TEXT;
+    private static String CACHED_COMPACT_TPS_TEXT;
+    private static String CACHED_COMPACT_PLAYER_TEXT;
+    private static String CACHED_COMPACT_TITLE_TEXT;
+    private static String CACHED_COMPACT_LEVEL_TEXT;
+    private static String CACHED_COMPACT_RANK_TEXT;
+    private static CompactTextLayout CACHED_COMPACT_LAYOUT;
+    private static List<MobEffectInstance> CACHED_ORDERED_EFFECTS = List.of();
+    private static long LAST_EFFECT_ORDER_UPDATE = Long.MIN_VALUE;
+    private static int CACHED_EFFECT_SIGNATURE;
+    private static final long EFFECT_ORDER_CACHE_INTERVAL = 250L;
 
     // 获取当前玩家UUID
     public static UUID getCurrentPlayerUUID() {
@@ -130,10 +176,7 @@ public class ServerInformationDisplay {
     public static void onRenderGuiPost(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
 
-        if (!SHOW_UI || mc.isPaused() || mc.screen != null || mc.player == null || mc.options.hideGui) return;
-
-        // F3 调试菜单打开时隐藏所有信息栏
-        if (mc.getDebugOverlay().showDebugScreen()) return;
+        if (!shouldRenderInformationHud(mc)) return;
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
         Font font = mc.font;
@@ -142,52 +185,79 @@ public class ServerInformationDisplay {
 
         int playerLevel = PlayerLevelManager.getPlayerLevelClient(mc.player);
 
-        PoseStack poseStack = guiGraphics.pose();
-        poseStack.pushPose();
+        // The GUI event is unmanaged by vanilla/NeoForge. Keep the complete top HUD
+        // (including system notifications) in one managed batch so every small fill
+        // does not submit the whole buffer separately.
+        guiGraphics.drawManaged(() -> {
+            PoseStack poseStack = guiGraphics.pose();
+            poseStack.pushPose();
 
-        int[] systemMessageAnchor;
-        if (USE_LEGACY_INFO_BOXES) {
-            // ========== 第一部分：左上角服务器信息（三个小框） ==========
-            List<InfoBox> leftBoxes = new ArrayList<>();
-            leftBoxes.add(new InfoBox(
-                Component.literal("§7" + SERVER_NAME_DREAMING + SERVER_NAME_FISH),
-                0xFF666666,
-                0xDD151520
-            ));
-            leftBoxes.add(new InfoBox(
-                Component.literal("§7" + ONLINE_PLAYERS + ONLINE_SUFFIX),
-                0xFF666666,
-                0xDD151520
-            ));
-            leftBoxes.add(new InfoBox(
-                Component.literal("§7" + getGameTimeString(mc)),
-                0xFF666666,
-                0xDD151520
-            ));
+            int[] systemMessageAnchor;
+            if (USE_LEGACY_INFO_BOXES) {
+                // ========== 第一部分：左上角服务器信息（三个小框） ==========
+                List<InfoBox> leftBoxes = new ArrayList<>();
+                leftBoxes.add(new InfoBox(
+                    Component.literal("§7" + SERVER_NAME_DREAMING + SERVER_NAME_FISH),
+                    0xFF666666,
+                    0xDD151520
+                ));
+                leftBoxes.add(new InfoBox(
+                    Component.literal("§7" + ONLINE_PLAYERS + ONLINE_SUFFIX),
+                    0xFF666666,
+                    0xDD151520
+                ));
+                leftBoxes.add(new InfoBox(
+                    Component.literal("§7" + getGameTimeString(mc)),
+                    0xFF666666,
+                    0xDD151520
+                ));
 
-            renderLeftBoxes(guiGraphics, font, leftBoxes);
+                renderLeftBoxes(guiGraphics, font, leftBoxes);
 
-            Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
-            String rankId = playerRank.getRankName();
-            String titleName = PlayerTitleManager.getPlayerTitleClient(mc.player).getTitleName();
-            systemMessageAnchor = renderPlayerInfo(guiGraphics, font, screenWidth, screenHeight, mc, rankId, titleName, playerLevel);
-        } else {
-            Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
-            systemMessageAnchor = renderCompactTopInfo(guiGraphics, font, screenWidth, screenHeight, mc, playerLevel, playerRank);
-        }
+                Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
+                String rankId = playerRank.getRankName();
+                String titleName = PlayerTitleManager.getPlayerTitleClient(mc.player).getTitleName();
+                systemMessageAnchor = renderPlayerInfo(guiGraphics, font, screenWidth, screenHeight, mc, rankId, titleName, playerLevel);
+            } else {
+                Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
+                systemMessageAnchor = renderCompactTopInfo(guiGraphics, font, screenWidth,
+                        screenHeight, mc, playerLevel, playerRank);
+            }
 
-        // ========== 第三部分：系统消息显示（玩家信息框下方）==========
-        SystemMessageDisplay.renderSystemMessages(guiGraphics, font, screenWidth, systemMessageAnchor[0], systemMessageAnchor[1]);
+            // ========== 第三部分：系统消息显示（玩家信息框下方）==========
+            SystemMessageDisplay.renderSystemMessages(guiGraphics, font, screenWidth,
+                    systemMessageAnchor[0], systemMessageAnchor[1]);
 
-        poseStack.popPose();
+            poseStack.popPose();
+        });
     }
 
-    private static int[] renderCompactTopInfo(GuiGraphics guiGraphics, Font font, int screenWidth, int screenHeight, Minecraft mc, int playerLevel, Rank playerRank) {
+    @SubscribeEvent
+    public static void replaceVanillaEffects(RenderGuiLayerEvent.Pre event) {
+        if (VanillaGuiLayers.EFFECTS.equals(event.getName())
+                && !USE_LEGACY_INFO_BOXES
+                && shouldRenderInformationHud(Minecraft.getInstance())) {
+            event.setCanceled(true);
+        }
+    }
+
+    private static boolean shouldRenderInformationHud(Minecraft mc) {
+        return SHOW_UI
+                && !mc.isPaused()
+                && (mc.screen == null || mc.screen instanceof Screen_NpcDialogue)
+                && mc.player != null
+                && !mc.options.hideGui
+                && !mc.getDebugOverlay().showDebugScreen();
+    }
+
+    private static int[] renderCompactTopInfo(GuiGraphics guiGraphics, Font font, int screenWidth,
+                                               int screenHeight, Minecraft mc,
+                                               int playerLevel, Rank playerRank) {
         String serverDreamingText = SERVER_NAME_DREAMING;
         String serverFishText = SERVER_NAME_FISH;
-        String onlineText = ONLINE_ICON + ONLINE_PLAYERS;
+        String onlineText = getOnlineText();
         String timeText = getGameTimeString(mc);
-        String tpsText = TPS_ICON + String.format("%.1f", getClientTps(mc));
+        String tpsText = getClientTpsText(mc);
         String playerIdText = mc.player.getName().getString();
         Title title = PlayerTitleManager.getPlayerTitleClient(mc.player);
         String titleName = title.getTitleName();
@@ -198,25 +268,21 @@ public class ServerInformationDisplay {
         String rankText = playerRank.getRankName();
         int rankColor = playerRank.getRankColor();
 
-        int firstLineWidth = font.width(serverDreamingText)
-                + font.width(serverFishText)
-                + font.width(TOP_INFO_SEPARATOR) * 3
-                + font.width(onlineText)
-                + font.width(timeText)
-                + font.width(tpsText);
-        int secondLineTextWidth = font.width(playerIdText)
-                + font.width(TOP_INFO_SEPARATOR) * 2
-                + font.width(titleName)
-                + font.width(rankText);
-        int thirdLineTextWidth = font.width(levelText);
+        CompactTextLayout textLayout = getCompactTextLayout(font, onlineText, timeText, tpsText,
+                playerIdText, titleName, levelText, rankText);
+
+        int firstLineWidth = textLayout.firstLineWidth();
+        int secondLineTextWidth = textLayout.secondLineTextWidth();
+        int thirdLineTextWidth = textLayout.thirdLineTextWidth();
         int padding = INFO_BOX_TEXT_PADDING;
-        int scaledAvatarWidth = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
-        int scaledAvatarSpacing = (int) (COMPACT_INFO_AVATAR_SPACING * INFO_TEXT_SCALE);
+        int scaledAvatarWidth = textLayout.scaledAvatarWidth();
+        int scaledAvatarSpacing = textLayout.scaledAvatarSpacing();
         int serverBoxWidth = (int) (firstLineWidth * INFO_TEXT_SCALE) + padding * 2;
-        int playerBoxWidth = scaledAvatarWidth + scaledAvatarSpacing + (int) (secondLineTextWidth * INFO_TEXT_SCALE) + padding * 2;
+        int playerBoxWidth = scaledAvatarWidth + scaledAvatarSpacing
+                + (int) (secondLineTextWidth * INFO_TEXT_SCALE) + padding * 2;
         int levelBoxWidth = (int) (thirdLineTextWidth * INFO_TEXT_SCALE) + padding * 2;
-        int scaledTextHeight = (int) (font.lineHeight * INFO_TEXT_SCALE);
-        int avatarHeight = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
+        int scaledTextHeight = textLayout.scaledTextHeight();
+        int avatarHeight = textLayout.avatarHeight();
         int boxHeight = BOX_HEIGHT;
         int serverBoxX = screenWidth - serverBoxWidth - RIGHT_OFFSET;
         int serverBoxY = TOP_OFFSET;
@@ -229,27 +295,38 @@ public class ServerInformationDisplay {
         int levelLineY = levelBoxY + (boxHeight - scaledTextHeight) / 2;
         int avatarY = playerBoxY + (boxHeight - avatarHeight) / 2;
 
-        drawRoundedRect(guiGraphics, serverBoxX, serverBoxY, serverBoxWidth, boxHeight, 1, COMPACT_INFO_BG);
-        drawRoundedRect(guiGraphics, playerBoxX, playerBoxY, playerBoxWidth, boxHeight, 1, COMPACT_INFO_BG);
-        drawRoundedRect(guiGraphics, levelBoxX, levelBoxY, levelBoxWidth, boxHeight, 1, COMPACT_INFO_BG);
+        drawVanillaEffectPanel(guiGraphics, serverBoxX, serverBoxY, serverBoxWidth, boxHeight);
+        drawVanillaEffectPanel(guiGraphics, playerBoxX, playerBoxY, playerBoxWidth, boxHeight);
+        drawVanillaEffectPanel(guiGraphics, levelBoxX, levelBoxY, levelBoxWidth, boxHeight);
 
         PoseStack poseStack = guiGraphics.pose();
         poseStack.pushPose();
         poseStack.translate(serverBoxX + padding, serverLineY, 0);
         poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
         int currentX = 0;
-        currentX = drawCompactPart(guiGraphics, font, serverDreamingText, currentX, COMPACT_INFO_DREAMING);
-        currentX = drawCompactPart(guiGraphics, font, serverFishText, currentX, COMPACT_INFO_FISH);
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED);
-        currentX = drawCompactPart(guiGraphics, font, onlineText, currentX, COMPACT_INFO_ONLINE);
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED);
-        currentX = drawCompactPart(guiGraphics, font, timeText, currentX, COMPACT_INFO_MUTED);
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED);
-        drawCompactPart(guiGraphics, font, tpsText, currentX, COMPACT_INFO_LEVEL);
+        currentX = drawCompactPart(guiGraphics, font, serverDreamingText, currentX, COMPACT_INFO_DREAMING,
+                textLayout.serverDreamingWidth());
+        currentX = drawCompactPart(guiGraphics, font, serverFishText, currentX, COMPACT_INFO_FISH,
+                textLayout.serverFishWidth());
+        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
+                textLayout.separatorWidth());
+        currentX = drawCompactPart(guiGraphics, font, onlineText, currentX, COMPACT_INFO_ONLINE,
+                textLayout.onlineWidth());
+        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
+                textLayout.separatorWidth());
+        currentX = drawCompactPart(guiGraphics, font, timeText, currentX, COMPACT_INFO_MUTED,
+                textLayout.timeWidth());
+        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
+                textLayout.separatorWidth());
+        drawCompactPart(guiGraphics, font, tpsText, currentX, COMPACT_INFO_LEVEL,
+                textLayout.tpsWidth());
         poseStack.popPose();
 
         PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
         if (playerInfo != null) {
+            // PlayerFaceRenderer uses an immediate texture blit. Submit the panel
+            // mesh first so the avatar remains above its background as before.
+            guiGraphics.flush();
             PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), playerBoxX + padding, avatarY, avatarHeight);
         }
 
@@ -257,36 +334,116 @@ public class ServerInformationDisplay {
         poseStack.translate(playerBoxX + padding + scaledAvatarWidth + scaledAvatarSpacing, playerLineY, 0);
         poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
         currentX = 0;
-        currentX = drawCompactPart(guiGraphics, font, playerIdText, currentX, COMPACT_INFO_TEXT);
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED);
-        currentX = drawCompactPart(guiGraphics, font, titleName, currentX, titleColor);
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED);
-        drawCompactPart(guiGraphics, font, rankText, currentX, 0xFF000000 | (rankColor & 0x00FFFFFF));
+        currentX = drawCompactPart(guiGraphics, font, playerIdText, currentX, COMPACT_INFO_TEXT,
+                textLayout.playerWidth());
+        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
+                textLayout.separatorWidth());
+        currentX = drawCompactPart(guiGraphics, font, titleName, currentX, titleColor,
+                textLayout.titleWidth());
+        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
+                textLayout.separatorWidth());
+        drawCompactPart(guiGraphics, font, rankText, currentX, 0xFF000000 | (rankColor & 0x00FFFFFF),
+                textLayout.rankWidth());
         poseStack.popPose();
 
         poseStack.pushPose();
         poseStack.translate(levelBoxX + padding, levelLineY, 0);
         poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
-        drawCompactPart(guiGraphics, font, levelText, 0, COMPACT_INFO_LEVEL);
+        drawCompactPart(guiGraphics, font, levelText, 0, COMPACT_INFO_LEVEL,
+                textLayout.levelWidth());
         poseStack.popPose();
+
+        int infoLeftEdge = Math.min(serverBoxX, Math.min(playerBoxX, levelBoxX));
+        renderCompactEffects(guiGraphics, mc, infoLeftEdge);
 
         int totalHeight = boxHeight * 3 + COMPACT_INFO_LINE_SPACING * 2;
         return new int[]{serverBoxY, totalHeight + COMPACT_INFO_MESSAGE_GAP};
     }
 
-    private static int drawCompactPart(GuiGraphics guiGraphics, Font font, String text, int x, int color) {
+    private static void renderCompactEffects(GuiGraphics guiGraphics, Minecraft mc, int infoLeftEdge) {
+        int beneficialIndex = 0;
+        int harmfulIndex = 0;
+        boolean renderedAny = false;
+
+        for (MobEffectInstance effect : getOrderedEffects(mc)) {
+            var renderer = net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions.of(effect);
+            if (!renderer.isVisibleInGui(effect) || !effect.showIcon()) {
+                continue;
+            }
+
+            if (!renderedAny) {
+                // Effect icons are immediate texture blits. Submit the panel/text
+                // mesh once, only when there is an icon that actually needs drawing.
+                guiGraphics.flush();
+                RenderSystem.enableBlend();
+                renderedAny = true;
+            }
+
+            boolean beneficial = effect.getEffect().value().isBeneficial();
+            int column = beneficial ? beneficialIndex++ : harmfulIndex++;
+            int x = infoLeftEdge - COMPACT_EFFECT_INFO_GAP - COMPACT_EFFECT_SIZE
+                    - column * (COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
+            int y = TOP_OFFSET + (beneficial ? 0 : COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
+            renderCompactEffect(guiGraphics, mc, effect, renderer, x, y);
+        }
+
+        if (renderedAny) {
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+            RenderSystem.disableBlend();
+        }
+    }
+
+    private static void renderCompactEffect(GuiGraphics guiGraphics, Minecraft mc, MobEffectInstance effect,
+                                            net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions renderer,
+                                            int x, int y) {
+        float alpha = 1.0F;
+        if (!effect.isAmbient() && effect.endsWithin(200)) {
+            int duration = effect.getDuration();
+            int pulseStep = 10 - duration / 20;
+            alpha = Mth.clamp(duration / 10.0F / 5.0F * 0.5F, 0.0F, 0.5F)
+                    + Mth.cos(duration * (float) Math.PI / 5.0F)
+                    * Mth.clamp(pulseStep / 10.0F * 0.25F, 0.0F, 0.25F);
+        }
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0.0F);
+        guiGraphics.pose().scale(COMPACT_EFFECT_SCALE, COMPACT_EFFECT_SCALE, 1.0F);
+        guiGraphics.blitSprite(effect.isAmbient() ? EFFECT_BACKGROUND_AMBIENT_SPRITE : EFFECT_BACKGROUND_SPRITE,
+                0, 0, 24, 24);
+
+        if (!renderer.renderGuiIcon(effect, mc.gui, guiGraphics, 0, 0, 0, alpha)) {
+            TextureAtlasSprite texture = mc.getMobEffectTextures().get(effect.getEffect());
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+            guiGraphics.blit(3, 3, 0, 18, 18, texture);
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+        guiGraphics.pose().popPose();
+    }
+
+    private static int drawCompactPart(GuiGraphics guiGraphics, Font font, String text, int x, int color,
+                                       int measuredWidth) {
         guiGraphics.drawString(font, text, x, 0, color, false);
-        return x + font.width(text);
+        return x + measuredWidth;
     }
 
     private static float getClientTps(Minecraft mc) {
+        long currentTime = System.currentTimeMillis();
+        if (LAST_TPS_UPDATE != Long.MIN_VALUE
+                && currentTime - LAST_TPS_UPDATE < TPS_CACHE_INTERVAL) {
+            return CACHED_CLIENT_TPS;
+        }
+
         if (mc.getSingleplayerServer() == null) {
-            return DEFAULT_TPS;
+            CACHED_CLIENT_TPS = DEFAULT_TPS;
+            LAST_TPS_UPDATE = currentTime;
+            return CACHED_CLIENT_TPS;
         }
 
         long[] tickTimes = mc.getSingleplayerServer().getTickTimesNanos();
         if (tickTimes == null || tickTimes.length == 0) {
-            return DEFAULT_TPS;
+            CACHED_CLIENT_TPS = DEFAULT_TPS;
+            LAST_TPS_UPDATE = currentTime;
+            return CACHED_CLIENT_TPS;
         }
 
         long totalTickTime = 0L;
@@ -296,10 +453,129 @@ public class ServerInformationDisplay {
 
         double averageTickMs = totalTickTime / (double) tickTimes.length / 1_000_000.0D;
         if (averageTickMs <= 0.0D) {
-            return DEFAULT_TPS;
+            CACHED_CLIENT_TPS = DEFAULT_TPS;
+            LAST_TPS_UPDATE = currentTime;
+            return CACHED_CLIENT_TPS;
         }
 
-        return (float) Math.min(DEFAULT_TPS, 1000.0D / averageTickMs);
+        CACHED_CLIENT_TPS = (float) Math.min(DEFAULT_TPS, 1000.0D / averageTickMs);
+        LAST_TPS_UPDATE = currentTime;
+        return CACHED_CLIENT_TPS;
+    }
+
+    /**
+     * TPS changes at most once per cache interval.  Formatting it once per HUD
+     * frame used to allocate a formatter-backed string even though the visible
+     * value stayed the same for hundreds of frames.
+     */
+    private static String getClientTpsText(Minecraft mc) {
+        float tps = getClientTps(mc);
+        if (Float.compare(tps, LAST_FORMATTED_TPS) != 0) {
+            CACHED_TPS_TEXT = TPS_ICON + String.format(Locale.ROOT, "%.1f", tps);
+            LAST_FORMATTED_TPS = tps;
+        }
+        return CACHED_TPS_TEXT;
+    }
+
+    private static String getOnlineText() {
+        if (CACHED_ONLINE_PLAYER_COUNT != ONLINE_PLAYERS) {
+            CACHED_ONLINE_PLAYER_COUNT = ONLINE_PLAYERS;
+            CACHED_ONLINE_TEXT = ONLINE_ICON + ONLINE_PLAYERS;
+        }
+        return CACHED_ONLINE_TEXT;
+    }
+
+    /**
+     * Cache the width measurements used by the compact top HUD.  The values are
+     * invalidated naturally when a player/title/rank/experience string changes
+     * or when Minecraft swaps the active font (for example after a resource-pack
+     * reload).  Drawing still occurs every frame, but repeated font splitter
+     * work and temporary layout objects do not.
+     */
+    private static CompactTextLayout getCompactTextLayout(Font font, String onlineText,
+                                                           String timeText, String tpsText,
+                                                           String playerText, String titleText,
+                                                           String levelText, String rankText) {
+        if (CACHED_COMPACT_LAYOUT != null
+                && CACHED_COMPACT_FONT == font
+                && Objects.equals(CACHED_COMPACT_ONLINE_TEXT, onlineText)
+                && Objects.equals(CACHED_COMPACT_TIME_TEXT, timeText)
+                && Objects.equals(CACHED_COMPACT_TPS_TEXT, tpsText)
+                && Objects.equals(CACHED_COMPACT_PLAYER_TEXT, playerText)
+                && Objects.equals(CACHED_COMPACT_TITLE_TEXT, titleText)
+                && Objects.equals(CACHED_COMPACT_LEVEL_TEXT, levelText)
+                && Objects.equals(CACHED_COMPACT_RANK_TEXT, rankText)) {
+            return CACHED_COMPACT_LAYOUT;
+        }
+
+        int serverDreamingWidth = font.width(SERVER_NAME_DREAMING);
+        int serverFishWidth = font.width(SERVER_NAME_FISH);
+        int separatorWidth = font.width(TOP_INFO_SEPARATOR);
+        int onlineWidth = font.width(onlineText);
+        int timeWidth = font.width(timeText);
+        int tpsWidth = font.width(tpsText);
+        int playerWidth = font.width(playerText);
+        int titleWidth = font.width(titleText);
+        int rankWidth = font.width(rankText);
+        int levelWidth = font.width(levelText);
+        int firstLineWidth = serverDreamingWidth
+                + serverFishWidth
+                + separatorWidth * 3
+                + onlineWidth
+                + timeWidth
+                + tpsWidth;
+        int secondLineTextWidth = playerWidth
+                + separatorWidth * 2
+                + titleWidth
+                + rankWidth;
+        int thirdLineTextWidth = levelWidth;
+        int scaledAvatarWidth = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
+        int scaledAvatarSpacing = (int) (COMPACT_INFO_AVATAR_SPACING * INFO_TEXT_SCALE);
+        int scaledTextHeight = (int) (font.lineHeight * INFO_TEXT_SCALE);
+        int avatarHeight = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
+
+        CACHED_COMPACT_FONT = font;
+        CACHED_COMPACT_ONLINE_TEXT = onlineText;
+        CACHED_COMPACT_TIME_TEXT = timeText;
+        CACHED_COMPACT_TPS_TEXT = tpsText;
+        CACHED_COMPACT_PLAYER_TEXT = playerText;
+        CACHED_COMPACT_TITLE_TEXT = titleText;
+        CACHED_COMPACT_LEVEL_TEXT = levelText;
+        CACHED_COMPACT_RANK_TEXT = rankText;
+        CACHED_COMPACT_LAYOUT = new CompactTextLayout(firstLineWidth, secondLineTextWidth,
+                thirdLineTextWidth, scaledAvatarWidth, scaledAvatarSpacing,
+                scaledTextHeight, avatarHeight, serverDreamingWidth, serverFishWidth,
+                separatorWidth, onlineWidth, timeWidth, tpsWidth, playerWidth,
+                titleWidth, rankWidth, levelWidth);
+        return CACHED_COMPACT_LAYOUT;
+    }
+
+    private static List<MobEffectInstance> getOrderedEffects(Minecraft mc) {
+        Collection<MobEffectInstance> activeEffects = mc.player.getActiveEffects();
+        int signature = activeEffects.size();
+        for (MobEffectInstance effect : activeEffects) {
+            // The client mutates effect instances in place, so include the instance
+            // identity and amplifier when detecting a structural/order change.
+            signature = 31 * signature + System.identityHashCode(effect);
+            signature = 31 * signature + System.identityHashCode(effect.getEffect().value());
+            signature = 31 * signature + effect.getAmplifier();
+            signature = 31 * signature + (effect.isAmbient() ? 1 : 0);
+            signature = 31 * signature + (effect.showIcon() ? 1 : 0);
+        }
+
+        long now = System.currentTimeMillis();
+        if (LAST_EFFECT_ORDER_UPDATE != Long.MIN_VALUE
+                && signature == CACHED_EFFECT_SIGNATURE
+                && now - LAST_EFFECT_ORDER_UPDATE < EFFECT_ORDER_CACHE_INTERVAL) {
+            return CACHED_ORDERED_EFFECTS;
+        }
+
+        CACHED_ORDERED_EFFECTS = List.copyOf(Ordering.<MobEffectInstance>natural()
+                .reverse()
+                .sortedCopy(activeEffects));
+        CACHED_EFFECT_SIGNATURE = signature;
+        LAST_EFFECT_ORDER_UPDATE = now;
+        return CACHED_ORDERED_EFFECTS;
     }
 
     // 渲染左上角小框（水平排列）
@@ -375,17 +651,12 @@ public class ServerInformationDisplay {
 
         // ========== 背景和边框 ==========
         int bgColor = 0xD0181818;
-        guiGraphics.fill(RenderType.gui(), boxX, boxY, boxX + boxWidth, boxY + boxHeight, bgColor);
-
         int dynamicColor = getDynamicBorderColor();
         int glowColor = 0x30000000 | (dynamicColor & 0x00FFFFFF);
-        guiGraphics.fill(RenderType.gui(), boxX - 1, boxY - 1, boxX + boxWidth + 1, boxY + boxHeight + 1, glowColor);
-
-        // 主边框
-        guiGraphics.fill(RenderType.gui(), boxX, boxY, boxX + boxWidth, boxY + 1, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), boxX, boxY, boxX + 1, boxY + boxHeight, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, dynamicColor);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, boxX - 1, boxY - 1,
+                boxWidth + 2, boxHeight + 2, 5, glowColor, 0);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, boxX, boxY,
+                boxWidth, boxHeight, 4, bgColor, dynamicColor);
 
         // ========== 左侧：玩家头像（覆盖前两行） ==========
         int avatarX = boxX + padding;
@@ -394,6 +665,7 @@ public class ServerInformationDisplay {
         PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
         if (playerInfo != null) {
             // 渲染头像（覆盖前两行）
+            guiGraphics.flush();
             PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), avatarX, avatarY, avatarSize);
         }
 
@@ -427,31 +699,20 @@ public class ServerInformationDisplay {
         int progressBarX = boxX + progressBarMargin; // 进度条左边到框左边 = progressBarMargin
         int progressBarWidth = boxWidth - progressBarMargin * 2; // 进度条右边到框右边 = progressBarMargin
 
-        // 进度条背景
-        guiGraphics.fill(RenderType.gui(), progressBarX, progressBarY,
-            progressBarX + progressBarWidth, progressBarY + PROGRESS_BAR_HEIGHT, 0xDD1A1A1A);
+        int progressGlowColor = 0x40000000 | (dynamicColor & 0x00FFFFFF);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, progressBarX - 1, progressBarY - 1,
+                progressBarWidth + 2, PROGRESS_BAR_HEIGHT + 2, 3, progressGlowColor, 0);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, progressBarX, progressBarY,
+                progressBarWidth, PROGRESS_BAR_HEIGHT, 2, 0xDD1A1A1A, dynamicColor);
 
         // 进度条前景（使用动态RGB颜色）
         int progressWidth = (int)(progressBarWidth * expProgress);
         if (progressWidth > 2) {
-            guiGraphics.fill(RenderType.gui(), progressBarX + 1, progressBarY + 1,
-                progressBarX + progressWidth - 1, progressBarY + PROGRESS_BAR_HEIGHT - 1, dynamicColor);
+            UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, progressBarX + 1, progressBarY + 1,
+                    progressWidth - 2, PROGRESS_BAR_HEIGHT - 2, 1, dynamicColor, 0);
             guiGraphics.fill(RenderType.gui(), progressBarX + 1, progressBarY + 1,
                 progressBarX + progressWidth - 1, progressBarY + 2, 0xFFFFFFFF);
         }
-
-        // 进度条边框（使用动态RGB颜色）
-        int progressGlowColor = 0x40000000 | (dynamicColor & 0x00FFFFFF);
-        guiGraphics.fill(RenderType.gui(), progressBarX - 1, progressBarY - 1,
-            progressBarX + progressBarWidth + 1, progressBarY + PROGRESS_BAR_HEIGHT + 1, progressGlowColor);
-        guiGraphics.fill(RenderType.gui(), progressBarX, progressBarY,
-            progressBarX + progressBarWidth, progressBarY + 1, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), progressBarX, progressBarY + PROGRESS_BAR_HEIGHT - 1,
-            progressBarX + progressBarWidth, progressBarY + PROGRESS_BAR_HEIGHT, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), progressBarX, progressBarY,
-            progressBarX + 1, progressBarY + PROGRESS_BAR_HEIGHT, dynamicColor);
-        guiGraphics.fill(RenderType.gui(), progressBarX + progressBarWidth - 1, progressBarY,
-            progressBarX + progressBarWidth, progressBarY + PROGRESS_BAR_HEIGHT, dynamicColor);
 
         // 返回玩家信息框的位置信息（Y坐标和高度）供系统消息使用
         return new int[]{boxY, boxHeight};
@@ -462,7 +723,7 @@ public class ServerInformationDisplay {
         int boxHeight = BOX_HEIGHT;
 
         // 圆角背景
-        int radius = 1;
+        int radius = COMPACT_INFO_RADIUS;
         drawRoundedRect(guiGraphics, x, y, box.boxWidth, boxHeight, radius, box.backgroundColor);
 
         // 文本居中渲染（应用缩放）
@@ -485,78 +746,24 @@ public class ServerInformationDisplay {
     }
 
     private static void drawRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int color) {
-        if (radius <= 0) {
-            guiGraphics.fill(RenderType.gui(), x, y, x + width, y + height, color);
-            return;
-        }
-        int r = Math.min(radius, Math.min(width / 2, height / 2));
-        int right = x + width;
-        int bottom = y + height;
+        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, radius, color);
+    }
 
-        guiGraphics.fill(RenderType.gui(), x + r, y, right - r, bottom, color);
-        guiGraphics.fill(RenderType.gui(), x, y + r, right, bottom - r, color);
-
-        if (r >= 2) {
-            guiGraphics.fill(RenderType.gui(), x + 1, y + 1, x + r, y + r, color);
-            guiGraphics.fill(RenderType.gui(), right - r, y + 1, right - 1, y + r, color);
-            guiGraphics.fill(RenderType.gui(), x + 1, bottom - r, x + r, bottom - 1, color);
-            guiGraphics.fill(RenderType.gui(), right - r, bottom - r, right - 1, bottom - 1, color);
-        }
-
-        if (r >= 3) {
-            guiGraphics.fill(RenderType.gui(), x + 1, y + 2, x + 2, bottom - 2, color);
-            guiGraphics.fill(RenderType.gui(), right - 2, y + 2, right - 1, bottom - 2, color);
-            guiGraphics.fill(RenderType.gui(), x + 2, y + 1, right - 2, y + 2, color);
-            guiGraphics.fill(RenderType.gui(), x + 2, bottom - 2, right - 2, bottom - 1, color);
-        }
+    private static void drawVanillaEffectPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, 2, COMPACT_INFO_OUTLINE);
+        UiPanelRenderer.roundedRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, 1, COMPACT_INFO_BG);
     }
 
     private static void drawRoundedBorder(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int color) {
-        if (radius <= 0) {
-            guiGraphics.fill(RenderType.gui(), x, y, x + width, y + 1, color);
-            guiGraphics.fill(RenderType.gui(), x, y + height - 1, x + width, y + height, color);
-            guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + height, color);
-            guiGraphics.fill(RenderType.gui(), x + width - 1, y, x + width, y + height, color);
-            return;
-        }
-        int r = Math.min(radius, Math.min(width / 2, height / 2));
-        int right = x + width;
-        int bottom = y + height;
-
-        guiGraphics.fill(RenderType.gui(), x + r, y, right - r, y + 1, color);
-        guiGraphics.fill(RenderType.gui(), x + r, bottom - 1, right - r, bottom, color);
-        guiGraphics.fill(RenderType.gui(), x, y + r, x + 1, bottom - r, color);
-        guiGraphics.fill(RenderType.gui(), right - 1, y + r, right, bottom - r, color);
-
-        if (r >= 2) {
-            guiGraphics.fill(RenderType.gui(), x + 1, y + 1, x + 2, y + 2, color);
-            guiGraphics.fill(RenderType.gui(), right - 2, y + 1, right - 1, y + 2, color);
-            guiGraphics.fill(RenderType.gui(), x + 1, bottom - 2, x + 2, bottom - 1, color);
-            guiGraphics.fill(RenderType.gui(), right - 2, bottom - 2, right - 1, bottom - 1, color);
-        }
-
-        if (r >= 3) {
-            guiGraphics.fill(RenderType.gui(), x + 1, y + 2, x + 2, y + 3, color);
-            guiGraphics.fill(RenderType.gui(), x + 2, y + 1, x + 3, y + 2, color);
-            guiGraphics.fill(RenderType.gui(), right - 2, y + 2, right - 1, y + 3, color);
-            guiGraphics.fill(RenderType.gui(), right - 3, y + 1, right - 2, y + 2, color);
-            guiGraphics.fill(RenderType.gui(), x + 1, bottom - 3, x + 2, bottom - 2, color);
-            guiGraphics.fill(RenderType.gui(), x + 2, bottom - 2, x + 3, bottom - 1, color);
-            guiGraphics.fill(RenderType.gui(), right - 2, bottom - 3, right - 1, bottom - 2, color);
-            guiGraphics.fill(RenderType.gui(), right - 3, bottom - 2, right - 2, bottom - 1, color);
-        }
+        UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, radius, color);
     }
 
     // 渲染小框（带文字缩放）- 保留旧方法备用
     private static void renderSmallBox(GuiGraphics guiGraphics, Font font, int x, int y, InfoBox box) {
-        // 背景
-        guiGraphics.fill(RenderType.gui(), x, y, x + box.boxWidth, y + BOX_HEIGHT, box.backgroundColor);
-
-        // 边框（上、下、左、右）
-        guiGraphics.fill(RenderType.gui(), x, y, x + box.boxWidth, y + 1, box.borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + BOX_HEIGHT - 1, x + box.boxWidth, y + BOX_HEIGHT, box.borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + BOX_HEIGHT, box.borderColor);
-        guiGraphics.fill(RenderType.gui(), x + box.boxWidth - 1, y, x + box.boxWidth, y + BOX_HEIGHT, box.borderColor);
+        UiPanelRenderer.roundedRect(guiGraphics, x, y, box.boxWidth, BOX_HEIGHT,
+                COMPACT_INFO_RADIUS, box.backgroundColor);
+        UiPanelRenderer.roundedBorder(guiGraphics, x, y, box.boxWidth, BOX_HEIGHT,
+                COMPACT_INFO_RADIUS, box.borderColor);
 
         // 文本居中渲染（应用缩放）
         PoseStack poseStack = guiGraphics.pose();
@@ -579,6 +786,12 @@ public class ServerInformationDisplay {
     private static String getGameTimeString(Minecraft mc) {
         if (mc.level == null) return UNKNOWN_TIME_TEXT;
 
+        long currentTime = System.currentTimeMillis();
+        if (LAST_GAME_TIME_UPDATE != Long.MIN_VALUE
+                && currentTime - LAST_GAME_TIME_UPDATE < GAME_TIME_CACHE_INTERVAL) {
+            return CACHED_GAME_TIME;
+        }
+
         java.time.LocalDateTime realTime = java.time.LocalDateTime.now();
         int year = realTime.getYear();
         int month = realTime.getMonthValue();
@@ -586,7 +799,9 @@ public class ServerInformationDisplay {
         int hour = realTime.getHour();
         int minute = realTime.getMinute();
 
-        return String.format("%d.%d.%d %02d:%02d", year, month, day, hour, minute);
+        CACHED_GAME_TIME = String.format("%d.%d.%d %02d:%02d", year, month, day, hour, minute);
+        LAST_GAME_TIME_UPDATE = currentTime;
+        return CACHED_GAME_TIME;
     }
 
     // 信息框数据类
@@ -602,6 +817,15 @@ public class ServerInformationDisplay {
             this.borderColor = borderColor;
             this.backgroundColor = backgroundColor;
         }
+    }
+
+    private record CompactTextLayout(int firstLineWidth, int secondLineTextWidth,
+                                     int thirdLineTextWidth, int scaledAvatarWidth,
+                                     int scaledAvatarSpacing, int scaledTextHeight,
+                                     int avatarHeight, int serverDreamingWidth,
+                                     int serverFishWidth, int separatorWidth, int onlineWidth,
+                                     int timeWidth, int tpsWidth, int playerWidth,
+                                     int titleWidth, int rankWidth, int levelWidth) {
     }
 
     /**

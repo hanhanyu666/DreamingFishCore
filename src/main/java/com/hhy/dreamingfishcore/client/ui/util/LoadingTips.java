@@ -21,38 +21,29 @@ import java.util.Random;
 
 public final class LoadingTips {
 
+    private static final int CURRENT_COPY_REVISION = 3;
     private static final List<String> tips = new ArrayList<>();
     private static final List<String> DEFAULT_TIPS = List.of(
-        "§b欢迎来到梦屿。§7这里曾是普通人重新开始做梦的地方。",
+        "§b欢迎来到梦屿。§7这里曾是普通人重新开始做梦的地方——而现在，危机刚刚到来。",
         "§7梦屿不是逃离世界的避难所，而是证明人类可以换一种方式生活的尝试。",
-        "§7慢下来，建一间屋子，种一片田。梦屿最初的意义，就是让普通生活重新变得珍贵。",
+        "§7慢下来，建一间屋子，种一片田。生活本身，从来不需要先证明价值才能拥有。",
+        "§7如果你刚刚抵达：先到阿拜多斯安顿下来。登记、医疗与第一份补给都在那里等你。",
+        "§6逐光会§7由梦屿的多支救援力量在危机中临时组成。它刚刚成立，总部正在阿拜多斯筹建。",
+        "§7是否加入逐光会由你自己决定。不加入的协作者，同样能参与救援、建设与调查。",
+        "§7外缘带的旧电网与旧泵站仍在运转，那里的居民还在等一封没有写完的承诺。",
         "§e重生技术§7并不是无限的奇迹。每一次回来，都意味着你离极限更近了一步。",
         "§c复活点数§7耗尽后，你将无法通过常规方式继续重生。请认真对待每一次死亡。",
         "§7如果有人愿意消耗自己的复活点数救你，请记住：那不是系统奖励，是另一个人的选择。",
         "§c感染值§7会因受伤、污染环境和靠近感染者而上升。疼痛有时比丧尸更早提醒你危险。",
-        "§7感染并不总是立刻夺走理智。真正可怕的，是所有人都急着给未知下定论。",
+        "§7关于感染，目前没有人拥有完整答案。别把恐惧当成证据，也别把猜测当成结论。",
         "§a幸存者§7更容易吸引怪物注意。你看起来越像旧世界的人类，黑暗越容易盯上你。",
-        "§c感染者§7并不等同于丧尸。他们仍可能记得自己是谁，也仍可能想活下去。",
-        "§7靠近感染者会让幸存者的感染值慢慢上升，但远离他们并不等于理解了真相。",
-        "§6逐光会§7宣称自己正在守护梦屿。相信之前，先看看他们希望你忽略什么。",
-        "§7逐光会说解药是唯一希望。可希望如果只有一种形状，它也可能是一种控制。",
-        "§7短时间记录往往充满恐惧，长时间观察才更接近真相。",
-        "§d线索§7不是越新越可靠。记录时间越长，越值得你停下来读完。",
-        "§6随记本§7会保存你发现的碎片。别急着判断，把矛盾的记录放在一起看。",
-        "§d故事阶段§7会随着你收集线索和理解梦屿而推进，而不是只靠击败敌人。",
-        "§7第一阶段：余梦期。先活下来，再慢慢听见这片大陆的旧梦。",
-        "§7第二阶段：管制期。隔离区的墙不只挡住感染，也挡住了很多声音。",
-        "§7第三阶段：疑光期。当记录彼此矛盾时，试着问问是谁最害怕长期观察。",
-        "§7第四阶段：破晓期。幸存者和感染者缺一不可，梦屿不会靠排斥迎来黎明。",
-        "§6白芷§7留下的记录也许不完整，但她至少试着看见感染者仍是人。",
-        "§7祁临曾相信秩序。也许真正困难的，不是反抗谎言，而是承认自己曾经相信它。",
-        "§7废墟里的告示、广播里的停顿、NPC 的沉默，都可能比一份正式通告更诚实。",
+        "§7远离感染者可以保护自己，但远离不等于理解。理解需要记录、时间与交叉验证。",
+        "§d故事阶段§7由服务器依据世界进展推进。任务的成功与失败都会被保留。",
         "§e蓝图§7代表你重新学会制作某件东西。梦屿的文明，也是这样一点点捡回来的。",
-        "§7不要只问感染者会不会伤害你，也问问他们为什么必须躲起来。",
         "§7丧尸、感染和死亡并不是灾难最深的部分。恐惧让人互相放弃，才是。",
-        "§7梦屿真正需要的，也许不是消灭所有感染者，而是找到人类继续活下去的方法。",
         "§7如果世界已经改变，活下去的人也必须学会承认改变。",
-        "§b守望梦屿§7不是回到过去，而是在废墟上重新相信彼此。"
+        "§b终端§7是你最重要的工具：广播、NPC 私信、个人引导与阶段任务都在这里。",
+        "§b守望不是回到过去，而是在废墟上重新相信彼此。"
     );
     private static final Random RANDOM = new Random();
     private static boolean loaded = false;
@@ -86,7 +77,15 @@ public final class LoadingTips {
         try {
             ensureDefaultConfig(configFile);
             try (Reader reader = Utf8JsonFileIO.openReader(configFile)) {
-                parse(JsonParser.parseReader(reader).getAsJsonObject());
+                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+                if (json.has("copyRevision")
+                        && json.get("copyRevision").getAsInt() == CURRENT_COPY_REVISION) {
+                    parse(json);
+                } else {
+                    // 旧版加载提示不再继续作为第二套可见文案保留。
+                    writeDefaultConfig(configFile);
+                    loadDefaultTips();
+                }
             }
         } catch (Exception e) {
             DreamingFishCore.LOGGER.warn("Failed to load loading_tips.json from config, using defaults", e);
@@ -115,15 +114,20 @@ public final class LoadingTips {
             parent.mkdirs();
         }
         if (!configFile.exists()) {
-            JsonObject json = new JsonObject();
-            JsonArray arr = new JsonArray();
-            for (String tip : DEFAULT_TIPS) {
-                arr.add(tip);
-            }
-            json.add("tips", arr);
-            try (Writer writer = Utf8JsonFileIO.openWriter(configFile)) {
-                new GsonBuilder().setPrettyPrinting().create().toJson(json, writer);
-            }
+            writeDefaultConfig(configFile);
+        }
+    }
+
+    private static void writeDefaultConfig(File configFile) throws IOException {
+        JsonObject json = new JsonObject();
+        json.addProperty("copyRevision", CURRENT_COPY_REVISION);
+        JsonArray arr = new JsonArray();
+        for (String tip : DEFAULT_TIPS) {
+            arr.add(tip);
+        }
+        json.add("tips", arr);
+        try (Writer writer = Utf8JsonFileIO.openWriter(configFile)) {
+            new GsonBuilder().setPrettyPrinting().create().toJson(json, writer);
         }
     }
 

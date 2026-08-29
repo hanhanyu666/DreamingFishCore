@@ -31,6 +31,8 @@ public final class TaskLocationDefinition {
     private Point max = new Point();
     /** 停用后不参与保护、玩家收集和位置查询。 */
     private boolean enabled = true;
+    /** 地点运行模式；旧配置缺少该字段时保持原有的强制保护行为。 */
+    private String mode = TaskLocationMode.PROTECTED.name();
 
     /** Gson 反序列化需要无参构造方法。 */
     public TaskLocationDefinition() {
@@ -38,9 +40,15 @@ public final class TaskLocationDefinition {
 
     public TaskLocationDefinition(String id, String name, ResourceKey<Level> dimension,
                                   BlockPos first, BlockPos second) {
+        this(id, name, dimension, first, second, TaskLocationMode.PROTECTED);
+    }
+
+    public TaskLocationDefinition(String id, String name, ResourceKey<Level> dimension,
+                                  BlockPos first, BlockPos second, TaskLocationMode mode) {
         this.id = id;
         this.name = name;
         this.dimension = Objects.requireNonNull(dimension, "dimension").location().toString();
+        this.mode = Objects.requireNonNull(mode, "mode").name();
         Objects.requireNonNull(first, "first");
         Objects.requireNonNull(second, "second");
         this.min = new Point(
@@ -71,6 +79,8 @@ public final class TaskLocationDefinition {
         if (min.x > max.x || min.y > max.y || min.z > max.z) {
             throw new IllegalStateException("任务地点边界必须按 min 到 max 排列：" + id);
         }
+        // Normalize accepted lower-case spellings before the definition is installed or written.
+        mode = getMode().name();
     }
 
     public static void requireValidId(String value, String label) {
@@ -125,6 +135,66 @@ public final class TaskLocationDefinition {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    public TaskLocationMode getMode() {
+        return TaskLocationMode.parse(mode);
+    }
+
+    public boolean isBuildable() {
+        return getMode() == TaskLocationMode.BUILDABLE;
+    }
+
+    public boolean forcesAdventure() {
+        return isEnabled() && getMode() == TaskLocationMode.PROTECTED;
+    }
+
+    /** Block edits are fully protected only for authored-scene locations. */
+    public boolean protectsBlocks() {
+        return isEnabled() && getMode() == TaskLocationMode.PROTECTED;
+    }
+
+    /** NPCs and authored decorations remain protected in both active modes. */
+    public boolean protectsEntities() {
+        return isEnabled();
+    }
+
+    /**
+     * Returns whether an EconomySystem claim footprint is completely inside this region's X/Z
+     * footprint. EconomySystem requires both selection points on one Y level, but its territory
+     * permissions ignore the stored Y values and protect the full vertical column.
+     */
+    public boolean containsClaim(ResourceKey<Level> levelDimension, BlockPos first, BlockPos second) {
+        if (!isEnabled() || !isBuildable() || levelDimension == null
+                || first == null || second == null || !getDimensionKey().equals(levelDimension)
+                || first.getY() != second.getY()) {
+            return false;
+        }
+        int minX = Math.min(first.getX(), second.getX());
+        int maxX = Math.max(first.getX(), second.getX());
+        int minZ = Math.min(first.getZ(), second.getZ());
+        int maxZ = Math.max(first.getZ(), second.getZ());
+        return minX >= min.x && maxX <= max.x
+                && minZ >= min.z && maxZ <= max.z;
+    }
+
+    /**
+     * Returns whether an EconomySystem claim footprint intersects this story location in X/Z.
+     * Stored claim Y is deliberately ignored because EconomySystem applies permissions through
+     * the whole vertical column. The two selected points must still share one Y, as required by
+     * EconomySystem's claim-wand protocol.
+     */
+    public boolean intersectsClaim(ResourceKey<Level> levelDimension, BlockPos first, BlockPos second) {
+        if (!isEnabled() || levelDimension == null || first == null || second == null
+                || !getDimensionKey().equals(levelDimension) || first.getY() != second.getY()) {
+            return false;
+        }
+        int minX = Math.min(first.getX(), second.getX());
+        int maxX = Math.max(first.getX(), second.getX());
+        int minZ = Math.min(first.getZ(), second.getZ());
+        int maxZ = Math.max(first.getZ(), second.getZ());
+        return minX <= max.x && maxX >= min.x
+                && minZ <= max.z && maxZ >= min.z;
     }
 
     /** JSON 中使用的简单坐标值对象。 */

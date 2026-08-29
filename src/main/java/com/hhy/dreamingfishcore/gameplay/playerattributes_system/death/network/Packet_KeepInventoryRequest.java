@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.DeathItemStorage;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -91,8 +92,11 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
                 return;
             }
 
-            // keepInventory 已开启，确认快照有效即可保留玩家身上的实际物品。
-            if (!DeathItemStorage.keepStoredItems(player)) {
+            // 新记录先从尸体还原；旧记录继续使用升级前的物品快照。
+            boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
+                    ? DeathCorpseManager.restoreForKeepInventory(player)
+                    : DeathItemStorage.keepStoredItems(player);
+            if (!itemsResolved) {
                 PendingDeathData.rollbackResolution(player, packet.deathId);
                 sendResponse(player, false, currentRespawnPoint);
                 return;

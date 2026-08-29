@@ -147,32 +147,38 @@ public class ChangeJoinMessage {
 
     // 根据玩家Rank获取进服消息
     public static String getJoinMessageByRank(Rank rank) {
-        return switch (rank.getRankLevel()) {
-            case 0 -> getConfigValue(JOIN_MESSAGE_NO_RANK);
-            case 1 -> getConfigValue(JOIN_MESSAGE_FISH);
-            case 2 -> getConfigValue(JOIN_MESSAGE_FISH_PLUS);
-            case 3 -> getConfigValue(JOIN_MESSAGE_FISH_PLUS_PLUS);
-            case 4 -> getConfigValue(JOIN_MESSAGE_OPERATOR);
-            case 5 -> getConfigValue(JOIN_MESSAGE_BUILDER_FISH);
-            case 6 -> getConfigValue(JOIN_MESSAGE_SUPER_BUILDER_FISH);
-            case 7 -> getConfigValue(JOIN_MESSAGE_WORLD_SHAPER_FISH);
-            case 8 -> getConfigValue(JOIN_MESSAGE_MYTH_SHAPER_FISH);
+        if (rank == null) {
+            return getConfigValue(JOIN_MESSAGE_NO_RANK);
+        }
+        return switch (rank.getRankName()) {
+            case "NO_RANK" -> getConfigValue(JOIN_MESSAGE_NO_RANK);
+            case "FISH" -> getConfigValue(JOIN_MESSAGE_FISH);
+            case "FISH+" -> getConfigValue(JOIN_MESSAGE_FISH_PLUS);
+            case "FISH++" -> getConfigValue(JOIN_MESSAGE_FISH_PLUS_PLUS);
+            case "OPERATOR" -> getConfigValue(JOIN_MESSAGE_OPERATOR);
+            case "BUILDER FISH" -> getConfigValue(JOIN_MESSAGE_BUILDER_FISH);
+            case "SUPER BUILDER FISH" -> getConfigValue(JOIN_MESSAGE_SUPER_BUILDER_FISH);
+            case "WORLD SHAPER FISH" -> getConfigValue(JOIN_MESSAGE_WORLD_SHAPER_FISH);
+            case "MYTH SHAPER FISH" -> getConfigValue(JOIN_MESSAGE_MYTH_SHAPER_FISH);
             default -> getConfigValue(JOIN_MESSAGE); // 默认消息
         };
     }
 
     // 根据玩家Rank获取离开消息
     public static String getLeaveMessageByRank(Rank rank) {
-        return switch (rank.getRankLevel()) {
-            case 0 -> getConfigValue(LEAVE_MESSAGE_NO_RANK);
-            case 1 -> getConfigValue(LEAVE_MESSAGE_FISH);
-            case 2 -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS);
-            case 3 -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS_PLUS);
-            case 4 -> getConfigValue(LEAVE_MESSAGE_OPERATOR);
-            case 5 -> getConfigValue(LEAVE_MESSAGE_BUILDER_FISH);
-            case 6 -> getConfigValue(LEAVE_MESSAGE_SUPER_BUILDER_FISH);
-            case 7 -> getConfigValue(LEAVE_MESSAGE_WORLD_SHAPER_FISH);
-            case 8 -> getConfigValue(LEAVE_MESSAGE_MYTH_SHAPER_FISH);
+        if (rank == null) {
+            return getConfigValue(LEAVE_MESSAGE_NO_RANK);
+        }
+        return switch (rank.getRankName()) {
+            case "NO_RANK" -> getConfigValue(LEAVE_MESSAGE_NO_RANK);
+            case "FISH" -> getConfigValue(LEAVE_MESSAGE_FISH);
+            case "FISH+" -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS);
+            case "FISH++" -> getConfigValue(LEAVE_MESSAGE_FISH_PLUS_PLUS);
+            case "OPERATOR" -> getConfigValue(LEAVE_MESSAGE_OPERATOR);
+            case "BUILDER FISH" -> getConfigValue(LEAVE_MESSAGE_BUILDER_FISH);
+            case "SUPER BUILDER FISH" -> getConfigValue(LEAVE_MESSAGE_SUPER_BUILDER_FISH);
+            case "WORLD SHAPER FISH" -> getConfigValue(LEAVE_MESSAGE_WORLD_SHAPER_FISH);
+            case "MYTH SHAPER FISH" -> getConfigValue(LEAVE_MESSAGE_MYTH_SHAPER_FISH);
             default -> getConfigValue(LEAVE_MESSAGE); // 默认消息
         };
     }

@@ -53,6 +53,7 @@ public class ModItemModelProvider extends ItemModelProvider {
         simpleItem(DreamingFishCore_Items.REVIVAL_CHARM);
         // 基因复苏药剂
         simpleItem(DreamingFishCore_Items.GENE_RESURGENCE_POTION);
+        withExistingParent("siege_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
     }
 
     private ItemModelBuilder simpleItem(DeferredHolder<Item, ? extends Item> itemRegistryObject) {

@@ -104,8 +104,7 @@ public class MarkerClientHandler {
         }
 
         if (hitResult instanceof BlockHitResult blockHitResult) {
-            BlockPos pos = blockHitResult.getBlockPos();
-            return Vec3.atCenterOf(pos).add(0.0D, 0.18D, 0.0D);
+            return blockHitResult.getLocation();
         }
 
         return hitResult.getLocation();

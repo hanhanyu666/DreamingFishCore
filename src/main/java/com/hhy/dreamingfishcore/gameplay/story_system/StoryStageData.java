@@ -16,8 +16,9 @@ import java.util.List;
  *     <li>这个阶段定义的若干任务</li>
  * </ul>
  *
- * <p>配置里可以定义很多任务，但客户端视图只会包含已经发布到世界的任务。
- * 这个过滤过程由 {@link StoryManager} 完成。</p>
+ * <p>配置里可以定义很多任务。客户端视图通常只包含已经发布到世界的任务，
+ * 但带个人部分的任务会在世界层解锁前提前显示，方便玩家从世界故事中看到自己的待办。
+ * 这个过滤和运行时合并过程由 {@link StoryManager} 完成。</p>
  */
 public class StoryStageData {
     /** 稳定字符串 ID，适合保存到存档和被脚本引用。 */
@@ -32,7 +33,11 @@ public class StoryStageData {
     /** 玩家可见的阶段简介。 */
     @SerializedName("description")
     private String stageDescription;
-    /** 该阶段定义的任务；客户端拿到的副本只包含已发布任务。 */
+    /** 仅运行时使用的当前阶段标记，不属于故事定义配置。 */
+    private transient boolean currentStage;
+    /** 服务端按全体符合条件玩家计算出的阶段完成比例；未填充时由本地任务视图回退计算。 */
+    private transient float globalProgressPercentage = -1.0f;
+    /** 该阶段定义的任务；客户端副本可能包含尚未发布但可见的个人任务。 */
     private List<StoryTaskData> tasks = new ArrayList<>();
     /** 可选的阶段怪物倍率。它只提供数据，实际应用仍需要怪物事件层调用。 */
     private MonsterModifier monsterModifier;
@@ -55,6 +60,8 @@ public class StoryStageData {
         StoryStageData copy = new StoryStageData(stageId, stageNumber, stageName, stageDescription);
         copy.tasks = new ArrayList<>(taskViews);
         copy.monsterModifier = monsterModifier == null ? null : monsterModifier.copy();
+        copy.currentStage = currentStage;
+        copy.globalProgressPercentage = globalProgressPercentage;
         return copy;
     }
 
@@ -116,6 +123,20 @@ public class StoryStageData {
         this.stageDescription = stageDescription;
     }
 
+    public boolean isCurrentStage() {
+        return currentStage;
+    }
+
+    public void setCurrentStage(boolean currentStage) {
+        this.currentStage = currentStage;
+    }
+
+    public void setGlobalProgressPercentage(float globalProgressPercentage) {
+        this.globalProgressPercentage = Float.isFinite(globalProgressPercentage)
+                ? Math.max(0.0f, Math.min(1.0f, globalProgressPercentage))
+                : -1.0f;
+    }
+
     public List<StoryTaskData> getTasks() {
         return tasks;
     }
@@ -158,11 +179,38 @@ public class StoryStageData {
     }
 
     /**
-     * 计算全服阶段进度。成功和失败都属于已结算，所以都会进入分子。
+     * 计算全服阶段进度。
+     *
+     * <p>个人故事任务按“完成玩家数 / 应参与玩家数”计入，而不是把一名玩家
+     * 的完成当成整项世界任务完成。普通世界任务仍按成功或失败的结算状态计入。</p>
      */
     public float getGlobalProgressPercentage() {
-        int total = getTotalTaskCount();
-        return total == 0 ? 0.0f : (float) getCompletedTaskCount() / total;
+        if (globalProgressPercentage >= 0.0f) {
+            return globalProgressPercentage;
+        }
+        if (tasks == null || tasks.isEmpty()) {
+            return 0.0f;
+        }
+        float progressSum = 0.0f;
+        int trackedTaskCount = 0;
+        for (StoryTaskData task : tasks) {
+            if (task == null) {
+                continue;
+            }
+            if (task.isPersonalTask()) {
+                int expected = task.getPersonalExpectedPlayerCount();
+                // 建设任务在还没有成员时不应把阶段进度凭空压低。
+                if (expected <= 0) {
+                    continue;
+                }
+                progressSum += Math.min(1.0f,
+                        (float) task.getFinishedPlayerCount() / expected);
+            } else {
+                progressSum += task.isCompleted() ? 1.0f : 0.0f;
+            }
+            trackedTaskCount++;
+        }
+        return trackedTaskCount == 0 ? 0.0f : progressSum / trackedTaskCount;
     }
 
     /** 计算当前客户端玩家取得的个人任务记录比例。 */

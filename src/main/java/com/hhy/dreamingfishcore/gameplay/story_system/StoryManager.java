@@ -5,9 +5,15 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
+import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
+import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipManager;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
+import com.hhy.dreamingfishcore.server.notice_system.NoticeDeliveryService;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
+import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.loading.FMLPaths;
 
@@ -20,6 +26,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,6 +69,25 @@ public final class StoryManager {
     private static final Map<Integer, StoryTaskData> TASKS_BY_NUMBER = new ConcurrentHashMap<>();
     /** 任务 ID 到所属阶段 ID 的反向索引，保留给后续任务执行器使用。 */
     private static final Map<String, String> TASK_STAGE_IDS = new ConcurrentHashMap<>();
+    /**
+     * 内置开场世界任务与个人引导的关联。
+     *
+     * <p>个人引导本身仍由 GuidanceManager 按玩家保存；这里仅提供故事页和全体完成
+     * 门槛所需的稳定关联，不改变 NPC 对话配置。</p>
+     */
+    private static final Map<String, List<String>> PERSONAL_TASK_GUIDANCE_IDS = Map.of(
+            OpeningStoryDefinitionCatalog.SETTLE_IN_ABYDOS_TASK_ID,
+            List.of("dreamingfishcore:guidance/opening/travel_to_abydos"),
+            OpeningStoryDefinitionCatalog.MEET_BAIZHI_TASK_ID,
+            List.of("dreamingfishcore:guidance/opening/talk_to_baizhi"),
+            OpeningStoryDefinitionCatalog.CHOOSE_ZHUIGUANG_PATH_TASK_ID,
+            // 联系周岑后任务已经分配；最终选择（加入或保持独立）才是完成条件。
+            // 因此两种引导都要进入“全体已分配玩家完成”的门槛。
+            List.of(
+                    "dreamingfishcore:guidance/opening/contact_zhoucen",
+                    "dreamingfishcore:guidance/opening/choose_membership"),
+            OpeningStoryDefinitionCatalog.BUILD_ZHUIGUANG_BASE_TASK_ID,
+            List.of("dreamingfishcore:guidance/opening/build_zhuiguang_base"));
 
     /** 当前服务器世界唯一的一份运行状态。 */
     private static StoryWorldState state = new StoryWorldState();
@@ -178,7 +204,12 @@ public final class StoryManager {
         }
 
         StoryDefinitionDocument document = GSON.fromJson(object, StoryDefinitionDocument.class);
+        boolean openingTasksAdded = ensureBuiltInOpeningDefinitions(document);
         validateDefinitionDocument(document);
+        if (openingTasksAdded) {
+            writeDefinitionDocument(document);
+            DreamingFishCore.LOGGER.info("已向故事定义补齐开场阶段的四项任务");
+        }
         return document;
     }
 
@@ -213,14 +244,40 @@ public final class StoryManager {
         }
     }
 
-    /** 创建只包含“余梦期”、不包含正式任务的最小可启动配置。 */
+    /** 创建“梦的开始”与“余梦期”的默认阶段定义。 */
     private static StoryDefinitionDocument createDefaultDefinitions() {
-        StoryStageData defaultStage = new StoryStageData(
+        StoryStageData dreamBeginning = new StoryStageData(
                 StoryWorldState.DEFAULT_STAGE_ID,
                 1,
+                "梦的开始",
+                OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION);
+        OpeningStoryDefinitionCatalog.createTasks().forEach(dreamBeginning::addTask);
+        StoryStageData afterdream = new StoryStageData(
+                "dreamingfishcore:afterdream",
+                2,
                 "余梦期",
-                "梦屿故事的起点");
-        return new StoryDefinitionDocument(DEFINITION_SCHEMA_VERSION, List.of(defaultStage));
+                "");
+        return new StoryDefinitionDocument(
+                DEFINITION_SCHEMA_VERSION,
+                List.of(dreamBeginning, afterdream));
+    }
+
+    /** 为已有服务器只补缺失任务；保留服主对阶段和同 ID 任务作出的改写。 */
+    private static boolean ensureBuiltInOpeningDefinitions(StoryDefinitionDocument document) {
+        if (document == null || document.stages == null) {
+            return false;
+        }
+        for (StoryStageData stage : document.stages) {
+            if (stage != null && OpeningStoryDefinitionCatalog.STAGE_ID.equals(stage.getStageId())) {
+                boolean changed = OpeningStoryDefinitionCatalog.ensureTasks(stage);
+                if ("梦屿故事的起点".equals(stage.getStageDescription())) {
+                    stage.setStageDescription(OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION);
+                    changed = true;
+                }
+                return changed;
+            }
+        }
+        return false;
     }
 
     /**
@@ -298,7 +355,11 @@ public final class StoryManager {
         }
         boolean changed = false;
         for (StoryTaskData task : stage.getTasks()) {
-            if (task.isPublishedByDefault() && state.activateTask(task.getTaskKey())) {
+            // 开场个人任务先由各玩家分别完成；世界任务只有在所有已分配玩家
+            // 完成个人部分后才解锁，因此不能在阶段加载时提前发布。
+            if (task.isPublishedByDefault()
+                    && !isPersonalStoryTask(task.getTaskKey())
+                    && state.activateTask(task.getTaskKey())) {
                 changed = true;
                 recordHistory(
                         WorldHistoryLog.EventType.TASK_PUBLISHED,
@@ -471,6 +532,20 @@ public final class StoryManager {
                 actor,
                 Map.of("previousStageId", previousStageId));
         dirty = true;
+        try {
+            TaskDataManager.broadcastFullTaskDataToAllPlayers();
+        } catch (RuntimeException exception) {
+            // 阶段状态、默认任务和 dirty 已经完成；客户端同步失败不能回滚这次切换。
+            DreamingFishCore.LOGGER.error(
+                    "故事阶段已切换为 {}，但向在线玩家同步阶段任务数据失败", stageId, exception);
+        }
+        try {
+            NoticeDeliveryService.deliverPendingToAllOnlinePlayers();
+        } catch (RuntimeException exception) {
+            // 阶段状态已经变更并标记为 dirty；公告投递失败不能影响这次切换。
+            DreamingFishCore.LOGGER.error(
+                    "故事阶段已切换为 {}，但向在线玩家补投阶段公告失败", stageId, exception);
+        }
         return true;
     }
 
@@ -635,6 +710,161 @@ public final class StoryManager {
         }
     }
 
+    /**
+     * 用稳定字符串 ID 记录一名玩家完成个人故事任务。
+     *
+     * <p>个人进度先单独保存，即使对应世界任务尚未解锁也不会丢失。只有当前服务器中
+     * 所有符合条件的玩家全部完成后，才会在世界层解锁并结算对应任务；这个过程不自动写入
+     * 世界历史，历史内容由运营者手动维护。入口只接受服务端剧情验证后的完成。</p>
+     */
+    public static synchronized boolean recordPlayerTaskProgress(
+            String taskKey, String playerName, UUID playerUUID) {
+        ensureWritable();
+        if (playerUUID == null || playerName == null || playerName.isBlank()) {
+            DreamingFishCore.LOGGER.warn("拒绝记录缺少玩家身份的个人故事任务：{}", taskKey);
+            return false;
+        }
+        if (!TASKS_BY_KEY.containsKey(taskKey)) {
+            DreamingFishCore.LOGGER.warn("故事任务不存在：{}", taskKey);
+            return false;
+        }
+        if (!isPersonalStoryTask(taskKey)) {
+            DreamingFishCore.LOGGER.warn("拒绝把非个人故事任务当作个人进度记录：{}", taskKey);
+            return false;
+        }
+        if (OpeningStoryDefinitionCatalog.isMemberOnlyTask(taskKey)
+                && !ZhuiguangMembershipManager.isMember(playerUUID)) {
+            DreamingFishCore.LOGGER.warn(
+                    "拒绝为非逐光会成员记录建设任务个人进度：{}", playerName);
+            return false;
+        }
+
+        try {
+            StoryWorldState.TaskParticipant participant =
+                    new StoryWorldState.TaskParticipant(playerUUID, playerName);
+            Set<UUID> expectedPlayers = getExpectedPersonalPlayers(taskKey);
+            expectedPlayers.add(playerUUID);
+            StoryWorldState.PersonalCompletionResult result = state.recordPersonalCompletion(
+                    taskKey, participant, expectedPlayers);
+
+            // 个人任务全部完成后，才把对应世界任务从“未解锁”推进到 SUCCEEDED。
+            // 这里直接操作世界状态，刻意绕过 activateTask/resolveTask 的历史记录入口。
+            boolean worldAdvanced = false;
+            if (result.allPlayersCompleted()) {
+                state.activateTask(taskKey);
+                StoryWorldState.TaskProgress worldProgress = state.getTaskProgress(taskKey);
+                if (worldProgress != null && !worldProgress.getOutcome().isResolved()) {
+                    List<StoryWorldState.TaskParticipant> completedParticipants =
+                            personalTaskParticipants(taskKey);
+                    worldAdvanced = state.resolveTask(
+                            taskKey, StoryTaskOutcome.SUCCEEDED, completedParticipants);
+                }
+            }
+
+            if (!result.changed() && !worldAdvanced) {
+                return false;
+            }
+            dirty = true;
+            DreamingFishCore.LOGGER.info(
+                    "玩家 {} 完成个人故事任务 {}，{}",
+                    playerName,
+                    taskKey,
+                    worldAdvanced ? "全体个人任务已完成，世界任务已推进" : "个人进度已记录");
+            // 个人进度和世界任务状态变化后，所有在线玩家都需要看到最新视图。
+            try {
+                TaskDataManager.broadcastFullTaskDataToAllPlayers();
+            } catch (RuntimeException exception) {
+                DreamingFishCore.LOGGER.error(
+                        "个人故事任务 {} 已写入，但向在线玩家广播最新世界进度失败",
+                        taskKey,
+                        exception);
+            }
+            return true;
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            DreamingFishCore.LOGGER.warn("记录个人故事任务 {} 失败", taskKey, exception);
+            return false;
+        }
+    }
+
+    /** 返回某个故事任务是否有独立的个人部分。 */
+    public static boolean isPersonalStoryTask(String taskKey) {
+        return taskKey != null && PERSONAL_TASK_GUIDANCE_IDS.containsKey(taskKey);
+    }
+
+    /** 返回这项个人任务当前应统计的服务器玩家。建设任务只统计逐光会成员。 */
+    private static Set<UUID> getAssignedPersonalPlayers(String taskKey) {
+        List<String> definitionIds = PERSONAL_TASK_GUIDANCE_IDS.get(taskKey);
+        return definitionIds == null
+                ? Set.of()
+                : GuidanceManager.getPlayerIdsForDefinitions(definitionIds);
+    }
+
+    /**
+     * 个人故事任务的全服门槛不再按“收到引导的人”计算，而是按玩家数据中的服务器玩家计算。
+     * 这样一名玩家完成任务只会让比例增加一小段，不会直接把世界任务结算；旧存档中只有引导
+     * 或完成记录、但尚未有玩家基础数据的 UUID 也会保留在统计集合中。
+     */
+    private static Set<UUID> getExpectedPersonalPlayers(String taskKey) {
+        Set<UUID> expected = new LinkedHashSet<>();
+        boolean memberOnly = OpeningStoryDefinitionCatalog.isMemberOnlyTask(taskKey);
+        Map<UUID, PlayerData> playerDataById = Map.of();
+
+        if (PlayerDataManager.isLoaded()) {
+            try {
+                playerDataById = PlayerDataManager.loadAllPlayerDataFromFile();
+                for (Map.Entry<UUID, PlayerData> entry : playerDataById.entrySet()) {
+                    UUID playerId = entry.getKey();
+                    PlayerData data = entry.getValue();
+                    if (playerId != null && (!memberOnly || data != null && data.isZhuiguangMember())) {
+                        expected.add(playerId);
+                    }
+                }
+            } catch (RuntimeException exception) {
+                DreamingFishCore.LOGGER.warn(
+                        "读取服务器玩家列表失败，个人故事任务 {} 暂时使用已知进度统计", taskKey, exception);
+            }
+        }
+
+        // 兼容玩家数据迁移前已经创建的引导与完成记录。
+        for (UUID assignedPlayer : getAssignedPersonalPlayers(taskKey)) {
+            if (!memberOnly || !PlayerDataManager.isLoaded()
+                    || playerDataById.getOrDefault(assignedPlayer, null) == null
+                    || playerDataById.get(assignedPlayer).isZhuiguangMember()) {
+                expected.add(assignedPlayer);
+            }
+        }
+        Map<UUID, PlayerData> knownPlayerData = playerDataById;
+        state.getPersonalTaskCompletions(taskKey).keySet().forEach(playerId -> {
+            try {
+                UUID parsed = UUID.fromString(playerId);
+                PlayerData data = knownPlayerData.get(parsed);
+                if (!memberOnly || !PlayerDataManager.isLoaded()
+                        || data == null || data.isZhuiguangMember()) {
+                    expected.add(parsed);
+                }
+            } catch (IllegalArgumentException ignored) {
+                // 世界状态加载时已经校验过；这里仅防御手动编辑的旧存档。
+            }
+        });
+        return expected;
+    }
+
+    /** 把个人完成记录转换成世界任务结算所需的参与者快照。 */
+    private static List<StoryWorldState.TaskParticipant> personalTaskParticipants(String taskKey) {
+        Map<String, String> completed = state.getPersonalTaskCompletions(taskKey);
+        List<StoryWorldState.TaskParticipant> participants = new ArrayList<>();
+        completed.forEach((playerId, playerName) -> {
+            try {
+                participants.add(new StoryWorldState.TaskParticipant(
+                        UUID.fromString(playerId), playerName));
+            } catch (IllegalArgumentException exception) {
+                DreamingFishCore.LOGGER.warn(
+                        "忽略个人任务 {} 中非法的玩家 UUID {}", taskKey, playerId);
+            }
+        });
+        return participants;
+    }
+
     /** 返回按数字编号索引的所有阶段视图，不附带某个玩家的个人完成状态。 */
     public static Map<Integer, StoryStageData> getAllStages() {
         return getStagesForPlayer(null);
@@ -643,8 +873,10 @@ public final class StoryManager {
     /**
      * 为指定玩家生成所有阶段的客户端视图。
      *
-     * <p>这里返回的是副本和只读 Map。配置里尚未发布的任务会被过滤，
-     * 已发布任务则合并全服结果和这个玩家的个人记录。</p>
+     * <p>普通世界任务只有在发布后进入视图；带个人部分的任务只有在这名玩家
+     * 实际收到对应的剧情引导后才进入故事页，并合并当前玩家的个人完成状态。
+     * 这样不会因为配置里预先写了整条任务链，就把尚未经历的剧情提前剧透给玩家。
+     * 管理/兼容查询传入 {@code null} 时仍返回所有任务。</p>
      */
     public static Map<Integer, StoryStageData> getStagesForPlayer(UUID playerId) {
         ensureLoaded();
@@ -669,15 +901,88 @@ public final class StoryManager {
     private static StoryStageData createStageView(StoryStageData definition, UUID playerId) {
         List<StoryTaskData> taskViews = new ArrayList<>();
         for (StoryTaskData task : definition.getTasks()) {
+            if (playerId != null
+                    && OpeningStoryDefinitionCatalog.isMemberOnlyTask(task.getTaskKey())
+                    && !ZhuiguangMembershipManager.isMember(playerId)) {
+                continue;
+            }
+            boolean personalTask = isPersonalStoryTask(task.getTaskKey());
+            // 个人任务的定义会随故事阶段一起保存，但分配是逐个玩家发生的。
+            // 没有收到对应引导的玩家不能看到这张任务卡；否则新玩家第一次打开
+            // 故事页就会同时看到整条开场链。已写入个人完成记录时保留任务，
+            // 以兼容引导存档因迁移/清理而缺失的旧数据。
+            if (playerId != null
+                    && personalTask
+                    && !isPersonalTaskVisibleToPlayer(task.getTaskKey(), playerId)) {
+                continue;
+            }
+            StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
+            if (progress == null && !personalTask) {
+                continue;
+            }
+            StoryTaskData view = task.copyForView();
+            int personalCompleted = personalTask
+                    ? state.getPersonalTaskCompletionCount(task.getTaskKey())
+                    : 0;
+            int personalExpected = personalTask
+                    ? getExpectedPersonalPlayers(task.getTaskKey()).size()
+                    : 0;
+            boolean playerFinished = personalTask
+                    ? state.hasPersonalTaskCompletion(task.getTaskKey(), playerId)
+                    : progress != null && progress.hasParticipant(playerId);
+            view.applyRuntimeView(
+                    progress,
+                    playerFinished,
+                    personalTask,
+                    personalCompleted,
+                    personalExpected);
+            taskViews.add(view);
+        }
+        StoryStageData view = definition.copyWithTasks(taskViews);
+        view.setCurrentStage(definition.getStageId().equals(state.getCurrentStageId()));
+        // 阶段全服比例必须基于完整定义计算，不能因客户端隐藏了尚未分配的个人任务而变化。
+        view.setGlobalProgressPercentage(calculateGlobalStageProgress(definition));
+        return view;
+    }
+
+    /** 以所有符合条件的玩家为分母，计算一个阶段的全服完成比例。 */
+    private static float calculateGlobalStageProgress(StoryStageData definition) {
+        if (definition == null || definition.getTasks() == null) {
+            return 0.0f;
+        }
+        float progressSum = 0.0f;
+        int trackedTaskCount = 0;
+        for (StoryTaskData task : definition.getTasks()) {
+            if (task == null) {
+                continue;
+            }
+            if (isPersonalStoryTask(task.getTaskKey())) {
+                int expected = getExpectedPersonalPlayers(task.getTaskKey()).size();
+                if (expected <= 0) {
+                    continue;
+                }
+                progressSum += Math.min(1.0f,
+                        (float) state.getPersonalTaskCompletionCount(task.getTaskKey()) / expected);
+                trackedTaskCount++;
+                continue;
+            }
             StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
             if (progress == null) {
                 continue;
             }
-            StoryTaskData view = task.copyForView();
-            view.applyRuntimeView(progress, progress.hasParticipant(playerId));
-            taskViews.add(view);
+            progressSum += progress.getOutcome().isResolved() ? 1.0f : 0.0f;
+            trackedTaskCount++;
         }
-        return definition.copyWithTasks(taskViews);
+        return trackedTaskCount == 0 ? 0.0f : progressSum / trackedTaskCount;
+    }
+
+    /** 判断个人任务是否已经实际分配给指定玩家。 */
+    private static boolean isPersonalTaskVisibleToPlayer(String taskKey, UUID playerId) {
+        if (playerId == null) {
+            return true;
+        }
+        return getAssignedPersonalPlayers(taskKey).contains(playerId)
+                || state.hasPersonalTaskCompletion(taskKey, playerId);
     }
 
     public static StoryStageData getStage(int stageNumber) {
@@ -704,11 +1009,26 @@ public final class StoryManager {
         return task == null ? null : createTaskView(task, null);
     }
 
-    /** 把单个任务定义与运行结果合并成视图；未发布任务会得到 published=false。 */
+    /** 把单个任务定义与运行结果合并成视图；个人任务允许得到 published=false。 */
     private static StoryTaskData createTaskView(StoryTaskData definition, UUID playerId) {
         StoryTaskData view = definition.copyForView();
         StoryWorldState.TaskProgress progress = state.getTaskProgress(definition.getTaskKey());
-        view.applyRuntimeView(progress, progress != null && progress.hasParticipant(playerId));
+        boolean personalTask = isPersonalStoryTask(definition.getTaskKey());
+        int personalCompleted = personalTask
+                ? state.getPersonalTaskCompletionCount(definition.getTaskKey())
+                : 0;
+        int personalExpected = personalTask
+                ? getExpectedPersonalPlayers(definition.getTaskKey()).size()
+                : 0;
+        boolean playerFinished = personalTask
+                ? state.hasPersonalTaskCompletion(definition.getTaskKey(), playerId)
+                : progress != null && progress.hasParticipant(playerId);
+        view.applyRuntimeView(
+                progress,
+                playerFinished,
+                personalTask,
+                personalCompleted,
+                personalExpected);
         return view;
     }
 
@@ -724,7 +1044,7 @@ public final class StoryManager {
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> {
                     StoryTaskData view = createTaskView(entry.getValue(), null);
-                    if (view.isTaskState()) {
+                    if (view.isTaskState() || view.isPersonalTask()) {
                         result.put(entry.getKey(), view);
                     }
                 });
@@ -737,6 +1057,9 @@ public final class StoryManager {
             return false;
         }
         StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
+        if (isPersonalStoryTask(task.getTaskKey())) {
+            return state.hasPersonalTaskCompletion(task.getTaskKey(), playerUUID);
+        }
         return progress != null && progress.hasParticipant(playerUUID);
     }
 
@@ -745,8 +1068,8 @@ public final class StoryManager {
         if (stage == null) {
             return false;
         }
-        List<StoryTaskData> published = getPublishedTasks(stage);
-        return !published.isEmpty() && published.stream()
+        List<StoryTaskData> tracked = getTrackedTasks(stage);
+        return !tracked.isEmpty() && tracked.stream()
                 .allMatch(task -> isPlayerFinishedTask(task.getTaskId(), playerUUID));
     }
 
@@ -755,7 +1078,7 @@ public final class StoryManager {
         if (stage == null) {
             return 0;
         }
-        return (int) getPublishedTasks(stage).stream()
+        return (int) getTrackedTasks(stage).stream()
                 .filter(task -> isPlayerFinishedTask(task.getTaskId(), playerUUID))
                 .count();
     }
@@ -764,6 +1087,16 @@ public final class StoryManager {
     private static List<StoryTaskData> getPublishedTasks(StoryStageData stage) {
         return stage.getTasks().stream()
                 .filter(task -> state.getTaskProgress(task.getTaskKey()) != null)
+                .toList();
+    }
+
+    /**
+     * 返回当前阶段已经进入故事进度的任务：已发布的世界任务，加上可提前显示的个人任务。
+     */
+    private static List<StoryTaskData> getTrackedTasks(StoryStageData stage) {
+        return stage.getTasks().stream()
+                .filter(task -> isPersonalStoryTask(task.getTaskKey())
+                        || state.getTaskProgress(task.getTaskKey()) != null)
                 .toList();
     }
 
@@ -797,7 +1130,9 @@ public final class StoryManager {
             return 0;
         }
         StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-        return progress == null ? 0 : progress.getParticipantCount();
+        return isPersonalStoryTask(task.getTaskKey())
+                ? state.getPersonalTaskCompletionCount(task.getTaskKey())
+                : progress == null ? 0 : progress.getParticipantCount();
     }
 
     public static int[] getStageTaskFinishedCounts(int stageNumber) {
@@ -805,7 +1140,7 @@ public final class StoryManager {
         if (stage == null) {
             return new int[0];
         }
-        List<StoryTaskData> tasks = getPublishedTasks(stage);
+        List<StoryTaskData> tasks = getTrackedTasks(stage);
         int[] result = new int[tasks.size()];
         for (int index = 0; index < tasks.size(); index++) {
             result[index] = getTaskFinishedCount(tasks.get(index).getTaskId());
@@ -817,6 +1152,9 @@ public final class StoryManager {
         StoryTaskData task = TASKS_BY_NUMBER.get(taskId);
         if (task == null) {
             return List.of();
+        }
+        if (isPersonalStoryTask(task.getTaskKey())) {
+            return state.getPersonalTaskCompletions(task.getTaskKey()).values().stream().sorted().toList();
         }
         StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
         if (progress == null) {
@@ -832,6 +1170,10 @@ public final class StoryManager {
         }
         Set<String> players = new HashSet<>();
         for (StoryTaskData task : stage.getTasks()) {
+            if (isPersonalStoryTask(task.getTaskKey())) {
+                players.addAll(state.getPersonalTaskCompletions(task.getTaskKey()).keySet());
+                continue;
+            }
             StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
             if (progress != null) {
                 players.addAll(progress.getParticipantNames().keySet());
@@ -841,15 +1183,21 @@ public final class StoryManager {
     }
 
     public static int getTotalTaskCompletions() {
-        return state.getTaskProgressView().values().stream()
+        int sharedCompletions = state.getTaskProgressView().values().stream()
                 .mapToInt(StoryWorldState.TaskProgress::getParticipantCount)
                 .sum();
+        int personalCompletions = state.getPersonalTaskProgressView().values().stream()
+                .mapToInt(Map::size)
+                .sum();
+        return sharedCompletions + personalCompletions;
     }
 
     public static int getTotalUniquePlayers() {
         Set<String> players = new HashSet<>();
         state.getTaskProgressView().values()
                 .forEach(progress -> players.addAll(progress.getParticipantNames().keySet()));
+        state.getPersonalTaskProgressView().values()
+                .forEach(progress -> players.addAll(progress.keySet()));
         return players.size();
     }
 
@@ -863,10 +1211,17 @@ public final class StoryManager {
             return "任务不存在";
         }
         StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-        String outcome = progress == null ? "未发布" : progress.getOutcome().name();
-        int playerCount = progress == null ? 0 : progress.getParticipantCount();
-        return String.format("任务 [%d / %s] %s: %s，%d 人在场",
-                task.getTaskId(), task.getTaskKey(), task.getTaskName(), outcome, playerCount);
+        String outcome = progress == null
+                ? (isPersonalStoryTask(task.getTaskKey()) ? "个人进行中" : "未发布")
+                : progress.getOutcome().name();
+        int playerCount = isPersonalStoryTask(task.getTaskKey())
+                ? state.getPersonalTaskCompletionCount(task.getTaskKey())
+                : progress == null ? 0 : progress.getParticipantCount();
+        String countLabel = isPersonalStoryTask(task.getTaskKey())
+                ? "人已完成个人部分"
+                : "人在场";
+        return String.format("任务 [%d / %s] %s: %s，%d %s",
+                task.getTaskId(), task.getTaskKey(), task.getTaskName(), outcome, playerCount, countLabel);
     }
 
     public static String getStageStatisticsString(int stageNumber) {
@@ -877,14 +1232,24 @@ public final class StoryManager {
         StringBuilder result = new StringBuilder();
         result.append(String.format("=== 阶段 %d / %s: %s ===\n",
                 stage.getStageNumber(), stage.getStageId(), stage.getStageName()));
-        for (StoryTaskData task : getPublishedTasks(stage)) {
+        for (StoryTaskData task : getTrackedTasks(stage)) {
             StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-            result.append(String.format("  [%d / %s] %s: %s，%d 人在场\n",
+            String outcome = progress == null
+                    ? (isPersonalStoryTask(task.getTaskKey()) ? "个人进行中" : "未发布")
+                    : progress.getOutcome().name();
+            int participantCount = isPersonalStoryTask(task.getTaskKey())
+                    ? state.getPersonalTaskCompletionCount(task.getTaskKey())
+                    : progress == null ? 0 : progress.getParticipantCount();
+            String countLabel = isPersonalStoryTask(task.getTaskKey())
+                    ? "人已完成个人部分"
+                    : "人在场";
+            result.append(String.format("  [%d / %s] %s: %s，%d %s\n",
                     task.getTaskId(), task.getTaskKey(), task.getTaskName(),
-                    progress.getOutcome(), progress.getParticipantCount()));
+                    outcome, participantCount, countLabel));
         }
         ProgressSnapshot progress = getProgress(stage.getStageId(), null);
-        result.append(String.format("全服阶段任务进度: %d/%d，失败: %d，参与人数: %d 人",
+        result.append(String.format("全服玩家完成比例: %.1f%%，已结算任务: %d/%d，失败: %d，参与人数: %d 人",
+                progress.globalPlayerRatio() * 100.0f,
                 progress.globalResolved(), progress.publishedTasks(), progress.globalFailed(),
                 getStageUniquePlayerCount(stageNumber)));
         return result.toString();
@@ -893,8 +1258,8 @@ public final class StoryManager {
     /**
      * 统计某阶段的双进度。
      *
-     * <p>分母只包含已发布任务。全服分子包含成功和失败；个人分子表示指定玩家
-     * 是否在结算参与者中。playerId 为 null 时个人进度自然为 0。</p>
+     * <p>任务数量与当前玩家个人完成数仍保留给旧管理接口；全服比例由所有符合条件
+     * 的玩家完成情况计算，个人任务不会因一名玩家完成就被当成全服已结算。</p>
      */
     public static ProgressSnapshot getProgress(String stageId, UUID playerId) {
         ensureLoaded();
@@ -907,26 +1272,34 @@ public final class StoryManager {
         int failed = 0;
         int personal = 0;
         int personalFailed = 0;
-        for (StoryTaskData task : stage.getTasks()) {
+        for (StoryTaskData task : getTrackedTasks(stage)) {
             StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-            if (progress == null) {
-                continue;
-            }
             total++;
-            if (progress.getOutcome().isResolved()) {
-                resolved++;
-            }
-            if (progress.getOutcome() == StoryTaskOutcome.FAILED) {
-                failed++;
-            }
-            if (progress.hasParticipant(playerId)) {
-                personal++;
+            if (progress != null) {
+                if (progress.getOutcome().isResolved()) {
+                    resolved++;
+                }
                 if (progress.getOutcome() == StoryTaskOutcome.FAILED) {
+                    failed++;
+                }
+            }
+            boolean playerFinished = isPersonalStoryTask(task.getTaskKey())
+                    ? state.hasPersonalTaskCompletion(task.getTaskKey(), playerId)
+                    : progress != null && progress.hasParticipant(playerId);
+            if (playerFinished) {
+                personal++;
+                if (progress != null && progress.getOutcome() == StoryTaskOutcome.FAILED) {
                     personalFailed++;
                 }
             }
         }
-        return new ProgressSnapshot(total, resolved, failed, personal, personalFailed);
+        return new ProgressSnapshot(
+                total,
+                resolved,
+                failed,
+                personal,
+                personalFailed,
+                calculateGlobalStageProgress(stage));
     }
 
     /**
@@ -962,6 +1335,16 @@ public final class StoryManager {
 
     public static boolean areWritesEnabled() {
         return loaded && writesEnabled;
+    }
+
+    /**
+     * Returns the server-authoritative story stage for systems that need to gate
+     * runtime behaviour.  Entity AI can be constructed before a world is loaded,
+     * so this accessor deliberately falls back to the first stage instead of
+     * throwing during that bootstrap window.
+     */
+    public static synchronized String getCurrentStageIdOrDefault() {
+        return loaded ? state.getCurrentStageId() : StoryWorldState.DEFAULT_STAGE_ID;
     }
 
     /** 兼容旧调用方：只把状态标记为待保存，不立即写磁盘。 */
@@ -1005,10 +1388,29 @@ public final class StoryManager {
             int globalResolved,
             int globalFailed,
             int personalResolved,
-            int personalFailed) {
+            int personalFailed,
+            float globalPlayerRatio) {
+
+        /** 保留旧的五参数构造方式，供外部兼容调用。 */
+        public ProgressSnapshot(
+                int publishedTasks,
+                int globalResolved,
+                int globalFailed,
+                int personalResolved,
+                int personalFailed) {
+            this(publishedTasks, globalResolved, globalFailed,
+                    personalResolved, personalFailed, -1.0f);
+        }
 
         public float globalRatio() {
             return publishedTasks == 0 ? 0.0f : (float) globalResolved / publishedTasks;
+        }
+
+        /** 全服玩家完成比例；旧调用构造的快照回退到已结算任务比例。 */
+        public float globalPlayerRatio() {
+            return globalPlayerRatio >= 0.0f
+                    ? Math.max(0.0f, Math.min(1.0f, globalPlayerRatio))
+                    : globalRatio();
         }
 
         public float personalRatio() {

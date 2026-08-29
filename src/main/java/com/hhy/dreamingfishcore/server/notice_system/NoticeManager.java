@@ -30,10 +30,20 @@ public class NoticeManager {
 
     public static synchronized void loadFromConfig() {
         if (Files.notExists(CONFIG_PATH)) {
-            NOTICES.clear();
-            configWritable = writeNotices(NOTICES);
-            if (configWritable) {
-                DreamingFishCore.LOGGER.info("已创建默认公告配置文件");
+            List<NoticeData> previousNotices = new ArrayList<>(NOTICES);
+            List<NoticeData> defaultNotices = new ArrayList<>();
+            defaultNotices.addAll(
+                    BuiltInNoticeCatalog.createMissingOpeningNotices(defaultNotices));
+            if (writeNotices(defaultNotices)) {
+                NOTICES.clear();
+                NOTICES.addAll(defaultNotices);
+                configWritable = true;
+                DreamingFishCore.LOGGER.info("已创建默认公告配置文件并补齐内置开场公告");
+            } else {
+                NOTICES.clear();
+                NOTICES.addAll(previousNotices);
+                configWritable = false;
+                DreamingFishCore.LOGGER.error("默认公告配置写入失败，已回滚内存公告列表");
             }
             return;
         }
@@ -53,6 +63,9 @@ public class NoticeManager {
             NOTICES.clear();
             NOTICES.addAll(loadedNotices);
             configWritable = true;
+            if (!ensureBuiltInNotices()) {
+                DreamingFishCore.LOGGER.error("内置开场公告写入失败，已回滚本次内置公告补齐");
+            }
             DreamingFishCore.LOGGER.info("已加载 {} 条公告", NOTICES.size());
         } catch (Exception exception) {
             configWritable = false;
@@ -69,6 +82,26 @@ public class NoticeManager {
         return sortedNotices;
     }
 
+    /**
+     * Returns notices readable in the terminal for the supplied story state.
+     * The tutorial flag remains in this overload for binary/source
+     * compatibility with older callers, but terminal visibility deliberately
+     * does not depend on it.
+     */
+    public static synchronized List<NoticeData> getVisibleNotices(
+            String currentStageId, boolean tutorialCompleted) {
+        return getVisibleNotices(currentStageId);
+    }
+
+    /** Returns notices readable in the terminal for the supplied story state. */
+    public static synchronized List<NoticeData> getVisibleNotices(String currentStageId) {
+        List<NoticeData> visibleNotices = new ArrayList<>(
+                NoticeVisibilityPolicy.filterVisible(
+                        NOTICES, currentStageId));
+        visibleNotices.sort(Comparator.comparingLong(NoticeData::getPublishTime).reversed());
+        return visibleNotices;
+    }
+
     public static synchronized NoticeData getLatestNotice() {
         if (NOTICES.isEmpty()) {
             return null;
@@ -78,6 +111,7 @@ public class NoticeManager {
 
     public static synchronized int getMaxNoticeId() {
         return NOTICES.stream()
+                .filter(notice -> notice != null)
                 .mapToInt(NoticeData::getNoticeId)
                 .max()
                 .orElse(0);
@@ -85,9 +119,63 @@ public class NoticeManager {
 
     public static synchronized NoticeData getNoticeById(int noticeId) {
         return NOTICES.stream()
+                .filter(notice -> notice != null)
                 .filter(notice -> notice.getNoticeId() == noticeId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public static synchronized NoticeData getNoticeByKey(String noticeKey) {
+        if (noticeKey == null || noticeKey.isBlank()) {
+            return null;
+        }
+        String normalizedKey = noticeKey.trim();
+        return NOTICES.stream()
+                .filter(notice -> notice != null)
+                .filter(notice -> normalizedKey.equals(notice.getNoticeKey()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Idempotently appends the built-in opening guide notice and persists the
+     * resulting list. The in-memory append is rolled back if persistence
+     * fails; this method never emits a player notification.
+     */
+    public static synchronized boolean ensureBuiltInNotices() {
+        if (!configWritable) {
+            return false;
+        }
+
+        NoticeData desertTown = getNoticeByKey(BuiltInNoticeCatalog.DESERT_TOWN_KEY);
+        String previousDesertTitle = desertTown == null ? "" : desertTown.getNoticeTitle();
+        String previousDesertContent = desertTown == null ? "" : desertTown.getNoticeContent();
+        boolean migratedAbydos = BuiltInNoticeCatalog.migrateAbydosTownName(NOTICES);
+        List<NoticeData> additions = BuiltInNoticeCatalog.createMissingOpeningNotices(NOTICES);
+        if (additions.isEmpty() && !migratedAbydos) {
+            return true;
+        }
+
+        int originalSize = NOTICES.size();
+        NOTICES.addAll(additions);
+        if (writeNotices(NOTICES)) {
+            if (migratedAbydos) {
+                DreamingFishCore.LOGGER.info("已将内置阿拜多斯安置公告更新为最新文案");
+            }
+            if (!additions.isEmpty()) {
+                DreamingFishCore.LOGGER.info("已补齐内置开场指引公告");
+            }
+            return true;
+        }
+
+        while (NOTICES.size() > originalSize) {
+            NOTICES.remove(NOTICES.size() - 1);
+        }
+        if (migratedAbydos && desertTown != null) {
+            desertTown.setNoticeTitle(previousDesertTitle);
+            desertTown.setNoticeContent(previousDesertContent);
+        }
+        return false;
     }
 
     public static synchronized boolean addNotice(NoticeData notice) {

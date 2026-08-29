@@ -19,7 +19,7 @@ import java.net.URL;
 public class UpdateChecker {
     // GitHub API 地址，用于获取最新版本信息
     private static final String GITHUB_API_URL = "https://api.github.com/repos/QingMo-A/EconoeySystem/releases/latest";
-    // private static final String CURRENT_VERSION = "1.0.0"; // 当前模组版本
+    // private static final String CURRENT_VERSION = "1.0.1"; // 当前模组版本
 
     /**
      * 检查是否有新版本可用，并通知玩家

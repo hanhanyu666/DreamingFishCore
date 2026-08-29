@@ -2,6 +2,9 @@ package com.hhy.dreamingfishcore.network;
 
 import com.hhy.dreamingfishcore.gameplay.marker_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.kill_effect_system.network.Packet_PlayKillEffect;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.network.Packet_SyncCourageData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.*;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.network.Packet_SyncInfectionData;
@@ -11,7 +14,9 @@ import com.hhy.dreamingfishcore.gameplay.playerlevel_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.story_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.network.Packet_SyncTaskLocationHud;
 import com.hhy.dreamingfishcore.server.check_system.network.*;
+import com.hhy.dreamingfishcore.server.economy_bridge.network.*;
 import com.hhy.dreamingfishcore.server.login_system.network.*;
 import com.hhy.dreamingfishcore.server.notice_system.network.*;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.*;
@@ -27,8 +32,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 世界历史请求/响应加入了新的客户端-服务端契约，旧客户端应在握手时明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.4.0";
+    // 任务地点常驻 HUD 加入网络契约，旧客户端应在握手时明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.14.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -55,6 +60,8 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_RichChatMessage.TYPE, Packet_RichChatMessage.STREAM_CODEC, Packet_RichChatMessage::handle);
         registrar.playToServer(Packet_OnlinePlayerCountRequest.TYPE, Packet_OnlinePlayerCountRequest.STREAM_CODEC, Packet_OnlinePlayerCountRequest::handle);
         registrar.playToClient(Packet_OnlinePlayerCountResponse.TYPE, Packet_OnlinePlayerCountResponse.STREAM_CODEC, Packet_OnlinePlayerCountResponse::handle);
+        registrar.playToServer(Packet_EconomyTerminalRequest.TYPE, Packet_EconomyTerminalRequest.STREAM_CODEC, Packet_EconomyTerminalRequest::handle);
+        registrar.playToClient(Packet_EconomyTerminalResponse.TYPE, Packet_EconomyTerminalResponse.STREAM_CODEC, Packet_EconomyTerminalResponse::handle);
 
         registrar.playToClient(Packet_SyncPlayerData.TYPE, Packet_SyncPlayerData.STREAM_CODEC, Packet_SyncPlayerData::handle);
         registrar.playToServer(Packet_RequestAllPlayerData.TYPE, Packet_RequestAllPlayerData.STREAM_CODEC, Packet_RequestAllPlayerData::handle);
@@ -68,6 +75,7 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_SyncFullTaskData.TYPE, Packet_SyncFullTaskData.STREAM_CODEC, Packet_SyncFullTaskData::handle);
         registrar.playToServer(Packet_SyncCompleteTask.TYPE, Packet_SyncCompleteTask.STREAM_CODEC, Packet_SyncCompleteTask::handle);
         registrar.playToClient(Packet_SyncUpdateTask.TYPE, Packet_SyncUpdateTask.STREAM_CODEC, Packet_SyncUpdateTask::handle);
+        registrar.playToClient(Packet_SyncTaskLocationHud.TYPE, Packet_SyncTaskLocationHud.STREAM_CODEC, Packet_SyncTaskLocationHud::handle);
 
         registrar.playToClient(Packet_CantRun.TYPE, Packet_CantRun.STREAM_CODEC, Packet_CantRun::handle);
         registrar.playToClient(Packet_SyncStrengthData.TYPE, Packet_SyncStrengthData.STREAM_CODEC, Packet_SyncStrengthData::handle);
@@ -92,6 +100,8 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_NoticeListResponse.TYPE, Packet_NoticeListResponse.STREAM_CODEC, Packet_NoticeListResponse::handle);
         registrar.playToServer(Packet_MarkNoticeReadRequest.TYPE, Packet_MarkNoticeReadRequest.STREAM_CODEC, Packet_MarkNoticeReadRequest::handle);
         registrar.playToClient(Packet_SendNotificationToClient.TYPE, Packet_SendNotificationToClient.STREAM_CODEC, Packet_SendNotificationToClient::handle);
+        registrar.playToServer(Packet_NewPlayerGuideViewed.TYPE, Packet_NewPlayerGuideViewed.STREAM_CODEC, Packet_NewPlayerGuideViewed::handle);
+        registrar.playToClient(Packet_NewPlayerGuideCompleted.TYPE, Packet_NewPlayerGuideCompleted.STREAM_CODEC, Packet_NewPlayerGuideCompleted::handle);
 
         registrar.playToClient(Packet_OpenStoryBookGUI.TYPE, Packet_OpenStoryBookGUI.STREAM_CODEC, Packet_OpenStoryBookGUI::handle);
         registrar.playToClient(Packet_OpenStoryFragmentGUI.TYPE, Packet_OpenStoryFragmentGUI.STREAM_CODEC, Packet_OpenStoryFragmentGUI::handle);
@@ -100,6 +110,13 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_WorldHistoryResponse.TYPE, Packet_WorldHistoryResponse.STREAM_CODEC, Packet_WorldHistoryResponse::handle);
         registrar.playToClient(Packet_OpenNpcDialogueGUI.TYPE, Packet_OpenNpcDialogueGUI.STREAM_CODEC, Packet_OpenNpcDialogueGUI::handle);
         registrar.playToServer(Packet_NpcInteractionRequest.TYPE, Packet_NpcInteractionRequest.STREAM_CODEC, Packet_NpcInteractionRequest::handle);
+        registrar.playToServer(Packet_NpcMessageSnapshotRequest.TYPE, Packet_NpcMessageSnapshotRequest.STREAM_CODEC, Packet_NpcMessageSnapshotRequest::handle);
+        registrar.playToClient(Packet_NpcMessageSnapshotResponse.TYPE, Packet_NpcMessageSnapshotResponse.STREAM_CODEC, Packet_NpcMessageSnapshotResponse::handle);
+        registrar.playToServer(Packet_NpcMessageReplyRequest.TYPE, Packet_NpcMessageReplyRequest.STREAM_CODEC, Packet_NpcMessageReplyRequest::handle);
+        registrar.playToServer(Packet_NpcMessageReadRequest.TYPE, Packet_NpcMessageReadRequest.STREAM_CODEC, Packet_NpcMessageReadRequest::handle);
+        registrar.playToServer(Packet_GuidanceSnapshotRequest.TYPE, Packet_GuidanceSnapshotRequest.STREAM_CODEC, Packet_GuidanceSnapshotRequest::handle);
+        registrar.playToClient(Packet_GuidanceSnapshotResponse.TYPE, Packet_GuidanceSnapshotResponse.STREAM_CODEC, Packet_GuidanceSnapshotResponse::handle);
+        registrar.playToClient(Packet_PlayKillEffect.TYPE, Packet_PlayKillEffect.STREAM_CODEC, Packet_PlayKillEffect::handle);
 
         registrar.playToServer(Packet_RequestMarker.TYPE, Packet_RequestMarker.STREAM_CODEC, Packet_RequestMarker::handle);
         registrar.playToClient(Packet_ShowMarker.TYPE, Packet_ShowMarker.STREAM_CODEC, Packet_ShowMarker::handle);

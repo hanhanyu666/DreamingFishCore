@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.marker_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager;
+import net.minecraft.Util;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -61,11 +62,13 @@ public class Packet_ShowMarker implements CustomPacketPayload {
     }
 
     public static void handle(Packet_ShowMarker packet, IPayloadContext context) {
+        // Marker lifetime is client presentation state. Never compare the server wall clock carried
+        // by the legacy wire field with the client's clock: remote hosts can differ by minutes.
         context.enqueueWork(() -> MarkerManager.addOrReplace(
                 packet.ownerId,
                 packet.ownerName,
                 new Vec3(packet.x, packet.y, packet.z),
-                packet.createdAtMs
+                Util.getMillis()
         ));
     }
 }

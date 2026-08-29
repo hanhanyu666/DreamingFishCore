@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingTransitionController;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.GenericWaitingScreen;
@@ -49,6 +50,8 @@ public abstract class GenericWaitingScreenMixin extends Screen {
         LoadingScreenUi.renderBottomStatusText(guiGraphics, this.font, vw, vh, statusText);
 
         guiGraphics.pose().popPose();
+        LoadingTransitionController.rememberTextFrame(tip, statusText);
+        LoadingTransitionController.renderLoadingEntry(guiGraphics, this.width, this.height);
     }
 
 }

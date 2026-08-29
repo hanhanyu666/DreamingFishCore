@@ -921,57 +921,6 @@ public abstract class TitleScreenMixin extends Screen {
         return (clampedAlpha << 24) | (color & 0x00FFFFFF);
     }
 
-    // ===== 圆角绘制辅助（保留备用，主按钮不再使用） =====
-    @Unique
-    private static void dreamingFishCore$fillRounded(GuiGraphics g, int x, int y, int w, int h, int r, int color) {
-        if ((color >>> 24) == 0) return;
-        int rr = Math.min(r, Math.min(w / 2, h / 2));
-        int right = x + w;
-        int bottom = y + h;
-        g.fill(x + rr, y, right - rr, bottom, color);
-        g.fill(x, y + rr, right, bottom - rr, color);
-        if (rr >= 2) {
-            g.fill(x + 1, y + 1, x + rr, y + rr, color);
-            g.fill(right - rr, y + 1, right - 1, y + rr, color);
-            g.fill(x + 1, bottom - rr, x + rr, bottom - 1, color);
-            g.fill(right - rr, bottom - rr, right - 1, bottom - 1, color);
-        }
-        if (rr >= 3) {
-            g.fill(x + 1, y + 2, x + 2, bottom - 2, color);
-            g.fill(right - 2, y + 2, right - 1, bottom - 2, color);
-            g.fill(x + 2, y + 1, right - 2, y + 2, color);
-            g.fill(x + 2, bottom - 2, right - 2, bottom - 1, color);
-        }
-    }
-
-    @Unique
-    private static void dreamingFishCore$drawRoundedBorder(GuiGraphics g, int x, int y, int w, int h, int r, int color) {
-        if ((color >>> 24) == 0) return;
-        int rr = Math.min(r, Math.min(w / 2, h / 2));
-        int right = x + w;
-        int bottom = y + h;
-        g.fill(x + rr, y, right - rr, y + 1, color);
-        g.fill(x + rr, bottom - 1, right - rr, bottom, color);
-        g.fill(x, y + rr, x + 1, bottom - rr, color);
-        g.fill(right - 1, y + rr, right, bottom - rr, color);
-        if (rr >= 2) {
-            g.fill(x + 1, y + 1, x + 2, y + 2, color);
-            g.fill(right - 2, y + 1, right - 1, y + 2, color);
-            g.fill(x + 1, bottom - 2, x + 2, bottom - 1, color);
-            g.fill(right - 2, bottom - 2, right - 1, bottom - 1, color);
-        }
-        if (rr >= 3) {
-            g.fill(x + 1, y + 2, x + 2, y + 3, color);
-            g.fill(x + 2, y + 1, x + 3, y + 2, color);
-            g.fill(right - 2, y + 2, right - 1, y + 3, color);
-            g.fill(right - 3, y + 1, right - 2, y + 2, color);
-            g.fill(x + 1, bottom - 3, x + 2, bottom - 2, color);
-            g.fill(x + 2, bottom - 2, x + 3, bottom - 1, color);
-            g.fill(right - 2, bottom - 3, right - 1, bottom - 2, color);
-            g.fill(right - 3, bottom - 2, right - 2, bottom - 1, color);
-        }
-    }
-
     @Unique
     private float dreamingFishCore$scale = 1.0f;
 

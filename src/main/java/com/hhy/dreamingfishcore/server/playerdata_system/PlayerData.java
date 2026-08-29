@@ -23,6 +23,7 @@ public class PlayerData {
     private long registrationTime;
     private long lastLoginTime;
     private long totalPlayTime;
+    private boolean zhuiguangMember;
 
     public PlayerData() {
         long now = System.currentTimeMillis();
@@ -35,6 +36,7 @@ public class PlayerData {
         this.registrationTime = now;
         this.lastLoginTime = now;
         this.totalPlayTime = 0;
+        this.zhuiguangMember = false;
     }
 
     public PlayerData(ServerPlayer player) {
@@ -56,6 +58,7 @@ public class PlayerData {
         this.registrationTime = now;
         this.lastLoginTime = now;  //登录时记录当前时间
         this.totalPlayTime = 0;
+        this.zhuiguangMember = false;
     }
 
     public PlayerData(UUID uuid, String playerName, Rank rank, Title title, int level) {
@@ -122,6 +125,7 @@ public class PlayerData {
                 ? RankRegistry.NO_RANK
                 : RankRegistry.getRankByName(rank.getRankName());
         if (rank == null || !canonicalRank.getRankName().equals(rank.getRankName())
+                || canonicalRank.getRankLevel() != rank.getRankLevel()
                 || canonicalRank.getRankColor() != rank.getRankColor()) {
             rank = canonicalRank;
             repaired = true;
@@ -189,4 +193,6 @@ public class PlayerData {
     public long getTotalPlayTime() { return totalPlayTime; }
     public void setTotalPlayTime(long totalPlayTime) { this.totalPlayTime = totalPlayTime; }
     public void addPlayTime(long time) { this.totalPlayTime += time; }
+    public boolean isZhuiguangMember() { return zhuiguangMember; }
+    public void setZhuiguangMember(boolean zhuiguangMember) { this.zhuiguangMember = zhuiguangMember; }
 }

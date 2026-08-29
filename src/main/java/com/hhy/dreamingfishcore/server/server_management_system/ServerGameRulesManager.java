@@ -1,6 +1,8 @@
 package com.hhy.dreamingfishcore.server.server_management_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryWorldState;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -11,36 +13,42 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 /**
- * 关闭玩家自然回血功能
- * 同时强制开启死亡不掉落（keepInventory）
+ * 统一维护全服游戏规则。
+ * 第一阶段允许原版自然回血（具体上限由 FirstStageSurvivalManager 控制），
+ * 后续阶段恢复关闭自然回血；死亡不掉落始终由服务器策略强制开启。
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class ServerGameRulesManager {
 
-    /**
-     * 核心方法：关闭所有维度的自然回血（推荐使用，全局生效）
-     * 并强制开启死亡不掉落
-     */
+    /** 服务器启动时按当前故事阶段应用自然回血策略，并开启死亡不掉落。 */
     @SubscribeEvent
     public static void disableAllDimensionsNaturalRegeneration(ServerStartedEvent event) {
-        // 先判断服务端实例是否已初始化（避免空指针异常）
-        MinecraftServer server = GetServerInstance.SERVER_INSTANCE;
+        MinecraftServer server = event.getServer();
+        boolean firstStage = StoryWorldState.DEFAULT_STAGE_ID.equals(
+                StoryManager.getCurrentStageIdOrDefault());
+        applyNaturalRegenerationPolicy(server, firstStage);
+    }
+
+    /**
+     * 按故事阶段切换所有维度的自然回血规则，同时保持死亡不掉落开启。
+     * 该方法由阶段生存管理器在阶段切换时调用。
+     */
+    public static void applyNaturalRegenerationPolicy(
+            MinecraftServer server,
+            boolean naturalRegenerationEnabled) {
         if (server == null) {
             return;
         }
 
-        // 获取游戏规则的Key
         GameRules.Key<GameRules.BooleanValue> regenRuleKey = GameRules.RULE_NATURAL_REGENERATION;
         GameRules.Key<GameRules.BooleanValue> keepInventoryKey = GameRules.RULE_KEEPINVENTORY;
-
-        //遍历所有服务端维度（主世界、下界、末地），确保全局生效
         for (ServerLevel level : server.getAllLevels()) {
-            //关闭自然回血
-            level.getGameRules().getRule(regenRuleKey).set(false, server);
-            //强制开启死亡不掉落
+            level.getGameRules().getRule(regenRuleKey).set(naturalRegenerationEnabled, server);
             level.getGameRules().getRule(keepInventoryKey).set(true, server);
-            LogUtils.getLogger().info("已关闭自然回血功能，已开启死亡不掉落");
         }
+        LogUtils.getLogger().info(
+                "已{}自然回血，已开启死亡不掉落",
+                naturalRegenerationEnabled ? "开启" : "关闭");
     }
 
     /**

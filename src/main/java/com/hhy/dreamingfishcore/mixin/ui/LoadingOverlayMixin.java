@@ -89,7 +89,7 @@ public abstract class LoadingOverlayMixin extends Overlay {
 
         RenderSystem.enableBlend();
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alphaF);
-        UiBackgroundRenderer.renderStartupBackground(guiGraphics, width, height);
+        UiBackgroundRenderer.renderStartupBackground(guiGraphics, width, height, alphaF);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         guiGraphics.fillGradient(0, 0, width, height,
                 (Mth.ceil(0x88 * alphaF) << 24),

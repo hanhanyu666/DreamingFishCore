@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_DeathScreenData;
 import net.minecraft.core.BlockPos;
@@ -11,7 +12,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.DimensionTransition;
@@ -47,7 +47,12 @@ public class DeathEventHandler {
             return;
         }
 
-        // 后续结算以“原版先保留物品”为前提；即使管理员运行中改过规则，也在死亡前恢复。
+        // NeoForge 的玩家死亡链可能重复派发 LivingDeathEvent；同一次捕获只结算一次。
+        if (DeathCorpseManager.isDeathConfigured(serverPlayer)) {
+            return;
+        }
+
+        // 付费保留仍依赖原版复活时复制旧玩家数据；尸体 Mixin 只会单独改写物品掉落判断。
         serverPlayer.level().getGameRules().getRule(GameRules.RULE_KEEPINVENTORY)
                 .set(true, serverPlayer.server);
 
@@ -56,6 +61,7 @@ public class DeathEventHandler {
 
         PlayerAttributesData deathPlayerAttributesData = PlayerAttributesDataManager.getPlayerAttributesData(deathPlayerUUID);
         if (deathPlayerAttributesData == null) {
+            DeathCorpseManager.configureCapture(serverPlayer, false);
             DreamingFishCore.LOGGER.error("玩家 {} 死亡时缺少属性数据，未创建待处理死亡记录",
                     serverPlayer.getScoreboardName());
             return;
@@ -66,11 +72,14 @@ public class DeathEventHandler {
 
         // 计算消耗
         int respawnCost = isInfected ? RESPAWN_COST_INFECTED : RESPAWN_COST_NOT_INFECTED;
+        boolean awaitingChoice = currentRespawnPoint >= respawnCost;
+        UUID corpseId = DeathCorpseManager.configureCapture(serverPlayer, awaitingChoice);
 
         // 检查复活点数是否足够（严格小于消耗时才封禁）
         if (currentRespawnPoint < respawnCost) {
-            // 复活点不足，先掉落所有物品，然后封禁并踢出
-            dropAllInventoryItems(serverPlayer);
+            PendingDeathData.DeathLocation corpseLocation =
+                    DeathCorpseManager.getPlannedCorpseLocation(serverPlayer);
+            String banReason = buildRespawnExhaustedReason(corpseLocation);
 
             // 复活玩家（不扣除点数），避免重连时显示死亡界面
             float maxHealth = (float) deathPlayerAttributesData.getMaxHealth();
@@ -88,15 +97,19 @@ public class DeathEventHandler {
                     null,
                     "DeathSystem",
                     null,
-                    "§c很不幸，您的复活点数耗尽...请等待一名幸存者来拯救你"
+                    banReason
             );
             banList.add(banEntry);
 
-            DreamingFishCore.LOGGER.info("玩家 {} 复活点数不足({})，物品已掉落，已被封禁",
-                    serverPlayer.getScoreboardName(), currentRespawnPoint);
+            BlockPos corpsePos = BlockPos.containing(
+                    corpseLocation.x(), corpseLocation.y(), corpseLocation.z());
+            DreamingFishCore.LOGGER.info(
+                    "玩家 {} 复活点数不足({})，物品已转入 {} 的尸体 {} {} {}，已被封禁",
+                    serverPlayer.getScoreboardName(), currentRespawnPoint,
+                    corpseLocation.dimension(), corpsePos.getX(), corpsePos.getY(), corpsePos.getZ());
 
             // 立即踢出玩家
-            serverPlayer.connection.disconnect(Component.literal("§c很不幸，您的复活点数耗尽...请等待一名幸存者来拯救你"));
+            serverPlayer.connection.disconnect(Component.literal(banReason));
             return;
         }
 
@@ -109,14 +122,15 @@ public class DeathEventHandler {
         double deathZ = serverPlayer.getZ();
         String dimension = serverPlayer.level().dimension().location().toString();
 
-        // 状态、位置和物品快照保存在同一份玩家 NBT 中，并用 deathId 标识本次死亡。
+        // 玩家 NBT 只保存结算状态和尸体引用；物品由死亡位置的尸体实体持久化。
         UUID deathId = PendingDeathData.begin(
                 serverPlayer,
                 currentRespawnPoint,
                 respawnCost,
                 respawnCost + KEEP_INVENTORY_COST,
                 isInfected,
-                deathMessage);
+                deathMessage,
+                corpseId);
 
         Packet_DeathScreenData packet = new Packet_DeathScreenData(
                 currentRespawnPoint,
@@ -161,6 +175,25 @@ public class DeathEventHandler {
         }
         PendingDeathData.recoverInterruptedResolution(player);
 
+        sendDeathScreenData(player);
+
+        DreamingFishCore.LOGGER.info("玩家 {} 的死亡状态已恢复，当前复活点: {}",
+                player.getScoreboardName(),
+                PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID()) == null
+                        ? "未知"
+                        : PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID()).getRespawnPoint());
+    }
+
+    /** 尸体实体生成或被安全迁移后，刷新死亡界面中的实际尸体位置。 */
+    public static void refreshDeathScreenData(ServerPlayer player) {
+        if (!hasDeathState(player)) {
+            return;
+        }
+        sendDeathScreenData(player);
+    }
+
+    private static void sendDeathScreenData(ServerPlayer player) {
+
         // 获取玩家当前的实际属性数据
         PlayerAttributesData data = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
         if (data == null) {
@@ -176,11 +209,11 @@ public class DeathEventHandler {
         float normalCost = getNormalCost(isInfected);
         float keepInventoryCost = getKeepInventoryCost(isInfected);
 
-        PendingDeathData.DeathLocation deathLocation = PendingDeathData.getDeathLocation(player);
-        double deathX = deathLocation.x();
-        double deathY = deathLocation.y();
-        double deathZ = deathLocation.z();
-        String dimension = deathLocation.dimension();
+        PendingDeathData.DeathLocation corpseLocation = PendingDeathData.getCorpseLocation(player);
+        double deathX = corpseLocation.x();
+        double deathY = corpseLocation.y();
+        double deathZ = corpseLocation.z();
+        String dimension = corpseLocation.dimension();
         Component deathMessage = PendingDeathData.getDeathMessage(player);
         UUID deathId = PendingDeathData.getDeathId(player);
 
@@ -198,9 +231,6 @@ public class DeathEventHandler {
                 deathId
         );
         DreamingFishCore_NetworkManager.sendToClient(packet, player);
-
-        DreamingFishCore.LOGGER.info("玩家 {} 的死亡状态已恢复，当前复活点: {}",
-                player.getScoreboardName(), currentRespawnPoint);
     }
 
     //获取正常复活消耗
@@ -211,6 +241,22 @@ public class DeathEventHandler {
     //获取保留物品复活消耗
     public static float getKeepInventoryCost(boolean isInfected) {
         return getNormalCost(isInfected) + KEEP_INVENTORY_COST;
+    }
+
+    private static String buildRespawnExhaustedReason(PendingDeathData.DeathLocation corpseLocation) {
+        BlockPos position = BlockPos.containing(
+                corpseLocation.x(), corpseLocation.y(), corpseLocation.z());
+        String dimension = switch (corpseLocation.dimension()) {
+            case "minecraft:overworld" -> "主世界";
+            case "minecraft:the_nether" -> "下界";
+            case "minecraft:the_end" -> "末地";
+            default -> corpseLocation.dimension();
+        };
+        return "§c很不幸，您的复活点数耗尽...请等待一名幸存者来拯救你"
+                + "\n§7尸体位置：" + dimension
+                + " X:" + position.getX()
+                + " Y:" + position.getY()
+                + " Z:" + position.getZ();
     }
 
     /**
@@ -251,37 +297,4 @@ public class DeathEventHandler {
                 player.getScoreboardName(), spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
     }
 
-    /**
-     * 掉落玩家所有物品（主物品栏、盔甲栏、副手栏）
-     */
-    private static void dropAllInventoryItems(ServerPlayer player) {
-        // 掉落主物品栏
-        for (int i = 0; i < player.getInventory().items.size(); i++) {
-            ItemStack stack = player.getInventory().items.get(i);
-            if (!stack.isEmpty()) {
-                player.drop(stack, true, false);
-                player.getInventory().items.set(i, ItemStack.EMPTY);
-            }
-        }
-
-        // 掉落盔甲栏
-        for (int i = 0; i < player.getInventory().armor.size(); i++) {
-            ItemStack stack = player.getInventory().armor.get(i);
-            if (!stack.isEmpty()) {
-                player.drop(stack, true, false);
-                player.getInventory().armor.set(i, ItemStack.EMPTY);
-            }
-        }
-
-        // 掉落副手栏
-        for (int i = 0; i < player.getInventory().offhand.size(); i++) {
-            ItemStack stack = player.getInventory().offhand.get(i);
-            if (!stack.isEmpty()) {
-                player.drop(stack, true, false);
-                player.getInventory().offhand.set(i, ItemStack.EMPTY);
-            }
-        }
-
-        DreamingFishCore.LOGGER.info("玩家 {} 的所有物品已在死亡点掉落", player.getScoreboardName());
-    }
 }

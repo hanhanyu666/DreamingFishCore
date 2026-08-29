@@ -37,9 +37,10 @@ public class PlayerCourageManager {
     //黑暗的光照等级阈值
     private static final int ENVIRONMENT_DARK_LIGHT_LEVEL = 7;
 
-    private static final long KILL_TIME_WINDOW = 10000L; //击杀时间窗口（10秒，毫秒级）
+    private static final long KILL_TIME_WINDOW = 20000L; //击杀时间窗口（20秒，毫秒级）
     private static final int KILL_THRESHOLD = 5; //时间窗口内需要击杀的敌对生物数量
     private static final int COURAGE_ADD_AMOUNT = 10; //满足条件后增加的勇气值
+    private static final float COURAGE_PER_KILL_AMOUNT = 0.5F; //每击杀一只敌对生物恢复的勇气值
     private static final float NORMAL_RECOVERY_CAP = 60.0F; //普通恢复上限，超过后只能靠快速击杀继续提升
     private static final float SAFE_DECAY_AMOUNT = 0.5F; //白天安全环境下，超出60的勇气会缓慢回落
 
@@ -131,6 +132,7 @@ public class PlayerCourageManager {
 
         boolean isDarkEnvironment = isEnvironmentDark(serverPlayer);
         boolean isGameNight = isNightTime(serverPlayer);
+        boolean isNether = Level.NETHER.equals(serverPlayer.level().dimension());
         int nearbyPlayerCount = getNearbyPlayerCount(serverPlayer);
         float maxCourage = attributesData.getMaxCourage();
         float currentCourage = attributesData.getCurrentCourage();
@@ -203,7 +205,12 @@ public class PlayerCourageManager {
             lightNum = 1.0d;
         }
 
-        if (isGameNight) {
+        // 地狱没有可用于勇气系统的原版昼夜循环：取消全局昼夜倍率，
+        // 但仍保留实际方块光照、附近怪物和高度带来的影响。
+        if (isNether) {
+            addMultiNum = 1.0d;
+            reduceMultiNum = 1.0d;
+        } else if (isGameNight) {
             addMultiNum = 0.8d;
             reduceMultiNum = 1.2d;
         } else {
@@ -293,7 +300,19 @@ public class PlayerCourageManager {
             return;
         }
 
-        //处理击杀记录，判断是否增加勇气值
+        //每次击杀敌对生物都恢复少量勇气（普通恢复受60点上限约束）
+        PlayerAttributesData attrData = PlayerAttributesDataManager.getPlayerAttributesData(serverPlayer.getUUID());
+        if (attrData != null) {
+            changeCourageValue(
+                    serverPlayer,
+                    attrData,
+                    COURAGE_PER_KILL_AMOUNT,
+                    attrData.getMaxCourage(),
+                    false
+            );
+        }
+
+        //处理击杀记录，判断是否增加连续击杀奖励
         handleKillCourageGain(serverPlayer);
     }
 

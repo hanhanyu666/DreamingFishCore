@@ -18,14 +18,36 @@ public class NoticeData {
     @SerializedName("publishTime")
     private long publishTime;
 
+    @SerializedName("category")
+    private NoticeCategory category = NoticeCategory.MAINTENANCE;
+
+    @SerializedName("storyStageId")
+    private String storyStageId = "";
+
+    @SerializedName("storyDate")
+    private String storyDate = "";
+
+    @SerializedName("noticeKey")
+    private String noticeKey = "";
+
     public NoticeData() {
     }
 
     public NoticeData(int noticeId, String noticeTitle, String noticeContent, long publishTime) {
+        this(noticeId, noticeTitle, noticeContent, publishTime,
+                NoticeCategory.MAINTENANCE, "", "", "");
+    }
+
+    public NoticeData(int noticeId, String noticeTitle, String noticeContent, long publishTime,
+                      NoticeCategory category, String storyStageId, String storyDate, String noticeKey) {
         this.noticeId = noticeId;
         this.noticeTitle = noticeTitle;
         this.noticeContent = noticeContent;
         this.publishTime = publishTime;
+        setCategory(category);
+        setStoryStageId(storyStageId);
+        setStoryDate(storyDate);
+        setNoticeKey(noticeKey);
     }
 
     public int getNoticeId() {
@@ -58,6 +80,46 @@ public class NoticeData {
 
     public void setPublishTime(long publishTime) {
         this.publishTime = publishTime;
+    }
+
+    public NoticeCategory getCategory() {
+        return category == null ? NoticeCategory.MAINTENANCE : category;
+    }
+
+    public void setCategory(NoticeCategory category) {
+        this.category = category == null ? NoticeCategory.MAINTENANCE : category;
+    }
+
+    public String getStoryStageId() {
+        return normalize(storyStageId);
+    }
+
+    public void setStoryStageId(String storyStageId) {
+        this.storyStageId = normalize(storyStageId);
+    }
+
+    public String getStoryDate() {
+        return normalize(storyDate);
+    }
+
+    public void setStoryDate(String storyDate) {
+        this.storyDate = normalize(storyDate);
+    }
+
+    public String getNoticeKey() {
+        return normalize(noticeKey);
+    }
+
+    public void setNoticeKey(String noticeKey) {
+        this.noticeKey = normalize(noticeKey);
+    }
+
+    public boolean isGameNotice() {
+        return getCategory() == NoticeCategory.GAME;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 
     @Override

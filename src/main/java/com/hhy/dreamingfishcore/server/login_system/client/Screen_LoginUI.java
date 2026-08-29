@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.server.login_system.client;
 
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -25,7 +26,11 @@ public class Screen_LoginUI extends Screen {
     private static final int TERMINAL_GREEN = 0xFF50D890;
     private static final int TERMINAL_RED = 0xFFFF6677;
     private static final int TERMINAL_GOLD = 0xFFFFC857;
-    private static final int SPACING = 8;
+    private static final int LOGIN_BOX_HEIGHT = 212;
+    private static final int REGISTER_BOX_HEIGHT = 260;
+    private static final int FIELD_TOP_OFFSET = 108;
+    private static final int FIELD_PANEL_HEIGHT = 28;
+    private static final int CONFIRM_FIELD_GAP = 42;
 
     private EditBox passwordField;
     private EditBox confirmPasswordField;
@@ -49,18 +54,18 @@ public class Screen_LoginUI extends Screen {
         int centerX = virtualSize.virtualWidth / 2;
         int centerY = virtualSize.virtualHeight / 2;
 
-        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
-        int boxHeight = requireRegistration ? 330 : 290;
+        int boxWidth = getBoxWidth();
+        int boxHeight = getBoxHeight();
         int boxX = centerX - boxWidth / 2;
         int boxY = centerY - boxHeight / 2;
 
-        int fieldWidth = Math.min(430, boxWidth - 120);
+        int fieldWidth = Math.min(360, boxWidth - 64);
         int fieldHeight = 18;
         int fieldX = centerX - fieldWidth / 2;
-        int startY = boxY + 164;
+        int startY = boxY + FIELD_TOP_OFFSET;
 
         // 密码输入框
-        this.passwordField = new EditBox(this.font, fieldX + 8, startY + 7, fieldWidth - 16, fieldHeight, Component.literal("密码"));
+        this.passwordField = new EditBox(this.font, fieldX + 7, startY + 5, fieldWidth - 14, fieldHeight, Component.literal("密码"));
         this.passwordField.setHint(Component.literal(requireRegistration ? "请设置您的密码" : "请输入您的密码"));
         this.passwordField.setMaxLength(32);
         this.passwordField.setBordered(false);
@@ -76,7 +81,8 @@ public class Screen_LoginUI extends Screen {
         this.addRenderableWidget(this.passwordField);
 
         // 确认密码输入框（仅在注册阶段显示）
-        this.confirmPasswordField = new EditBox(this.font, fieldX + 8, startY + 55, fieldWidth - 16, fieldHeight, Component.literal("确认密码"));
+        this.confirmPasswordField = new EditBox(this.font, fieldX + 7, startY + CONFIRM_FIELD_GAP + 5,
+                fieldWidth - 14, fieldHeight, Component.literal("确认密码"));
         this.confirmPasswordField.setHint(Component.literal("请再次确认您的密码"));
         this.confirmPasswordField.setMaxLength(32);
         this.confirmPasswordField.setBordered(false);
@@ -100,22 +106,32 @@ public class Screen_LoginUI extends Screen {
         VirtualCoordinateHelper.calculateDownscaledVirtualSize(this, virtualSize);
     }
 
+    private int getBoxWidth() {
+        int preferred = Math.max(340, Math.round(virtualSize.virtualWidth * 0.64f));
+        int available = Math.max(280, virtualSize.virtualWidth - 40);
+        return Math.min(460, Math.min(available, preferred));
+    }
+
+    private int getBoxHeight() {
+        return requireRegistration ? REGISTER_BOX_HEIGHT : LOGIN_BOX_HEIGHT;
+    }
+
     private void updateFieldLayout() {
         int centerX = virtualSize.virtualWidth / 2;
         int centerY = virtualSize.virtualHeight / 2;
-        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
-        int boxHeight = requireRegistration ? 330 : 290;
+        int boxWidth = getBoxWidth();
+        int boxHeight = getBoxHeight();
         int boxY = centerY - boxHeight / 2;
-        int fieldWidth = Math.min(430, boxWidth - 120);
+        int fieldWidth = Math.min(360, boxWidth - 64);
         int fieldX = centerX - fieldWidth / 2;
-        int startY = boxY + 164;
+        int startY = boxY + FIELD_TOP_OFFSET;
 
-        passwordField.setWidth(fieldWidth - 16);
-        passwordField.setX(fieldX + 8);
-        passwordField.setY(startY + 7);
-        confirmPasswordField.setWidth(fieldWidth - 16);
-        confirmPasswordField.setX(fieldX + 8);
-        confirmPasswordField.setY(startY + 55);
+        passwordField.setWidth(fieldWidth - 14);
+        passwordField.setX(fieldX + 7);
+        passwordField.setY(startY + 5);
+        confirmPasswordField.setWidth(fieldWidth - 14);
+        confirmPasswordField.setX(fieldX + 7);
+        confirmPasswordField.setY(startY + CONFIRM_FIELD_GAP + 5);
     }
 
     private void updatePromptMessage() {
@@ -136,11 +152,11 @@ public class Screen_LoginUI extends Screen {
         int centerX = virtualSize.virtualWidth / 2;
         int centerY = virtualSize.virtualHeight / 2;
 
-        int boxWidth = Math.min(680, Math.max(360, (int) (virtualSize.virtualWidth * 0.78f)));
-        int boxHeight = requireRegistration ? 330 : 290;
+        int boxWidth = getBoxWidth();
+        int boxHeight = getBoxHeight();
         int boxX = centerX - boxWidth / 2;
         int boxY = centerY - boxHeight / 2;
-        int headerHeight = 34;
+        int headerHeight = 30;
 
         guiGraphics.fill(RenderType.gui(), 0, 0, this.width, this.height, TERMINAL_BACKGROUND);
         guiGraphics.pose().pushPose();
@@ -149,46 +165,55 @@ public class Screen_LoginUI extends Screen {
         drawSoftRect(guiGraphics, boxX + 5, boxY + 6, boxWidth, boxHeight, 3, 0x66000000, 0x00000000);
         drawSoftRect(guiGraphics, boxX, boxY, boxWidth, boxHeight, 3, TERMINAL_SHELL, 0x66526372);
         drawSoftRect(guiGraphics, boxX + 6, boxY + 6, boxWidth - 12, headerHeight, 2, TERMINAL_HEADER, 0x224A5A68);
-        drawSoftRect(guiGraphics, boxX + 6, boxY + headerHeight, boxWidth - 12, boxHeight - headerHeight - 6, 2, TERMINAL_CONTENT, 0x22384755);
+        drawSoftRect(guiGraphics, boxX + 6, boxY + headerHeight + 6,
+                boxWidth - 12, boxHeight - headerHeight - 12, 2, TERMINAL_CONTENT, 0x22384755);
 
-        drawBrandTitle(guiGraphics, boxX + 18, boxY + 16);
+        drawBrandTitle(guiGraphics, boxX + 16, boxY + 15);
 
         String modeText = requireRegistration ? "REGISTER" : "LOGIN";
         int modeWidth = minecraft.font.width(modeText) + 18;
-        drawSoftRect(guiGraphics, boxX + boxWidth - modeWidth - 18, boxY + 13, modeWidth, 16, 2,
+        drawSoftRect(guiGraphics, boxX + boxWidth - modeWidth - 16, boxY + 11, modeWidth, 16, 2,
                 requireRegistration ? 0x3339A6FF : 0x3350D890, requireRegistration ? 0xFF4FC3F7 : TERMINAL_GREEN);
-        guiGraphics.drawString(minecraft.font, modeText, boxX + boxWidth - modeWidth - 9, boxY + 17,
+        guiGraphics.drawString(minecraft.font, modeText, boxX + boxWidth - modeWidth - 7, boxY + 15,
                 requireRegistration ? 0xFF4FC3F7 : TERMINAL_GREEN, false);
 
-        drawSoftRect(guiGraphics, boxX + 26, boxY + 66, boxWidth - 52, 62, 2, TERMINAL_CARD, TERMINAL_BORDER_DARK);
-        guiGraphics.fill(RenderType.gui(), boxX + 26, boxY + 66, boxX + 31, boxY + 128, TERMINAL_GOLD);
-        guiGraphics.drawString(minecraft.font, "PLAYER", boxX + 44, boxY + 80, TERMINAL_MUTED_TEXT, false);
+        int playerCardX = boxX + 20;
+        int playerCardY = boxY + 50;
+        int playerCardHeight = 42;
+        drawSoftRect(guiGraphics, playerCardX, playerCardY, boxWidth - 40, playerCardHeight,
+                2, TERMINAL_CARD, TERMINAL_BORDER_DARK);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, playerCardX + 2, playerCardY + 5,
+                3, playerCardHeight - 10, 1, TERMINAL_GOLD, 0);
+        guiGraphics.drawString(minecraft.font, "PLAYER", playerCardX + 16, playerCardY + 8,
+                TERMINAL_MUTED_TEXT, false);
 
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(1.35f, 1.35f, 1.0f);
+        guiGraphics.pose().scale(1.20f, 1.20f, 1.0f);
         String playerName = minecraft.player != null ? minecraft.player.getName().getString() : "Player";
-        guiGraphics.drawString(minecraft.font, playerName, (int) ((boxX + 44) / 1.35f), (int) ((boxY + 100) / 1.35f), TERMINAL_TEXT, false);
+        guiGraphics.drawString(minecraft.font, playerName,
+                (int) ((playerCardX + 16) / 1.20f), (int) ((playerCardY + 23) / 1.20f),
+                TERMINAL_TEXT, false);
         guiGraphics.pose().popPose();
 
-        int fieldWidth = Math.min(430, boxWidth - 120);
+        int fieldWidth = Math.min(360, boxWidth - 64);
         int fieldX = centerX - fieldWidth / 2;
-        int fieldY = boxY + 164;
+        int fieldY = boxY + FIELD_TOP_OFFSET;
 
         drawInputLabel(guiGraphics, fieldX, fieldY, "PASSWORD");
         if (!confirmPasswordField.isVisible()) {
-            renderInputBackground(guiGraphics, fieldX, fieldY, fieldWidth, 32, passwordField.isFocused());
-            guiGraphics.drawCenteredString(minecraft.font, statusMessage, centerX, fieldY + 48, messageColor);
-            guiGraphics.drawCenteredString(minecraft.font, "按下 Enter 确认身份", centerX, fieldY + 68, TERMINAL_MUTED_TEXT);
+            renderInputBackground(guiGraphics, fieldX, fieldY, fieldWidth, FIELD_PANEL_HEIGHT, passwordField.isFocused());
+            guiGraphics.drawCenteredString(minecraft.font, statusMessage, centerX, fieldY + 38, messageColor);
+            guiGraphics.drawCenteredString(minecraft.font, "按下 Enter 确认身份", centerX, fieldY + 55, TERMINAL_MUTED_TEXT);
         } else {
-            renderInputBackground(guiGraphics, fieldX, fieldY, fieldWidth, 32, passwordField.isFocused());
-            int confirmY = fieldY + 48;
+            renderInputBackground(guiGraphics, fieldX, fieldY, fieldWidth, FIELD_PANEL_HEIGHT, passwordField.isFocused());
+            int confirmY = fieldY + CONFIRM_FIELD_GAP;
             drawInputLabel(guiGraphics, fieldX, confirmY, "CONFIRM");
-            renderInputBackground(guiGraphics, fieldX, confirmY, fieldWidth, 32, confirmPasswordField.isFocused());
-            guiGraphics.drawCenteredString(minecraft.font, statusMessage, centerX, confirmY + 48, messageColor);
-            guiGraphics.drawCenteredString(minecraft.font, "设置完成后按下 Enter 写入身份凭据", centerX, confirmY + 68, TERMINAL_MUTED_TEXT);
+            renderInputBackground(guiGraphics, fieldX, confirmY, fieldWidth, FIELD_PANEL_HEIGHT, confirmPasswordField.isFocused());
+            guiGraphics.drawCenteredString(minecraft.font, statusMessage, centerX, confirmY + 38, messageColor);
+            guiGraphics.drawCenteredString(minecraft.font, "设置完成后按下 Enter 写入身份凭据", centerX, confirmY + 55, TERMINAL_MUTED_TEXT);
         }
 
-        drawTerminalFooter(guiGraphics, centerX, boxY + boxHeight - 23);
+        drawTerminalFooter(guiGraphics, centerX, boxY + boxHeight - 18);
 
         super.render(guiGraphics, toVirtual(mouseX), toVirtual(mouseY), partialTick);
         guiGraphics.pose().popPose();
@@ -248,7 +273,8 @@ public class Screen_LoginUI extends Screen {
         int borderColor = focused ? TERMINAL_BORDER : TERMINAL_BORDER_DARK;
         int bgColor = focused ? TERMINAL_CARD_HOVER : TERMINAL_CARD;
         drawSoftRect(guiGraphics, x, y, width, height, 2, bgColor, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + height, borderColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x + 2, y + 5,
+                2, height - 10, 1, borderColor, 0);
     }
 
     private void drawInputLabel(GuiGraphics guiGraphics, int x, int y, String label) {
@@ -276,12 +302,8 @@ public class Screen_LoginUI extends Screen {
     }
 
     private void drawSoftRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int fillColor, int borderColor) {
-        guiGraphics.fill(RenderType.gui(), x + radius, y, x + width - radius, y + height, fillColor);
-        guiGraphics.fill(RenderType.gui(), x, y + radius, x + width, y + height - radius, fillColor);
-        guiGraphics.fill(RenderType.gui(), x + 1, y + 1, x + width - 1, y + 2, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + 1, y + height - 2, x + width - 1, y + height - 1, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + 1, y + 1, x + 2, y + height - 1, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - 2, y + 1, x + width - 1, y + height - 1, borderColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, width, height,
+                Math.max(0, radius * 2), fillColor, borderColor);
     }
 
     @Override

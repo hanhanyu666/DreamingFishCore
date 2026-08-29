@@ -122,6 +122,19 @@ public class TaskDataManager {
         DreamingFishCore.LOGGER.info("已向全服玩家广播最新任务数据");
     }
 
+    /** 个人剧情进度变化时只刷新对应玩家，避免每一步都打扰全服客户端。 */
+    public static void syncFullTaskData(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        DreamingFishCore_NetworkManager.sendToClient(
+                player,
+                new Packet_SyncFullTaskData(
+                        player.getUUID(),
+                        TASK_PLAYER_DATA_CACHE,
+                        StoryManager.getStagesForPlayer(player.getUUID())));
+    }
+
     public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty) {
             return true;

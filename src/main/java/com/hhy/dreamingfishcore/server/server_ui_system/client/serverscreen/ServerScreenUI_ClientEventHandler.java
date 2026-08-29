@@ -21,6 +21,14 @@ public class ServerScreenUI_ClientEventHandler {
      */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // EconomySystem 等外部子界面可能直接关闭到游戏；下一 tick 立即返回梦屿终端。
+        Minecraft current = Minecraft.getInstance();
+        if (current.player != null && ServerScreenUI.isSubScreenActive() && current.screen == null) {
+            ServerScreenUI.onSubScreenClosed();
+            ServerScreenUI.setReturningFromSubScreen(true);
+            current.setScreen(new ServerScreenUI_Screen());
+            return;
+        }
         // 每20 tick（1秒）检查一次
         tickCounter++;
         if (tickCounter < 20) return;

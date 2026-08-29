@@ -4,12 +4,14 @@ import com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.marker_system.MarkerData;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
@@ -32,6 +34,7 @@ public class MarkerRenderer {
             0xFFE4D65A
     };
     private static final float TEXT_SCALE = 0.67F;
+    private static final float MARKER_HUD_Z = 400.0F;
     private static Matrix4f lastModelViewMatrix;
     private static Matrix4f lastProjectionMatrix;
     private static Vec3 lastCameraPosition;
@@ -50,12 +53,24 @@ public class MarkerRenderer {
             return;
         }
 
-        lastModelViewMatrix = new Matrix4f(event.getPoseStack().last().pose());
+        // Do not copy the two camera matrices when there is no marker to draw.
+        // This stage runs every world frame, while markers are an occasional HUD.
+        if (MarkerManager.getActiveMarkers().isEmpty()) {
+            lastModelViewMatrix = null;
+            lastProjectionMatrix = null;
+            lastCameraPosition = null;
+            return;
+        }
+
+        // AFTER_ENTITIES uses a temporary PoseStack that has already been restored to identity.
+        // The event's model-view matrix is the one that still contains the camera rotation needed
+        // to project a camera-relative world position onto the GUI correctly.
+        lastModelViewMatrix = new Matrix4f(event.getModelViewMatrix());
         lastProjectionMatrix = new Matrix4f(event.getProjectionMatrix());
         lastCameraPosition = event.getCamera().getPosition();
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
@@ -70,40 +85,48 @@ public class MarkerRenderer {
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
         Font font = mc.font;
-        long now = System.currentTimeMillis();
+        long now = Util.getMillis();
 
-        for (MarkerData marker : markers) {
-            double distanceSqr = marker.getPosition().distanceToSqr(mc.player.getEyePosition());
-            float fade = marker.getFade(now);
-            if (fade <= 0.01F) {
-                continue;
+        // RenderGuiEvent is dispatched with an unmanaged GuiGraphics. Keep all marker
+        // primitives in one managed batch so the pixel arrows/icons do not flush the
+        // complete HUD buffer once per fill call.
+        guiGraphics.drawManaged(() -> {
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(0.0F, 0.0F, MARKER_HUD_Z);
+            for (MarkerData marker : markers) {
+                double distanceSqr = marker.getPosition().distanceToSqr(mc.player.getEyePosition());
+                float fade = marker.getFade(now);
+                if (fade <= 0.01F) {
+                    continue;
+                }
+
+                ScreenPoint point = projectToScreen(mc, marker.getPosition());
+                if (point == null) {
+                    continue;
+                }
+
+                int distance = Math.max(0, Math.round((float) Math.sqrt(distanceSqr)));
+                int alpha = Math.max(0, Math.min(255, Math.round(255.0F * fade)));
+                int markerColor = withAlpha(colorForMarker(marker), alpha);
+                int textColor = markerColor;
+
+                if (point.edge != ScreenEdge.NONE) {
+                    drawEdgeIndicator(guiGraphics, font, Math.round(point.x), Math.round(point.y),
+                            marker.getOwnerName(), distance, markerColor, textColor, point.edge);
+                    continue;
+                }
+
+                Component text = Component.literal(marker.getOwnerName() + " · " + distance + "m");
+                int textWidth = Math.round(font.width(text) * TEXT_SCALE);
+                int iconX = Math.round(point.x);
+                int iconY = Math.round(point.y - 8.0F);
+                int textX = Math.round(point.x - textWidth / 2.0F);
+                int textY = Math.round(point.y + 1.0F);
+                drawMarkerIcon(guiGraphics, iconX, iconY, markerColor);
+                drawScaledString(guiGraphics, font, text, textX, textY, TEXT_SCALE, textColor);
             }
-
-            ScreenPoint point = projectToScreen(mc, marker.getPosition().add(0.0D, 1.65D, 0.0D));
-            if (point == null) {
-                continue;
-            }
-
-            int distance = Math.max(0, Math.round((float) Math.sqrt(distanceSqr)));
-            int alpha = Math.max(0, Math.min(255, Math.round(255.0F * fade)));
-            int markerColor = withAlpha(colorForMarker(marker), alpha);
-            int textColor = markerColor;
-
-            if (point.edge != ScreenEdge.NONE) {
-                drawEdgeIndicator(guiGraphics, font, Math.round(point.x), Math.round(point.y),
-                        marker.getOwnerName(), distance, markerColor, textColor, point.edge);
-                continue;
-            }
-
-            Component text = Component.literal(marker.getOwnerName() + " · " + distance + "m");
-            int textWidth = Math.round(font.width(text) * TEXT_SCALE);
-            int iconX = Math.round(point.x);
-            int iconY = Math.round(point.y - 8.0F);
-            int textX = Math.round(point.x - textWidth / 2.0F);
-            int textY = Math.round(point.y + 1.0F);
-            drawMarkerIcon(guiGraphics, iconX, iconY, markerColor);
-            drawScaledString(guiGraphics, font, text, textX, textY, TEXT_SCALE, textColor);
-        }
+            guiGraphics.pose().popPose();
+        });
     }
 
     private static void drawMarkerIcon(GuiGraphics guiGraphics, int centerX, int centerY, int color) {
@@ -185,9 +208,10 @@ public class MarkerRenderer {
         int margin = 18;
 
         if (clip.w() <= 0.0F) {
-            float horizontal = clamp(view.x() / Math.max(1.0F, Math.abs(view.z())), -0.92F, 0.92F);
-            float x = (horizontal * 0.5F + 0.5F) * screenWidth;
-            return new ScreenPoint(clamp(x, margin, screenWidth - margin), screenHeight - 24.0F, ScreenEdge.BOTTOM);
+            float absoluteW = Math.max(0.0001F, Math.abs(clip.w()));
+            float directionX = clip.x() / absoluteW;
+            float directionY = clip.y() / absoluteW;
+            return projectToEdge(screenWidth, screenHeight, margin, directionX, directionY);
         }
 
         float ndcX = clip.x() / clip.w();
@@ -206,7 +230,7 @@ public class MarkerRenderer {
         return new ScreenPoint(x, y, ScreenEdge.NONE);
     }
 
-    private static ScreenPoint projectToEdge(int screenWidth, int screenHeight, int margin, float ndcX, float ndcY) {
+    static ScreenPoint projectToEdge(int screenWidth, int screenHeight, int margin, float ndcX, float ndcY) {
         float scale = Math.max(Math.abs(ndcX), Math.abs(ndcY));
         if (scale < 0.0001F) {
             return new ScreenPoint(screenWidth / 2.0F, screenHeight - margin, ScreenEdge.BOTTOM);
@@ -242,7 +266,7 @@ public class MarkerRenderer {
         return (color & 0x00FFFFFF) | (a << 24);
     }
 
-    private enum ScreenEdge {
+    enum ScreenEdge {
         NONE,
         LEFT,
         RIGHT,
@@ -250,6 +274,6 @@ public class MarkerRenderer {
         BOTTOM
     }
 
-    private record ScreenPoint(float x, float y, ScreenEdge edge) {
+    record ScreenPoint(float x, float y, ScreenEdge edge) {
     }
 }

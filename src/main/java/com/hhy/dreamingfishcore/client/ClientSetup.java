@@ -4,6 +4,10 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.item.client.model.CustomRendererBakedModel;
 import com.hhy.dreamingfishcore.gameplay.npc_system.client.StoryNpcRenderer;
 import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntities;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.client.SiegeZombieRenderer;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseEntities;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.client.DeathCorpseRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
@@ -28,6 +32,8 @@ public class ClientSetup {
     @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(StoryNpcEntities.STORY_NPC.get(), StoryNpcRenderer::new);
+        event.registerEntityRenderer(DeathCorpseEntities.DEATH_CORPSE.get(), DeathCorpseRenderer::new);
+        event.registerEntityRenderer(SiegeZombieEntities.SIEGE_ZOMBIE.get(), SiegeZombieRenderer::new);
     }
 
     // 修改模型烘焙结果

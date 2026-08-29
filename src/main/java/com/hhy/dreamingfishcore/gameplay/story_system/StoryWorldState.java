@@ -21,12 +21,14 @@ import java.util.regex.Pattern;
 public final class StoryWorldState {
     /** 存档结构版本；版本变化时由 validateAndMigrateLoadedState 负责迁移或拒绝。 */
     public static final int CURRENT_SCHEMA_VERSION = 2;
-    /** 新世界没有其他进度时使用的初始阶段。 */
-    public static final String DEFAULT_STAGE_ID = "dreamingfishcore:afterdream";
+    /** 新世界没有其他进度时使用的第一阶段。 */
+    public static final String DEFAULT_STAGE_ID = "dreamingfishcore:dream_beginning";
 
     // 限制存档中可增长集合的大小，避免错误脚本无限写入世界数据。
     private static final int MAX_WORLD_FLAGS = 4096;
     private static final int MAX_TASK_STATES = 16384;
+    /** 单项个人任务最多保留的玩家记录，避免异常数据无限膨胀。 */
+    private static final int MAX_PERSONAL_TASK_PLAYERS = 16384;
     /** 所有可持久化 ID 的统一格式：小写字母开头，允许命名空间和路径字符。 */
     private static final Pattern ID_PATTERN = Pattern.compile("[a-z0-9][a-z0-9._:/-]{0,127}");
 
@@ -46,6 +48,13 @@ public final class StoryWorldState {
     private String endingId = "";
     /** key 是任务稳定 ID，value 是这个任务在世界里的运行结果。 */
     private Map<String, TaskProgress> taskProgress = new LinkedHashMap<>();
+    /**
+     * key 是任务稳定 ID，value 是已经完成该任务个人部分的玩家。
+     *
+     * <p>个人完成和世界任务结算是两条独立记录：个人任务可以在世界任务尚未解锁时
+     * 先保存；只有上层故事规则确认所有应参与玩家都完成后，才会写入 taskProgress。</p>
+     */
+    private Map<String, Map<String, String>> personalTaskProgress = new LinkedHashMap<>();
 
     /** Gson 反序列化存档时需要无参构造方法。 */
     public StoryWorldState() {
@@ -123,6 +132,44 @@ public final class StoryWorldState {
         }
         if (!(taskProgress instanceof LinkedHashMap<?, ?>)) {
             taskProgress = new LinkedHashMap<>(taskProgress);
+            migrated = true;
+        }
+
+        if (personalTaskProgress == null) {
+            personalTaskProgress = new LinkedHashMap<>();
+            migrated = true;
+        }
+        if (personalTaskProgress.size() > MAX_TASK_STATES) {
+            throw new IllegalStateException("个人故事任务状态数量超过限制：" + personalTaskProgress.size());
+        }
+        for (Map.Entry<String, Map<String, String>> entry : personalTaskProgress.entrySet()) {
+            requireValidId(entry.getKey(), "个人故事任务");
+            Map<String, String> players = entry.getValue();
+            if (players == null) {
+                throw new IllegalStateException("个人故事任务参与者状态不能为空：" + entry.getKey());
+            }
+            if (players.size() > MAX_PERSONAL_TASK_PLAYERS) {
+                throw new IllegalStateException(
+                        "个人故事任务参与者数量超过限制：" + entry.getKey());
+            }
+            for (Map.Entry<String, String> player : players.entrySet()) {
+                try {
+                    UUID.fromString(player.getKey());
+                } catch (IllegalArgumentException exception) {
+                    throw new IllegalStateException(
+                            "个人故事任务参与者UUID非法：" + player.getKey(), exception);
+                }
+                if (player.getValue() == null || player.getValue().isBlank()) {
+                    throw new IllegalStateException("个人故事任务参与者名称为空：" + entry.getKey());
+                }
+            }
+            if (!(players instanceof LinkedHashMap<?, ?>)) {
+                entry.setValue(new LinkedHashMap<>(players));
+                migrated = true;
+            }
+        }
+        if (!(personalTaskProgress instanceof LinkedHashMap<?, ?>)) {
+            personalTaskProgress = new LinkedHashMap<>(personalTaskProgress);
             migrated = true;
         }
         return migrated;
@@ -259,6 +306,60 @@ public final class StoryWorldState {
                 participant.playerId().toString(), participant.playerName()) == null;
     }
 
+    /**
+     * 记录一名玩家完成自己的个人故事任务。
+     *
+     * <p>个人完成不会直接结算世界任务，也不要求世界任务已经发布。调用方传入本项
+     * 个人任务的应参与玩家集合后，返回值会告诉上层是否已经达到“所有人完成”的门槛；
+     * 上层随后可以按自己的故事规则解锁/结算世界任务。</p>
+     */
+    PersonalCompletionResult recordPersonalCompletion(
+            String taskKey,
+            TaskParticipant participant,
+            Iterable<UUID> expectedPlayers) {
+        requireValidId(taskKey, "故事任务");
+        if (participant == null) {
+            throw new IllegalArgumentException("个人故事任务参与者不能为空");
+        }
+
+        Map<String, String> completedPlayers = personalTaskProgress.computeIfAbsent(
+                taskKey, ignored -> {
+                    if (personalTaskProgress.size() >= MAX_TASK_STATES) {
+                        throw new IllegalStateException("个人故事任务状态数量已达到上限：" + MAX_TASK_STATES);
+                    }
+                    return new LinkedHashMap<>();
+                });
+        if (completedPlayers.size() >= MAX_PERSONAL_TASK_PLAYERS
+                && !completedPlayers.containsKey(participant.playerId().toString())) {
+            throw new IllegalStateException("个人故事任务参与者数量已达到上限：" + taskKey);
+        }
+
+        boolean changed = completedPlayers.putIfAbsent(
+                participant.playerId().toString(), participant.playerName()) == null;
+        Set<String> expectedIds = new LinkedHashSet<>();
+        if (expectedPlayers != null) {
+            for (UUID expectedPlayer : expectedPlayers) {
+                if (expectedPlayer != null) {
+                    expectedIds.add(expectedPlayer.toString());
+                }
+            }
+        }
+        // 当前完成者始终属于本次门槛，避免调用方在构造快照时漏掉自己。
+        expectedIds.add(participant.playerId().toString());
+        boolean allPlayersCompleted = !expectedIds.isEmpty()
+                && expectedIds.stream().allMatch(completedPlayers::containsKey);
+        return new PersonalCompletionResult(changed, allPlayersCompleted);
+    }
+
+    /** 兼容旧调用方：没有额外参与者时，当前玩家构成完整门槛。 */
+    PersonalCompletionResult recordPersonalCompletion(
+            String taskKey, TaskParticipant participant) {
+        return recordPersonalCompletion(
+                taskKey,
+                participant,
+                participant == null ? null : Set.of(participant.playerId()));
+    }
+
     /** 将参与者对象转换为 UUID 字符串到名称的 Map，并去除重复玩家。 */
     private static Map<String, String> collectParticipants(Iterable<TaskParticipant> participants) {
         Map<String, String> result = new LinkedHashMap<>();
@@ -284,6 +385,40 @@ public final class StoryWorldState {
     Map<String, TaskProgress> getTaskProgressView() {
         Map<String, TaskProgress> copy = new LinkedHashMap<>();
         taskProgress.forEach((key, value) -> copy.put(key, value.copy()));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    /** 返回已经完成某项个人任务的玩家数量。 */
+    int getPersonalTaskCompletionCount(String taskKey) {
+        Map<String, String> players = personalTaskProgress.get(taskKey);
+        return players == null ? 0 : players.size();
+    }
+
+    /** 判断某名玩家是否已经完成某项个人任务。 */
+    boolean hasPersonalTaskCompletion(String taskKey, UUID playerId) {
+        Map<String, String> players = personalTaskProgress.get(taskKey);
+        return players != null && playerId != null && players.containsKey(playerId.toString());
+    }
+
+    /** 返回个人任务完成者的副本，供世界任务达到门槛时生成全服参与者快照。 */
+    Map<String, String> getPersonalTaskCompletions(String taskKey) {
+        Map<String, String> players = personalTaskProgress.get(taskKey);
+        if (players == null) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(players));
+    }
+
+    /** 返回所有个人任务完成记录的深层只读副本，供统计和管理视图使用。 */
+    Map<String, Map<String, String>> getPersonalTaskProgressView() {
+        if (personalTaskProgress == null || personalTaskProgress.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, String>> copy = new LinkedHashMap<>();
+        personalTaskProgress.forEach((taskKey, players) ->
+                copy.put(taskKey, players == null
+                        ? Map.of()
+                        : Collections.unmodifiableMap(new LinkedHashMap<>(players))));
         return Collections.unmodifiableMap(copy);
     }
 
@@ -343,6 +478,14 @@ public final class StoryWorldState {
             if (playerName == null || playerName.isBlank()) {
                 throw new IllegalArgumentException("任务参与者名称不能为空");
             }
+        }
+    }
+
+    /** 个人完成对“全体完成”门槛造成的变化。 */
+    public record PersonalCompletionResult(boolean changed, boolean allPlayersCompleted) {
+        /** 保留旧命名，避免旧调用方把“门槛达到”误解为单人直接结算。 */
+        public boolean resolvedNow() {
+            return allPlayersCompleted;
         }
     }
 

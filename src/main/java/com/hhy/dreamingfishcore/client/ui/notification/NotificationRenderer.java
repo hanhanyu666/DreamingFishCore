@@ -15,6 +15,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class NotificationRenderer {
@@ -23,12 +25,28 @@ public final class NotificationRenderer {
     private static final int INNER_PADDING = 7;
     private static final int ACCENT_WIDTH = 2;
     private static final long SIDE_NOTIFICATION_ANIMATION_MS = 220L;
+    private static final float TOP_RIGHT_TEXT_SCALE = 0.82f;
+    private static final int TOP_RIGHT_MAX_WIDTH = 196;
+    private static final int TOP_RIGHT_BOX_HEIGHT = 15;
+    private static final int TOP_RIGHT_RADIUS = 4;
+    private static final int TOP_RIGHT_STACK_GAP = 3;
+    private static final int TOP_RIGHT_LEFT_PADDING = 5;
+    private static final int TOP_RIGHT_ACCENT_GAP = 4;
+    private static final int TOP_RIGHT_RIGHT_PADDING = 6;
+    private static final int TOP_RIGHT_VERTICAL_PADDING = 3;
+    private static final int TOP_RIGHT_LINE_GAP = 1;
     private static final int MAX_LEFT_WIDTH = 300;
     private static final int CENTER_MIN_WIDTH = 190;
     private static final int CENTER_SIDE_MARGIN = 58;
     private static final int PANEL_RADIUS = 4;
     private static final int CENTER_INNER_COLOR = 0x5E202634;
     private static final int CENTER_DARK_BORDER_COLOR = 0x965A4328;
+    // Notification text is immutable for its lifetime.  Keep the expensive
+    // Font.split result around instead of rebuilding it on every HUD frame;
+    // weak keys let completed notifications disappear from the cache naturally.
+    private static final Map<Notification, CachedLines> LEFT_LINES_CACHE = new WeakHashMap<>();
+    private static final Map<Notification, CachedLines> TOP_RIGHT_LINES_CACHE = new WeakHashMap<>();
+    private static Font lineCacheFont;
 
     private NotificationRenderer() {
     }
@@ -41,11 +59,15 @@ public final class NotificationRenderer {
         }
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
-        renderTopLeft(guiGraphics, mc);
-        renderCenterTop(guiGraphics, mc);
+        // Notification panels are part of the HUD and can contain many translucent
+        // primitives. Batch them for one buffer submission per notification pass.
+        guiGraphics.drawManaged(() -> {
+            renderTopLeft(guiGraphics, mc);
+            renderCenterTop(guiGraphics, mc);
+        });
     }
 
-    public static void renderTopRight(GuiGraphics guiGraphics, Font font, int screenWidth,
+    public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,
                                       int anchorY, int anchorHeight) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
@@ -54,7 +76,7 @@ public final class NotificationRenderer {
 
         List<NotificationManager.ActiveNotification> entries =
                 NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
-        int currentY = anchorY + anchorHeight + 3;
+        int currentY = anchorY + anchorHeight + 2;
         long now = System.currentTimeMillis();
         for (int index = entries.size() - 1; index >= 0; index--) {
             NotificationManager.ActiveNotification entry = entries.get(index);
@@ -73,21 +95,58 @@ public final class NotificationRenderer {
             }
 
             Component message = notification.message();
-            int textWidth = font.width(message);
-            int boxWidth = 5 + ACCENT_WIDTH + 3 + textWidth + 6;
-            int boxHeight = font.lineHeight + 10;
-            int boxX = screenWidth - boxWidth - 2;
+            int chromeWidth = TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH
+                    + TOP_RIGHT_ACCENT_GAP + TOP_RIGHT_RIGHT_PADDING;
+            int maxTextWidth = Math.max(24,
+                    (int) ((TOP_RIGHT_MAX_WIDTH - chromeWidth) / TOP_RIGHT_TEXT_SCALE));
+            CachedLines cachedLines = splitTopRightLines(font, notification, maxTextWidth);
+            List<FormattedCharSequence> displayLines = cachedLines.lines();
+            int rawTextWidth = cachedLines.maxWidth();
+            int textWidth = Math.round(rawTextWidth * TOP_RIGHT_TEXT_SCALE);
+            int boxWidth = Math.min(TOP_RIGHT_MAX_WIDTH, chromeWidth + textWidth);
+            int rawLineStep = font.lineHeight + TOP_RIGHT_LINE_GAP;
+            int rawTextHeight = font.lineHeight + Math.max(0, displayLines.size() - 1) * rawLineStep;
+            int scaledTextHeight = Math.max(1, Math.round(rawTextHeight * TOP_RIGHT_TEXT_SCALE));
+            int boxHeight = Math.max(TOP_RIGHT_BOX_HEIGHT,
+                    TOP_RIGHT_VERTICAL_PADDING * 2 + scaledTextHeight);
+            int boxX = rightEdge - boxWidth - 2;
             int boxRight = boxX + boxWidth;
             int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
             guiGraphics.enableScissor(boxRight - animatedWidth, currentY, boxRight, currentY + boxHeight);
-            drawPanel(guiGraphics, boxX, currentY, boxWidth, boxHeight, notification, alpha, 2);
+            drawTopRightPanel(guiGraphics, boxX, currentY, boxWidth, boxHeight, notification, alpha);
 
-            int textX = boxX + 5 + ACCENT_WIDTH + 3;
-            int textY = currentY + 5;
-            guiGraphics.drawString(font, message, textX, textY, scaledColor(0xFFFFFFFF, alpha), false);
+            int textX = boxX + TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH + TOP_RIGHT_ACCENT_GAP;
+            int textY = currentY + (boxHeight - scaledTextHeight) / 2;
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(textX, textY, 0.0f);
+            guiGraphics.pose().scale(TOP_RIGHT_TEXT_SCALE, TOP_RIGHT_TEXT_SCALE, 1.0f);
+            int lineY = 0;
+            for (FormattedCharSequence line : displayLines) {
+                guiGraphics.drawString(font, line, 0, lineY,
+                        scaledColor(notification.theme().textColor(), alpha), false);
+                lineY += rawLineStep;
+            }
+            guiGraphics.pose().popPose();
             guiGraphics.disableScissor();
-            currentY += boxHeight + 3;
+            currentY += boxHeight + TOP_RIGHT_STACK_GAP;
         }
+    }
+
+    private static void drawTopRightPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
+                                          Notification notification, int alpha) {
+        NotificationTheme theme = notification.theme();
+        int accent = notification.effectiveAccentColor();
+        int border = notification.accentColor() >= 0 ? accent : theme.borderColor();
+        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, TOP_RIGHT_RADIUS,
+                scaleAlpha(theme.backgroundColor(), Math.round(alpha * 0.78f)));
+        UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, TOP_RIGHT_RADIUS,
+                scaleAlpha(border, Math.round(alpha * 0.62f)));
+
+        int accentX = x + TOP_RIGHT_LEFT_PADDING;
+        int accentY = y + 3;
+        int accentHeight = Math.max(2, height - 6);
+        UiPanelRenderer.roundedRect(guiGraphics, accentX, accentY, ACCENT_WIDTH, accentHeight, 1,
+                scaleAlpha(accent, Math.round(alpha * 0.88f)));
     }
 
     private static void renderTopLeft(GuiGraphics guiGraphics, Minecraft mc) {
@@ -97,15 +156,13 @@ public final class NotificationRenderer {
         long now = System.currentTimeMillis();
         for (NotificationManager.ActiveNotification entry : entries) {
             Notification notification = entry.notification();
-            List<FormattedCharSequence> lines = splitLines(mc.font, notification);
+            CachedLines cachedLines = splitLines(mc.font, notification);
+            List<FormattedCharSequence> lines = cachedLines.lines();
             if (lines.isEmpty()) {
                 continue;
             }
 
-            int maxWidth = 0;
-            for (FormattedCharSequence line : lines) {
-                maxWidth = Math.max(maxWidth, mc.font.width(line));
-            }
+            int maxWidth = cachedLines.maxWidth();
             int boxWidth = maxWidth + INNER_PADDING * 2 + ACCENT_WIDTH + 4;
             int boxHeight = INNER_PADDING * 2 + lines.size() * (mc.font.lineHeight + 3) - 3;
             long age = entry.ageMs(now);
@@ -190,30 +247,64 @@ public final class NotificationRenderer {
                 glyphColor, alpha255, intro);
     }
 
-    private static List<FormattedCharSequence> splitLines(Font font, Notification notification) {
-        List<FormattedCharSequence> result = new ArrayList<>();
-        if (!notification.title().getString().isBlank()) {
-            result.addAll(font.split(notification.title(), MAX_LEFT_WIDTH));
-        }
-
-        String message = notification.message().getString();
-        for (String manualLine : message.split("\\R")) {
-            if (!manualLine.isEmpty()) {
-                result.addAll(font.split(Component.literal(manualLine), MAX_LEFT_WIDTH));
+    private static CachedLines splitLines(Font font, Notification notification) {
+        ensureLineCacheFont(font);
+        return LEFT_LINES_CACHE.computeIfAbsent(notification, ignored -> {
+            List<FormattedCharSequence> result = new ArrayList<>();
+            if (!notification.title().getString().isBlank()) {
+                result.addAll(font.split(notification.title(), MAX_LEFT_WIDTH));
             }
+
+            String message = notification.message().getString();
+            for (String manualLine : message.split("\\R")) {
+                if (!manualLine.isEmpty()) {
+                    result.addAll(font.split(Component.literal(manualLine), MAX_LEFT_WIDTH));
+                }
+            }
+            List<FormattedCharSequence> lines = List.copyOf(result);
+            return new CachedLines(lines, maxWidth(font, lines));
+        });
+    }
+
+    private static CachedLines splitTopRightLines(Font font, Notification notification,
+                                                   int maxTextWidth) {
+        ensureLineCacheFont(font);
+        // The top-right width is fixed by the HUD constants, so the first
+        // computed split remains valid for the notification's lifetime.
+        return TOP_RIGHT_LINES_CACHE.computeIfAbsent(notification, ignored -> {
+            List<FormattedCharSequence> lines = font.split(notification.message(), maxTextWidth);
+            List<FormattedCharSequence> safeLines = lines.isEmpty()
+                    ? List.of(notification.message().getVisualOrderText())
+                    : List.copyOf(lines);
+            return new CachedLines(safeLines, maxWidth(font, safeLines));
+        });
+    }
+
+    private static int maxWidth(Font font, List<FormattedCharSequence> lines) {
+        int width = 0;
+        for (FormattedCharSequence line : lines) {
+            width = Math.max(width, font.width(line));
         }
-        return result;
+        return width;
+    }
+
+    private static void ensureLineCacheFont(Font font) {
+        if (lineCacheFont == font) {
+            return;
+        }
+        LEFT_LINES_CACHE.clear();
+        TOP_RIGHT_LINES_CACHE.clear();
+        lineCacheFont = font;
     }
 
     private static void drawPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
                                   Notification notification, int alpha, int radius) {
         NotificationTheme theme = notification.theme();
         int accent = notification.effectiveAccentColor();
-        UiPanelRenderer.roundedRect(guiGraphics, x - 1, y - 1, width + 2, height + 2,
-                radius + 1, scaleAlpha(theme.glowColor(), alpha));
-        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, radius,
-                scaleAlpha(theme.backgroundColor(), alpha));
-        UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, radius,
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 1, y - 1, width + 2, height + 2,
+                radius + 1, scaleAlpha(theme.glowColor(), alpha), 0);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height, radius,
+                scaleAlpha(theme.backgroundColor(), alpha),
                 scaleAlpha(notification.accentColor() >= 0 ? accent : theme.borderColor(), alpha));
 
         int accentAlpha = scaleAlpha(accent, alpha);
@@ -234,17 +325,15 @@ public final class NotificationRenderer {
         int streakX = x + (width - streakWidth) / 2;
         float shimmer = 0.5f + 0.5f * (float) Math.sin(elapsed / 360.0f);
 
-        UiPanelRenderer.roundedRect(guiGraphics, x - 2, y + 3, width + 4, height + 3,
-                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(0xFF000000, shadowAlpha));
-        UiPanelRenderer.roundedRect(guiGraphics, x - 1, y - 1, width + 2, height + 2,
-                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(theme.glowColor(), glowAlpha));
-        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, PANEL_RADIUS,
-                UiPanelRenderer.withAlpha(theme.backgroundColor(), alpha));
-        UiPanelRenderer.roundedRect(guiGraphics, x + 4, y + 4, width - 8, height - 8,
-                PANEL_RADIUS - 2, UiPanelRenderer.withAlpha(CENTER_INNER_COLOR, Math.round(alpha * 0.56f)));
-
-        UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, PANEL_RADIUS,
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 2, y + 3, width + 4, height + 3,
+                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(0xFF000000, shadowAlpha), 0);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 1, y - 1, width + 2, height + 2,
+                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(theme.glowColor(), glowAlpha), 0);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height, PANEL_RADIUS,
+                UiPanelRenderer.withAlpha(theme.backgroundColor(), alpha),
                 UiPanelRenderer.withAlpha(theme.borderColor(), alpha));
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x + 4, y + 4, width - 8, height - 8,
+                PANEL_RADIUS - 2, UiPanelRenderer.withAlpha(CENTER_INNER_COLOR, Math.round(alpha * 0.56f)), 0);
         guiGraphics.fill(streakX, y + 2, streakX + streakWidth, y + 3,
                 UiPanelRenderer.withAlpha(blendColor(theme.borderColor(), 0xFFFFFFFF, 0.28f),
                         Math.round(alpha * (0.28f + shimmer * 0.18f))));
@@ -312,5 +401,8 @@ public final class NotificationRenderer {
         int green = Math.round(ag + (bg - ag) * mix);
         int blue = Math.round(ab + (bb - ab) * mix);
         return 0xFF000000 | (red << 16) | (green << 8) | blue;
+    }
+
+    private record CachedLines(List<FormattedCharSequence> lines, int maxWidth) {
     }
 }

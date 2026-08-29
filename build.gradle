@@ -24,6 +24,11 @@ sourceSets.main.resources {
     // Exclude common development only resources from finalized outputs
     exclude("**/*.bbmodel") // BlockBench project files
     exclude("src/generated/**/.cache") // datagen cache files
+
+    // High-resolution loading backgrounds are user-replaceable external files under
+    // config/dreamingfishcore/loading_backgrounds and must never inflate the mod jar.
+    exclude("assets/dreamingfishcore/background_*.png")
+    exclude("assets/dreamingfishcore/textures/gui/loading/world_loading.png")
 }
 
 repositories {
@@ -39,6 +44,23 @@ repositories {
         name = "JEI"
         url = "https://maven.blamejared.com/"
     }
+    maven {
+        name = "Curios"
+        url = "https://maven.theillusivec4.top/"
+        content {
+            includeGroup("top.theillusivec4.curios")
+        }
+    }
+    maven {
+        name = "WispForest"
+        url = "https://maven.wispforest.io/releases"
+        content {
+            includeGroupByRegex("io\\.wispforest.*")
+        }
+    }
+    maven { url = "https://maven.su5ed.dev/releases" }
+    maven { url = "https://maven.fabricmc.net" }
+    maven { url = "https://maven.shedaniel.me/" }
 }
 
 base {
@@ -140,6 +162,20 @@ configurations {
 dependencies {
     implementation "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
 
+    // EconomySystem exposes a stable API-only jar for third-party integrations.
+    // It is compile-time only: the full EconomySystem mod remains an optional runtime dependency.
+    compileOnly files('libs/economy_system-neoforge-1.21.1-1.3.0-api.jar')
+    // Optional corpse integrations. These APIs are never bundled and are loaded only when
+    // the corresponding mod is present at runtime.
+    compileOnly("top.theillusivec4.curios:curios-neoforge:9.5.1+1.21.1") {
+        transitive = false
+    }
+    compileOnly("io.wispforest:accessories-neoforge:1.1.0-beta.53+1.21.1") {
+        transitive = false
+    }
+    localRuntime 'org.xerial:sqlite-jdbc:3.46.1.0'
+    localRuntime 'com.zaxxer:HikariCP:5.1.0'
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'com.google.code.gson:gson:2.10.1'
@@ -153,6 +189,14 @@ dependencies {
 tasks.named('test', Test).configure {
     useJUnitPlatform()
     classpath += sourceSets.main.runtimeClasspath
+}
+
+// Unit tests that exercise Minecraft-backed domain objects (for example,
+// task-location cuboids) need the same NeoForge/Minecraft compile classpath as
+// the main source set.  The Java plugin does not inherit that classpath for
+// test compilation by default.
+sourceSets.test {
+    compileClasspath += sourceSets.main.compileClasspath
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

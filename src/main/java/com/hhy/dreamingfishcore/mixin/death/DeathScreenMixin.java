@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.mixin.death;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
@@ -38,6 +39,11 @@ public abstract class DeathScreenMixin extends Screen {
     private Button dreamingFishCore$keepInventoryButton;
     @Unique
     private Button dreamingFishCore$titleScreenButton;
+    @Unique
+    private Button dreamingFishCore$corpseLockButton;
+
+    @Unique
+    private boolean dreamingFishCore$lockCorpse = true;
 
     @Unique
     private boolean dreamingFishCore$showDeathPos = false;  // 是否显示死亡位置
@@ -112,7 +118,7 @@ public abstract class DeathScreenMixin extends Screen {
     @Unique
     private void dreamingFishCore$sendNormalRespawn() {
         DreamingFishCore_NetworkManager.sendToServer(new Packet_NormalRespawnRequest(
-                DeathScreenDataStorage.getData().deathId()));
+                DeathScreenDataStorage.getData().deathId(), dreamingFishCore$lockCorpse));
     }
 
     /**
@@ -140,6 +146,9 @@ public abstract class DeathScreenMixin extends Screen {
         }
         if (dreamingFishCore$titleScreenButton != null) {
             this.removeWidget(dreamingFishCore$titleScreenButton);
+        }
+        if (dreamingFishCore$corpseLockButton != null) {
+            this.removeWidget(dreamingFishCore$corpseLockButton);
         }
 
         dreamingFishCore$createDeathButtons(data);
@@ -175,13 +184,28 @@ public abstract class DeathScreenMixin extends Screen {
                 false, 0, data.respawnPoint(),
                 btn -> dreamingFishCore$returnToTitleScreen()
         );
+        dreamingFishCore$corpseLockButton = new CorpseLockButton(
+                centerX - buttonWidth / 2, startY - 28,
+                buttonWidth, dreamingFishCore$vSize(18),
+                dreamingFishCore$lockCorpse,
+                btn -> dreamingFishCore$toggleCorpseLock()
+        );
 
+        this.addRenderableWidget(dreamingFishCore$corpseLockButton);
         this.addRenderableWidget(dreamingFishCore$normalRespawnButton);
         this.addRenderableWidget(dreamingFishCore$keepInventoryButton);
         this.addRenderableWidget(dreamingFishCore$titleScreenButton);
 
         dreamingFishCore$normalRespawnButton.active = data.respawnPoint() >= data.normalCost();
         dreamingFishCore$keepInventoryButton.active = data.respawnPoint() >= data.keepInventoryCost();
+    }
+
+    @Unique
+    private void dreamingFishCore$toggleCorpseLock() {
+        dreamingFishCore$lockCorpse = !dreamingFishCore$lockCorpse;
+        if (dreamingFishCore$corpseLockButton instanceof CorpseLockButton lockButton) {
+            lockButton.dreamingFishCore$setLocked(dreamingFishCore$lockCorpse);
+        }
     }
 
     /**
@@ -270,6 +294,9 @@ public abstract class DeathScreenMixin extends Screen {
         if (dreamingFishCore$titleScreenButton != null) {
             dreamingFishCore$titleScreenButton.render(guiGraphics, mouseX, mouseY, partialTick);
         }
+        if (dreamingFishCore$corpseLockButton != null) {
+            dreamingFishCore$corpseLockButton.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
     }
 
     /**
@@ -335,6 +362,10 @@ public abstract class DeathScreenMixin extends Screen {
         dreamingFishCore$placeButton(dreamingFishCore$keepInventoryButton, buttonX + segmentWidth, topY, segmentWidth, 24, visible, uiScale);
         dreamingFishCore$placeButton(dreamingFishCore$titleScreenButton, buttonX + segmentWidth * 2, topY,
                 totalWidth - segmentWidth * 2, 24, visible, uiScale);
+
+        int panelY = dreamingFishCore$respawnPanelY(topY);
+        dreamingFishCore$placeButton(dreamingFishCore$corpseLockButton,
+                buttonX + 14, panelY + 63, totalWidth - 28, 18, visible, uiScale);
     }
 
     @Unique
@@ -347,8 +378,16 @@ public abstract class DeathScreenMixin extends Screen {
         button.setY(Math.round(y * uiScale));
         if (button instanceof CustomButton customButton) {
             customButton.dreamingFishCore$setBounds(Math.round(width * uiScale), Math.max(14, Math.round(height * uiScale)));
+        } else if (button instanceof CorpseLockButton lockButton) {
+            lockButton.dreamingFishCore$setBounds(
+                    Math.round(width * uiScale), Math.max(14, Math.round(height * uiScale)));
         }
         button.visible = visible;
+    }
+
+    @Unique
+    private int dreamingFishCore$respawnPanelY(int buttonTopY) {
+        return Math.max(18, buttonTopY - 96);
     }
 
     @Unique
@@ -394,10 +433,10 @@ public abstract class DeathScreenMixin extends Screen {
                                                           int mouseX, int mouseY, int buttonTopY, int contentAlpha,
                                                           int virtualW) {
         int panelWidth = dreamingFishCore$deathButtonWidth(virtualW);
-        int panelHeight = 68;
+        int panelHeight = 88;
         int buttonRight = dreamingFishCore$deathButtonX(virtualW) + dreamingFishCore$deathButtonWidth(virtualW);
         int panelX = Math.max(18, buttonRight - panelWidth);
-        int panelY = Math.max(18, buttonTopY - panelHeight - 8);
+        int panelY = dreamingFishCore$respawnPanelY(buttonTopY);
 
         int x = panelX + 14;
         int y = panelY + 10;
@@ -502,8 +541,11 @@ public abstract class DeathScreenMixin extends Screen {
                 return "点数不足  还差 " + String.format("%.1f", previewCost - currentPoints);
             }
             String typeText = infected ? "感染者" : "幸存者";
+            String corpseAccess = hoveredAction == 1
+                    ? (dreamingFishCore$lockCorpse ? "  /  尸体仅自己可取" : "  /  尸体允许他人拾取")
+                    : "";
             return "确认后作为" + typeText + (hoveredAction == 2 ? "保留物品重生" : "重生")
-                    + "  /  之后可复活 " + respawnTimes + " 次";
+                    + "  /  之后可复活 " + respawnTimes + " 次" + corpseAccess;
         }
         if (hoveredAction == 3) {
             return "返回标题不会消耗死亡点数";
@@ -564,7 +606,7 @@ public abstract class DeathScreenMixin extends Screen {
                 dreamingFishCore$withAlpha(0xFFB83B37, (int) (contentAlpha * 0.62f)));
         guiGraphics.fill(x + 9, y + 12, x + panelW - 9, y + 13,
                 dreamingFishCore$withAlpha(0xFF6A6660, (int) (contentAlpha * 0.30f)));
-        guiGraphics.drawString(this.font, "死亡位置地图", x + 9, y + 5,
+        guiGraphics.drawString(this.font, "尸体位置", x + 9, y + 5,
                 dreamingFishCore$withAlpha(0xFFDAD4CC, contentAlpha), false);
 
         guiGraphics.fill(mapX - 1, mapY - 1, mapX + mapSize + 1, mapY + mapSize + 1,
@@ -765,6 +807,74 @@ public abstract class DeathScreenMixin extends Screen {
                     text,
                     Math.max(0, maxWidth - Minecraft.getInstance().font.width(ellipsis))
             ) + ellipsis;
+        }
+    }
+
+    /** 死亡结算前选择尸体的多人访问权限。 */
+    @Unique
+    private static class CorpseLockButton extends Button {
+        private boolean locked;
+
+        private CorpseLockButton(int x, int y, int width, int height, boolean locked, OnPress onPress) {
+            super(x, y, width, height, Component.empty(), onPress, DEFAULT_NARRATION);
+            dreamingFishCore$setLocked(locked);
+        }
+
+        @Unique
+        private void dreamingFishCore$setLocked(boolean locked) {
+            this.locked = locked;
+            setMessage(Component.literal(locked
+                    ? "尸体拾取权限：仅自己，点击切换"
+                    : "尸体拾取权限：允许他人，点击切换"));
+        }
+
+        @Unique
+        private void dreamingFishCore$setBounds(int width, int height) {
+            this.width = width;
+            this.height = height;
+        }
+
+        @Override
+        public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            int x = getX();
+            int y = getY();
+            int w = width;
+            int h = height;
+            boolean hovered = isHovered() || isFocused();
+            int accent = locked ? 0xFF72B7D4 : 0xFFD2A157;
+            int fill = hovered ? 0xE0253036 : 0xB4141B20;
+            int border = hovered ? accent : (locked ? 0xA06A9EB3 : 0xA08F7447);
+
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, w, h,
+                    Math.max(3, h / 4), fill, border);
+            guiGraphics.fill(x + 7, y + 4, x + 10, y + h - 4, accent);
+
+            var buttonFont = Minecraft.getInstance().font;
+            String label = w >= 190 ? "尸体拾取权限" : "尸体权限";
+            String state = locked ? "仅自己" : "允许他人";
+            String hint = "点击切换";
+            int textY = y + Math.max(2, (h - buttonFont.lineHeight) / 2);
+            int hintX = x + w - 9 - buttonFont.width(hint);
+            int stateX = hintX - 10 - buttonFont.width(state);
+            int labelRight = x + 15 + buttonFont.width(label);
+
+            if (stateX > labelRight + 6) {
+                guiGraphics.fill(stateX - 5, y + 3, hintX - 5, y + h - 3,
+                        locked ? 0x334D899F : 0x335F4A25);
+                guiGraphics.drawString(buttonFont, label, x + 15, textY,
+                        hovered ? 0xFFF4F6F6 : 0xFFD4DADB, false);
+                guiGraphics.drawString(buttonFont, state, stateX, textY, accent, false);
+                guiGraphics.drawString(buttonFont, hint, hintX, textY,
+                        hovered ? 0xFFD7D2CB : 0xFF918E89, false);
+            } else {
+                String compact = state + "  ·  点击切换";
+                guiGraphics.drawString(buttonFont, compact, x + 15, textY,
+                        hovered ? 0xFFF4F6F6 : accent, false);
+            }
+
+            if (hovered) {
+                guiGraphics.fill(x + 15, y + h - 2, x + w - 10, y + h - 1, accent);
+            }
         }
     }
 }

@@ -23,7 +23,7 @@ public final class Notification {
                 : position == NotificationPosition.CENTER_TOP
                 ? NotificationQueuePolicy.QUEUE
                 : NotificationQueuePolicy.STACK;
-        this.durationMs = Math.max(1L, builder.durationMs);
+        this.durationMs = builder.durationMs < 0L ? Long.MAX_VALUE : Math.max(1L, builder.durationMs);
         this.replaceKey = builder.replaceKey;
         this.accentColor = builder.accentColor;
     }
@@ -103,6 +103,7 @@ public final class Notification {
             return this;
         }
 
+        /** A negative duration creates a persistent notification that requires explicit removal. */
         public Builder durationMs(long durationMs) {
             this.durationMs = durationMs;
             return this;

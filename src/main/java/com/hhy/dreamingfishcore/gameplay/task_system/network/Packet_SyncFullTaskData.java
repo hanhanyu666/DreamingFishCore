@@ -61,6 +61,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
             buf.writeVarInt(stage.getStageNumber());
             buf.writeUtf(stage.getStageName());
             buf.writeUtf(stage.getStageDescription());
+            buf.writeBoolean(stage.isCurrentStage());
+            buf.writeFloat(stage.getGlobalProgressPercentage());
 
             // 编码怪物数值调整
             StoryStageData.MonsterModifier modifier = stage.getMonsterModifier();
@@ -88,10 +90,12 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                     buf.writeLong(task.getStartTime());
                     buf.writeLong(task.getEndTime());
                     buf.writeBoolean(task.isTaskState());
+                    buf.writeBoolean(task.isPersonalTask());
                     buf.writeBoolean(task.isCompleted());
                     buf.writeBoolean(task.isFailed());
                     buf.writeBoolean(task.isClientPlayerFinished());
                     buf.writeVarInt(task.getFinishedPlayerCount());
+                    buf.writeVarInt(task.getPersonalExpectedPlayerCount());
                 }
             }
         }
@@ -129,6 +133,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
             String stageDescription = buf.readUtf();
 
             StoryStageData stage = new StoryStageData(stageId, stageNumber, stageName, stageDescription);
+            stage.setCurrentStage(buf.readBoolean());
+            stage.setGlobalProgressPercentage(buf.readFloat());
 
             // 解码怪物数值调整
             boolean hasModifier = buf.readBoolean();
@@ -151,6 +157,7 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                 long startTime = buf.readLong();
                 long endTime = buf.readLong();
                 boolean taskState = buf.readBoolean();
+                boolean personalTask = buf.readBoolean();
                 boolean isCompleted = buf.readBoolean();
                 boolean isFailed = buf.readBoolean();
                 boolean isPlayerFinished = buf.readBoolean();
@@ -158,10 +165,12 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                 StoryTaskData task = new StoryTaskData(
                         taskKey, taskId, taskName, taskContent, startTime, endTime);
                 task.setTaskState(taskState);
+                task.setPersonalTask(personalTask);
                 task.setCompleted(isCompleted);
                 task.setFailed(isFailed);
                 task.setClientPlayerFinished(isPlayerFinished);
                 task.setFinishedPlayerCount(buf.readVarInt());
+                task.setPersonalExpectedPlayerCount(buf.readVarInt());
 
                 tasks.add(task);
             }

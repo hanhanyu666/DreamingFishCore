@@ -24,22 +24,32 @@ public final class LoadingScreenUi {
     }
 
     public static void renderBackground(GuiGraphics guiGraphics, int width, int height) {
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, width, height);
-        guiGraphics.fillGradient(0, 0, width, height, 0x10000000, 0x78000000);
+        renderBackground(guiGraphics, width, height, 1.0F);
+    }
+
+    public static void renderBackground(GuiGraphics guiGraphics, int width, int height, float opacity) {
+        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, width, height, opacity);
+        guiGraphics.fillGradient(0, 0, width, height,
+                withOpacity(0x10000000, opacity), withOpacity(0x78000000, opacity));
         int leftShadeWidth = Math.min(width, Math.max(160, width / 2));
-        guiGraphics.fill(0, 0, leftShadeWidth, height, 0x12000000);
+        guiGraphics.fill(0, 0, leftShadeWidth, height, withOpacity(0x12000000, opacity));
     }
 
     /** Draws the existing random loading tip without a visible "tip" heading. */
     public static void renderTip(GuiGraphics guiGraphics, Font font, String tip) {
-        renderTip(guiGraphics, font, tip, 250);
+        renderTip(guiGraphics, font, tip, 250, 1.0F);
     }
 
     public static void renderTip(GuiGraphics guiGraphics, Font font, String tip, int maxTextWidth) {
+        renderTip(guiGraphics, font, tip, maxTextWidth, 1.0F);
+    }
+
+    public static void renderTip(GuiGraphics guiGraphics, Font font, String tip, int maxTextWidth,
+                                 float opacity) {
         int iconX = 20;
         int iconY = 16;
         int iconSize = 14;
-        UiBackgroundRenderer.renderRadioIcon(guiGraphics, iconX, iconY, iconSize);
+        UiBackgroundRenderer.renderRadioIcon(guiGraphics, iconX, iconY, iconSize, opacity);
 
         String plainTip = ChatFormatting.stripFormatting(tip);
         if (plainTip == null || plainTip.isBlank()) {
@@ -52,13 +62,21 @@ public final class LoadingScreenUi {
                 font.split(Component.literal(plainTip), availableWidth);
         int lineCount = Math.min(2, lines.size());
         for (int i = 0; i < lineCount; i++) {
-            guiGraphics.drawString(font, lines.get(i), textX, iconY + i * (font.lineHeight + 2), TIP_COLOR, true);
+            guiGraphics.drawString(font, lines.get(i), textX, iconY + i * (font.lineHeight + 2),
+                    withOpacity(TIP_COLOR, opacity), true);
         }
     }
 
     /** Renders the lower-left status, an animated waveform, and a compact progress number. */
     public static void renderStatusWaveform(GuiGraphics guiGraphics, Font font, int virtualWidth,
                                              int virtualHeight, String statusText, int progress, long now) {
+        renderStatusWaveform(guiGraphics, font, virtualWidth, virtualHeight,
+                statusText, progress, now, 1.0F);
+    }
+
+    public static void renderStatusWaveform(GuiGraphics guiGraphics, Font font, int virtualWidth,
+                                             int virtualHeight, String statusText, int progress, long now,
+                                             float opacity) {
         int margin = 24;
         int statusY = virtualHeight - 84;
         int waveY = virtualHeight - 54;
@@ -66,27 +84,32 @@ public final class LoadingScreenUi {
         int waveWidth = Math.min(190, Math.max(100, virtualWidth - margin * 2 - percentWidth - 18));
 
         guiGraphics.drawString(font, trimToWidth(statusText, font, waveWidth + 30), margin, statusY,
-                STATUS_COLOR, true);
-        renderWaveform(guiGraphics, margin, waveY, waveWidth, 18, progress, now);
+                withOpacity(STATUS_COLOR, opacity), true);
+        renderWaveform(guiGraphics, margin, waveY, waveWidth, 18, progress, now, opacity);
 
         int clampedProgress = clampProgress(progress);
         String progressText = clampedProgress + "%";
         guiGraphics.drawString(font, progressText, margin + waveWidth + 10, waveY + 4,
-                WAVE_ACTIVE_HIGHLIGHT, true);
+                withOpacity(WAVE_ACTIVE_HIGHLIGHT, opacity), true);
     }
 
     /** Draws a compact status for waiting screens that do not expose meaningful progress. */
     public static void renderBottomStatusText(GuiGraphics guiGraphics, Font font, int virtualWidth,
                                               int virtualHeight, String statusText) {
+        renderBottomStatusText(guiGraphics, font, virtualWidth, virtualHeight, statusText, 1.0F);
+    }
+
+    public static void renderBottomStatusText(GuiGraphics guiGraphics, Font font, int virtualWidth,
+                                               int virtualHeight, String statusText, float opacity) {
         int margin = 24;
         int maxWidth = Math.max(40, virtualWidth - margin * 2);
         int y = Math.max(8, virtualHeight - margin - font.lineHeight);
         guiGraphics.drawString(font, trimToWidth(statusText, font, maxWidth), margin, y,
-                STATUS_COLOR, true);
+                withOpacity(STATUS_COLOR, opacity), true);
     }
 
     private static void renderWaveform(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                        int progress, long now) {
+                                        int progress, long now, float opacity) {
         if (width <= 0 || height <= 0) {
             return;
         }
@@ -95,7 +118,8 @@ public final class LoadingScreenUi {
         int centerY = y + height / 2;
         int segmentCount = Math.max(32, width / 2);
         int activeSegments = segmentCount * clampedProgress / 100;
-        guiGraphics.fill(x, centerY, x + width, centerY + 1, WAVE_BASELINE);
+        guiGraphics.fill(x, centerY, x + width, centerY + 1,
+                withOpacity(WAVE_BASELINE, opacity));
 
         for (int i = 0; i < segmentCount; i++) {
             int segmentX = x + i * width / segmentCount;
@@ -106,11 +130,12 @@ public final class LoadingScreenUi {
             int amplitude = 2 + (int) Math.round((height * 0.42D) * pattern * breathing);
             int color = i < activeSegments ? WAVE_ACTIVE : WAVE_INACTIVE;
             guiGraphics.fill(segmentX, centerY - amplitude, segmentX + segmentWidth,
-                    centerY + amplitude + 1, color);
+                    centerY + amplitude + 1, withOpacity(color, opacity));
         }
 
         int cursorX = x + Math.min(width - 1, width * clampedProgress / 100);
-        guiGraphics.fill(cursorX, y - 2, cursorX + 1, y + height + 2, WAVE_ACTIVE_HIGHLIGHT);
+        guiGraphics.fill(cursorX, y - 2, cursorX + 1, y + height + 2,
+                withOpacity(WAVE_ACTIVE_HIGHLIGHT, opacity));
     }
 
     public static int estimateProgress(long startedAt, long now, int start, int end, long durationMillis) {
@@ -127,16 +152,32 @@ public final class LoadingScreenUi {
     }
 
     public static int getCancelHintWidth(Font font) {
-        int rawWidth = getRawCancelHintWidth(font);
-        return (int) Math.ceil(rawWidth * CANCEL_TEXT_SCALE);
+        return getActionHintWidth(font, " 中断连接");
     }
 
     public static void renderCancelHint(GuiGraphics guiGraphics, Font font, int virtualWidth, int virtualHeight) {
+        renderActionHint(guiGraphics, font, virtualWidth, virtualHeight, " 中断连接", 1.0F);
+    }
+
+    /** Returns the visual width of the lower-right Esc action, after its compact scale is applied. */
+    public static int getActionHintWidth(Font font, String suffix) {
+        int rawWidth = getRawActionHintWidth(font, suffix);
+        return (int) Math.ceil(rawWidth * CANCEL_TEXT_SCALE);
+    }
+
+    /** Draws an Esc action using the exact styling shared by the connection screen. */
+    public static void renderActionHint(GuiGraphics guiGraphics, Font font, int virtualWidth,
+                                        int virtualHeight, String suffix) {
+        renderActionHint(guiGraphics, font, virtualWidth, virtualHeight, suffix, 1.0F);
+    }
+
+    public static void renderActionHint(GuiGraphics guiGraphics, Font font, int virtualWidth,
+                                        int virtualHeight, String suffix, float opacity) {
         String prefix = "按 ";
         String key = "Esc";
-        String suffix = " 中断连接";
+        String safeSuffix = suffix == null ? "" : suffix;
         int keyWidth = font.width(key);
-        int totalWidth = getCancelHintWidth(font);
+        int totalWidth = getActionHintWidth(font, safeSuffix);
         int x = virtualWidth - 24 - totalWidth;
         int y = virtualHeight - 24;
 
@@ -144,20 +185,29 @@ public final class LoadingScreenUi {
         guiGraphics.pose().translate(x, y, 0.0F);
         guiGraphics.pose().scale(CANCEL_TEXT_SCALE, CANCEL_TEXT_SCALE, 1.0F);
 
-        guiGraphics.drawString(font, prefix, 0, 0, CANCEL_COLOR, true);
+        guiGraphics.drawString(font, prefix, 0, 0, withOpacity(CANCEL_COLOR, opacity), true);
         int keyX = font.width(prefix) + 2;
         int keyY = -2;
-        guiGraphics.fill(keyX - 2, keyY, keyX + keyWidth + 2, keyY + font.lineHeight + 2, CANCEL_KEY_COLOR);
-        guiGraphics.fill(keyX - 2, keyY, keyX + keyWidth + 2, keyY + 1, CANCEL_COLOR);
+        guiGraphics.fill(keyX - 2, keyY, keyX + keyWidth + 2, keyY + font.lineHeight + 2,
+                withOpacity(CANCEL_KEY_COLOR, opacity));
+        guiGraphics.fill(keyX - 2, keyY, keyX + keyWidth + 2, keyY + 1,
+                withOpacity(CANCEL_COLOR, opacity));
         guiGraphics.fill(keyX - 2, keyY + font.lineHeight + 1, keyX + keyWidth + 2,
-                keyY + font.lineHeight + 2, CANCEL_COLOR);
-        guiGraphics.drawString(font, key, keyX, 0, CANCEL_COLOR, true);
-        guiGraphics.drawString(font, suffix, keyX + keyWidth + 4, 0, CANCEL_COLOR, true);
+                keyY + font.lineHeight + 2, withOpacity(CANCEL_COLOR, opacity));
+        guiGraphics.drawString(font, key, keyX, 0, withOpacity(CANCEL_COLOR, opacity), true);
+        guiGraphics.drawString(font, safeSuffix, keyX + keyWidth + 4, 0,
+                withOpacity(CANCEL_COLOR, opacity), true);
         guiGraphics.pose().popPose();
     }
 
-    private static int getRawCancelHintWidth(Font font) {
-        return font.width("按 ") + font.width("Esc") + font.width(" 中断连接") + 8;
+    private static int getRawActionHintWidth(Font font, String suffix) {
+        return font.width("按 ") + font.width("Esc") + font.width(suffix == null ? "" : suffix) + 8;
+    }
+
+    private static int withOpacity(int color, float opacity) {
+        float clamped = Math.max(0.0F, Math.min(1.0F, opacity));
+        int alpha = Math.round(((color >>> 24) & 0xFF) * clamped);
+        return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
     public static int clampProgress(int progress) {

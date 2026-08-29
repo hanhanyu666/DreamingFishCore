@@ -10,6 +10,8 @@ import net.minecraft.network.chat.Component;
 /** 客户端通知数据包的显示适配器。 */
 public final class NotificationClientDisplay {
     private static final String WORLD_BOUNDARY_KEYWORD = "世界边界";
+    private static final String NEW_PLAYER_GUIDE_KEYWORD = "新玩家帮助";
+    private static final String NEW_PLAYER_GUIDE_REPLACE_KEY = "new_player_guide";
 
     private NotificationClientDisplay() {
     }
@@ -37,6 +39,7 @@ public final class NotificationClientDisplay {
         }
 
         String text = message == null ? "" : message;
+        boolean newPlayerGuide = displayDuration < 0 && text.contains(NEW_PLAYER_GUIDE_KEYWORD);
         NotificationTheme theme = text.contains(WORLD_BOUNDARY_KEYWORD)
                 ? NotificationTheme.WARNING
                 : NotificationTheme.DEFAULT;
@@ -45,7 +48,12 @@ public final class NotificationClientDisplay {
                 .position(NotificationPosition.TOP_LEFT)
                 .theme(theme)
                 .queuePolicy(NotificationQueuePolicy.STACK)
+                .replaceKey(newPlayerGuide ? NEW_PLAYER_GUIDE_REPLACE_KEY : null)
                 .durationMs(displayDuration)
                 .build());
+    }
+
+    public static void dismissNewPlayerGuide() {
+        NotificationManager.removeContaining(NotificationPosition.TOP_LEFT, NEW_PLAYER_GUIDE_KEYWORD);
     }
 }

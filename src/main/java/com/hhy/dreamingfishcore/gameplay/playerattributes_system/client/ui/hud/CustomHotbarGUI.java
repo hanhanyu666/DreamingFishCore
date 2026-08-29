@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.item.items.Item_AidKit;
 import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
 import com.hhy.dreamingfishcore.item.items.medicine.Easy_Aid_Kit;
@@ -26,17 +27,18 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 public class CustomHotbarGUI {
     private static final int SLOT_COUNT = 9;
     private static final int SLOT_STEP = 20;
-    private static final int HOTBAR_PADDING = 3;
+    private static final int HOTBAR_PADDING = 2;
     private static final int HOTBAR_WIDTH = HOTBAR_PADDING * 2 + SLOT_COUNT * SLOT_STEP;
     private static final int HOTBAR_HEIGHT = 24;
     private static final int HOTBAR_BOTTOM_MARGIN = 4;
     private static final int ITEM_SIZE = 16;
     private static final int OFFHAND_SLOT_WIDTH = HOTBAR_PADDING * 2 + SLOT_STEP;
     private static final int OFFHAND_SLOT_GAP = 4;
-    private static final int HOTBAR_BG = 0x48060708;
-    private static final int HOTBAR_BG_INNER = 0x22101012;
-    private static final int HOTBAR_DIVIDER = 0x185E5E62;
-    private static final int SELECTED_UNDERLINE = 0x90C8C8C2;
+    private static final int HOTBAR_RADIUS = 6;
+    private static final int HOTBAR_BG = 0x90212629;
+    private static final int HOTBAR_BORDER = 0x4A767D82;
+    private static final int SELECTED_BG = 0x56636B70;
+    private static final int SELECTED_UNDERLINE = 0xC6A9D1E3;
     private static final float HOTBAR_IDLE_SCALE = 0.7f;
     private static final float HOTBAR_ACTIVE_SCALE = 0.9f;
     private static final long HOTBAR_SCALE_UP_MS = 150L;
@@ -76,7 +78,7 @@ public class CustomHotbarGUI {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (!shouldRenderCustomHotbar(mc)) {
+        if (!shouldReplaceVanillaHud(mc)) {
             return;
         }
 
@@ -105,18 +107,22 @@ public class CustomHotbarGUI {
         int y = getHotbarBaseTopY(screenHeight);
         int anchorY = screenHeight - HOTBAR_BOTTOM_MARGIN;
 
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(screenWidth / 2.0f, anchorY, 0.0f);
-        guiGraphics.pose().scale(scale, scale, 1.0f);
-        guiGraphics.pose().translate(-screenWidth / 2.0f, -anchorY, 0.0f);
+        // Batch the HUD primitives so each slot/panel does not force a separate
+        // BufferSource submission while the GUI event is unmanaged.
+        guiGraphics.drawManaged(() -> {
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(screenWidth / 2.0f, anchorY, 0.0f);
+            guiGraphics.pose().scale(scale, scale, 1.0f);
+            guiGraphics.pose().translate(-screenWidth / 2.0f, -anchorY, 0.0f);
 
-        drawHotbarFrame(guiGraphics, x, y);
-        drawHotbarItems(guiGraphics, mc, player, x, y);
-        drawOffhandSlot(guiGraphics, mc, player, x, y);
+            drawHotbarFrame(guiGraphics, x, y);
+            drawHotbarItems(guiGraphics, mc, player, x, y);
+            drawOffhandSlot(guiGraphics, mc, player, x, y);
 
-        guiGraphics.pose().popPose();
+            guiGraphics.pose().popPose();
 
-        drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
+            drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
+        });
     }
 
     @SubscribeEvent
@@ -150,9 +156,7 @@ public class CustomHotbarGUI {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || !isHudVisibleScreen(mc) || mc.options.hideGui
-                || mc.getDebugOverlay().showDebugScreen()
-                || mc.gameMode != null && mc.gameMode.getPlayerMode() == GameType.SPECTATOR) {
+        if (!shouldReplaceVanillaHud(mc)) {
             return;
         }
 
@@ -198,8 +202,11 @@ public class CustomHotbarGUI {
     }
 
     private static boolean shouldRenderCustomHotbar(Minecraft mc) {
+        return shouldReplaceVanillaHud(mc) && isHudVisibleScreen(mc);
+    }
+
+    private static boolean shouldReplaceVanillaHud(Minecraft mc) {
         return mc.player != null
-                && isHudVisibleScreen(mc)
                 && !mc.player.isDeadOrDying()
                 && !mc.options.hideGui
                 && !mc.getDebugOverlay().showDebugScreen()
@@ -240,13 +247,8 @@ public class CustomHotbarGUI {
     }
 
     private static void drawHotbarFrame(GuiGraphics guiGraphics, int x, int y) {
-        drawSoftRoundedRect(guiGraphics, x, y, HOTBAR_WIDTH, HOTBAR_HEIGHT, HOTBAR_BG);
-        guiGraphics.fill(x + 3, y + 2, x + HOTBAR_WIDTH - 3, y + HOTBAR_HEIGHT - 2, HOTBAR_BG_INNER);
-
-        for (int i = 1; i < SLOT_COUNT; i++) {
-            int dividerX = x + HOTBAR_PADDING + i * SLOT_STEP;
-            guiGraphics.fill(dividerX, y + 5, dividerX + 1, y + HOTBAR_HEIGHT - 5, HOTBAR_DIVIDER);
-        }
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, HOTBAR_WIDTH, HOTBAR_HEIGHT,
+                HOTBAR_RADIUS, HOTBAR_BG, HOTBAR_BORDER);
     }
 
     private static void drawHotbarItems(GuiGraphics guiGraphics, Minecraft mc, Player player, int x, int y) {
@@ -256,8 +258,12 @@ public class CustomHotbarGUI {
             int slotY = y + 2;
 
             if (i == selectedSlot) {
-                guiGraphics.fill(slotX + 4, y + HOTBAR_HEIGHT - 3, slotX + SLOT_STEP - 4,
-                        y + HOTBAR_HEIGHT - 1, SELECTED_UNDERLINE);
+                UiPanelRenderer.smoothRoundedRectBatched(guiGraphics,
+                        slotX, slotY, SLOT_STEP, HOTBAR_HEIGHT - 4,
+                        4, SELECTED_BG, 0x00000000);
+                UiPanelRenderer.smoothRoundedRectBatched(guiGraphics,
+                        slotX + 5, y + HOTBAR_HEIGHT - 3, SLOT_STEP - 10, 2,
+                        1, SELECTED_UNDERLINE, 0x00000000);
             }
 
             ItemStack stack = player.getInventory().getItem(i);
@@ -281,8 +287,8 @@ public class CustomHotbarGUI {
                 ? hotbarX - OFFHAND_SLOT_GAP - OFFHAND_SLOT_WIDTH
                 : hotbarX + HOTBAR_WIDTH + OFFHAND_SLOT_GAP;
 
-        drawSoftRoundedRect(guiGraphics, x, y, OFFHAND_SLOT_WIDTH, HOTBAR_HEIGHT, HOTBAR_BG);
-        guiGraphics.fill(x + 3, y + 2, x + OFFHAND_SLOT_WIDTH - 3, y + HOTBAR_HEIGHT - 2, HOTBAR_BG_INNER);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, OFFHAND_SLOT_WIDTH, HOTBAR_HEIGHT,
+                HOTBAR_RADIUS, HOTBAR_BG, HOTBAR_BORDER);
 
         int itemX = x + (OFFHAND_SLOT_WIDTH - ITEM_SIZE) / 2;
         int itemY = y + (HOTBAR_HEIGHT - ITEM_SIZE) / 2;
@@ -588,13 +594,8 @@ public class CustomHotbarGUI {
     }
 
     private static void drawSoftRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
-        guiGraphics.fill(x + 2, y, x + width - 2, y + height, color);
-        guiGraphics.fill(x, y + 2, x + 2, y + height - 2, color);
-        guiGraphics.fill(x + width - 2, y + 2, x + width, y + height - 2, color);
-        guiGraphics.fill(x + 1, y + 1, x + 2, y + 2, color);
-        guiGraphics.fill(x + width - 2, y + 1, x + width - 1, y + 2, color);
-        guiGraphics.fill(x + 1, y + height - 2, x + 2, y + height - 1, color);
-        guiGraphics.fill(x + width - 2, y + height - 2, x + width - 1, y + height - 1, color);
+        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height,
+                HOTBAR_RADIUS, color, 0x00000000);
     }
 
     private record MedicineUseInfo(float progress, int timeTicks, String label) {

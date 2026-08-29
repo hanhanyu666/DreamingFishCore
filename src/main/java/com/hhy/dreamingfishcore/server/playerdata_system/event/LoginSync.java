@@ -59,4 +59,14 @@ public class LoginSync {
             sendSyncPacketToPlayer(onlinePlayer, dataOwner);
         }
     }
+
+    /**
+     * 玩家基础资料发生服务端权威变更时，同时刷新本人和其他在线玩家的只读快照。
+     */
+    public static void broadcastPlayerDataIncludingOwner(ServerPlayer dataOwner) {
+        Collection<ServerPlayer> onlinePlayers = dataOwner.getServer().getPlayerList().getPlayers();
+        for (ServerPlayer onlinePlayer : onlinePlayers) {
+            sendSyncPacketToPlayer(onlinePlayer, dataOwner);
+        }
+    }
 }

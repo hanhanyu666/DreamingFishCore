@@ -5,10 +5,12 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.PlayerSkin;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -16,6 +18,8 @@ import net.minecraft.resources.ResourceLocation;
  * 每帧根据服务端同步的 model 字段选择；PlayerModel 本身包含帽子、袖子等皮肤第二层部件。
  */
 public class StoryNpcRenderer extends MobRenderer<StoryNpcEntity, PlayerModel<StoryNpcEntity>> {
+    private static final ThreadLocal<Integer> NAMEPLATE_SUPPRESSION_DEPTH =
+            ThreadLocal.withInitial(() -> 0);
     private final PlayerModel<StoryNpcEntity> wideModel;
     private final PlayerModel<StoryNpcEntity> slimModel;
 
@@ -44,9 +48,37 @@ public class StoryNpcRenderer extends MobRenderer<StoryNpcEntity, PlayerModel<St
         return Minecraft.getInstance().getResourceManager().getResource(location).isPresent() ? location : null;
     }
 
+    /** GUI 人物预览复用世界实体时，禁止把实体名称牌一起画进预览框。 */
+    public static void renderWithoutNameplate(Runnable renderAction) {
+        int previousDepth = NAMEPLATE_SUPPRESSION_DEPTH.get();
+        NAMEPLATE_SUPPRESSION_DEPTH.set(previousDepth + 1);
+        try {
+            renderAction.run();
+        } finally {
+            if (previousDepth == 0) {
+                NAMEPLATE_SUPPRESSION_DEPTH.remove();
+            } else {
+                NAMEPLATE_SUPPRESSION_DEPTH.set(previousDepth);
+            }
+        }
+    }
+
+    @Override
+    protected boolean shouldShowName(StoryNpcEntity entity) {
+        return NAMEPLATE_SUPPRESSION_DEPTH.get() == 0 && super.shouldShowName(entity);
+    }
+
+    @Override
+    protected void renderNameTag(StoryNpcEntity entity, Component displayName, PoseStack poseStack,
+                                 MultiBufferSource bufferSource, int packedLight, float partialTick) {
+        if (NAMEPLATE_SUPPRESSION_DEPTH.get() == 0) {
+            super.renderNameTag(entity, displayName, poseStack, bufferSource, packedLight, partialTick);
+        }
+    }
+
     @Override
     public void render(StoryNpcEntity entity, float yaw, float partialTick, PoseStack poseStack,
-                       net.minecraft.client.renderer.MultiBufferSource buffer, int packedLight) {
+                       MultiBufferSource buffer, int packedLight) {
         boolean slim = getAvailableConfiguredSkin(entity) != null
                 ? entity.isSlimModel()
                 : DefaultPlayerSkin.get(entity.getUUID()).model() == PlayerSkin.Model.SLIM;

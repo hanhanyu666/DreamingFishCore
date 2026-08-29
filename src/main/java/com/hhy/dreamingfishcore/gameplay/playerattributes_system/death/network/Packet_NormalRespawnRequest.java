@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.DeathItemStorage;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -29,9 +30,15 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             StreamCodec.of((buf, packet) -> encode(packet, buf), Packet_NormalRespawnRequest::decode);
 
     private final UUID deathId;
+    private final boolean lockCorpse;
+
+    public Packet_NormalRespawnRequest(UUID deathId, boolean lockCorpse) {
+        this.deathId = deathId;
+        this.lockCorpse = lockCorpse;
+    }
 
     public Packet_NormalRespawnRequest(UUID deathId) {
-        this.deathId = deathId;
+        this(deathId, true);
     }
 
     @Override
@@ -44,13 +51,14 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
      */
     public static void encode(Packet_NormalRespawnRequest packet, FriendlyByteBuf buf) {
         buf.writeUUID(packet.deathId);
+        buf.writeBoolean(packet.lockCorpse);
     }
 
     /**
      * 解码
      */
     public static Packet_NormalRespawnRequest decode(FriendlyByteBuf buf) {
-        return new Packet_NormalRespawnRequest(buf.readUUID());
+        return new Packet_NormalRespawnRequest(buf.readUUID(), buf.readBoolean());
     }
 
     /**
@@ -91,8 +99,11 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
                 return;
             }
 
-            // keepInventory 强制开启：普通复活必须先确认物品确实已从玩家栏移出并掉落。
-            if (!DeathItemStorage.dropStoredItems(player)) {
+            // 新记录只解锁死亡点尸体；旧记录继续使用升级前的物品快照掉落流程。
+            boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
+                    ? DeathCorpseManager.finalizeForNormalRespawn(player, packet.lockCorpse)
+                    : DeathItemStorage.dropStoredItems(player);
+            if (!itemsResolved) {
                 PendingDeathData.rollbackResolution(player, packet.deathId);
                 sendResponse(player, false, currentRespawnPoint);
                 return;
@@ -105,8 +116,8 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             // 发送成功消息，让客户端执行复活
             sendResponse(player, true, data.getRespawnPoint());
 
-            DreamingFishCore.LOGGER.info("玩家 {} 正常复活，消耗 {} 复活点（剩余: {}）",
-                    player.getScoreboardName(), cost, data.getRespawnPoint());
+            DreamingFishCore.LOGGER.info("玩家 {} 正常复活，消耗 {} 复活点（剩余: {}，尸体锁定={}）",
+                    player.getScoreboardName(), cost, data.getRespawnPoint(), packet.lockCorpse);
         });
     }
 

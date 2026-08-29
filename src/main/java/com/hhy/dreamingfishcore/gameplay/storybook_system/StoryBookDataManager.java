@@ -154,48 +154,8 @@ public class StoryBookDataManager {
      * 保存默认片段配置
      */
     private static boolean saveDefaultFragmentConfig() {
+        // 开服前暂不投放随机线索。保留空配置，后续可直接加入正式片段。
         List<FragmentData> defaultFragments = new ArrayList<>();
-
-        // 序章片段（使用4次残页解锁）
-        defaultFragments.add(new FragmentData(
-                1,
-                1,
-                0,
-                "未知幸存者",
-                "残页一",
-                "2066年3月15日",
-                "这是一切的开始...\n\n在这片荒芜的土地上，埋藏着许多不为人知的秘密。\n\n空气中弥漫着不祥的气息，我必须继续调查下去..."
-        ));
-
-        defaultFragments.add(new FragmentData(
-                2,
-                1,
-                0,
-                "失踪的矿工",
-                "残页二",
-                "2066年4月2日",
-                "我们挖到了一些奇怪的东西...那不是矿石...\n\n那是某种古老的遗迹，里面传来低沉的嗡嗡声。\n\n我不该再待在这里了..."
-        ));
-
-        defaultFragments.add(new FragmentData(
-                3,
-                1,
-                0,
-                "匿名研究者",
-                "残页三",
-                "2066年5月10日",
-                "有些东西比黄金更珍贵，也更危险...\n\n那批货物来自地下深处，我把它们藏在了北方的废弃矿坑里。\n\n如果你能找到它们，就是你的了。但记住，知识是有代价的..."
-        ));
-
-        defaultFragments.add(new FragmentData(
-                4,
-                1,
-                0,
-                "最后的记录者",
-                "残页四",
-                "2066年6月1日",
-                "我终于明白了真相...\n\n那些感染者...他们不是怪物。\n\n他们是在进化。\n\n如果你看到了这个，请继续往北走...那里有答案..."
-        ));
 
         try {
             JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);

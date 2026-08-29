@@ -1,6 +1,8 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system;
 
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 public class NpcRelationData {
     private int npcId;
@@ -8,6 +10,7 @@ public class NpcRelationData {
     private int favorability;
     private RelationType relationType = RelationType.STRANGER;
     private long lastInteractionTime;
+    private Set<String> appliedFavorabilityEffects = new HashSet<>();
 
     public NpcRelationData() {
     }
@@ -38,6 +41,21 @@ public class NpcRelationData {
     public void addFavorability(int amount) {
         setFavorability(this.favorability + amount);
         this.lastInteractionTime = System.currentTimeMillis();
+    }
+
+    /** 对带稳定 ID 的跨存档关系变化执行幂等应用。 */
+    public boolean applyFavorabilityEffect(String effectId, int amount) {
+        if (effectId == null || effectId.isBlank() || amount == 0) {
+            return false;
+        }
+        if (appliedFavorabilityEffects == null) {
+            appliedFavorabilityEffects = new HashSet<>();
+        }
+        if (!appliedFavorabilityEffects.add(effectId)) {
+            return false;
+        }
+        addFavorability(amount);
+        return true;
     }
 
     public RelationType getRelationType() {

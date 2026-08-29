@@ -1,10 +1,12 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system.client.ui.screen;
 
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcDialogueViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcInteractionType;
-import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.gameplay.npc_system.client.StoryNpcRenderer;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_NpcInteractionRequest;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -23,24 +25,21 @@ public class Screen_NpcDialogue extends Screen {
     private static final Minecraft MC = Minecraft.getInstance();
 
     private static final String TITLE_FALLBACK = "NPC对话";
-    private static final String LABEL_RELATION = "关系";
-    private static final String LABEL_FAVORABILITY = "好感度";
-    private static final String LABEL_PROFESSION = "职业";
-    private static final String LABEL_STAGE = "剧情阶段";
-    private static final String LABEL_THOUGHT = "想法";
-    private static final String LABEL_WANTED_ITEM = "想要物品";
-    private static final String LABEL_DIALOGUE = "对话";
-    private static final String LABEL_ACTION = "交互";
+    private static final String LABEL_ACTION = "你要怎么做？";
     private static final String BUTTON_DIALOGUE = "交谈";
-    private static final String BUTTON_GIFT = "赠予手中物品";
-    private static final String BUTTON_FOLLOW = "跟随";
-    private static final String BUTTON_SET_HOME = "定为家";
+    private static final String BUTTON_ABOUT = "关于";
+    private static final String BUTTON_BACK_TO_DIALOGUE = "返回交谈";
+    private static final String BUTTON_FOLLOW = "邀请跟随";
+    private static final String BUTTON_SET_HOME = "设为住处";
     private static final String TEXT_LOCKED = "未解锁";
-    private static final String TEXT_EMPTY_DIALOGUE = "他暂时没有更多想说的话。";
-    private static final String TEXT_NO_THOUGHT = "暂时没有特别在意的事。";
-    private static final String TEXT_CLOSE_HINT = "ESC 关闭";
+    private static final String TEXT_EMPTY_DIALOGUE = "对方暂时没有继续开口。";
+    private static final String TEXT_CLOSE_HINT = "ESC 离开";
 
-    private static final int COLOR_STAGE_BLACK = 0xF8000000;
+    private static final int COLOR_PANEL = 0xDC090B0E;
+    private static final int COLOR_PANEL_BORDER = 0x7A9B7B43;
+    private static final int COLOR_BUTTON = 0x8A1A1815;
+    private static final int COLOR_BUTTON_HOVER = 0xC4372E20;
+    private static final int COLOR_BUTTON_LOCKED = 0x69201E1A;
     private static final int COLOR_TITLE = 0xFFFFD88A;
     private static final int COLOR_TEXT = 0xFFEFE6D0;
     private static final int COLOR_MUTED = 0xFFB8AA91;
@@ -49,26 +48,28 @@ public class Screen_NpcDialogue extends Screen {
     private static final int COLOR_OPTION = 0xFFEAD9B4;
     private static final int COLOR_OPTION_HOVER = 0xFFFFD878;
     private static final int COLOR_OPTION_LOCKED = 0xFF777064;
-    private static final int COLOR_DIVIDER = 0x44D0B16F;
+    private static final int COLOR_DIVIDER = 0x55D0B16F;
 
     private final NpcDialogueViewData data;
-    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
+    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize =
+            new VirtualCoordinateHelper.VirtualSizeResult();
     private final List<TextActionArea> textActionAreas = new ArrayList<>();
 
     private int virtualWidth;
     private int virtualHeight;
     private float uiScale;
-    private int stageTop;
-    private int solidTop;
+    private int panelX;
+    private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private int modelCenterX;
     private int modelFootY;
-    private int infoX;
     private int dialogueX;
     private int dialogueWidth;
     private int actionX;
     private int actionWidth;
-    private int contentTop;
     private int dialogueIndex;
+    private boolean showingAbout;
     private long openTime;
 
     public Screen_NpcDialogue(NpcDialogueViewData data) {
@@ -89,31 +90,45 @@ public class Screen_NpcDialogue extends Screen {
         virtualWidth = virtualSize.virtualWidth;
         virtualHeight = virtualSize.virtualHeight;
 
-        stageTop = Math.max(170, virtualHeight / 2 - 8);
-        solidTop = stageTop + 28;
-        modelCenterX = 82;
-        modelFootY = virtualHeight - 24;
-        infoX = 142;
-        actionWidth = 128;
-        actionX = virtualWidth - actionWidth - 24;
-        dialogueX = Math.max(236, virtualWidth / 3 + 18);
-        dialogueWidth = Math.max(150, actionX - dialogueX - 26);
-        contentTop = solidTop + 16;
+        panelX = 12;
+        panelHeight = Math.max(98, Math.min(110, virtualHeight / 3 - 8));
+        panelY = virtualHeight - panelHeight - 10;
+        panelWidth = virtualWidth - panelX * 2;
+
+        modelCenterX = panelX + 42;
+        modelFootY = panelY + panelHeight - 7;
+        dialogueX = panelX + 84;
+        actionWidth = 166;
+        actionX = panelX + panelWidth - actionWidth - 10;
+        dialogueWidth = Math.max(190, actionX - dialogueX - 14);
     }
 
     private void rebuildTextActions() {
         textActionAreas.clear();
-        List<TextAction> actions = new ArrayList<>();
-        actions.add(new TextAction(BUTTON_DIALOGUE, NpcInteractionType.DIALOGUE, true));
-        actions.add(new TextAction(BUTTON_GIFT, NpcInteractionType.GIFT_ITEM, true));
-        actions.add(new TextAction(BUTTON_FOLLOW, NpcInteractionType.FOLLOW, isActionAvailable(NpcInteractionType.FOLLOW)));
-        actions.add(new TextAction(BUTTON_SET_HOME, NpcInteractionType.SET_HOME, isActionAvailable(NpcInteractionType.SET_HOME)));
+        List<TextAction> actions = List.of(
+                new TextAction(BUTTON_DIALOGUE, ScreenAction.DIALOGUE, true),
+                new TextAction(showingAbout ? BUTTON_BACK_TO_DIALOGUE : BUTTON_ABOUT,
+                        ScreenAction.ABOUT, true),
+                new TextAction(BUTTON_FOLLOW, ScreenAction.FOLLOW,
+                        isActionAvailable(NpcInteractionType.FOLLOW)),
+                new TextAction(BUTTON_SET_HOME, ScreenAction.SET_HOME,
+                        isActionAvailable(NpcInteractionType.SET_HOME))
+        );
 
-        int y = contentTop + 24;
-        for (TextAction action : actions) {
-            String label = action.enabled ? action.label : action.label + " / " + TEXT_LOCKED;
-            textActionAreas.add(new TextActionArea(actionX, y, MC.font.width(label), MC.font.lineHeight + 5, label, action.type, action.enabled));
-            y += 18;
+        int columns = 2;
+        int gap = 6;
+        int buttonWidth = (actionWidth - gap) / columns;
+        int buttonHeight = 22;
+        int startY = panelY + 29;
+        for (int index = 0; index < actions.size(); index++) {
+            TextAction action = actions.get(index);
+            String label = action.enabled ? action.label : action.label + " · " + TEXT_LOCKED;
+            int column = index % columns;
+            int row = index / columns;
+            int x = actionX + column * (buttonWidth + gap);
+            int y = startY + row * (buttonHeight + 6);
+            textActionAreas.add(new TextActionArea(x, y, buttonWidth, buttonHeight,
+                    label, action.type, action.enabled));
         }
     }
 
@@ -144,16 +159,16 @@ public class Screen_NpcDialogue extends Screen {
 
     private void renderStage(GuiGraphics guiGraphics) {
         renderQuickFade(guiGraphics);
-        guiGraphics.fill(0, solidTop, virtualWidth, virtualHeight, COLOR_STAGE_BLACK);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, panelX, panelY, panelWidth, panelHeight,
+                7, COLOR_PANEL, COLOR_PANEL_BORDER);
     }
 
     private void renderQuickFade(GuiGraphics guiGraphics) {
-        int fadeTop = stageTop;
-        for (int y = fadeTop; y < solidTop; y += 3) {
-            float ratio = (float) (y - fadeTop) / Math.max(1, solidTop - fadeTop);
-            int alpha = (int) (ratio * 248.0f);
-            int color = (alpha << 24);
-            guiGraphics.fill(0, y, virtualWidth, Math.min(solidTop, y + 3), color);
+        int fadeTop = panelY - 18;
+        for (int y = fadeTop; y < virtualHeight; y += 3) {
+            float ratio = (float) (y - fadeTop) / Math.max(1, virtualHeight - fadeTop);
+            int alpha = (int) (ratio * 88.0f);
+            guiGraphics.fill(0, y, virtualWidth, Math.min(virtualHeight, y + 3), alpha << 24);
         }
     }
 
@@ -163,70 +178,104 @@ public class Screen_NpcDialogue extends Screen {
             return;
         }
 
-        int modelSize = Math.max(54, Math.min(112, virtualHeight / 4));
-        float relativeMouseX = mouseX - modelCenterX;
-        float relativeMouseY = mouseY - modelFootY + 70;
-        InventoryScreen.renderEntityInInventoryFollowsMouse(
-                guiGraphics,
-                modelCenterX - modelSize,
-                modelFootY - modelSize * 2,
-                modelCenterX + modelSize,
-                modelFootY,
-                modelSize,
-                0.0625F,
-                -relativeMouseX * 0.35f,
-                -relativeMouseY * 0.18f,
-                entity
-        );
+        int modelSize = Math.max(34, Math.min(42, panelHeight / 2 - 8));
+        int modelLeft = modelCenterX - modelSize;
+        int modelTop = modelFootY - modelSize * 2;
+        int modelRight = modelCenterX + modelSize;
+        int clipPadding = 8;
+        int clipLeft = modelLeft - clipPadding;
+        int clipTop = modelTop - clipPadding;
+        int clipRight = modelRight + clipPadding;
+        int clipBottom = modelFootY + clipPadding;
+
+        // 原版接口需要模型边界坐标系中的绝对鼠标坐标；限幅可避免人物大幅扭头。
+        float trackedMouseX = Mth.clamp(mouseX, (float) modelLeft, (float) modelRight);
+        float trackedMouseY = Mth.clamp(mouseY, (float) modelTop, (float) modelFootY);
+
+        // 对话预览复用世界实体，只在这一帧临时隐藏名称牌，渲染后立即恢复。
+        boolean customNameVisible = entity.isCustomNameVisible();
+        entity.setCustomNameVisible(false);
+        try {
+            StoryNpcRenderer.renderWithoutNameplate(() ->
+                    InventoryScreen.renderEntityInInventoryFollowsMouse(
+                            guiGraphics,
+                            clipLeft,
+                            clipTop,
+                            clipRight,
+                            clipBottom,
+                            modelSize,
+                            0.0625F,
+                            trackedMouseX,
+                            trackedMouseY,
+                            entity
+                    ));
+        } finally {
+            entity.setCustomNameVisible(customNameVisible);
+        }
     }
 
     private void renderInfoColumn(GuiGraphics guiGraphics) {
-        int y = contentTop - 6;
-        guiGraphics.drawString(MC.font, data.getNpcName(), infoX, y, COLOR_TITLE, false);
-        y += 18;
+        int headerY = panelY + 10;
+        String relation = data.getRelationName().isEmpty() ? "尚未熟悉" : data.getRelationName();
+        relation = fitText(relation + " · 好感 " + data.getFavorability(),
+                Math.max(72, dialogueWidth / 2));
+        int relationWidth = MC.font.width(relation);
+        int relationX = dialogueX + dialogueWidth - relationWidth;
 
-        drawInfoLine(guiGraphics, LABEL_RELATION, data.getRelationName(), infoX, y, COLOR_GOOD);
-        y += 13;
-        drawInfoLine(guiGraphics, LABEL_FAVORABILITY, String.valueOf(data.getFavorability()), infoX, y, COLOR_GOOD);
-        y += 13;
-        drawInfoLine(guiGraphics, LABEL_PROFESSION, data.getNpcProfession(), infoX, y, COLOR_MUTED);
-        y += 13;
-        drawInfoLine(guiGraphics, LABEL_STAGE, String.valueOf(data.getStoryStageId()), infoX, y, COLOR_MUTED);
-    }
+        String npcName = fitText(data.getNpcName(), Math.max(42, dialogueWidth / 3));
+        guiGraphics.drawString(MC.font, npcName, dialogueX, headerY, COLOR_TITLE, false);
 
-    private void drawInfoLine(GuiGraphics guiGraphics, String label, String value, int x, int y, int valueColor) {
-        guiGraphics.drawString(MC.font, label, x, y, COLOR_ACCENT, false);
-        guiGraphics.drawString(MC.font, value, x + 48, y, valueColor, false);
+        int professionX = dialogueX + MC.font.width(npcName) + 8;
+        int professionWidth = Math.max(0, relationX - professionX - 8);
+        if (professionWidth > 18 && !data.getNpcProfession().isEmpty()) {
+            guiGraphics.drawString(MC.font, fitText(data.getNpcProfession(), professionWidth),
+                    professionX, headerY, COLOR_MUTED, false);
+        }
+        guiGraphics.drawString(MC.font, relation, relationX, headerY, COLOR_GOOD, false);
     }
 
     private void renderDialogueColumn(GuiGraphics guiGraphics) {
-        drawColumnHeader(guiGraphics, LABEL_DIALOGUE, dialogueX, contentTop - 16, dialogueWidth);
+        if (showingAbout) {
+            String introduction = data.getNpcIntroduction().isBlank()
+                    ? "随着你们逐渐的认识，你对这个人的了解会变多。"
+                    : data.getNpcIntroduction();
+            UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
+                    Math.min(48, panelHeight - 48), 1, COLOR_ACCENT);
+            drawTypewriterWrapped(guiGraphics, introduction, dialogueX, panelY + 31,
+                    dialogueWidth, COLOR_TEXT, 4);
+            return;
+        }
 
         List<String> dialogues = data.getDialogues();
-        String dialogue = dialogues.isEmpty() ? TEXT_EMPTY_DIALOGUE : dialogues.get(Mth.positiveModulo(dialogueIndex, dialogues.size()));
-        drawTypewriterWrapped(guiGraphics, dialogue, dialogueX, contentTop + 4, dialogueWidth, COLOR_TEXT, 4);
-
-        String intro = data.getNpcIntroduction();
-        if (!intro.isEmpty()) {
-            drawWrapped(guiGraphics, intro, dialogueX, contentTop + 54, dialogueWidth, COLOR_MUTED, 2);
-        }
-
-        int thoughtY = virtualHeight - 52;
-        guiGraphics.drawString(MC.font, LABEL_THOUGHT, dialogueX, thoughtY, COLOR_TITLE, false);
-        String thought = data.getThoughtText().isEmpty() ? TEXT_NO_THOUGHT : data.getThoughtText();
-        drawWrapped(guiGraphics, thought, dialogueX + 34, thoughtY, dialogueWidth - 34, COLOR_MUTED, 1);
-        if (!data.getWantedItemId().isEmpty()) {
-            guiGraphics.drawString(MC.font, LABEL_WANTED_ITEM + ": " + data.getWantedItemId(), dialogueX + 34, thoughtY + 12, COLOR_MUTED, false);
-        }
+        String dialogue = dialogues.isEmpty()
+                ? TEXT_EMPTY_DIALOGUE
+                : dialogues.get(Math.min(dialogueIndex, dialogues.size() - 1));
+        UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
+                Math.min(48, panelHeight - 48), 1, COLOR_ACCENT);
+        drawTypewriterWrapped(guiGraphics, dialogue, dialogueX, panelY + 31,
+                dialogueWidth, COLOR_TEXT, 4);
     }
 
     private void renderActionColumn(GuiGraphics guiGraphics, float mouseX, float mouseY) {
-        drawColumnHeader(guiGraphics, LABEL_ACTION, actionX, contentTop - 16, actionWidth);
+        drawColumnHeader(guiGraphics, LABEL_ACTION, actionX, panelY + 10, actionWidth);
         for (TextActionArea area : textActionAreas) {
             boolean hovered = area.contains((int) mouseX, (int) mouseY);
-            int color = area.enabled ? (hovered ? COLOR_OPTION_HOVER : COLOR_OPTION) : COLOR_OPTION_LOCKED;
-            String prefix = hovered && area.enabled ? "> " : "  ";
-            guiGraphics.drawString(MC.font, prefix + area.label, area.x, area.y, color, false);
+            int textColor = area.enabled
+                    ? (hovered ? COLOR_OPTION_HOVER : COLOR_OPTION)
+                    : COLOR_OPTION_LOCKED;
+            int background = area.enabled
+                    ? (hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON)
+                    : COLOR_BUTTON_LOCKED;
+            int border = hovered && area.enabled ? COLOR_OPTION_HOVER : COLOR_DIVIDER;
+            UiPanelRenderer.roundedRect(guiGraphics, area.x, area.y, area.width, area.height,
+                    4, background);
+            UiPanelRenderer.roundedBorder(guiGraphics, area.x, area.y, area.width, area.height,
+                    4, border);
+
+            String label = fitText(area.label, area.width - 8);
+            int textX = area.x + (area.width - MC.font.width(label)) / 2;
+            int textY = area.y + (area.height - MC.font.lineHeight) / 2;
+            guiGraphics.drawString(MC.font, label, textX, textY, textColor, false);
         }
     }
 
@@ -236,20 +285,40 @@ public class Screen_NpcDialogue extends Screen {
     }
 
     private void renderFooter(GuiGraphics guiGraphics) {
-        guiGraphics.drawString(MC.font, TEXT_CLOSE_HINT, 20, virtualHeight - 22, COLOR_MUTED, false);
+        int hintWidth = MC.font.width(TEXT_CLOSE_HINT);
+        guiGraphics.drawString(MC.font, TEXT_CLOSE_HINT,
+                panelX + panelWidth - hintWidth - 12, panelY + panelHeight - 15,
+                COLOR_MUTED, false);
     }
 
-    private void drawWrapped(GuiGraphics guiGraphics, String text, int x, int y, int width, int color, int maxLines) {
+    private void drawWrapped(GuiGraphics guiGraphics, String text, int x, int y,
+                             int width, int color, int maxLines) {
         var lines = MC.font.getSplitter().splitLines(text, width, Style.EMPTY);
         int count = Math.min(maxLines, lines.size());
-        for (int i = 0; i < count; i++) {
-            guiGraphics.drawString(MC.font, lines.get(i).getString(), x, y + i * 12, color, false);
+        for (int index = 0; index < count; index++) {
+            guiGraphics.drawString(MC.font, lines.get(index).getString(), x,
+                    y + index * 12, color, false);
         }
     }
 
-    private void drawTypewriterWrapped(GuiGraphics guiGraphics, String text, int x, int y, int width, int color, int maxLines) {
-        int visibleCharacters = Math.min(text.length(), (int) ((System.currentTimeMillis() - openTime) / 18L));
-        drawWrapped(guiGraphics, text.substring(0, visibleCharacters), x, y, width, color, maxLines);
+    private void drawTypewriterWrapped(GuiGraphics guiGraphics, String text, int x, int y,
+                                       int width, int color, int maxLines) {
+        int visibleCharacters = Math.min(text.length(),
+                (int) ((System.currentTimeMillis() - openTime) / 18L));
+        drawWrapped(guiGraphics, text.substring(0, visibleCharacters),
+                x, y, width, color, maxLines);
+    }
+
+    private String fitText(String text, int maxWidth) {
+        if (text == null || text.isEmpty() || maxWidth <= 0) {
+            return "";
+        }
+        if (MC.font.width(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "…";
+        int contentWidth = Math.max(0, maxWidth - MC.font.width(ellipsis));
+        return MC.font.plainSubstrByWidth(text, contentWidth) + ellipsis;
     }
 
     private LivingEntity getDialogueEntity() {
@@ -280,11 +349,19 @@ public class Screen_NpcDialogue extends Screen {
             for (TextActionArea area : textActionAreas) {
                 if (area.contains(virtualMouseX, virtualMouseY)) {
                     if (area.enabled) {
-                        if (area.type == NpcInteractionType.DIALOGUE) {
+                        if (area.type == ScreenAction.ABOUT) {
+                            showingAbout = !showingAbout;
+                            openTime = System.currentTimeMillis();
+                            return true;
+                        }
+                        if (area.type == ScreenAction.DIALOGUE) {
+                            showingAbout = false;
                             dialogueIndex++;
                             openTime = System.currentTimeMillis();
                         }
-                        DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcInteractionRequest(data.getNpcId(), data.getEntityId(), area.type));
+                        DreamingFishCore_NetworkManager.sendToServer(
+                                new Packet_NpcInteractionRequest(data.getNpcId(),
+                                        data.getEntityId(), area.type.interactionType));
                     }
                     return true;
                 }
@@ -298,12 +375,27 @@ public class Screen_NpcDialogue extends Screen {
         return false;
     }
 
-    private record TextAction(String label, NpcInteractionType type, boolean enabled) {
+    private enum ScreenAction {
+        DIALOGUE(NpcInteractionType.DIALOGUE),
+        ABOUT(null),
+        FOLLOW(NpcInteractionType.FOLLOW),
+        SET_HOME(NpcInteractionType.SET_HOME);
+
+        private final NpcInteractionType interactionType;
+
+        ScreenAction(NpcInteractionType interactionType) {
+            this.interactionType = interactionType;
+        }
     }
 
-    private record TextActionArea(int x, int y, int width, int height, String label, NpcInteractionType type, boolean enabled) {
+    private record TextAction(String label, ScreenAction type, boolean enabled) {
+    }
+
+    private record TextActionArea(int x, int y, int width, int height, String label,
+                                  ScreenAction type, boolean enabled) {
         private boolean contains(int mouseX, int mouseY) {
-            return mouseX >= x - 4 && mouseX <= x + width + 16 && mouseY >= y - 3 && mouseY <= y + height + 3;
+            return mouseX >= x && mouseX < x + width
+                    && mouseY >= y && mouseY < y + height;
         }
     }
 }

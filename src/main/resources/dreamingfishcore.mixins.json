@@ -7,6 +7,7 @@
   "client": [
     "death.DeathScreenMixin",
     "ui.DisconnectedScreenMixin",
+    "ui.MinecraftScreenTransitionMixin",
     "ui.SelectWorldScreenMixin",
     "ui.JoinMultiplayerScreenMixin",
     "ui.ConnectScreenMixin",
@@ -16,6 +17,7 @@
     "ui.ForgeLoadingOverlayMixin",
     "ui.GenericDirtMessageScreenMixin",
     "ui.GenericWaitingScreenMixin",
+    "ui.ProgressScreenMixin",
     "ui.ModScreenBackgroundMixin",
     "ui.VanillaScreenBackgroundMixin",
     "ui.ModernSelectionListMixin",
@@ -27,18 +29,22 @@
     "ui.LanHeaderMixin",
     "ui.TitleScreenMixin",
     "ui.ChatComponentMixin",
-    "ui.ChatScreenMixin"
+    "ui.ChatScreenMixin",
+    "ui.CommandSuggestionsMixin",
+    "ui.ServerScreenUiEconomyBridgeMixin",
+    "kill_effect.LivingEntityRendererKillEffectMixin"
   ],
   "server": [
-
   ],
   "mixins": [
     "death.RespawnMixin",
+    "death.ServerPlayerDeathMixin",
     "BedBlockMixin",
     "AnvilBlockMixin",
     "SystemMessageMixin",
     "CraftingMenuMixin",
-    "RecipeManagerMixin"
+    "RecipeManagerMixin",
+    "playerattributes.FoodDataNaturalHealingMixin"
   ],
   "injectors": {
     "defaultRequire": 1

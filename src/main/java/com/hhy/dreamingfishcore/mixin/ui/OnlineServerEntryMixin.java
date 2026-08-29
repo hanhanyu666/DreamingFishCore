@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nullable;
 import java.net.UnknownHostException;
@@ -55,10 +56,21 @@ public abstract class OnlineServerEntryMixin {
     @Nullable
     private byte[] lastIconBytes;
 
+    /**
+     * ServerData loaded from servers.dat does not serialize the transient status fields.
+     * Vanilla can build narration before the first entry render, so initialize them at
+     * the narration boundary instead of waiting for the ping/render path.
+     */
+    @Inject(method = "getNarration", at = @At("HEAD"))
+    private void dreamingFishCore$ensureNarrationComponents(CallbackInfoReturnable<Component> cir) {
+        dreamingFishCore$ensureStatusComponents();
+    }
+
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void dreamingFishCore$renderModernOnlineServerEntry(GuiGraphics guiGraphics, int index, int top, int left,
                                                                int width, int height, int mouseX, int mouseY,
                                                                boolean hovering, float partialTick, CallbackInfo ci) {
+        dreamingFishCore$ensureStatusComponents();
         if (!ModernSelectionScreenUi.isModernSelectionScreen()) {
             return;
         }
@@ -72,6 +84,7 @@ public abstract class OnlineServerEntryMixin {
 
     @Unique
     private void dreamingFishCore$ensureServerStatus() {
+        dreamingFishCore$ensureStatusComponents();
         if (this.serverData.state() != ServerData.State.INITIAL) {
             return;
         }
@@ -98,6 +111,16 @@ public abstract class OnlineServerEntryMixin {
                 this.serverData.motd = Component.translatable("multiplayer.status.cannot_connect").withColor(-65536);
             }
         });
+    }
+
+    @Unique
+    private void dreamingFishCore$ensureStatusComponents() {
+        if (this.serverData.motd == null) {
+            this.serverData.motd = CommonComponents.EMPTY;
+        }
+        if (this.serverData.status == null) {
+            this.serverData.status = CommonComponents.EMPTY;
+        }
     }
 
     @Unique

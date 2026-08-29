@@ -2,6 +2,9 @@ package com.hhy.dreamingfishcore.server.persistence.event;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
+import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
+import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
@@ -56,8 +59,13 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载玩家任务", () -> TaskDataManager.loadWorldData(server));
         runSafely("加载随记本", () -> StoryBookDataManager.loadWorldData(server));
         runSafely("加载 NPC 关系", () -> NpcRelationManager.loadWorldData(server));
+        runSafely("加载 NPC 私信", () -> NpcMessageManager.loadWorldData(server));
+        runSafely("加载个人引导", () -> GuidanceManager.loadWorldData(server));
+        runSafely("核对私信与个人引导", NpcMessageManager::reconcileGuidanceRecords);
+        runSafely("核对私信回复与 NPC 关系", NpcMessageManager::reconcileFavorabilityEffects);
         runSafely("加载复活信息", () -> RevivalInfoManager.loadWorldData(server));
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
+        runSafely("加载开场个人任务进度", () -> OpeningStoryProgressManager.loadWorldData(server));
     }
 
     @SubscribeEvent
@@ -109,9 +117,13 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存故事系统", () -> StoryManager.saveIfDirty(server));
         saved &= runSaveSafely("保存玩家任务", () -> TaskDataManager.saveIfDirty(server));
         saved &= runSaveSafely("保存随记本", () -> StoryBookDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存 NPC 私信", () -> NpcMessageManager.saveIfDirty(server));
+        // 私信回复的稳定 effectId 已先落盘；关系写入失败时可在下次加载幂等补齐。
         saved &= runSaveSafely("保存 NPC 关系", () -> NpcRelationManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存个人引导", () -> GuidanceManager.saveIfDirty(server));
         saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存开场个人任务进度", () -> OpeningStoryProgressManager.saveIfDirty(server));
         return saved;
     }
 
@@ -127,8 +139,11 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理任务缓存", TaskDataManager::clearWorldCache);
         runSafely("清理随记本缓存", StoryBookDataManager::clearWorldCache);
         runSafely("清理 NPC 关系缓存", NpcRelationManager::clearWorldCache);
+        runSafely("清理 NPC 私信缓存", NpcMessageManager::clearWorldCache);
+        runSafely("清理个人引导缓存", GuidanceManager::clearWorldCache);
         runSafely("清理复活信息缓存", RevivalInfoManager::clearWorldCache);
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
+        runSafely("清理开场个人任务缓存", OpeningStoryProgressManager::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

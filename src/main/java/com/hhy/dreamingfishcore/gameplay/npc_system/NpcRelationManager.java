@@ -63,6 +63,19 @@ public class NpcRelationManager {
         dirty = true;
     }
 
+    public static boolean applyFavorabilityEffect(
+            int npcId,
+            UUID playerUUID,
+            String effectId,
+            int amount) {
+        NpcRelationData relation = getRelation(npcId, playerUUID);
+        if (!relation.applyFavorabilityEffect(effectId, amount)) {
+            return false;
+        }
+        dirty = true;
+        return true;
+    }
+
     public static boolean canUseAction(int npcId, UUID playerUUID,
                                        NpcInteractionType interactionType, int requiredFavorability) {
         return getRelation(npcId, playerUUID).getFavorability() >= requiredFavorability;

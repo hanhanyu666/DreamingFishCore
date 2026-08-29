@@ -11,6 +11,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,8 +36,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TaskLocationManager {
     private static final int SCHEMA_VERSION = 1;
     private static final int MAX_LOCATIONS = 4096;
-    private static final Path CONFIG_PATH = Path.of(
-            "config", DreamingFishCore.MODID, "task_locations.json")
+    /** Resolve through NeoForge's active game directory so run/server instances do not read a
+     * similarly named config from the IDE project working directory. */
+    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get()
+            .resolve(DreamingFishCore.MODID)
+            .resolve("task_locations.json")
             .toAbsolutePath().normalize();
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -56,6 +60,7 @@ public final class TaskLocationManager {
     public static synchronized void load() {
         LOCATIONS.clear();
         SELECTIONS.clear();
+        BuildableTerritoryPolicy.clearAll();
         loaded = false;
         writesEnabled = false;
 
@@ -70,7 +75,7 @@ public final class TaskLocationManager {
             if (!fileExisted) {
                 writeDocument();
             }
-            DreamingFishCore.LOGGER.info("任务地点加载完成，共 {} 个", LOCATIONS.size());
+            DreamingFishCore.LOGGER.info("任务地点加载完成，共 {} 个，配置：{}", LOCATIONS.size(), CONFIG_PATH);
         } catch (Exception exception) {
             LOCATIONS.clear();
             loaded = true;
@@ -90,6 +95,7 @@ public final class TaskLocationManager {
             install(candidate);
             writesEnabled = true;
             SELECTIONS.clear();
+            BuildableTerritoryPolicy.clearAll();
             return LOCATIONS.size();
         } catch (IOException exception) {
             throw new IllegalStateException("读取任务地点配置失败：" + exception.getMessage(), exception);
@@ -101,6 +107,7 @@ public final class TaskLocationManager {
         SELECTIONS.clear();
         loaded = false;
         writesEnabled = false;
+        BuildableTerritoryPolicy.clearAll();
     }
 
     public static synchronized Collection<TaskLocationDefinition> getAllLocations() {
@@ -137,8 +144,85 @@ public final class TaskLocationManager {
                 .findFirst();
     }
 
+    /**
+     * Legacy broad protection query: true for any active story location. New callers should use
+     * {@link #isBlockProtected(Level, BlockPos)} when they specifically mean ordinary block edits.
+     */
     public static boolean isProtected(Level level, BlockPos position) {
-        return findLocationAt(level, position).isPresent();
+        return isStoryStructureProtected(level, position);
+    }
+
+    /** Returns true only for the original authored-scene mode. */
+    public static boolean isBlockProtected(Level level, BlockPos position) {
+        return findLocationAt(level, position)
+                .map(TaskLocationDefinition::protectsBlocks)
+                .orElse(false);
+    }
+
+    /** Returns true for any active story location, including buildable settlements. */
+    public static boolean isStoryStructureProtected(Level level, BlockPos position) {
+        return findLocationAt(level, position)
+                .map(TaskLocationDefinition::protectsEntities)
+                .orElse(false);
+    }
+
+    public static boolean isBuildable(Level level, BlockPos position) {
+        return findLocationAt(level, position)
+                .map(TaskLocationDefinition::isBuildable)
+                .orElse(false);
+    }
+
+    /**
+     * Finds the buildable story location that can contain an EconomySystem claim rectangle.
+     * EconomySystem remains the sole owner of private-territory persistence and permissions.
+     */
+    public static synchronized Optional<TaskLocationDefinition> findBuildableLocationForClaim(
+            Level level, BlockPos first, BlockPos second) {
+        if (!loaded || level == null || first == null || second == null) {
+            return Optional.empty();
+        }
+        return LOCATIONS.values().stream()
+                .filter(location -> location.containsClaim(level.dimension(), first, second))
+                .findFirst();
+    }
+
+    /**
+     * Finds an active story location touched by an EconomySystem claim rectangle. This lets the
+     * integration leave the rest of the world unrestricted while identifying claims that touch
+     * a story boundary.
+     */
+    public static synchronized Optional<TaskLocationDefinition> findStoryLocationIntersectingClaim(
+            Level level, BlockPos first, BlockPos second) {
+        if (!loaded || level == null || first == null || second == null) {
+            return Optional.empty();
+        }
+        return LOCATIONS.values().stream()
+                .filter(location -> location.intersectsClaim(level.dimension(), first, second))
+                .findFirst();
+    }
+
+    /** Finds a protected story location touched by an EconomySystem claim rectangle. */
+    public static synchronized Optional<TaskLocationDefinition> findProtectedLocationIntersectingClaim(
+            Level level, BlockPos first, BlockPos second) {
+        if (!loaded || level == null || first == null || second == null) {
+            return Optional.empty();
+        }
+        return LOCATIONS.values().stream()
+                .filter(location -> !location.isBuildable())
+                .filter(location -> location.intersectsClaim(level.dimension(), first, second))
+                .findFirst();
+    }
+
+    /** Finds a buildable story location touched by an EconomySystem claim rectangle. */
+    public static synchronized Optional<TaskLocationDefinition> findBuildableLocationIntersectingClaim(
+            Level level, BlockPos first, BlockPos second) {
+        if (!loaded || level == null || first == null || second == null) {
+            return Optional.empty();
+        }
+        return LOCATIONS.values().stream()
+                .filter(TaskLocationDefinition::isBuildable)
+                .filter(location -> location.intersectsClaim(level.dimension(), first, second))
+                .findFirst();
     }
 
     /**
@@ -175,13 +259,26 @@ public final class TaskLocationManager {
     }
 
     public static synchronized void beginSelection(ServerPlayer player, String displayName) {
-        ensureWritable();
         String normalizedName = requireLocationName(displayName);
         TaskLocationDefinition existing = getLocationByName(normalizedName).orElse(null);
+        beginSelection(player, normalizedName,
+                existing == null ? TaskLocationMode.PROTECTED : existing.getMode());
+    }
+
+    /** Starts a selection and explicitly chooses the mode for a new or existing location. */
+    public static synchronized void beginSelection(
+            ServerPlayer player, String displayName, TaskLocationMode mode) {
+        ensureWritable();
+        String normalizedName = requireLocationName(displayName);
+        TaskLocationMode selectedMode = mode == null ? TaskLocationMode.PROTECTED : mode;
+        TaskLocationDefinition existing = getLocationByName(normalizedName).orElse(null);
         String locationId = existing == null ? createLocationId() : existing.getId();
-        SELECTIONS.put(player.getUUID(), new SelectionSession(locationId, normalizedName));
+        SELECTIONS.put(player.getUUID(),
+                new SelectionSession(locationId, normalizedName, selectedMode));
         NotificationPushHelper.sendTopLeftNotification(player,
-                "§b任务地点选区已开始§r\n左键方块设置第一个角点，右键方块设置第二个角点。", 8000);
+                "§b任务地点选区已开始§r\n模式："
+                        + (selectedMode == TaskLocationMode.BUILDABLE ? "可建造" : "强制保护")
+                        + "\n左/右键方块选点；旁观模式可使用 task_location pos1 / pos2。", 9000);
     }
 
     public static boolean isSelecting(ServerPlayer player) {
@@ -234,7 +331,7 @@ public final class TaskLocationManager {
 
         TaskLocationDefinition definition = new TaskLocationDefinition(
                 session.locationId, session.displayName, session.dimension,
-                session.first, session.second);
+                session.first, session.second, session.mode);
         upsert(definition);
         SELECTIONS.remove(player.getUUID());
         return definition;
@@ -252,6 +349,7 @@ public final class TaskLocationManager {
         }
         try {
             writeDocument();
+            BuildableTerritoryPolicy.clearAll();
         } catch (RuntimeException exception) {
             LOCATIONS.put(removed.getId(), removed);
             throw exception;
@@ -402,13 +500,15 @@ public final class TaskLocationManager {
     private static final class SelectionSession {
         private final String locationId;
         private final String displayName;
+        private final TaskLocationMode mode;
         private net.minecraft.resources.ResourceKey<Level> dimension;
         private BlockPos first;
         private BlockPos second;
 
-        private SelectionSession(String locationId, String displayName) {
+        private SelectionSession(String locationId, String displayName, TaskLocationMode mode) {
             this.locationId = locationId;
             this.displayName = displayName;
+            this.mode = mode;
         }
     }
 

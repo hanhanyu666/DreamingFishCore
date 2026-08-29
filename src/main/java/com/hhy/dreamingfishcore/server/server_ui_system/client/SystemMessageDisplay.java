@@ -39,10 +39,10 @@ public final class SystemMessageDisplay {
         NotificationManager.clear(NotificationPosition.TOP_RIGHT);
     }
 
-    public static void renderSystemMessages(GuiGraphics guiGraphics, Font font, int screenWidth,
+    public static void renderSystemMessages(GuiGraphics guiGraphics, Font font, int rightEdge,
                                             int playerInfoBoxY, int playerInfoBoxHeight) {
         NotificationRenderer.renderTopRight(
-                guiGraphics, font, screenWidth, playerInfoBoxY, playerInfoBoxHeight);
+                guiGraphics, font, rightEdge, playerInfoBoxY, playerInfoBoxHeight);
     }
 
     private static int getPlayerRankBorderColor() {

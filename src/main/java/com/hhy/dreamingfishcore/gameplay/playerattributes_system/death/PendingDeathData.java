@@ -13,14 +13,14 @@ import java.util.UUID;
 /**
  * 玩家一次待处理死亡的持久化记录。
  *
- * <p>状态、死亡位置和物品快照保存在同一个玩家 NBT 中，避免服务器重启后只剩
- * DeathPending 标记、却丢失内存物品快照。</p>
+ * <p>新版本保存尸体 UUID，物品本体由尸体实体随区块持久化；旧版本的物品栏快照
+ * 仍保留读取能力，避免升级后卡住尚未结算的死亡记录。</p>
  */
 public final class PendingDeathData {
     private static final String ROOT_KEY = "DreamingFishCore_PendingDeath";
     private static final String STATE_PENDING = "pending";
     private static final String STATE_RESOLVING = "resolving";
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 3;
 
     private static final String LEGACY_PENDING = "DreamingFishCore_DeathPending";
     private static final String LEGACY_RESPAWN_POINT = "DreamingFishCore_DeathRespawnPoint";
@@ -37,11 +37,13 @@ public final class PendingDeathData {
     }
 
     public static UUID begin(ServerPlayer player, float respawnPoint, float normalCost,
-                             float keepInventoryCost, boolean infected, Component deathMessage) {
+                             float keepInventoryCost, boolean infected, Component deathMessage,
+                             UUID corpseId) {
         UUID deathId = UUID.randomUUID();
         CompoundTag record = new CompoundTag();
         record.putInt("SchemaVersion", SCHEMA_VERSION);
         record.putUUID("DeathId", deathId);
+        record.putUUID("CorpseId", corpseId);
         record.putString("State", STATE_PENDING);
         record.putFloat("RespawnPoint", respawnPoint);
         record.putFloat("NormalCost", normalCost);
@@ -56,8 +58,6 @@ public final class PendingDeathData {
         player.getPersistentData().put(ROOT_KEY, record);
         clearLegacyTags(player.getPersistentData());
 
-        // 先在死亡事件中保存一次，Mixin 会在原版掉落阶段再刷新为最终快照。
-        captureInventory(player);
         return deathId;
     }
 
@@ -86,6 +86,52 @@ public final class PendingDeathData {
     public static UUID getDeathId(ServerPlayer player) {
         CompoundTag record = requireRecord(player);
         return record.hasUUID("DeathId") ? record.getUUID("DeathId") : new UUID(0L, 0L);
+    }
+
+    public static boolean hasCorpseReference(ServerPlayer player) {
+        CompoundTag record = requireRecord(player);
+        return record.hasUUID("CorpseId");
+    }
+
+    public static java.util.Optional<UUID> getCorpseId(ServerPlayer player) {
+        CompoundTag record = requireRecord(player);
+        return record.hasUUID("CorpseId")
+                ? java.util.Optional.of(record.getUUID("CorpseId"))
+                : java.util.Optional.empty();
+    }
+
+    public static void markCorpseCreated(ServerPlayer player,
+                                         UUID corpseId,
+                                         boolean hadItems,
+                                         DeathLocation location,
+                                         boolean dangerRelocated) {
+        CompoundTag record = getRecord(player);
+        if (record == null || !record.hasUUID("CorpseId") || !record.getUUID("CorpseId").equals(corpseId)) {
+            return;
+        }
+        record.putBoolean("CorpseCreated", true);
+        record.putBoolean("CorpseHadItems", hadItems);
+        writeCorpseLocation(record, location, dangerRelocated);
+    }
+
+    /** 更新尸体因虚空保护等原因发生移动后的实际位置。 */
+    public static void updateCorpseLocation(ServerPlayer player,
+                                            UUID corpseId,
+                                            DeathLocation location,
+                                            boolean dangerRelocated) {
+        CompoundTag record = getRecord(player);
+        if (record == null || !record.hasUUID("CorpseId") || !record.getUUID("CorpseId").equals(corpseId)) {
+            return;
+        }
+        writeCorpseLocation(record, location, dangerRelocated);
+    }
+
+    public static boolean wasCorpseCreated(ServerPlayer player) {
+        return requireRecord(player).getBoolean("CorpseCreated");
+    }
+
+    public static boolean corpseHadItems(ServerPlayer player) {
+        return requireRecord(player).getBoolean("CorpseHadItems");
     }
 
     /**
@@ -173,6 +219,26 @@ public final class PendingDeathData {
                 record.getDouble("DeathZ"));
     }
 
+    /**
+     * 尸体当前持久化位置；旧记录没有该字段时回退到死亡位置。
+     */
+    public static DeathLocation getCorpseLocation(ServerPlayer player) {
+        CompoundTag record = requireRecord(player);
+        String dimension = record.getString("CorpseDimension");
+        if (dimension.isBlank()) {
+            return getDeathLocation(player);
+        }
+        return new DeathLocation(
+                dimension,
+                record.getDouble("CorpseX"),
+                record.getDouble("CorpseY"),
+                record.getDouble("CorpseZ"));
+    }
+
+    public static boolean wasCorpseDangerRelocated(ServerPlayer player) {
+        return requireRecord(player).getBoolean("CorpseDangerRelocated");
+    }
+
     public static Component getDeathMessage(ServerPlayer player) {
         String json = requireRecord(player).getString("DeathMessage");
         if (!json.isBlank()) {
@@ -230,6 +296,16 @@ public final class PendingDeathData {
             return null;
         }
         return persistentData.getCompound(ROOT_KEY);
+    }
+
+    private static void writeCorpseLocation(CompoundTag record,
+                                            DeathLocation location,
+                                            boolean dangerRelocated) {
+        record.putString("CorpseDimension", location.dimension());
+        record.putDouble("CorpseX", location.x());
+        record.putDouble("CorpseY", location.y());
+        record.putDouble("CorpseZ", location.z());
+        record.putBoolean("CorpseDangerRelocated", dangerRelocated);
     }
 
     private static void clearLegacyTags(CompoundTag persistentData) {

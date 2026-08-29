@@ -1,0 +1,1426 @@
+{
+  "schemaVersion": 1,
+  "messages": [
+    {
+      "id": "dreamingfishcore:recorder/first_contact",
+      "npcId": 1,
+      "subject": "通信恢复",
+      "content": "我是剧情记录员。梦屿的应急通信刚刚恢复，逐光会也才开始筹建。如果你愿意参与，就先留意终端；需要前往的地点和建设信息，会从这里留下记录。",
+      "trigger": "INTERACTION",
+      "once": true,
+      "priority": 10,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "ready",
+          "text": "收到，我会留意后续消息。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:recorder/first_contact_acknowledgement",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "ask_more",
+          "text": "你愿意告诉我更多内部情况吗？",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:recorder/familiar_information",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/watch_zhuiguang_foundation",
+        "title": "关注逐光会的筹建",
+        "content": "留意终端后续发来的地点、物资和建设需求。逐光会目前仍处于最初的临时联络阶段。",
+        "storyStageId": "dreamingfishcore:dream_beginning",
+        "locationLabel": "",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:recorder/first_contact_acknowledgement",
+      "npcId": 1,
+      "subject": "已建立联络",
+      "content": "好。我会记住你愿意帮忙。逐光会现在还不是一个成熟组织，它会由真正参与建设的人一起塑造成形。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:recorder/familiar_information",
+      "npcId": 1,
+      "subject": "只对熟人说的话",
+      "content": "既然我们已经熟悉，我可以多说一点：最早的安排每天都在变化。不要把任何人的短期判断当作最终答案，先保留记录，再和其他幸存者交叉验证。",
+      "trigger": "INTERACTION",
+      "once": true,
+      "priority": 20,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "understood",
+          "text": "明白，我会先验证再下结论。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:recorder/trusted_information",
+      "npcId": 1,
+      "subject": "信任频道",
+      "content": "你已经证明自己会认真保存语境。以后涉及敏感地点或未经证实的信息，我会先通过这条私人频道与你核对。",
+      "trigger": "INTERACTION",
+      "once": true,
+      "priority": 30,
+      "minimumFavorability": 600,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/network_online",
+      "npcId": 100,
+      "subject": "应急联络恢复",
+      "content": "这里是梦屿应急联络组。先说明情况：丧尸危机发生不到几天，医疗、能源、警备、物流、重生管理和居民自治正在接入同一条线路。“逐光会”现在只有一个刚提出的名字、几条不稳定的通信线和不够用的人手。你如果愿意参与，请先让自己和身边的人有一处能过夜的地方。等你安顿好，我们想和幸存者一起建一座联络站。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "request_plan",
+          "text": "把联络站需要什么发给我。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/station_request",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "settle_first",
+          "text": "我会先找安全处，安顿好再联系。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/settle_first",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "stay_independent",
+          "text": "我暂时只想照顾自己的生活。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/no_pressure",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/station_request",
+      "npcId": 100,
+      "subject": "联络站的第一张清单",
+      "content": "先选一个你们愿意长期使用的地点。我们需要稳定照明、几张床、能分类存放物资的空间、基础医疗区，以及一条不会被随手拆掉的供电线路。不要求照图建造，也不要求把建筑交给逐光会；这会是你们的地方，只在需要时承担公共联络和接应。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "choose_site",
+          "text": "地点由我们来定，建好后给你回信。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/register_contact_site",
+        "title": "选定并建设一座联络站",
+        "content": "与其他幸存者选定地点，准备稳定照明、床位、分类储物、基础医疗区和供电。建成后由服务端或服主登记为剧情场所。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "玩家共同选定的联络站",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/settle_first",
+      "npcId": 100,
+      "subject": "先活下来",
+      "content": "好。先活下来不是逃避公共责任，是所有后续事情的前提。找到能过夜的地方后保留接收信号，我们不会因为你没有立刻加入而把你从名单上删掉。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/no_pressure",
+      "npcId": 100,
+      "subject": "联络仍然开放",
+      "content": "可以。梦屿不会要求每个人先成为英雄，才允许他过自己的生活。公共求援仍会发到这条线路；哪一天你愿意搭把手，再回复也不迟。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/first_rescue_call",
+      "npcId": 100,
+      "subject": "第一批转移者正在接近",
+      "content": "联络站已经接入应急频段。一支从附近撤离点出发的小队正在接近，其中有不能快速移动的伤员，也带着医院急需的物资。逐光会还没有足够人手独立接应。请准备床位和照明，能战斗的人清理路线，能找路的人先确认接应点周围是否安全。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "escort",
+          "text": "我去接应和护送。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "prepare_station",
+          "text": "我留在联络站准备床位和物资。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "need_route",
+          "text": "先把方向和风险说清楚。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/receive_first_group",
+        "title": "接应第一批转移者",
+        "content": "根据现场分工，侦察并清理接应路线，或留在联络站准备照明、床位、食物、医疗与分类储物。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "临时接应点（发布事件时填写）",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/founding_meeting",
+      "npcId": 100,
+      "subject": "关于“逐光会”这个名字",
+      "content": "第一场接应让各部门确认了一件事：只靠各自守住医院、仓库和线路，救援会在缝隙里漏掉人。医疗、科研、能源、警备、物流、重生管理、灾害救援和居民自治决定组成临时联合指挥组织，正式使用“人类逐光联合会”这个名字。它仍然是临时的，也需要玩家协作节点。你可以加入，可以保持独立合作，也可以先阅读约章再决定。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [
+        {
+          "id": "join",
+          "text": "我愿意加入，并继续参与建设。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/member_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "JOIN"
+        },
+        {
+          "id": "independent",
+          "text": "我愿意合作，但会保持独立。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/independent_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "read_charter",
+          "text": "先把临时约章发给所有人。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/charter_copy",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/archive_founding_charter",
+        "title": "保存逐光会的最初承诺",
+        "content": "阅读并保存逐光会成立广播与临时约章。可在玩家联络站建设公告墙、会议区或公共档案处。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "玩家联络站",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/member_ack",
+      "npcId": 100,
+      "subject": "协作身份已记录",
+      "content": "收到。加入不是领取一套制服，也不是放弃自己的聚落。请和其他人决定你们愿意长期承担哪一件公共工作：接应、医疗、建设、维修、记录或路线保障。逐光会会把实际行动写进记录。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "MEMBER",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/independent_ack",
+      "npcId": 100,
+      "subject": "独立协作已记录",
+      "content": "收到。保持独立不等于拒绝救援，也不取消你监督逐光会的权利。公共求援和必要风险信息仍会向你开放；是否参加，由你根据现场情况决定。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/charter_copy",
+      "npcId": 100,
+      "subject": "逐光会临时约章·首版",
+      "content": "首版约章摘要：救援不以财富、职业价值和完整身份资料排序；无法立即撤离与尚未完成登记的人仍属于救援对象；感染风险必须医学处理，但不能自动取消人格、照护和申诉；紧急调度、隔离、征用与信息暂缓必须留下原因、时间、执行者和复核记录；危机受控后，紧急权力应交还居民自治体系审查。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [
+        {
+          "id": "archive",
+          "text": "我会保留这份首版记录。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "join_after_reading",
+          "text": "我读完了，愿意加入逐光会。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/member_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "JOIN"
+        },
+        {
+          "id": "remain_independent",
+          "text": "我会保存约章，并以独立协作者身份监督它。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/independent_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/first_rescue_record",
+      "npcId": 100,
+      "subject": "第一场救援记录",
+      "content": "第一批转移人员已经进入联络站。伤员、携带物资、出发地点和途中损失均已分别登记。记录会注明玩家建设与现场参与，不会把这次救援写成逐光会单方面完成的功绩。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/familiar_concern",
+      "npcId": 100,
+      "subject": "请保留首版文件",
+      "content": "说一句不放在公用频道里的话：今天的调度表里，有几项临时权限没有写失效时间。这可能只是忙乱，但请把首版约章和广播原件各留一份。刚成立的组织会犯错，记录能让错误仍有机会被修改。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "preserve",
+          "text": "我会保存原件，也会记录后续修改。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/triage_request",
+      "npcId": 101,
+      "subject": "医院需要一处接收区",
+      "content": "我是白芷，梦屿中央医院感染科。联络站如果准备接收转移人员，请把普通伤员区、物资区和疑似感染观察区分开。伤员先报名字，再报伤情；不知道姓名就写“身份待确认”，不要写“无名者”。没有专业设备也没关系，稳定照明、干净的水和不会塌的床已经能救人。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "need_list",
+          "text": "把最缺的物资分类发给我。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "dreamingfishcore:opening/baizhi/supply_list",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "patient_first",
+          "text": "我先把伤员安全带回来。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/baizhi/patient_first",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "ask_infected",
+          "text": "疑似感染的人也送过去吗？",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/baizhi/infection_answer",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/prepare_triage_area",
+        "title": "准备伤员接收与分流区域",
+        "content": "在联络站准备普通伤员区、物资区和独立观察区，保证照明、清洁水源、床位和可通行空间。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "玩家联络站医疗区",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/supply_list",
+      "npcId": 101,
+      "subject": "按用途准备",
+      "content": "按用途分就好：清洁与包扎、照明与供电、饮水与基础食物、保暖与床位、隔离防护、能够密封保存的样本容器。具体物品可以替代，不要为了凑一张漂亮清单耽误接应。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/patient_first",
+      "npcId": 101,
+      "subject": "先让人抵达",
+      "content": "谢谢。路上不要为了抢救一箱物资让不能移动的人单独留下。如果必须取舍，记下丢失物资的位置，我们之后还能找；人的情况可能没有第二次机会。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/infection_answer",
+      "npcId": 101,
+      "subject": "送到观察区，不要混送",
+      "content": "送，但不要与普通伤员混在一起，也不要直接接触体液。提前通知我们，走独立入口。只要对方仍能沟通，就先说明接下来会发生什么；隔离是必要措施，不是处决。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/observation_room",
+      "npcId": 101,
+      "subject": "第一间观察室",
+      "content": "出现了一例需要进一步确认的异常感染反应。请把观察区做成真正能待人的地方：独立出入口、可清洁表面、稳定照明、沟通窗口和基本生活空间。门需要关，但患者仍应该看见人，也应该能够表达疼痛、恐惧和拒绝。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "humane",
+          "text": "我会把防护和沟通窗口都做好。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "strict",
+          "text": "先确保不会有人误入，再考虑舒适。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/build_observation_room",
+        "title": "完善感染观察室",
+        "content": "准备独立出入口、缓冲区、稳定照明、可清洁空间、基本床位和安全沟通窗口。完成状态由服务端或服主确认。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "医院或联络站观察区",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/after_rescue",
+      "npcId": 101,
+      "subject": "名单我收到了",
+      "content": "转移名单我收到了。我已经把“身份待确认”和“昏迷无法回答”分开记录，也保留了获救者自己补充姓名的位置。谢谢你们没有把他们只写成数字。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/familiar_note",
+      "npcId": 101,
+      "subject": "纸质时间线",
+      "content": "电子记录这两天丢过几次时间戳，我在纸上另外做了患者时间线。不是因为我怀疑谁，只是一次检测只能说明一个时间点。你如果参与观察，请把患者自己说过的话和当时状态一起记下。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "keep_context",
+          "text": "我会把原话和观察条件一起保存。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/trusted_note",
+      "npcId": 101,
+      "subject": "请帮我检查盲点",
+      "content": "我有时担心自己太想保护眼前这个人，会低估其他人承担的风险。你不必总同意我。如果发现我的判断前后不一致，请直接指出来；但也请帮我确认，我们没有因为害怕就把某个人从记录里删掉。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 600,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/initial_protocol",
+      "npcId": 102,
+      "subject": "第一例疑似感染：记录规则",
+      "content": "我是江晚。关于当前病例：已知事实是高热、异常攻击反射和组织变化；合理推测是存在传播风险；尚无证据证明症状必然不可逆；无法排除短时间内恶化。请保持隔离，同时记录准确时间、地点、接触条件和每次变化。谨慎不是取消患者作为人的资格。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "record_first",
+          "text": "我会先按时间和条件记录，再讨论结论。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/jiang/record_ack",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "seal_all",
+          "text": "既然有风险，就应该立刻彻底封死。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": -1,
+          "followUpMessageId": "dreamingfishcore:opening/jiang/caution_reply",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "no_isolation",
+          "text": "他还能说话，应该不需要隔离。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": -2,
+          "followUpMessageId": "dreamingfishcore:opening/jiang/personhood_reply",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/preserve_first_case_observations",
+        "title": "保留第一例观察记录",
+        "content": "在安全防护下记录每次观察的时间、地点、接触条件、症状变化和患者陈述。不要用结论替代原始观察。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "医院观察区",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/record_ack",
+      "npcId": 102,
+      "subject": "记录顺序正确",
+      "content": "对。先保留原始观察，再形成解释。以后即使结论被修改，这份记录仍然有价值。请不要只摘录支持自己判断的部分。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/caution_reply",
+      "npcId": 102,
+      "subject": "严格不等于无边界",
+      "content": "隔离需要严格执行，但“彻底封死”必须说明通风、供给、复核和解除条件。没有解除条件的临时措施，很容易在忙乱中变成永久处置。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/personhood_reply",
+      "npcId": 102,
+      "subject": "人格与风险不是同一问题",
+      "content": "他能说话，说明我们必须尊重其人格；这不能证明传播风险不存在。沟通窗口要留，隔离门也要关。不要让同情替你伪造确定性。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/familiar_uncertainty",
+      "npcId": 102,
+      "subject": "临时分类",
+      "content": "现有感染分类是为了应急，不是永恒定义。白芷注意到了一些单次检测没有包含的细节。个例不能替所有人作保证，但漏掉个例同样会让标准失真。继续记录，不要急着替它命名。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "continue",
+          "text": "我会保存矛盾数据，不提前命名。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/jiang/trusted_personal",
+      "npcId": 102,
+      "subject": "关于希望",
+      "content": "我曾经相信过一些来不及验证的希望。我不能让别人替那份希望承担代价。我也知道，永远要求更多证据有时只是另一种拒绝改变。如果你发现我把谨慎变成了拖延，请拿原始记录来和我谈。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 600,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/first_signal",
+      "npcId": 103,
+      "subject": "外缘中继：听见请回一个字",
+      "content": "这里是外缘扩岸区中继。听见就回一个字，别发长句，电压不够你们客套。医院冷库、水泵和避难所风机共用一条快断的支线。我得拆开这边的中继，动手以后信号可能回不来。梦屿那边先查接收端，别让两头一起黑。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "check_relay",
+          "text": "收到。我来查梦屿这一端的断点。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/liang/dream_side_relay",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "ask_evacuate",
+          "text": "你先撤，设备可以丢。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/liang/why_stay",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "ask_authorization",
+          "text": "请先发来正式授权和设备编号。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": -1,
+          "followUpMessageId": "dreamingfishcore:opening/liang/authorization",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/restore_outer_relay",
+        "title": "恢复外缘通信中继",
+        "content": "检查梦屿侧接收设备、供电和线路断点，准备替代电源或修复零件。事件坐标由服主发布时补充。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "梦屿侧外缘中继（发布事件时填写）",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/dream_side_relay",
+      "npcId": 103,
+      "subject": "就查断点",
+      "content": "好。先看供电，再看接头，最后才换整机。线路出问题，先查哪里断了；不能因为图纸上它应该通，就说灯没灭。你那边恢复载波后发三次短脉冲，我会接。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/why_stay",
+      "npcId": 103,
+      "subject": "设备后面还有人",
+      "content": "设备当然可以丢。医院冷库里的药、地下水泵、避难所风机和等着最后一辆车的人不能一起丢。我送完能走的那批人就撤——前提是名单别再往后加。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/authorization",
+      "npcId": 103,
+      "subject": "正式授权在撤离路上",
+      "content": "设备编号可以发。正式授权大概跟管理层坐同一辆车走了。你要等纸面许可，我这边先停水；你要确认现场事实，就查梦屿接收端的负载。放心，我做过的切换都会留时间和账号。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/power_diversion",
+      "npcId": 103,
+      "subject": "供电切换记录，请代存",
+      "content": "公司线路刚发来自动命令，要给停产设备保电。我把生产区断了，电转去合作诊所和避难所。中央服务器正在关闭，这边的操作记录可能留不住。我把时间、负载、账号和仍在使用设施的名单发给你们。别只存结论，原始记录一起存。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "archive_all",
+          "text": "我会把原始记录和居民名单一起保存。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "verify_first",
+          "text": "我会先核对负载，再给切换记录作证。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/archive_liang_records",
+        "title": "保存外缘供电与居民记录",
+        "content": "保存并交叉核对梁朔发来的供电切换时间、负载、操作账号、维修日志和仍待撤离居民名单。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "玩家联络站档案处",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/hold_signal",
+      "npcId": 103,
+      "subject": "第一批人已经走了",
+      "content": "第一批转移车已经出发，诊所的重伤员和避难所里的孩子先走。我还在这里，水泵刚跳了一次，最后一批名单也没齐。别把这条消息写成我拒绝撤离。信号还在，逐光会也说会继续等——我按这个承诺安排后面的事。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "keep_channel",
+          "text": "我们会保持频道，也会记录你仍在等待接应。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "leave_now",
+          "text": "不要再等最后一批，下一辆车你必须走。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/familiar_record",
+      "npcId": 103,
+      "subject": "别替我写英雄事迹",
+      "content": "如果档案处还有空间，先存居民名字、设施状态和谁在什么时间值过班。别替我写英雄事迹。把留在那里的人名字找回来，比给我一个称号有用。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "names_first",
+          "text": "名单和原始值守记录优先。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liang/trusted_fear",
+      "npcId": 103,
+      "subject": "如果记录断了",
+      "content": "我不是怕检查。我怕有一天有人用很平静、很规范的语气告诉我：现有资料无法证明你是谁，而且救援期限已经结束。如果真走到那一步，至少你知道我现在还在这里，也知道我为什么最后才走。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 600,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/weak_signal",
+      "npcId": 104,
+      "subject": "通兰天文台请求校时",
+      "content": "这里是通兰天文台，尉迟南。我收到了梦屿载波，但时间误差正在扩大。恢复这条链路首先是为了传递天气、污染和幸存者信息，不是立刻向未知目标广播。请在公共天线端校准时间同步，完成后先保持低功率接收。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "review_data",
+          "text": "先校准接收端，把原始数据发来。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/yuchi/review_data",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "life_priority",
+          "text": "通信可以恢复，但能源先保障医疗和避难所。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "dreamingfishcore:opening/yuchi/life_priority",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        },
+        {
+          "id": "disconnect",
+          "text": "未知信号有风险，我主张先断开。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": -1,
+          "followUpMessageId": "dreamingfishcore:opening/yuchi/disconnect",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/calibrate_remote_link",
+        "title": "校准通兰远距通信",
+        "content": "在公共天线或通信设施检查供电、接收方向与时间同步。完成后维持低功率接收，不自动开启远距广播。",
+        "storyStageId": "dreamingfishcore:afterdream",
+        "locationLabel": "公共天线（发布事件时填写）",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/review_data",
+      "npcId": 104,
+      "subject": "先看数据",
+      "content": "谢谢。我会发送带时间戳的原始采样和设备状态。里面有一组重复模式，与危机前旧项目的格式相似；这只是观察，不是来源结论。请保留噪声段，不要只截取看起来像信号的部分。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/life_priority",
+      "npcId": 104,
+      "subject": "优先级同意",
+      "content": "同意。天文台链路使用剩余功率，不得挤占医疗、净水和避难设施。没有稳定生活条件，观测本身也无法持续。我只需要一段可预测的低功率窗口。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/disconnect",
+      "npcId": 104,
+      "subject": "你有权要求停止",
+      "content": "风险不只属于我，所以你有权要求停止广播。我建议保留被动接收和原始数据，暂不开启高功率发射。等你们看完资料，再决定是否连接下一步。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/familiar_anomaly",
+      "npcId": 104,
+      "subject": "一组没有命名的重复模式",
+      "content": "那组模式仍然存在。我不能证明它是回应，也不能证明它只是噪声，所以我没有在公共频道给它命名。没有结果，不代表观测没有价值；至少我们可以逐项排除设备故障、旧信号反射和地面干扰。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 100,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "preserve_noise",
+          "text": "保留完整数据，先不替它下定义。",
+          "minimumFavorability": 100,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/yuchi/trusted_reason",
+      "npcId": 104,
+      "subject": "我回到天文台的另一个原因",
+      "content": "我一直说自己回来是为了通信、天气和资料。这些都是真的。还有一部分原因是，我害怕人类终于收到某种回应时，已经没有人愿意继续听。我知道这不是替所有人冒险的理由，所以决定权不能只在我手里。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 0,
+      "minimumFavorability": 600,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/join_later",
+      "npcId": 100,
+      "subject": "逐光会成员登记仍然开放",
+      "content": "你不需要在成立当天作出永久决定。如果你现在愿意承担一项公共工作，可以在这里确认加入；聚落、财产和自己的判断仍然属于你。加入只意味着我们把你记为逐光会成员，并向你开放内部协作信息。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [
+        {
+          "id": "join_now",
+          "text": "我愿意加入，并承担一项公共工作。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 2,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/member_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "JOIN"
+        },
+        {
+          "id": "not_yet",
+          "text": "我暂时继续作为独立协作者。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/independent_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/liaison/leave_request",
+      "npcId": 100,
+      "subject": "成员身份确认",
+      "content": "成员身份是自愿的。退出不会取消公共救援、主线参与权或你已经完成的贡献；你会回到独立协作者身份，内部协作消息也会停止。如果确认退出，请在这里回复。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 0,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "MEMBER",
+      "replies": [
+        {
+          "id": "leave_now",
+          "text": "确认退出，今后以独立协作者身份行动。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "dreamingfishcore:opening/liaison/independent_ack",
+          "membershipRequirement": "MEMBER",
+          "membershipAction": "LEAVE"
+        },
+        {
+          "id": "remain_member",
+          "text": "暂不退出，我仍作为逐光会成员。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "",
+          "membershipRequirement": "MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:baizhi/first_stage_protocol",
+      "npcId": 101,
+      "subject": "这几天的观察",
+      "content": "我是白芷，很高兴认识你，我现在在阿拜多斯的学校做医疗志愿，你可以随时来找我。\n\n危机刚刚爆发，根据我最近的观察，目前大家的自愈能力尚未完全消失，但是应该有所下降，光靠进食似乎无法完全恢复自身的健康，需要额外的药品进行辅助。当然了，感染程度以及重生机制都会随着时间流逝缓慢恢复，这一切实在是太突然了，我还需要更多的观察，请多加小心。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 100,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:outer_band/load_shed_ticket",
+      "npcId": 103,
+      "subject": "外缘带联合能源 · 工单 E-17 负荷切离回执",
+      "content": "【外缘带联合能源｜自动工单 E-17】生产区负载已切离。医院冷库、北岸水泵与避难所风机列为一级保电对象。\n\n现场操作账号：梁朔。总部批准栏：空。系统提示：本记录不构成公司恢复营业承诺。\n\n人工附注：如果你还能收到这条短信，只回报坐标、剩余电量和可接收人数。别发长句，链路按字计费——现在不是财务意义上的计费，是电池意义上的。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 20,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:outer_band/water_quality_notice",
+      "npcId": 103,
+      "subject": "北岸水务 · 供水质量例外告知",
+      "content": "【北岸水务｜客户服务自动通知】净化线处于手动旁路，当前水压与余氯读数无法完成常规复核。请将饮用水煮沸后使用，优先供给伤员与儿童。\n\n本通知不构成恢复供水承诺，也不代表外缘带任何企业已恢复正常运营。若发现管线破损，请保留阀门编号、时间和现场照片；系统恢复后将按工单顺序处理。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 19,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:outer_band/cold_chain_manifest",
+      "npcId": 103,
+      "subject": "梦屿远岸冷链 · 资产异常清单",
+      "content": "【外缘带远岸冷链｜交接清单】冷库 A、B 区已停止自动盘点；仍有温控记录的箱体优先交给医院。\n\n系统把所有未扫描人员标记为‘待确认资产’，梁朔在纸面上逐一改回了‘人’。如果你接手这份清单，请保留原编号，不要为了让报表好看而删掉空白项。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 18,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:outer_band/personnel_status",
+      "npcId": 103,
+      "subject": "外缘带企业应急网 · 人员状态核验",
+      "content": "【外缘带企业应急网｜自动核验】请在 30 分钟内回复：姓名、当前地点、可执行工作、是否需要转移。逾期将被标记为‘失联’，不会自动从救援名单中删除。\n\n系统尾注：未经核验的撤离承诺不构成公司承诺。人工附注：名单后面每多一个名字，线路就多撑一会儿。",
+      "trigger": "MANUAL",
+      "once": false,
+      "priority": 17,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/abydos_arrival",
+      "npcId": 101,
+      "subject": "到学校来找我",
+      "content": "听登记处说你已经到阿拜多斯了。我是白芷，现在在镇上的学校做医疗志愿。安顿好以后过来一趟吧，我想先确认一下你的伤势和感染情况，也有一件关于这里后续安置的事想和你说。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 200,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/talk_to_baizhi",
+        "title": "去学校找白芷",
+        "content": "白芷在阿拜多斯的学校做医疗志愿。找到她并当面交谈。",
+        "storyStageId": "dreamingfishcore:dream_beginning",
+        "locationLabel": "",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/baizhi/zhuiguang_contact",
+      "npcId": 101,
+      "subject": "周岑的联络方式",
+      "content": "刚才提到的逐光会，周岑负责登记和筹备。我已经把你的联络请求转给他了；在这里回一句，他会把具体安排讲清楚。是否加入，你听完以后自己决定。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 210,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [
+        {
+          "id": "contact_zhoucen",
+          "text": "好，帮我联系周岑。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/zhoucen/contact_channel",
+          "membershipRequirement": "ANY",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/contact_zhoucen",
+        "title": "联系周岑",
+        "content": "白芷已经当面说明了逐光会的大致情况。回复她的联络消息，接通周岑，听完具体安排后再决定是否加入。",
+        "storyStageId": "dreamingfishcore:dream_beginning",
+        "locationLabel": "",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/zhoucen/contact_channel",
+      "npcId": 105,
+      "subject": "临时联络已经接通",
+      "content": "白芷刚刚当面联系了我。我是周岑，现在负责逐光会筹备处。信号不太稳定，长话短说：如果你想知道我们在做什么，就直接回下面那句话，我把目前的安排发给你。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 200,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [
+        {
+          "id": "ask_about_zhuiguang",
+          "text": "我是白芷介绍来的，想听听具体安排。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 1,
+          "followUpMessageId": "dreamingfishcore:opening/zhoucen/introduction",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/zhoucen/introduction",
+      "npcId": 105,
+      "subject": "人类逐光联合会",
+      "content": "逐光会的全称是\"人类逐光联合会\"。眼下医院、维修队、搜救人员，还有愿意替大家多做一点的人，都在各自撑着。我们只是想把这些人和手里的资源接起来，出了事能找到人，物资到了也别在路上耽搁。\n\n现在最要紧的是把基地搭起来，而且不能只是几间勉强挡风的屋子。我们需要一个足够大的地方，让各支队伍能坐下来开会、交换情报、安排救援，也方便登记人员、分发物资和处理临时状况。仓库、救援交接点、能让人安稳过夜的地方，一个都不能少，还得给以后运来的药品和其他物资留出位置。\n\n基地建成后，会有固定的医疗和休整条件，让大家受伤时有地方处理，累了也能喘口气。只是眼下人手和物资都有限，能照顾到的范围还不大。等基础设施和供应逐渐稳定下来，这些安排也会慢慢向周边开放，不会只留给逐光会的成员。\n\n愿意加入的话，我们会把你登记为成员，发一份开工补给，也希望你按自己的能力搭把手，和其他人一起把这件事做起来。暂时不加入也没关系，阿拜多斯的安置、看病和交易不会因为这个把你挡在门外。\n\n这不是替你写好的答案。你可以先到基地看看，把想问的都问清楚，再决定要不要把名字写上去。想好了，就从下面选一个。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 210,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [
+        {
+          "id": "join_zhuiguang",
+          "text": "我愿意加入逐光会，也会参与基地建设。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 3,
+          "followUpMessageId": "dreamingfishcore:opening/zhoucen/member_welcome",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "JOIN"
+        },
+        {
+          "id": "remain_independent",
+          "text": "我暂时不加入，先以独立身份留下。",
+          "minimumFavorability": -1000,
+          "maximumFavorability": 1000,
+          "favorabilityDelta": 0,
+          "followUpMessageId": "dreamingfishcore:opening/zhoucen/independent_ack",
+          "membershipRequirement": "NON_MEMBER",
+          "membershipAction": "NONE"
+        }
+      ],
+      "guidance": {
+        "id": "dreamingfishcore:guidance/opening/choose_membership",
+        "title": "决定是否加入逐光会",
+        "content": "阅读周岑发来的介绍，然后使用消息下方的预设选项作出决定。",
+        "storyStageId": "dreamingfishcore:dream_beginning",
+        "locationLabel": "",
+        "dimension": "minecraft:overworld",
+        "hasLocation": false,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "id": "dreamingfishcore:opening/zhoucen/member_welcome",
+      "npcId": 105,
+      "subject": "成员登记完成",
+      "content": "登记好了，给你的开工补给会马上发到手上。我们正在为逐光会的基地区域选址，选好后我会发消息给你。先用这些物资在阿拜多斯附近休息一会儿吧。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 220,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "MEMBER",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:opening/zhoucen/independent_ack",
+      "npcId": 105,
+      "subject": "选择已记录",
+      "content": "收到，我把你登记为独立协作者。你不会再收到逐光会内部建设任务；阿拜多斯的安置、医院和普通公共信息照常对你开放。\n\n如果以后改变主意，可以再联系筹备处。现在先照顾好自己。",
+      "trigger": "FOLLOW_UP",
+      "once": true,
+      "priority": 220,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "NON_MEMBER",
+      "replies": [],
+      "guidance": null
+    }
+  ]
+}

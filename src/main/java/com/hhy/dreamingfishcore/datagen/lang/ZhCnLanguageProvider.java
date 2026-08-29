@@ -29,5 +29,7 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get(), "专业急救包");
         add(DreamingFishCore_Items.REVIVAL_CHARM.get(), "复活护符");
         add(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get(), "基因复苏药剂");
+        add("item.dreamingfishcore.siege_zombie_spawn_egg", "丧尸刷怪蛋");
+        add("entity.dreamingfishcore.siege_zombie", "丧尸");
     }
 }

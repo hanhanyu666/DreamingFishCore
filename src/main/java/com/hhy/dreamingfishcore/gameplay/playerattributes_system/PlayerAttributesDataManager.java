@@ -14,7 +14,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.lang.reflect.Type;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -58,6 +60,11 @@ public class PlayerAttributesDataManager {
         return ATTRIBUTES_CACHE.containsKey(player.getUUID());
     }
 
+    /** 世界玩家属性存档是否已经加载，供服务器 tick 级规则做启动期防护。 */
+    public static boolean isLoaded() {
+        return loaded;
+    }
+
     public static void initPlayerAttributesData(ServerPlayer player, int realLevel) {
         UUID playerUUID = player.getUUID();
         if (hasPlayerAttributesData(player)) {
@@ -97,6 +104,34 @@ public class PlayerAttributesDataManager {
     public static void updatePlayerAttributesData(ServerPlayer player, PlayerAttributesData newData) {
         ATTRIBUTES_CACHE.put(player.getUUID(), newData);
         markDirty();
+    }
+
+    /**
+     * 给所有已经建档的玩家恢复分裂/重生储备，并返回实际发生变化的玩家。
+     * 离线玩家也会获得每日补充，避免“必须恰好在日出在线”造成不公平差异。
+     */
+    public static synchronized Set<UUID> restoreRespawnPointsForAll(float amount) {
+        ensureLoaded();
+        if (!(amount > 0.0F) || Float.isNaN(amount) || Float.isInfinite(amount)) {
+            return Set.of();
+        }
+
+        Set<UUID> changedPlayers = new HashSet<>();
+        for (Map.Entry<UUID, PlayerAttributesData> entry : ATTRIBUTES_CACHE.entrySet()) {
+            PlayerAttributesData data = entry.getValue();
+            if (data == null) {
+                continue;
+            }
+            float before = data.getRespawnPoint();
+            data.restoreRespawnPoint(amount);
+            if (data.getRespawnPoint() > before) {
+                changedPlayers.add(entry.getKey());
+            }
+        }
+        if (!changedPlayers.isEmpty()) {
+            dirty = true;
+        }
+        return Set.copyOf(changedPlayers);
     }
 
     /**

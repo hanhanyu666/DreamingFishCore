@@ -15,6 +15,10 @@ import java.nio.file.Path;
 /** Client-side persisted layout for the immersive chat window. */
 final class ImmersiveChatConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final int DEFAULT_X = 2;
+    private static final int DEFAULT_WIDTH = 223;
+    private static final int DEFAULT_HEIGHT = 216;
+    private static final int DEFAULT_BOTTOM_GAP = 96;
     private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get()
             .resolve(DreamingFishCore.MODID)
             .resolve("immersive_chat.json");
@@ -29,12 +33,10 @@ final class ImmersiveChatConfig {
 
     static synchronized Layout resolve(int screenWidth, int screenHeight) {
         if (data.width <= 0 || data.height <= 0) {
-            int width = Math.min(360, Math.max(250, (int) (screenWidth * 0.42f)));
-            int height = Math.min(185, Math.max(120, (int) (screenHeight * 0.34f)));
-            data.x = 7;
-            data.y = Math.max(20, screenHeight - height - 96);
-            data.width = width;
-            data.height = height;
+            data.x = DEFAULT_X;
+            data.y = Math.max(20, screenHeight - DEFAULT_HEIGHT - DEFAULT_BOTTOM_GAP);
+            data.width = DEFAULT_WIDTH;
+            data.height = DEFAULT_HEIGHT;
         }
         clamp(screenWidth, screenHeight);
         return new Layout(data.x, data.y, data.width, data.height);

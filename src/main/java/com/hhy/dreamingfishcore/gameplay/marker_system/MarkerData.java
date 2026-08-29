@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.marker_system;
 
+import net.minecraft.Util;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.UUID;
@@ -14,7 +15,7 @@ public class MarkerData {
     private final long expiresAtMs;
 
     public MarkerData(UUID ownerId, String ownerName, Vec3 position) {
-        this(ownerId, ownerName, position, System.currentTimeMillis());
+        this(ownerId, ownerName, position, Util.getMillis());
     }
 
     public MarkerData(UUID ownerId, String ownerName, Vec3 position, long createdAtMs) {

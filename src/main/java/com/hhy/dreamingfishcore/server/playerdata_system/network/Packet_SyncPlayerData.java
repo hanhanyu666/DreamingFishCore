@@ -43,6 +43,7 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
     private final long registrationTime;
     private final long lastLoginTime;
     private final long totalPlayTime;
+    private final boolean zhuiguangMember;
 
     // 服务端专用构造器（在线玩家）
     public Packet_SyncPlayerData(ServerPlayer serverPlayer) {
@@ -59,24 +60,25 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         this.registrationTime = getEffectiveRegistrationTime(data);
         this.lastLoginTime = data.getLastLoginTime();
         this.totalPlayTime = data.getTotalPlayTime() + Math.max(0, System.currentTimeMillis() - data.getLastLoginTime());
+        this.zhuiguangMember = data.isZhuiguangMember();
     }
 
     // 离线玩家构造器
     public Packet_SyncPlayerData(UUID playerUUID, String playerName, String rankName, String titleName, int level, long experience, String onlineTime) {
-        this(playerUUID, playerName, false, rankName, Set.of(), titleName, level, experience, onlineTime, 0L, 0L, 0L);
+        this(playerUUID, playerName, false, rankName, Set.of(), titleName, level, experience, onlineTime, 0L, 0L, 0L, false);
     }
 
     public Packet_SyncPlayerData(UUID playerUUID, String playerName, String rankName, String titleName, int level, long experience,
                                  String onlineTime, long registrationTime, long lastLoginTime, long totalPlayTime,
-                                 Set<String> ownedRankNames) {
+                                 Set<String> ownedRankNames, boolean zhuiguangMember) {
         this(playerUUID, playerName, false, rankName, ownedRankNames, titleName, level, experience, onlineTime,
-                registrationTime, lastLoginTime, totalPlayTime);
+                registrationTime, lastLoginTime, totalPlayTime, zhuiguangMember);
     }
 
     private Packet_SyncPlayerData(UUID playerUUID, String playerName, boolean isOnline, String rankName,
                                   Set<String> ownedRankNames, String titleName,
                                   int level, long experience, String onlineTime, long registrationTime,
-                                  long lastLoginTime, long totalPlayTime) {
+                                  long lastLoginTime, long totalPlayTime, boolean zhuiguangMember) {
         this.playerUUID = playerUUID;
         this.playerName = playerName;
         this.isOnline = isOnline;
@@ -89,6 +91,7 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         this.registrationTime = registrationTime > 0 ? registrationTime : lastLoginTime;
         this.lastLoginTime = lastLoginTime;
         this.totalPlayTime = totalPlayTime;
+        this.zhuiguangMember = zhuiguangMember;
     }
 
     //服务端获取玩家在线时间
@@ -127,6 +130,7 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         buf.writeLong(packet.registrationTime);
         buf.writeLong(packet.lastLoginTime);
         buf.writeLong(packet.totalPlayTime);
+        buf.writeBoolean(packet.zhuiguangMember);
     }
 
     // 解码
@@ -147,8 +151,9 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         long registrationTime = buf.readLong();
         long lastLoginTime = buf.readLong();
         long totalPlayTime = buf.readLong();
+        boolean zhuiguangMember = buf.readBoolean();
         return new Packet_SyncPlayerData(uuid, playerName, isOnline, rankName, ownedRankNames, titleName, level, experience, onlineTime,
-                registrationTime, lastLoginTime, totalPlayTime);
+                registrationTime, lastLoginTime, totalPlayTime, zhuiguangMember);
     }
 
     //处理逻辑，无客户端类引用
@@ -168,20 +173,21 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         final long safeRegistrationTime = packet.registrationTime;
         final long safeLastLoginTime = packet.lastLoginTime;
         final long safeTotalPlayTime = packet.totalPlayTime;
+        final boolean safeZhuiguangMember = packet.zhuiguangMember;
 
         // 主线程执行（仅分发，无客户端逻辑）
         context.enqueueWork(() -> processOnMainThread(safeUUID, safePlayerName, safeIsOnline, safeRank, safeOwnedRanks, safeTitle, safeLevel,
-                safeExperience, safeOnlineTime, safeRegistrationTime, safeLastLoginTime, safeTotalPlayTime));
+                safeExperience, safeOnlineTime, safeRegistrationTime, safeLastLoginTime, safeTotalPlayTime, safeZhuiguangMember));
     }
 
     //分发方法，无客户端类引用
     private static void processOnMainThread(UUID playerUUID, String playerName, boolean isOnline, String rankName,
                                             Set<String> ownedRankNames, String titleName,
                                             int level, long experience, String onlineTime, long registrationTime,
-                                            long lastLoginTime, long totalPlayTime) {
+                                            long lastLoginTime, long totalPlayTime, boolean zhuiguangMember) {
         //用SafeRunnable隔离客户端逻辑，服务器端仅加载接口，不加载实现
         new ClientSyncRunnable(playerUUID, playerName, isOnline, rankName, ownedRankNames,
-                titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime).run();
+                titleName, level, experience, onlineTime, registrationTime, lastLoginTime, totalPlayTime, zhuiguangMember).run();
     }
 
     //纯客户端逻辑（@OnlyIn标记，服务器完全不加载）=
@@ -199,11 +205,12 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
         private final long registrationTime;
         private final long lastLoginTime;
         private final long totalPlayTime;
+        private final boolean zhuiguangMember;
 
         public ClientSyncRunnable(UUID playerUUID, String playerName, boolean isOnline, String rankName,
                                   Set<String> ownedRankNames, String titleName,
                                   int level, long experience, String onlineTime, long registrationTime,
-                                  long lastLoginTime, long totalPlayTime) {
+                                  long lastLoginTime, long totalPlayTime, boolean zhuiguangMember) {
             this.playerUUID = playerUUID;
             this.playerName = playerName;
             this.isOnline = isOnline;
@@ -216,12 +223,13 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
             this.registrationTime = registrationTime;
             this.lastLoginTime = lastLoginTime;
             this.totalPlayTime = totalPlayTime;
+            this.zhuiguangMember = zhuiguangMember;
         }
 
         @Override
         public void run() {
             syncPlayerDataOnClient(playerUUID, playerName, isOnline, rankName, ownedRankNames, titleName, level, experience, onlineTime,
-                    registrationTime, lastLoginTime, totalPlayTime);
+                    registrationTime, lastLoginTime, totalPlayTime, zhuiguangMember);
         }
     }
 
@@ -230,7 +238,7 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
     private static void syncPlayerDataOnClient(UUID playerUUID, String playerName, boolean isOnline, String rankName,
                                                Set<String> ownedRankNames, String titleName,
                                                int level, long experience, String onlineTime, long registrationTime,
-                                               long lastLoginTime, long totalPlayTime) {
+                                               long lastLoginTime, long totalPlayTime, boolean zhuiguangMember) {
         try {
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             if (mc == null || mc.player == null) {
@@ -268,6 +276,7 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
             cachedData.setRegistrationTime(registrationTime);
             cachedData.setLastLoginTime(lastLoginTime);
             cachedData.setTotalPlayTime(totalPlayTime);
+            cachedData.setZhuiguangMember(zhuiguangMember);
             com.hhy.dreamingfishcore.client.cache.ClientCacheManager.setPlayerData(playerUUID, cachedData);
 
             Player targetPlayer = mc.level != null ? mc.level.getPlayerByUUID(playerUUID) : null;
@@ -281,8 +290,8 @@ public class Packet_SyncPlayerData implements net.minecraft.network.protocol.com
             // TODO: 排行榜功能暂时注释，等待重写
             // ServerScreenUI_Screen.updatePlayerRankLevelCache(playerUUID, playerName, level, rankName, titleName, onlineTime);
 
-            DreamingFishCore.LOGGER.info("客户端同步数据成功：Rank={}, Title={}, Level={}, Exp={}, TotalPlay={}ms",
-                    rank.getRankName(), title.getTitleName(), level, experience, totalPlayTime);
+            DreamingFishCore.LOGGER.info("客户端同步数据成功：Rank={}, Title={}, Level={}, Exp={}, TotalPlay={}ms, ZhuiguangMember={}",
+                    rank.getRankName(), title.getTitleName(), level, experience, totalPlayTime, zhuiguangMember);
         } catch (Exception e) {
             DreamingFishCore.LOGGER.error("客户端同步玩家数据失败", e);
         }

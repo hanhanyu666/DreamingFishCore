@@ -43,3 +43,26 @@ logs/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
+
+### Local Minecraft server state ###
+# The repository contains the mod source and distributable resources; these are generated or
+# machine-specific server files and must not be committed.
+/config/
+/world/
+/server-data/
+/diagnostics/
+/bin/
+/dev2/
+/mods/
+/defaultconfigs/
+/server.properties
+/ops.json
+/banned-ips.json
+/banned-players.json
+/usercache.json
+/whitelist.json
+
+### Local agent/editor state ###
+/.agents/
+/.ai-bridge/
+/.claude/

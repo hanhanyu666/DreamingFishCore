@@ -1,9 +1,9 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.util.UiBackgroundRenderer;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
-import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Final;
@@ -21,492 +22,406 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * DisconnectedScreen Mixin
- * 使用虚拟坐标系统（640×360）的自定义断开连接界面
- */
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/** 连接加载界面的简洁失败变体：保留背景与留白，只替换左下状态。 */
 @Mixin(DisconnectedScreen.class)
 public abstract class DisconnectedScreenMixin extends Screen {
-
-    // ==================== 虚拟基准尺寸 ====================
-    private static final int BASE_WIDTH = 640;
-    private static final int BASE_HEIGHT = 360;
-
-    // ==================== 颜色定义 - 暗红色调 ====================
-    private static final int GLASS_TOP = 0x66D16868;
-    private static final int GLASS_BOTTOM = 0x33201010;
-    private static final int GLASS_BORDER = 0x55FF9C9C;
-    private static final int GLASS_SHADOW = 0x33280000;
-    private static final int GLASS_HIGHLIGHT = 0x66FFD2D2;
-    private static final int ACCENT_RED = 0xFFCC0000;
-
-    // ==================== 虚拟坐标系统变量 ====================
-    @Unique
-    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
+    @Unique private static final int dreamingFishCore$GENERIC_ACCENT = 0xFFD96A62;
+    @Unique private static final int dreamingFishCore$BAN_ACCENT = 0xFFE15C55;
+    @Unique private static final int dreamingFishCore$DEATH_ACCENT = 0xFFD54A45;
+    @Unique private static final int dreamingFishCore$DETAIL_COLOR = 0xD0C5B0A9;
+    @Unique private static final int dreamingFishCore$MUTED_COLOR = 0xA89D8883;
+    @Unique private static final long dreamingFishCore$INTRO_MS = 360L;
 
     @Unique
-    private Button dreamingFishCore$returnButton;
+    private final VirtualCoordinateHelper.VirtualSizeResult dreamingFishCore$virtualSize =
+            new VirtualCoordinateHelper.VirtualSizeResult();
+    @Unique private String dreamingFishCore$tip = "";
+    @Unique private Button dreamingFishCore$returnButton;
+    @Unique private long dreamingFishCore$openedAt = -1L;
 
-    @Shadow
-    @Final
-    private DisconnectionDetails details;
-
-    @Shadow
-    @Final
-    private Screen parent;
+    @Shadow @Final private DisconnectionDetails details;
+    @Shadow @Final private Screen parent;
 
     protected DisconnectedScreenMixin(Component title) {
         super(title);
     }
 
-    /**
-     * 检查是否是复活点数耗尽
-     */
-    @Unique
-    private boolean isPermaDeathDisconnect() {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        if (reason == null) return false;
-        String msg = reason.getString();
-        return msg.contains("复活点数耗尽") || msg.contains("细胞分裂");
-    }
-
-    /**
-     * 检查是否是封禁
-     */
-    @Unique
-    private boolean isBanDisconnect() {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        if (reason == null) return false;
-        String msg = reason.getString();
-        return msg.contains("banned") || msg.contains("封禁") || msg.contains("banned.expiration");
-    }
-
-    @Unique
-    private Component dreamingFishCore$getDisconnectReason() {
-        return this.details == null ? null : this.details.reason();
-    }
-
-    /**
-     * 注入 init() 方法
-     */
     @Inject(method = "init", at = @At("HEAD"), cancellable = true)
     private void dreamingFishCore$init(CallbackInfo ci) {
         ci.cancel();
-        initCustomScreen();
-    }
-
-    /**
-     * 初始化自定义屏幕
-     */
-    @Unique
-    private void initCustomScreen() {
-        // 计算虚拟尺寸
-        VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
-
-        // 虚拟坐标下的按钮位置
-        int centerX = virtualSize.virtualWidth / 2;
-        int centerY = virtualSize.virtualHeight / 2;
-
-        int boxWidth = 420;
-        int boxHeight = 200;
-        int boxX = centerX - boxWidth / 2;
-        int boxY = centerY - boxHeight / 2;
-
-        int buttonWidth = 380;
-        int buttonHeight = 24;
-        // 按钮在框内水平居中
-        int virtualButtonX = boxX + (boxWidth - buttonWidth) / 2;
-        int virtualButtonY = boxY + boxHeight - 40;
-        // 转换虚拟坐标到屏幕坐标
-        int screenButtonX = (int) (virtualButtonX * virtualSize.uiScale);
-        int screenButtonY = (int) (virtualButtonY * virtualSize.uiScale);
-        int screenButtonWidth = (int) (buttonWidth * virtualSize.uiScale);
-        int screenButtonHeight = (int) (buttonHeight * virtualSize.uiScale);
-
-        // 确定按钮文字和目标屏幕
-        Component buttonText;
-        Button.OnPress onPress;
-        if (parent instanceof ConnectScreen) {
-            buttonText = Component.literal("§c返回服务器列表");
-            onPress = btn -> Minecraft.getInstance().setScreen(new TitleScreen());
-        } else {
-            buttonText = Component.literal("§c返回标题界面");
-            onPress = btn -> dreamingFishCore$returnToTitleScreen();
+        if (dreamingFishCore$tip.isEmpty()) {
+            dreamingFishCore$tip = LoadingTips.getRandomTip();
+        }
+        if (dreamingFishCore$openedAt < 0L) {
+            dreamingFishCore$openedAt = System.currentTimeMillis();
         }
 
-        dreamingFishCore$returnButton = new CustomButton(
-                screenButtonX, screenButtonY,
-                screenButtonWidth, screenButtonHeight,
-                buttonText,
-                onPress,
-                virtualSize.uiScale
-        );
-        this.addRenderableWidget(dreamingFishCore$returnButton);
-    }
-
-    /**
-     * 返回标题界面
-     */
-    @Unique
-    private void dreamingFishCore$returnToTitleScreen() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null) {
-            mc.level.disconnect();
-        }
-        mc.disconnect();
-        mc.setScreen(new TitleScreen());
+        dreamingFishCore$returnButton = Button.builder(
+                        Component.literal(dreamingFishCore$returnLabel()),
+                        button -> dreamingFishCore$returnFromDisconnect())
+                .bounds(0, 0, 1, 1)
+                .build();
+        addRenderableWidget(dreamingFishCore$returnButton);
+        dreamingFishCore$updateReturnHitbox();
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderCustomScreen(guiGraphics, mouseX, mouseY, partialTick);
-    }
+        VirtualCoordinateHelper.calculateVirtualSize(this, dreamingFishCore$virtualSize);
+        dreamingFishCore$updateReturnHitbox();
 
-    /**
-     * 渲染自定义屏幕
-     */
-    @Unique
-    private void renderCustomScreen(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        // 每帧重新计算虚拟尺寸（支持窗口大小变化）
-        VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
-        dreamingFishCore$updateReturnButtonBounds();
-
-        // ========== 背景（使用屏幕坐标） ==========
-        UiBackgroundRenderer.renderLoadingBackground(guiGraphics, this.width, this.height);
-        guiGraphics.fillGradient(0, 0, this.width, this.height, 0x88000000, 0xCC000000);
-
-        // ========== 应用虚拟坐标缩放 ==========
+        LoadingScreenUi.renderBackground(guiGraphics, width, height);
+        float intro = dreamingFishCore$introProgress();
+        guiGraphics.fillGradient(0, 0, width, height,
+                dreamingFishCore$withAlpha(0xFF35070B, Math.round(68.0F * intro)),
+                dreamingFishCore$withAlpha(0xFF180205, Math.round(126.0F * intro)));
+        guiGraphics.fill(0, 0, width, height,
+                dreamingFishCore$withAlpha(0xFF170306, Math.round(28.0F * intro)));
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(virtualSize.uiScale, virtualSize.uiScale, 1.0f);
-
-        // ========== 虚拟坐标下的布局 ==========
-        int centerX = virtualSize.virtualWidth / 2;
-        int centerY = virtualSize.virtualHeight / 2;
-
-        int boxWidth = 420;
-        int boxHeight = 200;
-        int boxX = centerX - boxWidth / 2;
-        int boxY = centerY - boxHeight / 2;
-
-        // 主面板
-        renderGlassPanel(guiGraphics, boxX, boxY, boxWidth, boxHeight, 0xAAC25E5E);
-
-        // 标题区域
-        PoseStack poseStack = guiGraphics.pose();
-
-        // 骷髅图标
-        String skullIcon = "☠";
-        poseStack.pushPose();
-        poseStack.scale(3.0f, 3.0f, 1.0f);
-        int skullX = (int) ((boxX + 25) / 3.0f);
-        int skullY = (int) ((boxY + 20) / 3.0f);
-        guiGraphics.drawString(this.font, skullIcon, skullX, skullY, ACCENT_RED, false);
-        poseStack.popPose();
-
-        // 标题
-        poseStack.pushPose();
-        poseStack.scale(2.2f, 2.2f, 1.0f);
-        String titleText = isPermaDeathDisconnect() ? "§c§l布豪，您趋势了！" : "§c§l布豪，连接失败！";
-        int titleX = (int) ((centerX + 15) / 2.2f - font.width(titleText) / 2.0f);
-        int titleY = (int) ((boxY + 28) / 2.2f);
-        guiGraphics.drawString(this.font, titleText, titleX, titleY, 0xFFFFFFFF, false);
-        poseStack.popPose();
-
-        // 右上角：DreamingFish
-        String domainText = "§b§lDreaming§d§lFish";
-        int domainX = boxX + boxWidth - 12 - font.width(domainText);
-        int domainY = boxY + 15;
-        guiGraphics.drawString(this.font, domainText, domainX, domainY, 0xFFFFFFFF, false);
-
-        // 分隔线
-        int lineY = boxY + 55;
-        guiGraphics.fill(boxX + 12, lineY, boxX + boxWidth - 12, lineY + 2, ACCENT_RED);
-        guiGraphics.fill(boxX + 12, lineY + 3, boxX + boxWidth - 12, lineY + 4, 0xAA660000);
-
-        // 消息内容
-        if (isPermaDeathDisconnect()) {
-            renderPermaDeathMessage(guiGraphics, centerX, boxY);
-        } else {
-            renderDisconnectMessage(guiGraphics, centerX, boxY);
-        }
-
-        // 恢复矩阵状态
+        guiGraphics.pose().scale(dreamingFishCore$virtualSize.uiScale,
+                dreamingFishCore$virtualSize.uiScale, 1.0F);
+        LoadingScreenUi.renderTip(guiGraphics, font, dreamingFishCore$tip,
+                Math.min(250, dreamingFishCore$virtualSize.virtualWidth - 52));
+        dreamingFishCore$renderFailureStatus(guiGraphics);
+        LoadingScreenUi.renderActionHint(guiGraphics, font,
+                dreamingFishCore$virtualSize.virtualWidth,
+                dreamingFishCore$virtualSize.virtualHeight,
+                " " + dreamingFishCore$returnLabel());
         guiGraphics.pose().popPose();
+    }
 
-        // ========== 渲染按钮（使用屏幕坐标） ==========
-        if (dreamingFishCore$returnButton != null) {
-            dreamingFishCore$returnButton.render(guiGraphics, mouseX, mouseY, partialTick);
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) {
+            dreamingFishCore$returnFromDisconnect();
+            return true;
         }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Unique
-    private void dreamingFishCore$updateReturnButtonBounds() {
+    private void dreamingFishCore$renderFailureStatus(GuiGraphics guiGraphics) {
+        int virtualW = dreamingFishCore$virtualSize.virtualWidth;
+        int virtualH = dreamingFishCore$virtualSize.virtualHeight;
+        int x = 24;
+        int titleY = virtualH - 94;
+        int maxReasonWidth = Math.min(360, Math.max(140, virtualW - 76));
+        float progress = dreamingFishCore$introProgress();
+        int alpha = Math.round(255.0F * progress);
+        int accent = dreamingFishCore$accentColor();
+
+        guiGraphics.drawString(font, dreamingFishCore$failureTitle(), x, titleY,
+                dreamingFishCore$multiplyAlpha(accent, alpha), true);
+
+        List<String> lines = dreamingFishCore$detailLines(maxReasonWidth, 2);
+        for (int i = 0; i < lines.size(); i++) {
+            guiGraphics.drawString(font, lines.get(i), x, titleY + 17 + i * 12,
+                    dreamingFishCore$multiplyAlpha(dreamingFishCore$DETAIL_COLOR, alpha), true);
+        }
+
+        int signalY = virtualH - 45;
+        int signalWidth = Math.min(190, Math.max(104, virtualW - x - 180));
+        dreamingFishCore$renderInterruptedSignal(guiGraphics, x, signalY, signalWidth, accent, alpha);
+        String state = dreamingFishCore$stateLabel();
+        guiGraphics.drawString(font, state, x + signalWidth + 10, signalY + 2,
+                dreamingFishCore$multiplyAlpha(dreamingFishCore$MUTED_COLOR, alpha), true);
+    }
+
+    @Unique
+    private void dreamingFishCore$renderInterruptedSignal(GuiGraphics guiGraphics, int x, int y,
+                                                           int width, int accent, int alpha) {
+        int centerY = y + 5;
+        guiGraphics.fill(x, centerY, x + width, centerY + 1,
+                dreamingFishCore$withAlpha(accent, Math.round(alpha * 0.20F)));
+
+        int segmentCount = Math.max(24, width / 5);
+        int visibleUntil = Math.max(5, segmentCount * 2 / 5);
+        for (int i = 0; i < segmentCount; i++) {
+            int segmentX = x + i * width / segmentCount;
+            int nextX = x + (i + 1) * width / segmentCount;
+            if (i > visibleUntil && (i % 5 != 0 || i > visibleUntil + 8)) {
+                continue;
+            }
+            int amplitude = i <= visibleUntil
+                    ? 1 + (int) Math.round(Math.abs(Math.sin(i * 0.83D)) * 5.0D)
+                    : 1;
+            int segmentAlpha = i <= visibleUntil ? alpha : Math.round(alpha * 0.25F);
+            guiGraphics.fill(segmentX, centerY - amplitude,
+                    Math.max(segmentX + 1, nextX - 1), centerY + amplitude + 1,
+                    dreamingFishCore$withAlpha(accent, segmentAlpha));
+        }
+
+        int breakX = x + width * 47 / 100;
+        guiGraphics.fill(breakX - 1, centerY - 7, breakX + 1, centerY + 8,
+                dreamingFishCore$withAlpha(accent, Math.round(alpha * 0.68F)));
+    }
+
+    @Unique
+    private void dreamingFishCore$updateReturnHitbox() {
         if (dreamingFishCore$returnButton == null) {
             return;
         }
-
-        int centerX = virtualSize.virtualWidth / 2;
-        int centerY = virtualSize.virtualHeight / 2;
-        int boxX = centerX - 420 / 2;
-        int boxY = centerY - 200 / 2;
-        float scale = virtualSize.uiScale;
-
-        dreamingFishCore$returnButton.setX((int) ((boxX + 20) * scale));
-        dreamingFishCore$returnButton.setY((int) ((boxY + 160) * scale));
-        dreamingFishCore$returnButton.setWidth((int) (380 * scale));
-        dreamingFishCore$returnButton.setHeight((int) (24 * scale));
+        VirtualCoordinateHelper.calculateVirtualSize(this, dreamingFishCore$virtualSize);
+        String suffix = " " + dreamingFishCore$returnLabel();
+        int hintWidth = LoadingScreenUi.getActionHintWidth(font, suffix);
+        int virtualX = dreamingFishCore$virtualSize.virtualWidth - 24 - hintWidth;
+        int virtualY = dreamingFishCore$virtualSize.virtualHeight - 28;
+        float scale = dreamingFishCore$virtualSize.uiScale;
+        dreamingFishCore$returnButton.setX(Math.round(virtualX * scale));
+        dreamingFishCore$returnButton.setY(Math.round(virtualY * scale));
+        dreamingFishCore$returnButton.setWidth(Math.max(1, Math.round((hintWidth + 8) * scale)));
+        dreamingFishCore$returnButton.setHeight(Math.max(12, Math.round(18 * scale)));
     }
 
-    /**
-     * 渲染复活点数耗尽消息
-     */
     @Unique
-    private void renderPermaDeathMessage(GuiGraphics guiGraphics, int centerX, int boxY) {
-        String[] messageLines = {
-                "§c很不幸，您的细胞分裂点数已经耗尽...",
-                "§7您已无法通过常规手段重生",
-                "§7请等待其他幸存者来拯救您...",
-        };
-
-        int messageStartY = boxY + 75;
-        for (int i = 0; i < messageLines.length; i++) {
-            String line = messageLines[i];
-            guiGraphics.drawCenteredString(this.font, line, centerX, messageStartY + i * 18, 0xFFFFFFFF);
+    private void dreamingFishCore$returnFromDisconnect() {
+        Minecraft minecraft = Minecraft.getInstance();
+        Screen target;
+        if (parent == null || parent instanceof ConnectScreen) {
+            target = new JoinMultiplayerScreen(new TitleScreen());
+        } else {
+            target = parent;
         }
+
+        // A local death-ban can show this screen while the integrated server is still saving.
+        // Wait for Minecraft's normal shutdown path before the player can open another save;
+        // otherwise NeoForge server configs from both instances can overlap and crash PermissionAPI.
+        if (minecraft.hasSingleplayerServer()) {
+            minecraft.disconnect();
+        }
+        minecraft.setScreen(target);
     }
 
-    /**
-     * 渲染普通断开连接消息
-     */
     @Unique
-    private void renderDisconnectMessage(GuiGraphics guiGraphics, int centerX, int boxY) {
-        Component reason = dreamingFishCore$getDisconnectReason();
-        String messageText = reason == null ? "" : reason.getString();
+    private String dreamingFishCore$returnLabel() {
+        return parent instanceof TitleScreen ? "返回标题界面" : "返回服务器列表";
+    }
 
-        if (isBanDisconnect()) {
-            String expiration = extractBanExpiration(messageText);
-            String formattedExpiration = formatExpirationTime(expiration);
+    @Unique
+    private Component dreamingFishCore$disconnectReason() {
+        return details == null ? null : details.reason();
+    }
 
-            String[] banLines = {
-                    "§c您已被服务器封禁",
-                    "§7原因: §f" + extractBanReason(messageText),
-                    "§7解封时间: " + formattedExpiration,
-                    "§7如有疑问请联系服务器管理员"
-            };
+    @Unique
+    private String dreamingFishCore$rawReason() {
+        Component reason = dreamingFishCore$disconnectReason();
+        String raw = reason == null ? "连接被远端服务器关闭" : reason.getString();
+        return dreamingFishCore$plain(raw);
+    }
 
-            int messageStartY = boxY + 75;
-            for (int i = 0; i < banLines.length; i++) {
-                guiGraphics.drawCenteredString(this.font, banLines[i], centerX, messageStartY + i * 18, 0xFFFFFFFF);
+    @Unique
+    private boolean dreamingFishCore$isPermaDeathDisconnect() {
+        String reason = dreamingFishCore$rawReason();
+        return reason.contains("复活点数耗尽") || reason.contains("细胞分裂")
+                || reason.contains("等待一名幸存者");
+    }
+
+    @Unique
+    private boolean dreamingFishCore$isBanDisconnect() {
+        String reason = (" " + dreamingFishCore$rawReason() + " ").toLowerCase(Locale.ROOT);
+        return reason.contains("banned") || reason.contains(" ban ")
+                || reason.contains("封禁") || reason.contains("禁止进入");
+    }
+
+    @Unique
+    private int dreamingFishCore$accentColor() {
+        if (dreamingFishCore$isPermaDeathDisconnect()) {
+            return dreamingFishCore$DEATH_ACCENT;
+        }
+        return dreamingFishCore$isBanDisconnect()
+                ? dreamingFishCore$BAN_ACCENT
+                : dreamingFishCore$GENERIC_ACCENT;
+    }
+
+    @Unique
+    private String dreamingFishCore$failureTitle() {
+        if (dreamingFishCore$isPermaDeathDisconnect()) {
+            return "生命信号耗尽";
+        }
+        return dreamingFishCore$isBanDisconnect() ? "访问被服务器拒绝" : "连接失败";
+    }
+
+    @Unique
+    private String dreamingFishCore$stateLabel() {
+        if (dreamingFishCore$isPermaDeathDisconnect()) {
+            return "等待救援";
+        }
+        if (dreamingFishCore$isBanDisconnect()) {
+            return dreamingFishCore$extractExpiration() == null ? "永久封禁" : "临时封禁";
+        }
+        return "信号中断";
+    }
+
+    @Unique
+    private List<String> dreamingFishCore$detailLines(int maxWidth, int maxLines) {
+        String detail;
+        if (dreamingFishCore$isPermaDeathDisconnect()) {
+            detail = "等待其他幸存者使用复活护符救援";
+            String corpseLocation = dreamingFishCore$extractCorpseLocation();
+            if (corpseLocation != null) {
+                detail += "\n尸体位置：" + corpseLocation;
+            }
+        } else if (dreamingFishCore$isBanDisconnect()) {
+            detail = dreamingFishCore$extractRestrictedReason();
+            String expiration = dreamingFishCore$extractExpiration();
+            if (expiration != null) {
+                detail += "\n解封于 " + expiration;
             }
         } else {
-            int maxWidth = 380;
-            int messageStartY = boxY + 80;
-
-            if (font.width(messageText) > maxWidth) {
-                String[] words = messageText.split(" ");
-                StringBuilder currentLine = new StringBuilder();
-                int currentY = messageStartY;
-
-                for (String word : words) {
-                    String testLine = currentLine.length() > 0
-                            ? currentLine + " " + word
-                            : word;
-
-                    if (font.width(testLine) > maxWidth && currentLine.length() > 0) {
-                        guiGraphics.drawCenteredString(this.font, currentLine.toString(), centerX, currentY, 0xFFFFFFFF);
-                        currentLine = new StringBuilder(word);
-                        currentY += 18;
-                    } else {
-                        currentLine = new StringBuilder(testLine);
-                    }
-                }
-                if (currentLine.length() > 0) {
-                    guiGraphics.drawCenteredString(this.font, currentLine.toString(), centerX, currentY, 0xFFFFFFFF);
-                }
-            } else {
-                guiGraphics.drawCenteredString(this.font, messageText, centerX, messageStartY, 0xFFFFFFFF);
-            }
+            detail = dreamingFishCore$rawReason();
         }
+        return dreamingFishCore$wrapText(detail, maxWidth, maxLines);
     }
 
-    /**
-     * 从封禁消息中提取原因
-     */
     @Unique
-    private String extractBanReason(String fullMessage) {
-        DreamingFishCore.LOGGER.info("封禁消息原始内容: [{}]", fullMessage);
-
-        // 中文格式："原因：{原因}"
-        if (fullMessage.contains("原因：")) {
-            int reasonIndex = fullMessage.indexOf("原因：") + 3;
-            int endIndex = fullMessage.length();
-
-            if (fullMessage.contains("解封时间")) {
-                endIndex = fullMessage.indexOf("解封时间");
-            } else if (fullMessage.contains("\n")) {
-                int newlineIndex = fullMessage.indexOf("\n", reasonIndex);
-                if (newlineIndex != -1) endIndex = newlineIndex;
+    private String dreamingFishCore$extractCorpseLocation() {
+        String raw = dreamingFishCore$rawReason();
+        String lower = raw.toLowerCase(Locale.ROOT);
+        String[] markers = {"尸体位置：", "尸体位置:", "corpse location:"};
+        for (String marker : markers) {
+            int index = lower.indexOf(marker.toLowerCase(Locale.ROOT));
+            if (index < 0) {
+                continue;
             }
-
-            String reason = fullMessage.substring(reasonIndex, endIndex).trim();
-            DreamingFishCore.LOGGER.info("提取到的原因: [{}]", reason);
-            if (!reason.isEmpty()) return reason;
-        }
-
-        // 英文格式: "Reason: {reason}"
-        if (fullMessage.contains("Reason:")) {
-            int reasonIndex = fullMessage.indexOf("Reason:") + 7;
-            int endIndex = fullMessage.length();
-
-            if (fullMessage.contains("Your ban will be removed on")) {
-                endIndex = fullMessage.indexOf("Your ban will be removed on");
-            } else if (fullMessage.contains("\n")) {
-                int newlineIndex = fullMessage.indexOf("\n", reasonIndex);
-                if (newlineIndex != -1) endIndex = newlineIndex;
+            String value = dreamingFishCore$beforeAny(
+                    raw.substring(index + marker.length()).trim(),
+                    "\n", "your ban will be removed on", "解封时间", "解封于").trim();
+            if (!value.isBlank()) {
+                return value;
             }
-
-            String reason = fullMessage.substring(reasonIndex, endIndex).trim();
-            if (!reason.isEmpty()) return reason;
-        }
-
-        // 兼容旧版中文冒号
-        if (fullMessage.contains("原因:")) {
-            int reasonIndex = fullMessage.indexOf("原因:") + 3;
-            int endIndex = fullMessage.length();
-
-            if (fullMessage.contains("\n")) {
-                int newlineIndex = fullMessage.indexOf("\n", reasonIndex);
-                if (newlineIndex != -1) endIndex = newlineIndex;
-            }
-
-            String reason = fullMessage.substring(reasonIndex, endIndex).trim();
-            if (!reason.isEmpty()) return reason;
-        }
-
-        return "违反服务器规则";
-    }
-
-    /**
-     * 从封禁消息中提取解封时间
-     */
-    @Unique
-    private String extractBanExpiration(String fullMessage) {
-        if (fullMessage.contains("Your ban will be removed on")) {
-            int index = fullMessage.indexOf("Your ban will be removed on") + 27;
-            String expiration = fullMessage.substring(index).trim();
-            return expiration.isEmpty() ? "未知" : expiration;
-        }
-        if (fullMessage.contains("解封时间:")) {
-            int index = fullMessage.indexOf("解封时间:") + 5;
-            String expiration = fullMessage.substring(index).trim();
-            return expiration.isEmpty() ? "未知" : expiration;
-        }
-        if (fullMessage.contains("解封于")) {
-            int index = fullMessage.indexOf("解封于") + 3;
-            String expiration = fullMessage.substring(index).trim();
-            return expiration.isEmpty() ? "未知" : expiration;
         }
         return null;
     }
 
-    /**
-     * 格式化封禁时间
-     */
     @Unique
-    private String formatExpirationTime(String expiration) {
-        if (expiration == null) return "§c永久封禁";
-        if (expiration.equalsIgnoreCase("forever") || expiration.contains("永久")) return "§c永久封禁";
-        return "§e" + expiration;
-    }
-
-    /**
-     * 绘制圆角矩形
-     */
-    @Unique
-    private void renderGlassPanel(GuiGraphics guiGraphics, int x, int y, int width, int height, int tint) {
-        guiGraphics.fillGradient(x, y, x + width, y + height, GLASS_TOP, GLASS_BOTTOM);
-        guiGraphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, withAlpha(tint, 0x12));
-        guiGraphics.fill(x, y, x + width, y + 1, GLASS_BORDER);
-        guiGraphics.fill(x, y + height - 1, x + width, y + height, GLASS_SHADOW);
-        guiGraphics.fill(x, y, x + 1, y + height, GLASS_BORDER);
-        guiGraphics.fill(x + width - 1, y, x + width, y + height, GLASS_SHADOW);
-        guiGraphics.fill(x + 1, y + 1, x + width - 1, y + 2, GLASS_HIGHLIGHT);
-        guiGraphics.fill(x + 1, y + height - 2, x + width - 1, y + height - 1, GLASS_SHADOW);
-        renderGlassNoise(guiGraphics, x, y, width, height);
-    }
-
-    @Unique
-    private void renderGlassNoise(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        if (width < 20 || height < 20) {
-            return;
-        }
-        int maxX = x + width - 6;
-        int maxY = y + height - 6;
-        for (int i = 0; i < 6; i++) {
-            int nx = x + 6 + (i * 23 + x) % (maxX - x);
-            int ny = y + 6 + (i * 17 + y) % (maxY - y);
-            guiGraphics.fill(nx, ny, nx + 1, ny + 1, 0x22FFFFFF);
-        }
-    }
-
-    @Unique
-    private int withAlpha(int color, int alpha) {
-        return (color & 0x00FFFFFF) | ((alpha & 0xFF) << 24);
-    }
-
-    /**
-     * 自定义按钮（使用屏幕坐标）
-     */
-    @Unique
-    private static class CustomButton extends Button {
-        private final float virtualScale;
-
-        public CustomButton(int x, int y, int width, int height, Component message, OnPress onPress, float virtualScale) {
-            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
-            this.virtualScale = virtualScale;
-        }
-
-        @Override
-        public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = isHovered() || isFocused();
-
-            int topColor, bottomColor, borderColor;
-            if (hovered) {
-                topColor = 0xCC660000;
-                bottomColor = 0xCC330000;
-                borderColor = 0xFFCC0000;
-            } else {
-                topColor = 0xCC440000;
-                bottomColor = 0xCC220000;
-                borderColor = 0xCC880000;
+    private String dreamingFishCore$extractRestrictedReason() {
+        String raw = dreamingFishCore$rawReason();
+        String lower = raw.toLowerCase(Locale.ROOT);
+        String[] markers = {"reason:", "原因：", "原因:"};
+        for (String marker : markers) {
+            int index = lower.indexOf(marker.toLowerCase(Locale.ROOT));
+            if (index >= 0) {
+                String extracted = raw.substring(index + marker.length()).trim();
+                extracted = dreamingFishCore$beforeAny(extracted,
+                        "\n", "your ban will be removed on", "解封时间", "解封于").trim();
+                if (!extracted.isBlank()) {
+                    return extracted;
+                }
             }
-
-            int x = getX();
-            int y = getY();
-            int w = width;
-            int h = height;
-
-            // 渐变背景
-            guiGraphics.fill(x + 2, y, x + w - 2, y + h, topColor);
-            guiGraphics.fill(x + 2, y + h, x + w - 2, y + h + 1, bottomColor);
-
-            // 边框
-            guiGraphics.fill(x + 1, y, x + 2, y + h, borderColor);
-            guiGraphics.fill(x + w - 2, y, x + w - 1, y + h, borderColor);
-            guiGraphics.fill(x + 2, y, x + w - 2, y + 1, borderColor);
-            guiGraphics.fill(x + 2, y + h - 1, x + w - 2, y + h, borderColor);
-
-            // 角落装饰
-            guiGraphics.fill(x, y, x + 1, y + 1, borderColor);
-            guiGraphics.fill(x + w - 1, y, x + w, y + 1, borderColor);
-            guiGraphics.fill(x, y + h - 1, x + 1, y + h, borderColor);
-            guiGraphics.fill(x + w - 1, y + h - 1, x + w, y + h, borderColor);
-
-            // 文字
-            String displayText = getMessage().getString();
-            int textX = x + w / 2 - Minecraft.getInstance().font.width(displayText) / 2;
-            int textY = y + (h - 8) / 2;
-            guiGraphics.drawString(Minecraft.getInstance().font, displayText, textX, textY, 0xFFFFFF, false);
         }
+
+        for (String line : raw.split("\\R")) {
+            String clean = line.trim();
+            String lineLower = clean.toLowerCase(Locale.ROOT);
+            if (!clean.isBlank() && !lineLower.contains("banned") && !clean.contains("封禁")
+                    && !lineLower.contains("ban will be removed") && !clean.contains("解封")) {
+                return clean;
+            }
+        }
+        return raw;
+    }
+
+    @Unique
+    private String dreamingFishCore$extractExpiration() {
+        String raw = dreamingFishCore$rawReason();
+        String lower = raw.toLowerCase(Locale.ROOT);
+        String[] markers = {"your ban will be removed on", "解封时间：", "解封时间:", "解封于"};
+        for (String marker : markers) {
+            int index = lower.indexOf(marker.toLowerCase(Locale.ROOT));
+            if (index >= 0) {
+                String tail = raw.substring(index + marker.length()).trim();
+                String value = dreamingFishCore$beforeAny(tail, "\n").trim();
+                return value.isBlank() ? null : value;
+            }
+        }
+        return null;
+    }
+
+    @Unique
+    private String dreamingFishCore$beforeAny(String source, String... delimiters) {
+        int end = source.length();
+        String lower = source.toLowerCase(Locale.ROOT);
+        for (String delimiter : delimiters) {
+            int index = lower.indexOf(delimiter.toLowerCase(Locale.ROOT));
+            if (index >= 0) {
+                end = Math.min(end, index);
+            }
+        }
+        return source.substring(0, end);
+    }
+
+    @Unique
+    private List<String> dreamingFishCore$wrapText(String source, int maxWidth, int maxLines) {
+        List<String> result = new ArrayList<>();
+        boolean truncated = false;
+        for (String paragraph : dreamingFishCore$plain(source).split("\\R", -1)) {
+            String remaining = paragraph.trim();
+            while (!remaining.isEmpty()) {
+                if (result.size() >= maxLines) {
+                    truncated = true;
+                    break;
+                }
+                String fitted = font.plainSubstrByWidth(remaining, Math.max(24, maxWidth));
+                int length = Math.max(1, fitted.length());
+                if (length < remaining.length()) {
+                    int space = fitted.lastIndexOf(' ');
+                    if (space > fitted.length() / 2) {
+                        length = space;
+                    }
+                }
+                result.add(remaining.substring(0, Math.min(length, remaining.length())).trim());
+                remaining = remaining.substring(Math.min(length, remaining.length())).trim();
+            }
+            if (result.size() >= maxLines) {
+                break;
+            }
+        }
+
+        if (result.isEmpty()) {
+            result.add("服务器未提供详细原因");
+        }
+        if (truncated) {
+            int last = result.size() - 1;
+            String ellipsis = "...";
+            result.set(last, font.plainSubstrByWidth(result.get(last),
+                    Math.max(0, maxWidth - font.width(ellipsis))) + ellipsis);
+        }
+        return result;
+    }
+
+    @Unique
+    private String dreamingFishCore$plain(String text) {
+        String stripped = ChatFormatting.stripFormatting(text == null ? "" : text);
+        return stripped == null ? "" : stripped.replace('\r', '\n')
+                .replaceAll("\\n{2,}", "\n").trim();
+    }
+
+    @Unique
+    private float dreamingFishCore$easeOutCubic(float value) {
+        float t = Math.max(0.0F, Math.min(1.0F, value));
+        float inverse = 1.0F - t;
+        return 1.0F - inverse * inverse * inverse;
+    }
+
+    @Unique
+    private float dreamingFishCore$introProgress() {
+        return dreamingFishCore$easeOutCubic(
+                (System.currentTimeMillis() - dreamingFishCore$openedAt)
+                        / (float) dreamingFishCore$INTRO_MS);
+    }
+
+    @Unique
+    private int dreamingFishCore$withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (Math.max(0, Math.min(255, alpha)) << 24);
+    }
+
+    @Unique
+    private int dreamingFishCore$multiplyAlpha(int color, int alpha) {
+        return dreamingFishCore$withAlpha(color,
+                (color >>> 24) * Math.max(0, Math.min(255, alpha)) / 255);
     }
 }

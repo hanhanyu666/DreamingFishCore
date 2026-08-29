@@ -22,8 +22,24 @@ public class Rank {
         this.rankColor = rankColor;
     }
 
+    public Rank(String rankName, RankTier tier) {
+        this(rankName, tier.level());
+    }
+
+    public Rank(String rankName, RankTier tier, int rankColor) {
+        this(rankName, tier.level(), rankColor);
+    }
+
     public int getRankLevel() {
         return rankLevel;
+    }
+
+    public RankTier getTier() {
+        return RankTier.fromLevel(rankLevel);
+    }
+
+    public boolean isAtLeast(RankTier minimumTier) {
+        return getTier().isAtLeast(minimumTier);
     }
 
     public String getRankName() {

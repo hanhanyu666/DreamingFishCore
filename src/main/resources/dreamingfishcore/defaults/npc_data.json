@@ -1,0 +1,238 @@
+{
+  "1": {
+    "npcId": 1,
+    "npcName": "剧情记录员",
+    "npcIntroduction": "他记录着服务器共同推进的故事，也会记住每位玩家与他的交情。",
+    "npcGender": "未知",
+    "npcFeamale": null,
+    "npcProfession": "记录员",
+    "storyStageId": 1,
+    "dialogues": [
+      "欢迎回来。这个世界的故事不是一个人写完的。",
+      "如果你带来了我正在寻找的东西，我会记住这份帮助。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": {
+      "thoughtText": "我现在想要一个苹果，用来确认赠礼系统是否正常。",
+      "wantedItemId": "minecraft:apple",
+      "wantedAction": "",
+      "favorabilityReward": 20,
+      "returnGiftChance": 0
+    },
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  },
+  "100": {
+    "npcId": 100,
+    "npcName": "梦屿应急联络员",
+    "npcIntroduction": "梦屿公共应急频段的轮值联络席。逐光会刚刚出现时，这里负责把医疗、能源、警备、物流和幸存者接到同一条线上。",
+    "npcGender": "未知",
+    "npcFeamale": null,
+    "npcProfession": "临时联络",
+    "storyStageId": 1,
+    "dialogues": [
+      "逐光会现在只有一个名字和几条临时线路，还没有你想象中的总部。",
+      "愿意帮忙就挑一件做得到的事。把一盏灯维持到天亮，也算。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  },
+  "101": {
+    "npcId": 101,
+    "npcName": "白芷",
+    "npcIntroduction": "梦屿中央医院感染医学科住院医师，现在在梦屿与外缘带地区的阿拜多斯学校进行医疗志愿。\n随着你们逐渐的认识，你对她的了解会变多",
+    "npcGender": "女",
+    "npcFeamale": null,
+    "npcProfession": "感染科医生",
+    "storyStageId": 1,
+    "dialogues": [
+      "伤员先报名字，再报伤情。名字不知道就问，问不到再写身份待确认。",
+      "现在能做的检查很有限。哪里不舒服就告诉我，别一个人硬撑。",
+      "镇上最近在筹建一个组织，叫人类逐光联合会。医院、维修队和搜救的人，想先把彼此连起来。",
+      "基地还只是个开头，仓库、救援交接点和能让人过夜的地方，都要一点点搭起来。",
+      "加入不是交出自己的生活。愿意的人一起建设，不加入也能在阿拜多斯生活、看病和做交易。",
+      "周岑负责登记和具体安排。先听他把条件讲完，再按自己的想法决定。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    },
+    "appearance": {
+      "skin": "dreamingfishcore:textures/entity/npc/baizhi.png",
+      "model": "slim",
+      "showName": true
+    }
+  },
+  "102": {
+    "npcId": 102,
+    "npcName": "江晚",
+    "npcIntroduction": "谨慎的微生物研究者。她会明确区分已知事实、合理推测、尚无证据与无法排除的风险。",
+    "npcGender": "女",
+    "npcFeamale": null,
+    "npcProfession": "微生物研究员",
+    "storyStageId": 1,
+    "dialogues": [
+      "隔离门要关，沟通窗口也要留。两件事不冲突。",
+      "个例值得被记录，但个例不能替所有人作出保证。",
+      "请写明时间、地点和接触条件。昨天好像没事，不构成可复核记录。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  },
+  "103": {
+    "npcId": 103,
+    "npcName": "梁朔",
+    "npcIntroduction": "外缘扩岸过渡社区的基础设施维护员。危机刚发生时，他仍在维持医院冷库、供水、通风和通信。",
+    "npcGender": "男",
+    "npcFeamale": null,
+    "npcProfession": "基础设施维护员",
+    "storyStageId": 1,
+    "dialogues": [
+      "先别问我为什么没撤。医院冷库、水泵和避难所风机都没撤。",
+      "线路出问题，先查哪里断了。不能因为图纸上它应该通，就说灯没灭。",
+      "别叫我英雄。把留在那里的人名字找回来，比给我一个称号有用。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  },
+  "104": {
+    "npcId": 104,
+    "npcName": "尉迟南",
+    "npcIntroduction": "通兰天文台宇宙学研究员。危机后返回天文台，尝试恢复与梦屿的科研通信并保存原始资料。",
+    "npcGender": "男",
+    "npcFeamale": null,
+    "npcProfession": "天体物理研究员",
+    "storyStageId": 1,
+    "dialogues": [
+      "我恢复这条链路首先是为了天气、污染和幸存者信息。",
+      "我不能证明那是回应，但我也不能证明它只是噪声。",
+      "能收到和应该广播，是两个问题。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  },
+  "105": {
+    "npcId": 105,
+    "npcName": "周岑",
+    "npcIntroduction": "人类逐光联合会筹备处的临时负责人，负责人员登记、物资安排与基地建设协调。他习惯先把承诺和代价都讲明白，再让对方自己决定。",
+    "npcGender": "男",
+    "npcFeamale": null,
+    "npcProfession": "逐光会筹备处负责人",
+    "storyStageId": 1,
+    "dialogues": [
+      "基地还在图纸和脚手架之间。砖、木料和肯搭把手的人，缺一不可。",
+      "愿意加入，我们会给你工作和补给；暂时不加入，也不会影响你在阿拜多斯生活。",
+      "危机越乱，越不能替别人作决定。先把条件讲清楚。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 300,
+      "WARNING_RULES": 600,
+      "VIEW_BACKPACK": 600,
+      "ASSIGN_TASK": 100,
+      "GIFT_ITEM": 0,
+      "DIALOGUE": 0,
+      "SET_HOME": 300
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    }
+  }
+}

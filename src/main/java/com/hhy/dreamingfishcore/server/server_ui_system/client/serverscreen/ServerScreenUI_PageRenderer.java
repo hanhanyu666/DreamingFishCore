@@ -811,11 +811,12 @@ public class ServerScreenUI_PageRenderer {
         // 进度信息行（进度条上方）
         int progressInfoY = descY + 6;
 
-        // 左侧：玩家完成进度（灰色）
-        String playerProgressText = String.format("您的完成进度: %d/%d", finishedCount, totalCount);
+        // 左侧：全服玩家完成比例；个人任务不能因为一名玩家完成就直接算作全服完成。
+        String playerProgressText = String.format(
+            "全服完成比例: %.0f%%", Math.max(0.0f, Math.min(1.0f, globalProgress)) * 100.0f);
         guiGraphics.drawString(mc.font, playerProgressText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
 
-        String serverProgressText = String.format("全服进度: %d/%d · 失败 %d", globalResolved, totalCount, failedCount);
+        String serverProgressText = String.format("已结算任务: %d/%d · 失败 %d", globalResolved, totalCount, failedCount);
         int serverTextWidth = mc.font.width(serverProgressText);
         guiGraphics.drawString(mc.font, serverProgressText, x + width - innerMargin - serverTextWidth, progressInfoY, 0xFFAAAAAA);
 
@@ -1081,7 +1082,9 @@ public class ServerScreenUI_PageRenderer {
         } else {
             // 故事任务显示完成人数
             int countTextX = x + width - innerMargin - 4;
-            String countText = finishedCount > 0 ? finishedCount + "人" : "";
+            String countText;
+            // 故事任务卡显示完成玩家数；个人故事任务的全服比例显示在阶段卡片上。
+            countText = finishedCount > 0 ? finishedCount + "人" : "";
             int countWidth = mc.font.width(countText);
             guiGraphics.drawString(mc.font, countText, countTextX - countWidth,
                 y + cardHeight - innerMargin - mc.font.lineHeight, 0xFF888888);
@@ -1098,130 +1101,4 @@ public class ServerScreenUI_PageRenderer {
         }
     }
 
-    // ==================== 帮助页面渲染 ====================
-
-    /**
-     * 渲染帮助页面
-     */
-    public void renderHelpPage(GuiGraphics guiGraphics, int x, int width, int mouseX, int mouseY,
-                                int virtualWidth, float uiScale) {
-        // 填充深半透明黑色背景
-        guiGraphics.fill(RenderType.gui(), x, 0, virtualWidth, screen.getVirtualHeight(), 0x99000000);
-
-        int innerMargin = 16;
-        int startY = 20;
-
-        // 获取帮助内容和滚动偏移
-        long scrollOffset = screen.getHelpScrollOffset();
-        String[] helpLines = getHelpContent();
-
-        int lineHeight = 18;
-        int maxHeight = screen.getVirtualHeight() - startY - 20;
-        int visibleLines = maxHeight / lineHeight;
-
-        // 渲染可见内容（支持行内颜色）
-        for (int i = 0; i < visibleLines; i++) {
-            int lineIndex = (int) (i + scrollOffset);
-            if (lineIndex >= helpLines.length) break;
-
-            String line = helpLines[lineIndex];
-            int lineY = startY + i * lineHeight;
-
-            // 使用 Component 自动解析颜色代码
-            net.minecraft.network.chat.Component textComponent = net.minecraft.network.chat.Component.literal(line);
-            guiGraphics.drawString(mc.font, textComponent, x + innerMargin, lineY, 0xFFFFFFFF);
-        }
-
-        // 滚动提示
-        if (helpLines.length > visibleLines) {
-            String scrollHint = String.format("▼ 滚动查看 (%d/%d)", (int) scrollOffset + 1, helpLines.length - visibleLines + 1);
-            int hintWidth = mc.font.width(scrollHint);
-            guiGraphics.drawString(mc.font, scrollHint, x + (width - hintWidth) / 2, screen.getVirtualHeight() - 30, 0xFF666666);
-        }
-    }
-
-    /**
-     * 获取帮助内容
-     */
-    private static String[] getHelpContent() {
-        return new String[]{
-            "§6欢迎来到梦鱼服，看到这段文本说明您已经踏入了梦屿，并想成为梦屿剧情的推进者",
-            "",
-            "§f为了帮助您在这个充满危机的方块世界生存下去，下面是您需要了解的机制",
-            "",
-            "§f您现在会感到疲惫，恐惧，不过§e体力§f与§e血量§f会随着您的等级增加而增加。",
-            "§f§a绿色§f的进度条就是您的体力值，而§d紫色§f则是您的勇气值。",
-            "§f§d勇气值§f越低，也代表着您越恐惧。黑暗的地方，周围的怪物都会使您感到恐惧，",
-            "§f与其他玩家在一起，待在§e光亮§f的环境下可以帮助您恢复勇气值，",
-            "§f此外，§e短时间快速击杀野怪§f可以让您快速恢复勇气值。",
-            "§f请注意：虽然与其他玩家在一起可以帮您恢复勇气值，但是§c一旦§f有其他玩家在您附近§c死亡§f后，您会感到恐惧，",
-            "§f§d勇气值§f高可以让您充满力量，§c过于恐惧§f会让你畏手畏脚。",
-            "",
-            "§f§a探索生物群系§f，§e击杀怪物§f，§b获得原版成就§f，§e完成原版挑战§f（尤其是§c隐藏成就§f）会使您快速增加等级。",
-            "",
-            "§f您需要与其他玩家发现这场危机的真相——点击§e故事§f可以查看当前的剧情阶段，",
-            "§f与其他玩家完成的进度。故事剧情的后续发展是由于您与其他玩家决定的，",
-            "§f请保持您自己的思考，认真思考在探索过程中收集到的剧情类物品，",
-            "§c因为他人的思考推理不一定正确§f——错误的推断可能会导致结局走向失败，",
-            "§c而您也将成为失败的帮凶§f。",
-            "",
-            "§f虽然2066年梦屿的玩家已经可以通过自身细胞的重新分裂实现重生，但是重生需要代价。",
-            "§f就目前而言，§2幸存者§f的重生惩罚比§4感染者§f小，因此您需要注意身上的感染值，",
-            "§f§4感染值达到100§f，会使您成为§4感染者§f。感染者会发生什么谁也不知道，",
-            "§f随着游戏阶段的不同，感染者本身也会发生微妙的变化。",
-            "§f在这个充满感染的世界里，您受到伤害就会增加感染值，",
-            "§f与被感染的玩家待在一起也会缓慢增加您的感染值。",
-            "§f§2被感染的玩家需要幸存玩家使用道具才能解除感染状态§f。",
-            "§f当然，§5分裂次数§f会随着时间缓慢的增加，前提是您的身体保持一个良好状态。",
-            "",
-            "§f当您的§5分裂次数§f用尽后，您将无法重生，需要一名玩家拯救您。",
-            "§f拯救您的玩家是什么状态，那么您也是什么状态。",
-            "§f如果是§4感染者§f救助的您，那么您重生了也是§4感染者§f。",
-            "",
-            "§a加油生存下去吧萌新鱼友，服务器需要您的拯救。",
-        };
-    }
-
-    /**
-     * 获取帮助内容行数
-     */
-    public static int getHelpContentLines() {
-        return getHelpContent().length;
-    }
-
-    /**
-     * 解析颜色代码（如 §6 -> 0xFFFFD700）
-     */
-    private int parseColorCode(String line) {
-        if (line == null || line.length() < 2) return 0xFFFFFFFF;
-
-        char colorChar = line.charAt(1);
-        return switch (colorChar) {
-            case '0' -> 0x000000; // 黑色
-            case '1' -> 0x0000AA; // 深蓝色
-            case '2' -> 0x00AA00; // 深绿色
-            case '3' -> 0x00AAAA; // 深青色
-            case '4' -> 0xAA0000; // 深红色
-            case '5' -> 0xAA00AA; // 深紫色
-            case '6' -> 0xFFFFD700; // 金色
-            case '7' -> 0xAAAAAA; // 灰色
-            case '8' -> 0x555555; // 深灰色
-            case '9' -> 0x5555FF; // 蓝色
-            case 'a' -> 0x55FF55; // 绿色
-            case 'b' -> 0x55FFFF; // 青色
-            case 'c' -> 0xFF5555; // 红色
-            case 'd' -> 0xFF55FF; // 粉色
-            case 'e' -> 0xFFFF55; // 黄色
-            case 'f' -> 0xFFFFFF; // 白色
-            default -> 0xFFFFFF;
-        } | 0xFF000000; // 添加 alpha 通道
-    }
-
-    /**
-     * 移除颜色代码，只保留纯文本
-     */
-    private String stripColorCodes(String line) {
-        if (line == null) return "";
-        return line.replaceAll("§[0-9a-fA-F]", "");
-    }
 }

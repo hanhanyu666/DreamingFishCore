@@ -1,13 +1,14 @@
 package com.hhy.dreamingfishcore.server.notice_system.client;
 
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI_Screen;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 
 import java.time.Instant;
@@ -48,12 +49,15 @@ public class Screen_NoticeDetail extends Screen {
     // 打开前的页面索引（用于关闭后返回原页面）
     private final int previousPageIndex;
 
+    // 打开前的公告分类标签（0=游戏公告，1=服务器通知（MAINTENANCE））
+    private final int previousNoticeTab;
+
     // 打开时间戳（用于防止点击事件传播导致立刻关闭）
     private final long openTime;
 
     // 弹窗尺寸（像素）
     private int boxWidth = 420;
-    private int boxHeight = 280;
+    private int boxHeight = 312;
     private int boxX, boxY;
 
     // 关闭按钮区域
@@ -71,9 +75,14 @@ public class Screen_NoticeDetail extends Screen {
     private static final ZoneId ZONE = ZoneId.systemDefault();
 
     public Screen_NoticeDetail(NoticeData notice, int previousPageIndex) {
+        this(notice, previousPageIndex, notice != null && !notice.isGameNotice() ? 1 : 0);
+    }
+
+    public Screen_NoticeDetail(NoticeData notice, int previousPageIndex, int previousNoticeTab) {
         super(Component.literal("NoticeDetail"));
         this.notice = notice;
         this.previousPageIndex = previousPageIndex;
+        this.previousNoticeTab = Math.max(0, Math.min(1, previousNoticeTab));
         this.openTime = System.currentTimeMillis();
     }
 
@@ -112,13 +121,13 @@ public class Screen_NoticeDetail extends Screen {
             int virtualMouseX = (int) (mouseX / virtualSize.uiScale);
             int virtualMouseY = (int) (mouseY / virtualSize.uiScale);
 
-            // 2. 主面板（双层边框 + 圆角效果）
-            // 外层深色边框
-            renderRoundedBox(guiGraphics, boxX - 4, boxY - 4, boxX + boxWidth + 4, boxY + boxHeight + 4, BORDER_DARK);
-            // 内层发光边框
-            renderRoundedBox(guiGraphics, boxX - 2, boxY - 2, boxX + boxWidth + 2, boxY + boxHeight + 2, BORDER_GLOW);
-            // 主背景
-            guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, BG_INNER);
+            // 2. 主面板：三层圆角共用同一个圆心，避免边框视觉偏心。
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, boxX - 4, boxY - 4,
+                    boxWidth + 8, boxHeight + 8, 8, BORDER_DARK, 0);
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, boxX - 2, boxY - 2,
+                    boxWidth + 4, boxHeight + 4, 6, BORDER_GLOW, 0);
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, boxX, boxY,
+                    boxWidth, boxHeight, 4, BG_INNER, 0);
 
             var poseStack = guiGraphics.pose();
 
@@ -134,8 +143,9 @@ public class Screen_NoticeDetail extends Screen {
             // 4. 标题（右侧，放大）
             poseStack.pushPose();
             poseStack.scale(1.5f, 1.5f, 1.0f);
-            String title = notice.getNoticeTitle();
-            String titleText = "§l§f" + (title != null ? title : "无标题");
+            String title = fitText(safeNoticeText(notice == null ? null : notice.getNoticeTitle(), "无标题"),
+                Math.max(40, (int) ((boxWidth - 108) / scaleForTitle())));
+            String titleText = "§l§f" + title;
             float scale = 1.5f;
             int titleX = (int) ((boxX + 90) / scale);
             int titleY = (int) ((boxY + 28) / scale);
@@ -153,20 +163,32 @@ public class Screen_NoticeDetail extends Screen {
             guiGraphics.fill(boxX + PADDING, lineY, boxX + boxWidth - PADDING, lineY + 2, ACCENT_CYAN);
             guiGraphics.fill(boxX + PADDING, lineY + 3, boxX + boxWidth - PADDING, lineY + 4, 0xAA004444);
 
-            // 7. 发布时间
-            String dateTime = formatDateTime(notice.getPublishTime());
-            String timeText = "§7发布时间: §f" + dateTime;
-            int timeWidth = this.font.width(timeText);
-            int centerX = boxX + boxWidth / 2;
-            guiGraphics.drawString(this.font, timeText, centerX - timeWidth / 2, boxY + 68, TIME_COLOR);
+            // 7. 公告分类与元数据。剧情日期属于后台元数据，不在玩家界面展示。
+            boolean gameNotice = notice != null && notice.isGameNotice();
+            String categoryText = gameNotice ? "类别：梦屿广播" : "类别：服务器公告";
+            drawCenteredText(guiGraphics, categoryText, boxY + 68, ACCENT_CYAN);
+            int contentY;
+            if (gameNotice) {
+                String stageText = "故事阶段：" + getNoticeStageLabel(notice);
+                drawCenteredText(guiGraphics, fitText(stageText, boxWidth - 2 * PADDING), boxY + 83, TIME_COLOR);
+                contentY = boxY + 101;
+            } else {
+                String dateTime = notice == null ? "未标注" : formatDateTime(notice.getPublishTime());
+                drawCenteredText(guiGraphics, "发布时间：" + dateTime, boxY + 84, TIME_COLOR);
+                contentY = boxY + 105;
+            }
 
-            // 8. 内容区域
-            int contentY = boxY + 90;
+            // 8. 正文区域：限定在关闭按钮上方，长文超出时截断，避免覆盖按钮。
             int contentWidth = boxWidth - 2 * PADDING;
             int contentX = boxX + PADDING;
-            String content = notice.getNoticeContent();
-            String safeContent = (content != null) ? content : "暂无内容";
-            renderWrappedText(guiGraphics, safeContent, contentX, contentY, contentWidth);
+            int contentBottom = closeButtonY - 10;
+            int contentPanelY = contentY - 8;
+            int contentPanelHeight = Math.max(32, contentBottom - contentPanelY);
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, contentX - 2, contentPanelY,
+                contentWidth + 4, contentPanelHeight, 2, 0xAA082525, 0x663A7777);
+            guiGraphics.drawString(this.font, "正文", contentX + 6, contentPanelY + 5, ACCENT_CYAN);
+            String safeContent = safeNoticeText(notice == null ? null : notice.getNoticeContent(), "暂无内容");
+            renderWrappedText(guiGraphics, safeContent, contentX, contentY + 18, contentWidth, contentBottom - 4);
 
             // 9. 绘制关闭按钮
             renderCustomButton(guiGraphics, virtualMouseX, virtualMouseY, closeButtonX, closeButtonY, closeButtonWidth, closeButtonHeight, "§b关闭");
@@ -186,14 +208,6 @@ public class Screen_NoticeDetail extends Screen {
     }
 
     /**
-     * 渲染圆角盒子（参考 ConnectScreenMixin）
-     */
-    private void renderRoundedBox(GuiGraphics guiGraphics, int x1, int y1, int x2, int y2, int color) {
-        guiGraphics.fill(RenderType.gui(), x1 + 1, y1, x2 - 1, y2, color);
-        guiGraphics.fill(RenderType.gui(), x1, y1 + 1, x2, y2 - 1, color);
-    }
-
-    /**
      * 渲染自定义按钮（参考 ConnectScreenMixin.CustomButton）
      */
     private void renderCustomButton(GuiGraphics guiGraphics, int mouseX, int mouseY, int x, int y, int width, int height, String text) {
@@ -210,21 +224,9 @@ public class Screen_NoticeDetail extends Screen {
             borderColor = BTN_BORDER_NORMAL;
         }
 
-        // 渐变背景
-        guiGraphics.fill(RenderType.gui(), x + 2, y, x + width - 2, y + height, topColor);
-        guiGraphics.fill(RenderType.gui(), x + 2, y + height, x + width - 2, y + height + 1, bottomColor);
-
-        // 边框
-        guiGraphics.fill(RenderType.gui(), x + 1, y, x + 2, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - 2, y, x + width - 1, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + 2, y, x + width - 2, y + 1, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + 2, y + height - 1, x + width - 2, y + height, borderColor);
-
-        // 角落装饰
-        guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + 1, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - 1, y, x + width, y + 1, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + height - 1, x + 1, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - 1, y + height - 1, x + width, y + height, borderColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, width, height,
+                4, topColor, borderColor);
+        guiGraphics.fill(x + 4, y + height - 2, x + width - 4, y + height - 1, bottomColor);
 
         // 文字
         String displayText = text;
@@ -236,7 +238,7 @@ public class Screen_NoticeDetail extends Screen {
     /**
      * 渲染自动换行的文本
      */
-    private void renderWrappedText(GuiGraphics guiGraphics, String text, int x, int y, int maxWidth) {
+    private void renderWrappedText(GuiGraphics guiGraphics, String text, int x, int y, int maxWidth, int maxY) {
         String[] lines = text.split("\n");
         int currentY = y;
 
@@ -244,15 +246,54 @@ public class Screen_NoticeDetail extends Screen {
             String remaining = line;
             while (!remaining.isEmpty() && this.font.width(remaining) > maxWidth) {
                 int breakPoint = findBreakPoint(remaining, maxWidth);
+                if (currentY + this.font.lineHeight > maxY) return;
                 guiGraphics.drawString(this.font, remaining.substring(0, breakPoint), x, currentY, CONTENT_COLOR);
                 remaining = remaining.substring(breakPoint);
                 currentY += this.font.lineHeight + 4;
             }
             if (!remaining.isEmpty()) {
+                if (currentY + this.font.lineHeight > maxY) return;
                 guiGraphics.drawString(this.font, remaining, x, currentY, CONTENT_COLOR);
                 currentY += this.font.lineHeight + 4;
             }
         }
+    }
+
+    private void drawCenteredText(GuiGraphics guiGraphics, String text, int y, int color) {
+        String safeText = safeNoticeText(text, "");
+        int textX = boxX + boxWidth / 2 - this.font.width(safeText) / 2;
+        guiGraphics.drawString(this.font, safeText, textX, y, color);
+    }
+
+    private String getNoticeStageLabel(NoticeData notice) {
+        String stageId = notice == null ? "" : safeNoticeText(notice.getStoryStageId(), "");
+        if (stageId.isBlank()) return "未指定";
+        var stages = ClientCacheManager.getStoryStages();
+        if (stages != null) {
+            for (var stage : stages.values()) {
+                if (stage != null && stageId.equals(stage.getStageId())) {
+                    return "第" + stage.getStageNumber() + "阶段 · "
+                        + safeNoticeText(stage.getStageName(), "未命名");
+                }
+            }
+        }
+        return stageId;
+    }
+
+    private String fitText(String text, int maxWidth) {
+        String safeText = safeNoticeText(text, "");
+        if (maxWidth <= 0 || this.font.width(safeText) <= maxWidth) return safeText;
+        int ellipsisWidth = this.font.width("...");
+        if (maxWidth <= ellipsisWidth) return "...";
+        return this.font.plainSubstrByWidth(safeText, maxWidth - ellipsisWidth) + "...";
+    }
+
+    private float scaleForTitle() {
+        return 1.5f;
+    }
+
+    private String safeNoticeText(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private int findBreakPoint(String text, int maxWidth) {
@@ -285,6 +326,7 @@ public class Screen_NoticeDetail extends Screen {
         ServerScreenUI_Screen screen =
             new ServerScreenUI_Screen();
         screen.setSelectedPageIndex(previousPageIndex);
+        screen.setNoticeTab(previousNoticeTab);
         mc.setScreen(screen);
     }
 
@@ -325,4 +367,3 @@ public class Screen_NoticeDetail extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 }
-

@@ -12,34 +12,34 @@ public class RankRegistry {
     // OPERATOR: 红色 (0xFF5555 - §c)
 
     public static final Rank NULL = new Rank(
-            "NULL", -1, 0xAAAAAA
+            "NULL", RankTier.UNKNOWN, 0xAAAAAA
     );
     public static final Rank NO_RANK = new Rank(
-            "NO_RANK", 0, 0xAAAAAA
+            "NO_RANK", RankTier.NO_RANK, 0xAAAAAA
     );
     public static final Rank FISH = new Rank(
-            "FISH", 1, 0x55FF55
+            "FISH", RankTier.FISH, 0x55FF55
     );
     public static final Rank FISH_PLUS = new Rank(
-            "FISH+", 2, 0x55FFFF
+            "FISH+", RankTier.FISH_PLUS, 0x55FFFF
     );
     public static final Rank FISH_PLUS_PLUS = new Rank(
-            "FISH++", 3, 0xFFAA00
+            "FISH++", RankTier.FISH_PLUS_PLUS, 0xFFAA00
     );
     public static final Rank OPERATOR = new Rank(
-            "OPERATOR", 4, 0xFF5555
+            "OPERATOR", RankTier.MYTH, 0xFF5555
     );
     public static final Rank BUILDER_FISH = new Rank(
-            "BUILDER FISH", 5, 0x55FF55
+            "BUILDER FISH", RankTier.FISH, 0x55FF55
     );
     public static final Rank SUPER_BUILDER_FISH = new Rank(
-            "SUPER BUILDER FISH", 6, 0x55FFFF
+            "SUPER BUILDER FISH", RankTier.FISH_PLUS, 0x55FFFF
     );
     public static final Rank WORLD_SHAPER_FISH = new Rank(
-            "WORLD SHAPER FISH", 7, 0xFFAA00
+            "WORLD SHAPER FISH", RankTier.FISH_PLUS_PLUS, 0xFFAA00
     );
     public static final Rank MYTH_SHAPER_FISH = new Rank(
-            "MYTH SHAPER FISH", 8, 0xFF69B4
+            "MYTH SHAPER FISH", RankTier.MYTH, 0xFF69B4
     );
 
     private static final List<Rank> REGISTERED_RANKS = List.of(
@@ -52,16 +52,16 @@ public class RankRegistry {
         if (name == null) {
             return NO_RANK;
         }
-        return switch (name.trim().toUpperCase(Locale.ROOT)) {
-            case "NO_RANK" -> NO_RANK;
+        return switch (normalizeName(name)) {
+            case "NO RANK" -> NO_RANK;
             case "FISH" -> FISH;
             case "FISH+" -> FISH_PLUS;
             case "FISH++" -> FISH_PLUS_PLUS;
             case "OPERATOR" -> OPERATOR;
-            case "BUILDER FISH", "BUILDER_FISH" -> BUILDER_FISH;
-            case "SUPER BUILDER FISH", "SUPER_BUILDER_FISH" -> SUPER_BUILDER_FISH;
-            case "WORLD SHAPER FISH", "WORLD_SHAPER_FISH" -> WORLD_SHAPER_FISH;
-            case "MYTH SHAPER FISH", "MYTH_SHAPER_FISH" -> MYTH_SHAPER_FISH;
+            case "BUILDER FISH" -> BUILDER_FISH;
+            case "SUPER", "SUPER BUILDER FISH" -> SUPER_BUILDER_FISH;
+            case "WORLD SHAPER FISH" -> WORLD_SHAPER_FISH;
+            case "MYTH", "MYTH SHAPER FISH" -> MYTH_SHAPER_FISH;
             default -> NO_RANK;
         };
     }
@@ -70,32 +70,41 @@ public class RankRegistry {
         if (name == null) {
             return false;
         }
-        String normalizedName = name.trim().toUpperCase(Locale.ROOT);
-        return REGISTERED_RANKS.stream()
-                .anyMatch(rank -> rank.getRankName().equals(normalizedName)
-                        || (rank == BUILDER_FISH && "BUILDER_FISH".equals(normalizedName))
-                        || (rank == SUPER_BUILDER_FISH && "SUPER_BUILDER_FISH".equals(normalizedName))
-                        || (rank == WORLD_SHAPER_FISH && "WORLD_SHAPER_FISH".equals(normalizedName))
-                        || (rank == MYTH_SHAPER_FISH && "MYTH_SHAPER_FISH".equals(normalizedName)));
+        String normalizedName = normalizeName(name);
+        return "SUPER".equals(normalizedName)
+                || "MYTH".equals(normalizedName)
+                || REGISTERED_RANKS.stream()
+                .anyMatch(rank -> normalizeName(rank.getRankName()).equals(normalizedName));
     }
 
     public static List<Rank> getRegisteredRanks() {
         return REGISTERED_RANKS;
     }
 
-    // 按等级查找
+    /** Returns the base rank representing a tier. Use {@link #getRanksByLevel(int)} for aliases. */
     public static Rank getRankByLevel(int level) {
-        return switch (level) {
-            case 0 -> NO_RANK;
-            case 1 -> FISH;
-            case 2 -> FISH_PLUS;
-            case 3 -> FISH_PLUS_PLUS;
-            case 4 -> OPERATOR;
-            case 5 -> BUILDER_FISH;
-            case 6 -> SUPER_BUILDER_FISH;
-            case 7 -> WORLD_SHAPER_FISH;
-            case 8 -> MYTH_SHAPER_FISH;
+        return switch (RankTier.fromLevel(level)) {
+            case NO_RANK -> NO_RANK;
+            case FISH -> FISH;
+            case FISH_PLUS -> FISH_PLUS;
+            case FISH_PLUS_PLUS -> FISH_PLUS_PLUS;
+            case MYTH -> OPERATOR;
             default -> NO_RANK;
         };
+    }
+
+    /** Returns every named rank assigned to the requested privilege tier. */
+    public static List<Rank> getRanksByLevel(int level) {
+        RankTier tier = RankTier.fromLevel(level);
+        if (tier == RankTier.UNKNOWN) {
+            return List.of();
+        }
+        return REGISTERED_RANKS.stream()
+                .filter(rank -> rank.getTier() == tier)
+                .toList();
+    }
+
+    private static String normalizeName(String name) {
+        return name.trim().toUpperCase(Locale.ROOT).replace('_', ' ');
     }
 }

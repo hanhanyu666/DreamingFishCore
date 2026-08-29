@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.item;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntities;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -28,6 +29,7 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get());
                         output.accept(DreamingFishCore_Items.REVIVAL_CHARM.get());
                         output.accept(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get());
+                        output.accept(SiegeZombieEntities.SIEGE_ZOMBIE_SPAWN_EGG.get());
                     })
                     .build()
     );

@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingTransitionController;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.GenericMessageScreen;
@@ -24,9 +25,11 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
     }
 
     @Inject(method = "renderBackground", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY,
+                                                   float partialTick, CallbackInfo ci) {
         ci.cancel();
         dreamingFishCore$renderCleanWaitingScreen(guiGraphics);
+        LoadingTransitionController.renderLoadingEntry(guiGraphics, this.width, this.height);
     }
 
     @Unique
@@ -53,6 +56,7 @@ public abstract class GenericDirtMessageScreenMixin extends Screen {
         LoadingScreenUi.renderBottomStatusText(guiGraphics, this.font, vw, vh, statusText);
 
         guiGraphics.pose().popPose();
+        LoadingTransitionController.rememberTextFrame(tip, statusText);
     }
 
 }

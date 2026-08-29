@@ -1,8 +1,10 @@
 package com.hhy.dreamingfishcore.server.notice_system.command;
 
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
+import com.hhy.dreamingfishcore.server.notice_system.NoticeCategory;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
+import com.hhy.dreamingfishcore.server.notice_system.NoticeDeliveryService;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
-import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -13,7 +15,9 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 公告管理指令
- * /notice add "标题" "内容" - 添加新公告（引号内可含空格）
+ * /notice add "标题" "内容" - 添加服务器通知（兼容旧用法）
+ * /notice add maintenance "标题" "内容" - 添加服务器通知（MAINTENANCE）
+ * /notice add game "stageId" "storyDate" "标题" "内容" - 添加游戏公告
  * /notice delete <ID> - 删除指定ID的公告
  * /notice list - 列出所有公告
  * /notice reload - 重新加载公告配置
@@ -65,25 +69,50 @@ public class Command_Notice {
         );
     }
 
-    /**
-     * 添加新公告
-     * 用法：/notice add "标题" "内容"
-     * 示例：/notice add "新活动" "&e周末开启双倍经验活动！&r"
-     *
-     * 支持 & 符号代替颜色符号
-     */
+    /** 添加服务器通知（MAINTENANCE，旧命令格式仍然有效）或带故事元数据的游戏公告。 */
     private static int executeAddNotice(CommandContext<CommandSourceStack> context) {
         String input = StringArgumentType.getString(context, "input");
 
-        // 解析引号包裹的参数
-        String[] parts = parseQuotedStrings(input);
-        if (parts.length < 2) {
-            context.getSource().sendFailure(Component.literal("§c格式错误！正确格式: /notice add \"标题\" \"内容\""));
-            return 0;
+        String trimmedInput = input == null ? "" : input.trim();
+        NoticeCategory category = NoticeCategory.MAINTENANCE;
+        String stageId = "";
+        String storyDate = "";
+        String[] parts;
+
+        if (hasCommandPrefix(trimmedInput, "game")) {
+            category = NoticeCategory.GAME;
+            parts = parseQuotedStrings(stripCommandPrefix(trimmedInput, "game"));
+            if (parts.length != 4) {
+                sendUsageFailure(context, "§c格式错误！游戏公告用法：/notice add game \"stageId\" \"storyDate\" \"标题\" \"内容\"");
+                return 0;
+            }
+            stageId = parts[0].trim();
+            storyDate = parts[1].trim();
+            if (stageId.isEmpty() || storyDate.isEmpty()) {
+                context.getSource().sendFailure(Component.literal("§c游戏公告的 stageId 和 storyDate 不能为空"));
+                return 0;
+            }
+            if (StoryManager.getStage(stageId) == null) {
+                context.getSource().sendFailure(Component.literal("§c不存在故事阶段：" + stageId));
+                return 0;
+            }
+        } else if (hasCommandPrefix(trimmedInput, "maintenance")) {
+            parts = parseQuotedStrings(stripCommandPrefix(trimmedInput, "maintenance"));
+            if (parts.length != 2) {
+                sendUsageFailure(context, "§c格式错误！服务器通知用法：/notice add maintenance \"标题\" \"内容\"");
+                return 0;
+            }
+        } else {
+            // 保留旧命令：未声明类别的公告一律按服务器通知（MAINTENANCE）处理。
+            parts = parseQuotedStrings(trimmedInput);
+            if (parts.length != 2) {
+                sendUsageFailure(context, "§c格式错误！兼容用法：/notice add \"标题\" \"内容\"");
+                return 0;
+            }
         }
 
-        String title = parts[0];
-        String content = parts[1];
+        String title = category == NoticeCategory.GAME ? parts[2] : parts[0];
+        String content = category == NoticeCategory.GAME ? parts[3] : parts[1];
 
         // 将 & 替换为 §
         String formattedTitle = title.replace("&", "§");
@@ -92,16 +121,16 @@ public class Command_Notice {
         int newId = NoticeManager.getMaxNoticeId() + 1;
         long now = System.currentTimeMillis();
 
-        NoticeData newNotice = new NoticeData(newId, formattedTitle, formattedContent, now);
+        NoticeData newNotice = new NoticeData(
+                newId, formattedTitle, formattedContent, now,
+                category, stageId, storyDate, "");
 
         if (NoticeManager.addNotice(newNotice)) {
             context.getSource().sendSuccess(
                     () -> Component.literal("§a成功添加公告 [ID:" + newId + "]: " + formattedTitle),
                     true
             );
-            // 向全服广播新公告提示
-            NotificationPushHelper.broadcastTopLeftNotification(
-                    "§b§l您有新的公告需要查看", 15000);
+            NoticeDeliveryService.publishToEligibleOnlinePlayers(newNotice);
             return 1;
         } else {
             context.getSource().sendFailure(Component.literal("§c添加公告失败"));
@@ -130,15 +159,32 @@ public class Command_Notice {
                 inQuotes = !inQuotes;
             } else if (inQuotes) {
                 current.append(c);
+            } else if (!Character.isWhitespace(c)) {
+                // 所有参数都必须使用引号，避免把错误的前缀静默吞掉。
+                return new String[0];
             }
         }
 
-        // 如果最后一个引号没有闭合
-        if (current.length() > 0) {
-            result.add(current.toString());
+        // 如果最后一个引号没有闭合，返回空结果让调用方给出准确用法。
+        if (inQuotes) {
+            return new String[0];
         }
 
         return result.toArray(new String[0]);
+    }
+
+    private static boolean hasCommandPrefix(String input, String prefix) {
+        return input.equals(prefix)
+                || input.startsWith(prefix + " ")
+                || input.startsWith(prefix + "\t");
+    }
+
+    private static String stripCommandPrefix(String input, String prefix) {
+        return input.substring(prefix.length()).trim();
+    }
+
+    private static void sendUsageFailure(CommandContext<CommandSourceStack> context, String message) {
+        context.getSource().sendFailure(Component.literal(message));
     }
 
     /**
@@ -188,9 +234,16 @@ public class Command_Notice {
         for (NoticeData notice : notices) {
             String timeStr = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm")
                     .format(new java.util.Date(notice.getPublishTime()));
+            String categoryLabel;
+            if (notice.getCategory() == NoticeCategory.GAME) {
+                categoryLabel = "§6游戏公告 §7[阶段:" + notice.getStoryStageId()
+                        + " | 剧情日期:" + notice.getStoryDate() + "]";
+            } else {
+                categoryLabel = "§b服务器通知";
+            }
             context.getSource().sendSuccess(
                     () -> Component.literal("§e[ID:" + notice.getNoticeId() + "] §f" + notice.getNoticeTitle()
-                            + " §7(" + timeStr + ")"),
+                            + " §7(" + timeStr + ") " + categoryLabel),
                     false
             );
         }
@@ -210,12 +263,6 @@ public class Command_Notice {
                 () -> Component.literal("§a已重新加载公告配置，当前共 " + count + " 条公告"),
                 true
         );
-
-        // 向全服广播新公告提示
-        if (count > 0) {
-            NotificationPushHelper.broadcastTopLeftNotification(
-                    "§b§l您有新的公告需要查看", 15000);
-        }
 
         return 1;
     }

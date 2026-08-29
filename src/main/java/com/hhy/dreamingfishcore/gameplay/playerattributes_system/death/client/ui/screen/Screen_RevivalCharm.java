@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.ui.screen;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_RevivalRequest;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -167,17 +168,16 @@ public class Screen_RevivalCharm extends Screen {
         int outerBorder = 4;
         int innerBorder = 2;
 
-        renderRoundedBox(guiGraphics,
+        UiPanelRenderer.smoothRoundedRect(guiGraphics,
                 panelX - outerBorder, panelY - outerBorder,
-                panelX + PANEL_WIDTH + outerBorder, panelY + PANEL_HEIGHT + outerBorder,
-                BORDER_DARK);
-
-        renderRoundedBox(guiGraphics,
+                PANEL_WIDTH + outerBorder * 2, PANEL_HEIGHT + outerBorder * 2,
+                8, BORDER_DARK, 0);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics,
                 panelX - innerBorder, panelY - innerBorder,
-                panelX + PANEL_WIDTH + innerBorder, panelY + PANEL_HEIGHT + innerBorder,
-                BORDER_GLOW);
-
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, BG_INNER);
+                PANEL_WIDTH + innerBorder * 2, PANEL_HEIGHT + innerBorder * 2,
+                6, BORDER_GLOW, 0);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics,
+                panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, 4, BG_INNER, 0);
     }
 
     private void renderContent(GuiGraphics guiGraphics) {
@@ -240,14 +240,12 @@ public class Screen_RevivalCharm extends Screen {
         int inputY = panelY + Y_INPUT;
 
         // 输入框外发光效果
-        guiGraphics.fill(inputX - 3, inputY - 3, inputX + INPUT_WIDTH + 3, inputY + INPUT_HEIGHT + 3, 0x40FFCC00);
-        // 输入框边框
-        renderRoundedBox(guiGraphics,
-                inputX - 2, inputY - 2,
-                inputX + INPUT_WIDTH + 2, inputY + INPUT_HEIGHT + 2,
-                BORDER_GLOW);
-        // 输入框背景
-        guiGraphics.fill(inputX, inputY, inputX + INPUT_WIDTH, inputY + INPUT_HEIGHT, 0xDD000000);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX - 3, inputY - 3,
+                INPUT_WIDTH + 6, INPUT_HEIGHT + 6, 6, 0x40FFCC00, 0);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX - 2, inputY - 2,
+                INPUT_WIDTH + 4, INPUT_HEIGHT + 4, 5, BORDER_GLOW, 0);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX, inputY,
+                INPUT_WIDTH, INPUT_HEIGHT, 3, 0xDD000000, 0);
 
         // 输入文字
         String displayText = playerName.isEmpty() ? "§7输入玩家名称..." : "§e" + playerName;
@@ -344,11 +342,6 @@ public class Screen_RevivalCharm extends Screen {
         }
     }
 
-    private void renderRoundedBox(GuiGraphics guiGraphics, int x1, int y1, int x2, int y2, int color) {
-        guiGraphics.fill(x1 + 1, y1, x2 - 1, y2, color);
-        guiGraphics.fill(x1, y1 + 1, x2, y2 - 1, color);
-    }
-
     private static class CustomButton extends Button {
         private final boolean isPrimary;
 
@@ -395,24 +388,13 @@ public class Screen_RevivalCharm extends Screen {
 
             // 外发光（仅主按钮悬停时）
             if (isPrimary && hovered) {
-                guiGraphics.fill(x - 2, y - 2, x + w + 2, y + h + 2, glowColor);
+                UiPanelRenderer.smoothRoundedRect(guiGraphics, x - 2, y - 2,
+                        w + 4, h + 4, 6, glowColor, 0);
             }
 
-            // 渐变背景
-            guiGraphics.fill(x + 2, y, x + w - 2, y + h, topColor);
-            guiGraphics.fill(x + 2, y + h, x + w - 2, y + h + 1, bottomColor);
-
-            // 边框
-            guiGraphics.fill(x + 1, y, x + 2, y + h, borderColor);
-            guiGraphics.fill(x + w - 2, y, x + w - 1, y + h, borderColor);
-            guiGraphics.fill(x + 2, y, x + w - 2, y + 1, borderColor);
-            guiGraphics.fill(x + 2, y + h - 1, x + w - 2, y + h, borderColor);
-
-            // 角落装饰
-            guiGraphics.fill(x, y, x + 1, y + 1, borderColor);
-            guiGraphics.fill(x + w - 1, y, x + w, y + 1, borderColor);
-            guiGraphics.fill(x, y + h - 1, x + 1, y + h, borderColor);
-            guiGraphics.fill(x + w - 1, y + h - 1, x + w, y + h, borderColor);
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, w, h,
+                    4, topColor, borderColor);
+            guiGraphics.fill(x + 4, y + h - 2, x + w - 4, y + h - 1, bottomColor);
 
             // 主按钮高光效果
             if (isPrimary) {

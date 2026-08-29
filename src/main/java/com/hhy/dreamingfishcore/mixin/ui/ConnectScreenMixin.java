@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingTransitionController;
 import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
@@ -66,6 +67,8 @@ public abstract class ConnectScreenMixin extends Screen {
                 SERVER_STATUS, progress, now);
         LoadingScreenUi.renderCancelHint(guiGraphics, this.font, vs.virtualWidth, vs.virtualHeight);
         guiGraphics.pose().popPose();
+        LoadingTransitionController.rememberProgressFrame(tip, SERVER_STATUS, progress, true);
+        LoadingTransitionController.renderLoadingEntry(guiGraphics, this.width, this.height);
     }
 
     @Unique

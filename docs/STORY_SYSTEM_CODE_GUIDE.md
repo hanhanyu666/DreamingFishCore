@@ -117,6 +117,7 @@ private transient boolean failed;
 字符串 ID 用于稳定引用：
 
 ```text
+dreamingfishcore:dream_beginning
 dreamingfishcore:afterdream
 ```
 

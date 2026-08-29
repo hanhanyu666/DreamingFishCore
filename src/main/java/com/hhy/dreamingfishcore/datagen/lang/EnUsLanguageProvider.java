@@ -29,5 +29,7 @@ public class EnUsLanguageProvider extends LanguageProvider {
         add(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get(), "Professional Aid Kit");
         add(DreamingFishCore_Items.REVIVAL_CHARM.get(), "Revival Charm");
         add(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get(), "Gene Resurgence Potion");
+        add("item.dreamingfishcore.siege_zombie_spawn_egg", "Zombie Spawn Egg");
+        add("entity.dreamingfishcore.siege_zombie", "Zombie");
     }
 }

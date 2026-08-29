@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.sync.LimbClientInjurySync;
@@ -141,6 +142,11 @@ public class CustomStatueGUI {
     private static long armorRevealLastChangeTime = 0L;
     private static long infectionRevealStartTime = 0L;
     private static long infectionRevealLastChangeTime = 0L;
+    // Injury entries are timestamp based and do not need a map sweep every
+    // render frame.  Delaying cleanup by a quarter second keeps expiry
+    // behaviour identical while avoiding repeated concurrent-map iteration.
+    private static long lastInjuryCleanupTime = 0L;
+    private static final long INJURY_CLEANUP_INTERVAL = 250L;
 
     /**
      * 记录屏幕参数，避免 GUI 缩放变化时沿用旧布局状态
@@ -187,10 +193,8 @@ public class CustomStatueGUI {
         }
 
         boolean showEquipmentDurability = SHOW_EQUIPMENT_DURABILITY && hasDamageableArmor(player);
-        int modelCenterX = LEFT_OFFSET + PLAYER_MODEL_ANCHOR_HALF_WIDTH + PLAYER_MODEL_HORIZONTAL_OFFSET;
-        if (showEquipmentDurability) {
-            modelCenterX += EQUIPMENT_DURABILITY_WIDTH + EQUIPMENT_DURABILITY_GAP;
-        }
+        int modelCenterX = LEFT_OFFSET + PLAYER_MODEL_ANCHOR_HALF_WIDTH + PLAYER_MODEL_HORIZONTAL_OFFSET
+                + (showEquipmentDurability ? EQUIPMENT_DURABILITY_WIDTH + EQUIPMENT_DURABILITY_GAP : 0);
         int statusBarY = screenHeight - LEFT_STATUS_BOTTOM_OFFSET - STATUS_STACK_HEIGHT;
         int modelFootY = screenHeight - 5;
         int modelTopY = modelFootY - PLAYER_MODEL_HEIGHT;
@@ -230,12 +234,12 @@ public class CustomStatueGUI {
         }
 
         int currentStrength = PlayerStrengthClientSync.getCurrentStrengthClient(player);
-        int maxStrength = PlayerStrengthClientSync.getMaxStrengthClient(player);
-        if (maxStrength <= 0) maxStrength = 100;
+        int fetchedMaxStrength = PlayerStrengthClientSync.getMaxStrengthClient(player);
+        int maxStrength = fetchedMaxStrength <= 0 ? 100 : fetchedMaxStrength;
 
         float currentCourage = PlayerCourageManager.getCurrentCourageClient(player);
-        float maxCourage = PlayerCourageManager.getMaxCourageClient(player);
-        if (maxCourage <= 0) maxCourage = 100; // 避免除以0异常
+        float fetchedMaxCourage = PlayerCourageManager.getMaxCourageClient(player);
+        float maxCourage = fetchedMaxCourage <= 0 ? 100 : fetchedMaxCourage; // 避免除以0异常
 
         float currentInfection = PlayerInfectionManager.getCurrentInfectionClient(player);
         int maxInfection = 100;
@@ -245,53 +249,64 @@ public class CustomStatueGUI {
         boolean infectionDanger = currentInfection / maxInfection >= INFECTION_DANGER_THRESHOLD;
         float statusFade = 1.0f;
 
-        if (showEquipmentDurability) {
-            drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
-        }
-        drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
-        HudPlayerWireframeRenderer.render(
-                guiGraphics, player, modelCenterX, modelFootY, playerModelColor, isFlashing);
-        cleanupAndDrawLimbInjuryIcons(guiGraphics, player, modelCenterX, modelTopY);
-
         float strengthRatio = currentStrength / (float) maxStrength;
         float courageRatio = currentCourage / maxCourage;
 
-        drawSplitExperienceSegment(guiGraphics, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                strengthRatio, STRENGTH_BAR_COLOR, false);
-        drawSplitExperienceSegment(guiGraphics, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
-                experienceProgress, EXPERIENCE_BAR_COLOR, false);
-        drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                courageRatio, COURAGE_BAR_COLOR, courageDanger);
-        if (showOxygen) {
-            float oxygenRatio = maxAir > 0 ? currentAir / (float) maxAir : 0.0f;
-            drawSplitExperienceSegment(guiGraphics, courageActionBarX, oxygenBarY,
-                    SPLIT_EXPERIENCE_SIDE_WIDTH, oxygenRatio, OXYGEN_BAR_COLOR, oxygenRatio <= 0.25f);
-        }
-        drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
-                strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
-        drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
-                courageActionBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
         boolean revealSideValues = shouldRevealBottomSideValues(currentTime, currentStrength, maxStrength,
                 currentCourage, maxCourage);
-        if (revealSideValues) {
-            drawSegmentValue(guiGraphics, mc, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                    currentStrength + "/" + maxStrength, STRENGTH_BAR_COLOR);
-            drawSegmentValue(guiGraphics, mc, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                    Math.round(currentCourage) + "/" + Math.round(maxCourage), COURAGE_BAR_COLOR);
-        }
-        if (experienceLevel > 0) {
-            drawSegmentValue(guiGraphics, mc, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
-                    Integer.toString(experienceLevel), EXPERIENCE_BAR_COLOR);
-        }
 
         if (SHOW_LEFT_STATUS_BARS) {
             updateLeftStatusFlashTimes(currentTime, currentHealth, maxHealth,
                     currentFood, currentArmor, currentInfection);
-            drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
-                    currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
-                    currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
-                    currentTime);
         }
+
+        final boolean renderFlashing = isFlashing;
+
+        // GuiGraphics is unmanaged while the HUD event is dispatched, so every ordinary
+        // fill/text operation would otherwise end the GPU batch. Keep this whole HUD in one
+        // managed batch; item rendering still performs its own required flush internally.
+        guiGraphics.drawManaged(() -> {
+            if (showEquipmentDurability) {
+                drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
+            }
+            drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
+            HudPlayerWireframeRenderer.render(
+                    guiGraphics, player, modelCenterX, modelFootY, playerModelColor, renderFlashing);
+            cleanupAndDrawLimbInjuryIcons(guiGraphics, player, modelCenterX, modelTopY, currentTime);
+
+            drawSplitExperienceSegment(guiGraphics, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                    strengthRatio, STRENGTH_BAR_COLOR, false);
+            drawSplitExperienceSegment(guiGraphics, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
+                    experienceProgress, EXPERIENCE_BAR_COLOR, false);
+            drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                    courageRatio, COURAGE_BAR_COLOR, courageDanger);
+            if (showOxygen) {
+                float oxygenRatio = maxAir > 0 ? currentAir / (float) maxAir : 0.0f;
+                drawSplitExperienceSegment(guiGraphics, courageActionBarX, oxygenBarY,
+                        SPLIT_EXPERIENCE_SIDE_WIDTH, oxygenRatio, OXYGEN_BAR_COLOR, oxygenRatio <= 0.25f);
+            }
+            drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
+                    strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+            drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
+                    courageActionBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+            if (revealSideValues) {
+                drawSegmentValue(guiGraphics, mc, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                        currentStrength + "/" + maxStrength, STRENGTH_BAR_COLOR);
+                drawSegmentValue(guiGraphics, mc, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                        Math.round(currentCourage) + "/" + Math.round(maxCourage), COURAGE_BAR_COLOR);
+            }
+            if (experienceLevel > 0) {
+                drawSegmentValue(guiGraphics, mc, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
+                        Integer.toString(experienceLevel), EXPERIENCE_BAR_COLOR);
+            }
+
+            if (SHOW_LEFT_STATUS_BARS) {
+                drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
+                        currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
+                        currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
+                        currentTime);
+            }
+        });
     }
 
     /**
@@ -517,9 +532,9 @@ public class CustomStatueGUI {
         int fillHeight = Math.max(1, Math.round((height - 2) * progress));
         int fillTop = y + height - 1 - fillHeight;
 
-        drawPixelCutRect(guiGraphics, x, y, width, height, withAlpha(TRACK_COLOR, 128));
-        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, withAlpha(TRACK_COLOR, 70));
-        drawPixelCutRect(guiGraphics, x + 1, fillTop, width - 2, fillHeight, withAlpha(color, 184));
+        drawSmoothProgressRect(guiGraphics, x, y, width, height, withAlpha(TRACK_COLOR, 128));
+        drawSmoothProgressRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, withAlpha(TRACK_COLOR, 70));
+        drawSmoothProgressRect(guiGraphics, x + 1, fillTop, width - 2, fillHeight, withAlpha(color, 184));
         if (fillHeight > 2) {
             guiGraphics.fill(x + 1, fillTop, x + width - 1, fillTop + 1,
                     withAlpha(blendColor(color, 0xFFFFFFFF, 0.22f), 166));
@@ -538,19 +553,22 @@ public class CustomStatueGUI {
     }
 
     private static void cleanupAndDrawLimbInjuryIcons(GuiGraphics guiGraphics, Player player,
-                                                      int centerX, int topY) {
-        LimbClientInjurySync.cleanupExpiredInjuries(player);
+                                                      int centerX, int topY, long currentTime) {
+        if (currentTime - lastInjuryCleanupTime >= INJURY_CLEANUP_INTERVAL) {
+            LimbClientInjurySync.cleanupExpiredInjuries(player);
+            lastInjuryCleanupTime = currentTime;
+        }
 
         int iconX = centerX - PLAYER_ICON_WIDTH / 2;
         for (LimbType limbType : LimbType.values()) {
             if (LimbClientInjurySync.isInjuryVisible(player, limbType)) {
-                drawLimbInjuryIcon(guiGraphics, iconX, topY, limbType);
+                drawLimbInjuryIcon(guiGraphics, iconX, topY, limbType, currentTime);
             }
         }
     }
 
     private static void drawLimbInjuryIcon(GuiGraphics guiGraphics, int playerIconX, int playerIconY,
-                                           LimbType limbType) {
+                                           LimbType limbType, long time) {
         int offsetX;
         int offsetY;
         switch (limbType) {
@@ -574,7 +592,6 @@ public class CustomStatueGUI {
                 return;
         }
 
-        long time = System.currentTimeMillis();
         float pulsePhase = (time % PULSE_CYCLE) / (float) PULSE_CYCLE;
         float pulseFactor = (float) Math.sin(pulsePhase * Math.PI);
         int currentSize = INJURY_DOT_BASE_SIZE + (int) (pulseFactor * INJURY_DOT_PULSE_SIZE);
@@ -600,14 +617,13 @@ public class CustomStatueGUI {
         int fillWidth = (int) (innerWidth * progress);
         int activeColor = warning ? blendColor(fillColor, LOW_COLOR, 0.36f) : fillColor;
 
-        drawPixelCutRect(guiGraphics, x + 1, y + 1, width, SPLIT_EXPERIENCE_BAR_HEIGHT, 0x26000000);
-        drawPixelCutRect(guiGraphics, x, y, width, SPLIT_EXPERIENCE_BAR_HEIGHT, withAlpha(TRACK_COLOR, 168));
-        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
+        drawSmoothProgressRect(guiGraphics, x + 1, y + 1, width, SPLIT_EXPERIENCE_BAR_HEIGHT, 0x26000000);
+        drawSmoothProgressRect(guiGraphics, x, y, width, SPLIT_EXPERIENCE_BAR_HEIGHT, withAlpha(TRACK_COLOR, 168));
+        drawSmoothProgressRect(guiGraphics, x + 1, y + 1, width - 2, SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
                 withAlpha(TRACK_COLOR, 88));
         if (fillWidth > 0) {
             int fillEnd = x + 1 + Math.min(innerWidth, Math.max(1, fillWidth));
-            drawCleanGlow(guiGraphics, x, y, fillEnd, y + SPLIT_EXPERIENCE_BAR_HEIGHT, activeColor, warning ? 48 : 26);
-            drawPixelCutRect(guiGraphics, x + 1, y + 1, fillEnd - (x + 1), SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
+            drawSmoothProgressRect(guiGraphics, x + 1, y + 1, fillEnd - (x + 1), SPLIT_EXPERIENCE_BAR_HEIGHT - 2,
                     withAlpha(activeColor, warning ? 222 : 196));
             if (fillEnd > x + 3) {
                 guiGraphics.fill(x + 2, y + 1, fillEnd - 1, y + 2,
@@ -727,7 +743,8 @@ public class CustomStatueGUI {
 
     private static float easeOutCubic(float value) {
         float t = Math.max(0.0f, Math.min(1.0f, value));
-        return 1.0f - (float) Math.pow(1.0f - t, 3.0D);
+        float remaining = 1.0f - t;
+        return 1.0f - remaining * remaining * remaining;
     }
 
     private static void drawStatusValue(GuiGraphics guiGraphics, Minecraft mc, int x, int y, String text,
@@ -780,13 +797,13 @@ public class CustomStatueGUI {
         int warningColor = withAlpha(blendColor(fillColor, 0xFFFFFFFF, 0.32f),
                 warning ? (int) (102 + warningPulse * 118) : 0);
 
-        drawPixelCutRect(guiGraphics, x + 1, y + 1, width, STATUS_BAR_HEIGHT, 0x2B000000);
-        drawPixelCutRect(guiGraphics, x, y, width, STATUS_BAR_HEIGHT, trackColor);
-        drawPixelCutRect(guiGraphics, x + 1, y + 1, width - 2, STATUS_BAR_HEIGHT - 2, trackInsetColor);
+        drawSmoothProgressRect(guiGraphics, x + 1, y + 1, width, STATUS_BAR_HEIGHT, 0x2B000000);
+        drawSmoothProgressRect(guiGraphics, x, y, width, STATUS_BAR_HEIGHT, trackColor);
+        drawSmoothProgressRect(guiGraphics, x + 1, y + 1, width - 2, STATUS_BAR_HEIGHT - 2, trackInsetColor);
         if (filledUntil > 0) {
             int fillEnd = x + 1 + Math.min(innerWidth, Math.max(1, filledUntil));
             int fillWidth = fillEnd - (x + 1);
-            drawPixelCutRect(guiGraphics, x + 1, y + 1, fillWidth, STATUS_BAR_HEIGHT - 2, activeColor);
+            drawSmoothProgressRect(guiGraphics, x + 1, y + 1, fillWidth, STATUS_BAR_HEIGHT - 2, activeColor);
             if (fillEnd > x + 3) {
                 guiGraphics.fill(x + 2, y + 1, fillEnd - 1, y + 2,
                         withAlpha(blendColor(fillColor, 0xFFFFFFFF, 0.22f), Math.max(0, fillAlpha - 18)));
@@ -801,7 +818,7 @@ public class CustomStatueGUI {
         if (flashAlpha > 0) {
             int flashColor = withAlpha(0xFFFFFFFF, flashAlpha);
             int flashWidth = Math.max(2, (int) ((width - 2) * Math.max(0.12f, progress)));
-            drawPixelCutRect(guiGraphics, x + 1, y + 1, flashWidth, STATUS_BAR_HEIGHT - 2, flashColor);
+            drawSmoothProgressRect(guiGraphics, x + 1, y + 1, flashWidth, STATUS_BAR_HEIGHT - 2, flashColor);
             guiGraphics.fill(x + 1, y - 1, x + width - 1, y, withAlpha(0xFFFFFFFF, flashAlpha / 2));
         }
     }
@@ -829,27 +846,14 @@ public class CustomStatueGUI {
         return (int) (172 * t * t);
     }
 
-    private static void drawPixelCutRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
+    private static void drawSmoothProgressRect(GuiGraphics guiGraphics, int x, int y,
+                                               int width, int height, int color) {
         if (width <= 0 || height <= 0) {
             return;
         }
 
-        if (width <= 2 || height <= 2) {
-            guiGraphics.fill(x, y, x + width, y + height, color);
-            return;
-        }
-
-        guiGraphics.fill(x + 1, y, x + width - 1, y + height, color);
-        guiGraphics.fill(x, y + 1, x + width, y + height - 1, color);
-    }
-
-    private static void drawCleanGlow(GuiGraphics guiGraphics, int x1, int y1, int x2, int y2, int color, int alpha) {
-        int glow = withAlpha(color, alpha);
-        guiGraphics.fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, withAlpha(color, alpha / 3));
-        guiGraphics.fill(x1, y1 - 1, x2, y1, glow);
-        guiGraphics.fill(x1, y2, x2, y2 + 1, glow);
-        guiGraphics.fill(x1 - 1, y1, x1, y2, withAlpha(color, alpha / 2));
-        guiGraphics.fill(x2, y1, x2 + 1, y2, withAlpha(color, alpha / 2));
+        int radius = Math.max(1, (Math.min(width, height) + 1) / 2);
+        UiPanelRenderer.crispRoundedRectBatched(guiGraphics, x, y, width, height, radius, color);
     }
 
     private static int withAlpha(int color, int alpha) {

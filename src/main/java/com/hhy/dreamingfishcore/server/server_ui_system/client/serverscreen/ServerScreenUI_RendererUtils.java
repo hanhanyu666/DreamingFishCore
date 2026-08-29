@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 
+import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.Font;
@@ -60,44 +61,16 @@ public class ServerScreenUI_RendererUtils {
      * 绘制圆角矩形
      */
     public static void drawRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int fillColor, int borderColor) {
-        // 绘制填充
-        guiGraphics.fill(RenderType.gui(), x + radius, y, x + width - radius, y + height, fillColor);
-        guiGraphics.fill(RenderType.gui(), x, y + radius, x + width, y + height - radius, fillColor);
-        // 四个圆角
-        guiGraphics.fill(RenderType.gui(), x, y + radius, x + radius, y + radius + radius, fillColor);
-        guiGraphics.fill(RenderType.gui(), x + width - radius, y + radius, x + width, y + radius + radius, fillColor);
-        guiGraphics.fill(RenderType.gui(), x + radius, y, x + width - radius, y + radius, fillColor);
-        guiGraphics.fill(RenderType.gui(), x + radius, y + height - radius, x + width - radius, y + height, fillColor);
-
-        // 绘制边框
-        int borderWidth = 1;
-        guiGraphics.fill(RenderType.gui(), x + radius, y, x + width - radius, y + borderWidth, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + radius, y + height - borderWidth, x + width - radius, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + radius, x + borderWidth, y + height - radius, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - borderWidth, y + radius, x + width, y + height - radius, borderColor);
-        // 四个圆角边框
-        guiGraphics.fill(RenderType.gui(), x, y, x + radius, y + borderWidth, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + borderWidth, y + radius, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - radius, y, x + width, y + borderWidth, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - borderWidth, y, x + width, y + radius, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + height - borderWidth, x + radius, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + height - radius, x + borderWidth, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - radius, y + height - borderWidth, x + width, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - borderWidth, y + height - radius, x + width, y + height, borderColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, width, height,
+                radius, fillColor, borderColor);
     }
 
     /**
-     * 绘制带直角边框的矩形
+     * 绘制带平滑圆角边框的矩形
      */
     public static void drawRoundedRectOutline(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int fillColor, int borderColor) {
-        // 绘制填充
-        guiGraphics.fill(RenderType.gui(), x, y, x + width, y + height, fillColor);
-        // 绘制直角边框
-        int borderWidth = 1;
-        guiGraphics.fill(RenderType.gui(), x, y, x + width, y + borderWidth, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y + height - borderWidth, x + width, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + borderWidth, y + height, borderColor);
-        guiGraphics.fill(RenderType.gui(), x + width - borderWidth, y, x + width, y + height, borderColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, width, height,
+                radius, fillColor, borderColor);
     }
 
     /**
@@ -184,12 +157,14 @@ public class ServerScreenUI_RendererUtils {
     public static void drawRoundedProgressBar(GuiGraphics guiGraphics, int x, int y, int width, int height, float pct, int color) {
         int radius = Math.min(height / 2, 4);
         int bgColor = 0x60FFFFFF;
-        drawRoundedRect(guiGraphics, x, y, width, height, radius, bgColor, bgColor);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, width, height,
+                radius, bgColor, 0);
 
         int progressWidth = (int) (width * Math.max(0, Math.min(1, pct)));
         if (progressWidth > radius * 2) {
             int progressColor = 0xFF000000 | (color & 0x00FFFFFF);
-            drawRoundedRect(guiGraphics, x, y, progressWidth, height, radius, progressColor, progressColor);
+            UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, progressWidth, height,
+                    radius, progressColor, 0);
         }
     }
 
@@ -197,8 +172,8 @@ public class ServerScreenUI_RendererUtils {
      * 渲染圆角盒子
      */
     public static void renderRoundedBox(GuiGraphics guiGraphics, int x1, int y1, int x2, int y2, int color) {
-        guiGraphics.fill(RenderType.gui(), x1 + 1, y1, x2 - 1, y2, color);
-        guiGraphics.fill(RenderType.gui(), x1, y1 + 1, x2, y2 - 1, color);
+        UiPanelRenderer.smoothRoundedRect(guiGraphics, x1, y1,
+                x2 - x1, y2 - y1, 2, color, 0);
     }
 
     /**

@@ -36,14 +36,18 @@ public class StoryTaskData {
 
     // 以下字段只是某一次查询生成的“视图”，不属于配置文件，也不直接持久化。
     private transient boolean published;
+    /** 这是一个可先于世界任务解锁显示的个人任务。 */
+    private transient boolean personalTask;
     /** 成功和失败都会为 true，因为两者都表示任务已经结算。 */
     private transient boolean completed;
     /** 单独记录失败，供客户端把任务显示为红色。 */
     private transient boolean failed;
     /** 接收这份视图的玩家是否取得了该任务的个人记录。 */
     private transient boolean clientPlayerFinished;
-    /** 任务结算时被记录在场的玩家人数，不向客户端发送姓名或 UUID。 */
+    /** 普通世界任务为结算时参与人数；个人任务为已完成个人部分的人数。 */
     private transient int finishedPlayerCount;
+    /** 个人任务当前应参与统计的玩家数，用于显示“已完成/总人数”比例。 */
+    private transient int personalExpectedPlayerCount;
 
     /** Gson 反序列化 JSON 时需要无参构造方法。 */
     public StoryTaskData() {
@@ -71,10 +75,12 @@ public class StoryTaskData {
         copy.publishedByDefault = publishedByDefault;
         copy.locationId = locationId;
         copy.published = published;
+        copy.personalTask = personalTask;
         copy.completed = completed;
         copy.failed = failed;
         copy.clientPlayerFinished = clientPlayerFinished;
         copy.finishedPlayerCount = finishedPlayerCount;
+        copy.personalExpectedPlayerCount = personalExpectedPlayerCount;
         return copy;
     }
 
@@ -100,18 +106,37 @@ public class StoryTaskData {
         }
     }
 
-    /**
-     * 将世界存档中的运行结果合并进这份客户端视图。
-     *
-     * @param progress 世界中的任务状态；null 表示任务还没有发布
-     * @param playerFinished 当前接收客户端是否取得了个人记录
-     */
+    /** 将世界存档中的运行结果合并进这份客户端视图。 */
     void applyRuntimeView(StoryWorldState.TaskProgress progress, boolean playerFinished) {
+        applyRuntimeView(progress, playerFinished, false, 0, 0);
+    }
+
+    /**
+     * 合并全服任务与个人任务的双层运行视图。
+     *
+     * @param progress 世界任务状态；null 表示世界任务尚未解锁
+     * @param playerFinished 当前玩家是否完成个人部分
+     * @param personalTask 是否允许在世界任务未解锁时展示
+     * @param personalCompleted 已完成个人部分的玩家数
+     * @param personalExpected 当前应参与个人部分的玩家数
+     */
+    void applyRuntimeView(
+            StoryWorldState.TaskProgress progress,
+            boolean playerFinished,
+            boolean personalTask,
+            int personalCompleted,
+            int personalExpected) {
         published = progress != null;
+        this.personalTask = personalTask;
         completed = progress != null && progress.getOutcome().isResolved();
         failed = progress != null && progress.getOutcome() == StoryTaskOutcome.FAILED;
-        clientPlayerFinished = progress != null && playerFinished;
-        finishedPlayerCount = progress == null ? 0 : progress.getParticipantCount();
+        clientPlayerFinished = personalTask
+                ? playerFinished
+                : progress != null && playerFinished;
+        finishedPlayerCount = personalTask
+                ? Math.max(0, personalCompleted)
+                : progress == null ? 0 : progress.getParticipantCount();
+        personalExpectedPlayerCount = personalTask ? Math.max(0, personalExpected) : 0;
     }
 
     public String getTaskKey() {
@@ -182,8 +207,16 @@ public class StoryTaskData {
         return published;
     }
 
+    public boolean isPersonalTask() {
+        return personalTask;
+    }
+
     public void setTaskState(boolean published) {
         this.published = published;
+    }
+
+    public void setPersonalTask(boolean personalTask) {
+        this.personalTask = personalTask;
     }
 
     public boolean isCompleted() {
@@ -216,5 +249,13 @@ public class StoryTaskData {
 
     public void setFinishedPlayerCount(int finishedPlayerCount) {
         this.finishedPlayerCount = Math.max(0, finishedPlayerCount);
+    }
+
+    public int getPersonalExpectedPlayerCount() {
+        return personalExpectedPlayerCount;
+    }
+
+    public void setPersonalExpectedPlayerCount(int personalExpectedPlayerCount) {
+        this.personalExpectedPlayerCount = Math.max(0, personalExpectedPlayerCount);
     }
 }

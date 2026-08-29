@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RespawnPointSyncManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.StrengthSyncManager;
@@ -47,6 +48,8 @@ public class LoginDeathSync {
                     data.isInfected()
             );
         }
+
+        DeathCorpseManager.sendQueuedRespawnLocation(player);
     }
 
     @SubscribeEvent
@@ -77,6 +80,8 @@ public class LoginDeathSync {
             if (DeathEventHandler.hasDeathState(serverPlayer)) {
                 DeathEventHandler.restoreDeathState(serverPlayer);
             }
+
+            DeathCorpseManager.sendQueuedRespawnLocation(serverPlayer);
         }
     }
 }

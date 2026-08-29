@@ -167,7 +167,9 @@ public final class Command_Story {
                 + "\n- 当前阶段: " + snapshot.currentStageNumber()
                 + " / " + snapshot.currentStageId()
                 + " / " + snapshot.currentStageName()
-                + "\n- 全服任务进度: " + progress.globalResolved()
+                + "\n- 全服玩家完成比例: "
+                + String.format(java.util.Locale.ROOT, "%.1f%%", progress.globalPlayerRatio() * 100.0f)
+                + "；已结算任务 " + progress.globalResolved()
                 + "/" + progress.publishedTasks()
                 + "（失败 " + progress.globalFailed() + "）"
                 + "\n- 在线活动时间: " + formatTicks(snapshot.activeTicks())
