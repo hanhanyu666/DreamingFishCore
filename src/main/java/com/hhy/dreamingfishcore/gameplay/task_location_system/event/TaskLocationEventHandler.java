@@ -19,6 +19,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.portal.PortalShape;
@@ -34,6 +35,7 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.ItemAbilities;
+import net.neoforged.neoforge.common.util.TriState;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Set;
@@ -54,7 +56,7 @@ public final class TaskLocationEventHandler {
 
     /**
      * Protected task locations use Adventure as the first protection layer; buildable locations
-     * remain in Survival and only apply the narrow TNT/lava/portal-ignition policy.
+     * remain in Survival and only apply the narrow TNT/mob-explosion/lava/flint policy.
      */
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
@@ -94,7 +96,7 @@ public final class TaskLocationEventHandler {
                 if (justEntered) {
                     NotificationPushHelper.sendCenterTopNotification(
                             player, currentLocation.getName(),
-                            "可建造区域：可建设、可在此圈私人领地（仅禁止岩浆、TNT 和传送门点火）", 7000);
+                            "可建造区域：可建设、可在此圈私人领地（禁 TNT、生物爆炸和岩浆；打火石仅可用于点燃下界传送门）", 7000);
                 }
             } else if (justEntered && gameType == GameType.CREATIVE) {
                 NotificationPushHelper.sendCenterTopNotification(
@@ -261,30 +263,37 @@ public final class TaskLocationEventHandler {
         }
     }
 
-    /** Stop TNT everywhere inside a task location. Other explosions keep vanilla behavior. */
+    /** Stop TNT and mob explosions in every active task location. */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onExplosionStart(ExplosionEvent.Start event) {
         Level level = event.getLevel();
-        BlockPos center = BlockPos.containing(event.getExplosion().center());
-        if (isTaskLocation(level, center)
-                && BuildableTerritoryPolicy.isTntExplosion(event.getExplosion())) {
+        Explosion explosion = event.getExplosion();
+        BlockPos center = BlockPos.containing(explosion.center());
+        boolean tntExplosion = BuildableTerritoryPolicy.isTntExplosion(explosion);
+        boolean mobExplosion = !tntExplosion
+                && BuildableTerritoryPolicy.isMobExplosion(explosion);
+        if (isExplosionBlockedAt(level, center, tntExplosion, mobExplosion)) {
             event.setCanceled(true);
         }
     }
 
-    /** Remove TNT effects that would enter a task location from outside. */
+    /** Remove TNT and mob effects that would enter any active task location. */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onExplosionDetonate(ExplosionEvent.Detonate event) {
-        boolean tntExplosion = BuildableTerritoryPolicy.isTntExplosion(event.getExplosion());
-        if (!tntExplosion) {
+        Explosion explosion = event.getExplosion();
+        boolean tntExplosion = BuildableTerritoryPolicy.isTntExplosion(explosion);
+        boolean mobExplosion = !tntExplosion
+                && BuildableTerritoryPolicy.isMobExplosion(explosion);
+        if (!tntExplosion && !mobExplosion) {
             // NPCs and authored decorations are still protected by the entity handlers below;
             // ordinary non-TNT explosions are intentionally not filtered here.
             return;
         }
         event.getAffectedBlocks().removeIf(position ->
-                isTaskLocation(event.getLevel(), position));
+                isExplosionBlockedAt(event.getLevel(), position, tntExplosion, mobExplosion));
         event.getAffectedEntities().removeIf(entity ->
-                isTaskLocation(entity.level(), entity.blockPosition()));
+                entity != null && isExplosionBlockedAt(
+                        entity.level(), entity.blockPosition(), tntExplosion, mobExplosion));
     }
 
     /** 允许攻击敌对怪物，只拦截任务地点内的剧情 NPC 和易损装饰实体。 */
@@ -313,27 +322,34 @@ public final class TaskLocationEventHandler {
         }
     }
 
-    /** Blocks TNT items and lava buckets in every active task location. */
+    /** Blocks TNT items, lava buckets, and air-use of flint and steel in every active location. */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onDestructiveItemUse(PlayerInteractEvent.RightClickItem event) {
         if (!(event.getEntity() instanceof ServerPlayer player)
-                || !isTaskLocation(player.serverLevel(), player.blockPosition())
-                || (!BuildableTerritoryPolicy.isTntTool(event.getItemStack())
-                && !BuildableTerritoryPolicy.isLavaBucket(event.getItemStack()))) {
+                || !isTaskLocation(player.serverLevel(), player.blockPosition())) {
+            return;
+        }
+        boolean flintAndSteel = BuildableTerritoryPolicy.isFlintAndSteel(event.getItemStack());
+        boolean tnt = BuildableTerritoryPolicy.isTntTool(event.getItemStack());
+        boolean lava = BuildableTerritoryPolicy.isLavaBucket(event.getItemStack());
+        if (!flintAndSteel && !tnt && !lava) {
             return;
         }
         event.setCanceled(true);
         player.displayClientMessage(net.minecraft.network.chat.Component.literal(
-                "§c任务地点内仅禁止使用 TNT 和放置岩浆。"), true);
+                flintAndSteel
+                        ? "§c任务地点内打火石仅可用于点燃下界传送门。"
+                        : "§c任务地点内禁止使用 TNT 和放置岩浆。"), true);
     }
 
     /**
-     * Allow ordinary fire-starting, but do not let flint and steel create a Nether portal inside a
-     * task location. The shape check mirrors vanilla's {@link BaseFireBlock} portal path, so a
-     * flint-and-steel click on a campfire, candle, or ordinary flammable block is left untouched.
+     * Reserve flint and steel in task locations for the one allowed use: creating a Nether portal.
+     * The shape check mirrors vanilla's {@link BaseFireBlock} portal path, so ordinary fire,
+     * campfires, candles, and other flint-and-steel actions are denied while a real portal
+     * ignition is allowed through unchanged.
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void onFlintAndSteelPortalIgnition(PlayerInteractEvent.RightClickBlock event) {
+    public static void onFlintAndSteelUse(PlayerInteractEvent.RightClickBlock event) {
         if (event.isCanceled()
                 || !(event.getEntity() instanceof ServerPlayer player)
                 || !BuildableTerritoryPolicy.isFlintAndSteel(event.getItemStack())
@@ -342,35 +358,23 @@ public final class TaskLocationEventHandler {
         }
 
         Level level = player.serverLevel();
-        if (!isNetherPortalDimension(level)) {
-            return;
-        }
-
-        UseOnContext context = new UseOnContext(player, event.getHand(), event.getHitVec());
         BlockPos clickedPos = event.getPos();
-        // FlintAndSteelItem uses the tool-modification branch for campfires, candles, and other
-        // blocks. Those actions do not call BaseFireBlock.onPlace and therefore cannot create a
-        // Nether portal.
-        if (level.getBlockState(clickedPos).getToolModifiedState(
-                context, ItemAbilities.FIRESTARTER_LIGHT, true) != null) {
-            return;
-        }
-
         BlockPos ignitionPos = clickedPos.relative(event.getFace());
-        if (!BaseFireBlock.canBePlacedAt(level, ignitionPos, context.getHorizontalDirection())
-                || PortalShape.findEmptyPortalShape(level, ignitionPos, Direction.Axis.X).isEmpty()) {
-            return;
-        }
-
-        // Check both the clicked frame and the new fire position. This also handles a frame on a
-        // task-location boundary where the player is standing just outside the configured box.
         if (!isTaskLocation(level, clickedPos) && !isTaskLocation(level, ignitionPos)) {
             return;
         }
 
-        event.setCanceled(true);
+        UseOnContext context = new UseOnContext(player, event.getHand(), event.getHitVec());
+        if (wouldCreateNetherPortal(level, clickedPos, ignitionPos, context)) {
+            return;
+        }
+
+        // Disable only the item branch. Keeping block use enabled means a chest, bookshelf, or
+        // other ordinary block can still handle the same right-click while the flint itself is
+        // prevented from creating ordinary fire.
+        event.setUseItem(TriState.FALSE);
         player.displayClientMessage(net.minecraft.network.chat.Component.literal(
-                "§c任务地点内不能点燃下界传送门。"), true);
+                "§c任务地点内打火石仅可用于点燃下界传送门。"), true);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -417,11 +421,6 @@ public final class TaskLocationEventHandler {
                 && TaskLocationManager.isBlockProtected(actualLevel, position);
     }
 
-    private static boolean isBuildable(Object level, BlockPos position) {
-        return level instanceof Level actualLevel
-                && TaskLocationManager.isBuildable(actualLevel, position);
-    }
-
     private static boolean isStoryProtected(Object level, BlockPos position) {
         return level instanceof Level actualLevel
                 && TaskLocationManager.isStoryStructureProtected(actualLevel, position);
@@ -432,8 +431,25 @@ public final class TaskLocationEventHandler {
                 && TaskLocationManager.findLocationAt(actualLevel, position).isPresent();
     }
 
-    private static boolean isNetherPortalDimension(Level level) {
-        return level.dimension() == Level.OVERWORLD || level.dimension() == Level.NETHER;
+    private static boolean isExplosionBlockedAt(
+            Level level, BlockPos position, boolean tntExplosion, boolean mobExplosion) {
+        return (tntExplosion || mobExplosion)
+                && isTaskLocation(level, position);
+    }
+
+    private static boolean wouldCreateNetherPortal(
+            Level level, BlockPos clickedPos, BlockPos ignitionPos, UseOnContext context) {
+        // FlintAndSteelItem uses the tool-modification branch for campfires, candles, and other
+        // blocks. Those actions do not call BaseFireBlock.onPlace and cannot create a portal.
+        if (level.dimension() != Level.OVERWORLD && level.dimension() != Level.NETHER) {
+            return false;
+        }
+        if (level.getBlockState(clickedPos).getToolModifiedState(
+                context, ItemAbilities.FIRESTARTER_LIGHT, true) != null) {
+            return false;
+        }
+        return BaseFireBlock.canBePlacedAt(level, ignitionPos, context.getHorizontalDirection())
+                && PortalShape.findEmptyPortalShape(level, ignitionPos, Direction.Axis.X).isPresent();
     }
 
     private static ItemStack heldItem(ServerPlayer player) {

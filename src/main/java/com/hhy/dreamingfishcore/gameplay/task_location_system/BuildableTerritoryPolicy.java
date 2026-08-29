@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Explosion;
@@ -30,9 +31,9 @@ import net.neoforged.neoforge.event.CommandEvent;
  * <p>EconomySystem remains the owner of private territory data and permission checks. This class
  * only gates a claim when it touches a story location: claims wholly outside story locations pass
  * through unchanged, claims touching a buildable location are allowed with a reminder, and any
- * claim touching a protected location is rejected. BUILDABLE locations keep normal block
- * interaction and only apply the configured hazards (TNT, lava, and conditional Nether-portal
- * ignition); PROTECTED locations are still handled by the Adventure/scene protection layer.</p>
+ * claim touching a protected location is rejected. Both location modes apply the configured
+ * hazard rules (TNT, ordinary flint-and-steel use, mob explosions, lava, and the portal-ignition
+ * exception); PROTECTED locations additionally use the Adventure/scene protection layer.</p>
  */
 public final class BuildableTerritoryPolicy {
     private static final String ECONOMY_NAMESPACE = "economy_system";
@@ -89,7 +90,7 @@ public final class BuildableTerritoryPolicy {
 
     /**
      * Compatibility name retained for integrations compiled against the first policy version.
-     * Fire, crystals and other explosives are no longer blocked by task locations.
+     * The predicate intentionally remains TNT-only; mob explosions are classified separately.
      */
     public static boolean isExplosiveOrFireTool(ItemStack stack) {
         return isTntTool(stack);
@@ -143,10 +144,7 @@ public final class BuildableTerritoryPolicy {
                 || path.contains("fire");
     }
 
-    /**
-     * Returns whether an explosion was created by a TNT entity. Creepers, ghasts, beds, crystals
-     * and other non-TNT explosions remain ordinary world behavior.
-     */
+    /** Returns whether an explosion was created by a TNT entity. */
     public static boolean isTntExplosion(Explosion explosion) {
         if (explosion == null) {
             return false;
@@ -158,12 +156,29 @@ public final class BuildableTerritoryPolicy {
         return isTntEntity(explosion.getIndirectSourceEntity());
     }
 
+    /**
+     * Returns whether an explosion was caused by a mob itself or by a projectile owned by a mob.
+     * TNT is deliberately excluded because it has its own hazard rule even when a mob was the
+     * igniter/owner.
+     */
+    public static boolean isMobExplosion(Explosion explosion) {
+        if (explosion == null || isTntExplosion(explosion)) {
+            return false;
+        }
+        return isMobEntity(explosion.getDirectSourceEntity())
+                || isMobEntity(explosion.getIndirectSourceEntity());
+    }
+
     private static boolean isTntEntity(Entity entity) {
         if (entity == null) {
             return false;
         }
         ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
         return id != null && id.getPath().toLowerCase(Locale.ROOT).contains("tnt");
+    }
+
+    private static boolean isMobEntity(Entity entity) {
+        return entity instanceof Mob;
     }
 
     /** Returns true for both source and flowing lava block states. */

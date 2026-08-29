@@ -8,7 +8,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 
-/** Client-side snapshot backing the persistent task-location HUD. */
+/** Client-side snapshot backing the brief task-location boundary effect. */
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class TaskLocationClientState {
     static final long BOUNDARY_DURATION_MS = 5_000L;

@@ -32,7 +32,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 任务地点常驻 HUD 加入网络契约，旧客户端应在握手时明确拒绝连接。
+    // 任务地点边界提示加入网络契约，旧客户端应在握手时明确拒绝连接。
     private static final String PROTOCOL_VERSION = "0.14.0";
 
     private DreamingFishCore_NetworkManager() {

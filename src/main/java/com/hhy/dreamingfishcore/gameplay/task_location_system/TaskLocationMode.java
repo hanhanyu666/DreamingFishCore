@@ -7,8 +7,9 @@ import java.util.Locale;
  *
  * <p>{@link #PROTECTED} is the authored-scene mode: survival players are moved to Adventure and
  * the scene is protected. {@link #BUILDABLE} keeps players in Survival and lets them build and
- * interact with containers/bookshelves; only TNT, lava, and conditional Nether-portal ignition
- * are blocked there, and EconomySystem private claims may touch the region.</p>
+ * interact with containers/bookshelves; TNT, ordinary flint-and-steel use, mob explosions, and
+ * lava are blocked there, while flint-and-steel remains allowed when it actually creates a
+ * Nether portal. EconomySystem private claims may touch the region.</p>
  */
 public enum TaskLocationMode {
     PROTECTED,

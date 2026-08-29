@@ -36,5 +36,5 @@
   "message.dreamingfishcore.territory.claim_confirm_only_buildable": "当前选区进入了强制保护剧情地点，请避开该地点后再确认。",
   "message.dreamingfishcore.territory.claim_protected": "强制保护剧情地点不能圈私人领地；请在可建造地点或故事区域外选择。",
   "message.dreamingfishcore.territory.claim_story_boundary": "领地不能进入强制保护剧情地点。",
-  "message.dreamingfishcore.territory.claim_buildable_reminder": "提示：你正在故事可建造区域内圈地；TNT、岩浆和传送门点火仍受剧情规则限制。"
+  "message.dreamingfishcore.territory.claim_buildable_reminder": "提示：你正在故事可建造区域内圈地；TNT、生物爆炸和岩浆受限，打火石仅可用于点燃下界传送门。"
 }

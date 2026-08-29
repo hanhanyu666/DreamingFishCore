@@ -36,5 +36,5 @@
   "message.dreamingfishcore.territory.claim_confirm_only_buildable": "This selection enters a protected story location. Move it away before confirming.",
   "message.dreamingfishcore.territory.claim_protected": "Protected story locations cannot contain private claims; choose a buildable location or the free world.",
   "message.dreamingfishcore.territory.claim_story_boundary": "A territory cannot enter a protected story location.",
-  "message.dreamingfishcore.territory.claim_buildable_reminder": "Reminder: this claim touches a buildable story area; TNT, lava and Nether-portal ignition remain restricted by story rules."
+  "message.dreamingfishcore.territory.claim_buildable_reminder": "Reminder: this claim touches a buildable story area; TNT, mob explosions and lava are restricted, and flint and steel is only allowed for lighting a Nether portal."
 }

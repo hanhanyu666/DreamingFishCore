@@ -13,7 +13,7 @@ status: accepted
 任务地点增加两种模式：
 
 - `PROTECTED`：保持原有强制冒险和场景保护规则；
-- `BUILDABLE`：保持生存模式，允许正常建造、破坏、容器/书架使用、活塞和水；只拦截 TNT、岩浆的放置和跨越地点边界流动，以及打火石点燃下界传送门。
+- `BUILDABLE`：保持生存模式，允许正常建造、破坏、容器/书架使用、活塞和水；拦截 TNT、生物爆炸、岩浆的放置和跨越地点边界流动，以及打火石的普通点火，只允许打火石实际点燃下界传送门。
 
 `BUILDABLE` 地点不复制 EconomySystem 的领地数据。故事区域外完全保留 EconomySystem 原有的自由圈地行为；DreamingFishCore 只在服务端观察触及故事地点的圈地杖选点并给出提醒，同时拦截覆盖 `PROTECTED` 地点的确认命令。领地可以跨出 `BUILDABLE` 边界，但不能进入 `PROTECTED`。通过校验后，所有权、成员、权限、价格、保存和领地保护仍由 EconomySystem 负责。这样既能保留 EconomySystem 的现有 UI/命令，也避免两个 SavedData 相互漂移。
 
