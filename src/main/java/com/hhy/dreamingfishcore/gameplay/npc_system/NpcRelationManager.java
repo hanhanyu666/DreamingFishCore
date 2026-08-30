@@ -31,7 +31,8 @@ public class NpcRelationManager {
                     ConcurrentHashMap::new);
             loadedData.forEach(NpcRelationManager::putIfValid);
             RELATION_CACHE.values().forEach(NpcRelationData::refreshRelationType);
-            dirty = false;
+            // 被删除 NPC 的关系记录不再进入运行时；下一次保存会把本地存档一并收口。
+            dirty = RELATION_CACHE.size() != loadedData.size();
             DreamingFishCore.LOGGER.info("NPC关系数据加载完成，共 {} 条", RELATION_CACHE.size());
         } catch (Exception exception) {
             dirty = false;
@@ -118,7 +119,9 @@ public class NpcRelationManager {
 
     private static void putIfValid(String key, NpcRelationData relation) {
         if (key == null || relation == null || relation.getNpcId() <= 0
-                || relation.getTargetPlayerUUID() == null) {
+                || relation.getTargetPlayerUUID() == null
+                || !StoryNpcContentPolicy.isRetained(relation.getNpcId())
+                || !key.equals(makeKey(relation.getNpcId(), relation.getTargetPlayerUUID()))) {
             return;
         }
         RELATION_CACHE.put(key, relation);

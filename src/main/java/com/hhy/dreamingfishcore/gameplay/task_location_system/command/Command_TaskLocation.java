@@ -24,38 +24,44 @@ public final class Command_TaskLocation {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(
-                Commands.literal("dreamingfish")
-                        .requires(source -> source.hasPermission(3))
-                        .then(Commands.literal("task_location")
-                                .then(Commands.literal("list")
-                                        .executes(Command_TaskLocation::list))
-                                .then(Commands.literal("info")
-                                        .then(locationNameArgument()
-                                                .executes(Command_TaskLocation::info)))
-                                .then(Commands.literal("reload")
-                                        .executes(Command_TaskLocation::reload))
-                                .then(Commands.literal("select")
-                                        .then(Commands.literal("buildable")
-                                                .then(locationNameArgument()
-                                                        .executes(context -> beginSelection(
-                                                                context, TaskLocationMode.BUILDABLE))))
-                                        .then(Commands.literal("protected")
-                                                .then(locationNameArgument()
-                                                        .executes(context -> beginSelection(
-                                                                context, TaskLocationMode.PROTECTED))))
-                                        .then(locationNameArgument()
-                                                .executes(context -> beginSelection(
-                                                        context, null))))
-                                .then(pointCommand("pos1", true))
-                                .then(pointCommand("pos2", false))
-                                .then(Commands.literal("confirm")
-                                        .executes(Command_TaskLocation::confirm))
-                                .then(Commands.literal("cancel")
-                                        .executes(Command_TaskLocation::cancel))
-                                .then(Commands.literal("remove")
-                                        .then(locationNameArgument()
-                                                .executes(Command_TaskLocation::remove)))));
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("dreamingfish")
+                .requires(source -> source.hasPermission(2));
+        register(root);
+        dispatcher.register(root);
+    }
+
+    /** 将任务地点子树挂到统一的 /dreamingfish 根节点。 */
+    public static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(Commands.literal("task_location")
+                .requires(source -> source.hasPermission(3))
+                .then(Commands.literal("list")
+                        .executes(Command_TaskLocation::list))
+                .then(Commands.literal("info")
+                        .then(locationNameArgument()
+                                .executes(Command_TaskLocation::info)))
+                .then(Commands.literal("reload")
+                        .executes(Command_TaskLocation::reload))
+                .then(Commands.literal("select")
+                        .then(Commands.literal("buildable")
+                                .then(locationNameArgument()
+                                        .executes(context -> beginSelection(
+                                                context, TaskLocationMode.BUILDABLE))))
+                        .then(Commands.literal("protected")
+                                .then(locationNameArgument()
+                                        .executes(context -> beginSelection(
+                                                context, TaskLocationMode.PROTECTED))))
+                        .then(locationNameArgument()
+                                .executes(context -> beginSelection(
+                                        context, null))))
+                .then(pointCommand("pos1", true))
+                .then(pointCommand("pos2", false))
+                .then(Commands.literal("confirm")
+                        .executes(Command_TaskLocation::confirm))
+                .then(Commands.literal("cancel")
+                        .executes(Command_TaskLocation::cancel))
+                .then(Commands.literal("remove")
+                        .then(locationNameArgument()
+                                .executes(Command_TaskLocation::remove))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> pointCommand(

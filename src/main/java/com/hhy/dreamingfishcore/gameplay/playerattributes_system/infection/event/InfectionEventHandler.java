@@ -5,6 +5,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.Playe
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
@@ -46,7 +47,9 @@ public class InfectionEventHandler {
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer player)) {
+        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()
+                || !(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
         if (player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
@@ -220,7 +223,8 @@ public class InfectionEventHandler {
         if (event.getEntity().level().isClientSide()) {
             return;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 

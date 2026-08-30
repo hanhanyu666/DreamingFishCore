@@ -3,9 +3,9 @@ package com.hhy.dreamingfishcore.server.playerdata_system.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.Packet_SyncPlayerData;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -16,17 +16,25 @@ import java.util.Collection;
 public class LoginSync {
 
     @SubscribeEvent
-    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer newPlayer)) return;
+    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
+        ServerPlayer newPlayer = event.getPlayer();
+        if (!AuthSessionGuard.isAuthenticated(newPlayer)) {
+            return;
+        }
 
         //给新加入玩家发所有在线玩家的数据（包括自己）
         for (ServerPlayer onlinePlayer : newPlayer.getServer().getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(onlinePlayer)
+                    && !onlinePlayer.getUUID().equals(newPlayer.getUUID())) {
+                continue;
+            }
             sendSyncPacketToPlayer(newPlayer, onlinePlayer);
         }
 
         //给其他所有在线玩家发新加入玩家的数据
         for (ServerPlayer onlinePlayer : newPlayer.getServer().getPlayerList().getPlayers()) {
-            if (!onlinePlayer.getUUID().equals(newPlayer.getUUID())) {
+            if (AuthSessionGuard.isAuthenticated(onlinePlayer)
+                    && !onlinePlayer.getUUID().equals(newPlayer.getUUID())) {
                 sendSyncPacketToPlayer(onlinePlayer, newPlayer);
             }
         }
@@ -35,6 +43,10 @@ public class LoginSync {
 
     //给单个玩家发送指定玩家的同步包
     public static void sendSyncPacketToPlayer(ServerPlayer targetReceiver, ServerPlayer dataOwner) {
+        if (!AuthSessionGuard.isAuthenticated(targetReceiver)
+                || !AuthSessionGuard.isAuthenticated(dataOwner)) {
+            return;
+        }
         Packet_SyncPlayerData syncPacket = new Packet_SyncPlayerData(dataOwner);
         DreamingFishCore_NetworkManager.sendToClient(
                 targetReceiver,
@@ -48,11 +60,14 @@ public class LoginSync {
 
     //广播指定玩家的数据给所有在线玩家
     public static void broadcastPlayerDataToAllOnlinePlayers(ServerPlayer dataOwner) {
+        if (!AuthSessionGuard.isAuthenticated(dataOwner)) {
+            return;
+        }
         //获取服务器内所有在线玩家
         Collection<ServerPlayer> onlinePlayers = dataOwner.getServer().getPlayerList().getPlayers();
         for (ServerPlayer onlinePlayer : onlinePlayers) {
-            //跳过自己
-            if (onlinePlayer.getUUID().equals(dataOwner.getUUID())) {
+            if (!AuthSessionGuard.isAuthenticated(onlinePlayer)
+                    || onlinePlayer.getUUID().equals(dataOwner.getUUID())) {
                 continue;
             }
             //给每个在线玩家发送新玩家的数据
@@ -66,7 +81,10 @@ public class LoginSync {
     public static void broadcastPlayerDataIncludingOwner(ServerPlayer dataOwner) {
         Collection<ServerPlayer> onlinePlayers = dataOwner.getServer().getPlayerList().getPlayers();
         for (ServerPlayer onlinePlayer : onlinePlayers) {
-            sendSyncPacketToPlayer(onlinePlayer, dataOwner);
+            if (AuthSessionGuard.isAuthenticated(onlinePlayer)
+                    && AuthSessionGuard.isAuthenticated(dataOwner)) {
+                sendSyncPacketToPlayer(onlinePlayer, dataOwner);
+            }
         }
     }
 }

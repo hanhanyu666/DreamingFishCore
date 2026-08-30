@@ -15,12 +15,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
 /**
  * 统一维护全服游戏规则。
  * 第一阶段允许原版自然回血（具体上限由 FirstStageSurvivalManager 控制），
- * 后续阶段恢复关闭自然回血；死亡不掉落始终由服务器策略强制开启。
+ * 后续阶段恢复关闭自然回血；死亡掉落交由自定义尸体/复活流程处理，不修改全局规则。
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class ServerGameRulesManager {
 
-    /** 服务器启动时按当前故事阶段应用自然回血策略，并开启死亡不掉落。 */
+    /** 服务器启动时按当前故事阶段应用自然回血策略。 */
     @SubscribeEvent
     public static void disableAllDimensionsNaturalRegeneration(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
@@ -30,7 +30,7 @@ public class ServerGameRulesManager {
     }
 
     /**
-     * 按故事阶段切换所有维度的自然回血规则，同时保持死亡不掉落开启。
+     * 按故事阶段切换所有维度的自然回血规则。
      * 该方法由阶段生存管理器在阶段切换时调用。
      */
     public static void applyNaturalRegenerationPolicy(
@@ -41,13 +41,11 @@ public class ServerGameRulesManager {
         }
 
         GameRules.Key<GameRules.BooleanValue> regenRuleKey = GameRules.RULE_NATURAL_REGENERATION;
-        GameRules.Key<GameRules.BooleanValue> keepInventoryKey = GameRules.RULE_KEEPINVENTORY;
         for (ServerLevel level : server.getAllLevels()) {
             level.getGameRules().getRule(regenRuleKey).set(naturalRegenerationEnabled, server);
-            level.getGameRules().getRule(keepInventoryKey).set(true, server);
         }
         LogUtils.getLogger().info(
-                "已{}自然回血，已开启死亡不掉落",
+                "已{}自然回血，死亡掉落由自定义尸体流程处理",
                 naturalRegenerationEnabled ? "开启" : "关闭");
     }
 

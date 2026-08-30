@@ -11,7 +11,7 @@ import java.util.List;
  * <p>例如“余梦期”可以拥有：</p>
  * <ul>
  *     <li>稳定 ID：dreamingfishcore:afterdream</li>
- *     <li>数字编号：1</li>
+ *     <li>数字编号：2</li>
  *     <li>显示名称：余梦期</li>
  *     <li>这个阶段定义的若干任务</li>
  * </ul>

@@ -2,12 +2,15 @@ package com.hhy.dreamingfishcore.server.server_ui_system.event;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -183,11 +186,11 @@ public class ChangeJoinMessage {
         };
     }
 
-    // 监听玩家进服事件，类似单片机中断
+    // 只有完成身份验证后才广播进服消息；PlayerLoggedInEvent 只代表连接建立。
     @SubscribeEvent
-    public static void onPlayerJoinServer(PlayerEvent.PlayerLoggedInEvent event) {   //括号里的内容是监听的对象事件
-        // 通过监听到的信息获取事件关联的实体，再检查是不是属于服务器玩家，如果是的话就把名字赋值给serverPlayer变量
-        if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
+        ServerPlayer serverPlayer = event.getPlayer();
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
         // 防止服务器未初始化导致空指针
@@ -206,6 +209,9 @@ public class ChangeJoinMessage {
         Component content = Component.literal(formattedMsg);
         int borderColor = getRankBorderColor(playerRank);  // 获取该玩家Rank的边框颜色
         for (ServerPlayer onlinePlayer : serverPlayer.getServer().getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(onlinePlayer)) {
+                continue;
+            }
             DreamingFishCore_NetworkManager.sendToClient(
                     new Packet_SystemMessage(content, borderColor),
                     onlinePlayer
@@ -214,7 +220,7 @@ public class ChangeJoinMessage {
     }
 
     // 监听玩家离开事件
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onPlayerLeaveServer(PlayerEvent.PlayerLoggedOutEvent event) {
 
         // 正常关服会把缓存保留到玩家退出之后；该检查仅保护异常的迟到事件。
@@ -223,6 +229,11 @@ public class ChangeJoinMessage {
         }
 
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+            return;
+        }
+
+        // 未完成登录验证的连接不会被视为真正加入过服务器。
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
 
@@ -240,6 +251,10 @@ public class ChangeJoinMessage {
         Component content = Component.literal(formattedMsg);
         int borderColor = getRankBorderColor(playerRank);  // 获取该玩家Rank的边框颜色
         for (ServerPlayer onlinePlayer : serverPlayer.getServer().getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(onlinePlayer)
+                    || onlinePlayer == serverPlayer) {
+                continue;
+            }
             DreamingFishCore_NetworkManager.sendToClient(
                     new Packet_SystemMessage(content, borderColor),
                     onlinePlayer

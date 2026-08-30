@@ -2,6 +2,8 @@ package com.hhy.dreamingfishcore.gameplay.zombie_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.ConfigurableOpenDoorGoal;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.ConfigurableBreakDoorGoal;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.ProtectedTurtleEggGoal;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.ZombieAlertSurroundGoal;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.SiegeZombieAlertTargetGoal;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ai.SiegeZombieAttackGoal;
@@ -30,6 +32,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.goal.ZombieAttackGoal;
+import net.minecraft.world.entity.ai.goal.RemoveBlockGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.monster.Monster;
@@ -117,7 +120,7 @@ public class SiegeZombieEntity extends Zombie {
         super(entityType, level);
     }
 
-    /** Returns one of the eight supplied base skins without synchronized entity data. */
+    /** Returns one of the twelve supplied base skins without synchronized entity data. */
     public int getSkinVariantIndex() {
         return stableAppearanceIndex(SKIN_VARIANT_SALT, SKIN_VARIANT_COUNT);
     }
@@ -147,6 +150,15 @@ public class SiegeZombieEntity extends Zombie {
     @Override
     protected void registerGoals() {
         super.registerGoals();
+        // Zombie.registerGoals() installs a vanilla turtle-egg RemoveBlockGoal.
+        // Replace it so task-location protection covers every inherited block
+        // destruction path, while preserving the ordinary behavior elsewhere.
+        for (WrappedGoal wrapped : new ArrayList<>(this.goalSelector.getAvailableGoals())) {
+            if (wrapped.getGoal() instanceof RemoveBlockGoal) {
+                this.goalSelector.removeGoal(wrapped.getGoal());
+            }
+        }
+        this.goalSelector.addGoal(4, new ProtectedTurtleEggGoal(this));
         // Zombie.addBehaviourGoals() installs a player target goal with a
         // cached range. Replace that one priority-2 goal instead of adding a
         // second scan, keeping the vanilla ten-tick cadence and avoiding a
@@ -181,6 +193,7 @@ public class SiegeZombieEntity extends Zombie {
         // gate is still required after the attack goal has stopped, so a
         // transient path refresh never turns into destructive AI.
         this.goalSelector.addGoal(1, new ConfigurableOpenDoorGoal(this));
+        this.goalSelector.addGoal(1, new ConfigurableBreakDoorGoal(this));
         // Insertion order at priority 2 is intentional: carrying the existing
         // surround slot around a hidden target is non-destructive, then an
         // elevated-player stack, then a step/bridge, then mining.
@@ -194,6 +207,19 @@ public class SiegeZombieEntity extends Zombie {
         // Replace the inherited 35-block follow range with the species default.
         // Runtime story-stage overrides are applied as a transient modifier.
         return Zombie.createAttributes().add(Attributes.FOLLOW_RANGE, DEFAULT_TRACKING_RANGE);
+    }
+
+    /** The inherited BreakDoorGoal is replaced by ConfigurableBreakDoorGoal below. */
+    @Override
+    protected boolean supportsBreakDoorGoal() {
+        return false;
+    }
+
+    /** Keep village navigation informed while the custom goal applies its door-position gate. */
+    @Override
+    public boolean canBreakDoors() {
+        return isAbilityEnabled(ZombieSpeciesConfig.Ability.BREAKING_DOORS)
+                && !ZombieTaskLocationRules.blocksDestructiveAction(this, null);
     }
 
     @Override
@@ -470,6 +496,9 @@ public class SiegeZombieEntity extends Zombie {
             MobSpawnType spawnType,
             BlockPos pos,
             RandomSource random) {
+        if (ZombieTaskLocationRules.blocksMonsterSpawn(type, level, pos, spawnType)) {
+            return false;
+        }
         return Monster.checkMonsterSpawnRules(type, level, spawnType, pos, random);
     }
 
@@ -921,12 +950,6 @@ public class SiegeZombieEntity extends Zombie {
             applyTrackingRangeModifier(next);
         }
 
-        boolean shouldBreakDoors = next.enabled() && next.breakingDoors();
-        if (shouldBreakDoors != this.canBreakDoors()) {
-            // Keep vanilla's difficulty predicate and break-progress animation;
-            // the story gate only decides whether the goal is installed.
-            super.setCanBreakDoors(shouldBreakDoors);
-        }
         if (this.getNavigation() instanceof GroundPathNavigation navigation) {
             navigation.setCanOpenDoors(next.enabled() && (next.openDoors() || next.breakingDoors()));
         }

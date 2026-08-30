@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.zombie_system.ai;
 
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntity;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieSpeciesConfig;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieTaskLocationRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -278,7 +279,8 @@ public final class ZombieDigGoal extends Goal {
             ZombieSpeciesConfig.ResolvedSettings settings,
             SiegeZombieEntity zombie) {
         BlockState state = level.getBlockState(pos);
-        if (ZombieConstructionMemory.isRecentlyPlaced(level, pos)
+        if (ZombieTaskLocationRules.blocksDestructiveAction(zombie, pos)
+                || ZombieConstructionMemory.isRecentlyPlaced(level, pos)
                 || state.isAir()
                 || state.is(Blocks.BEDROCK)
                 || state.is(net.minecraft.tags.BlockTags.DOORS)

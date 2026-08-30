@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryWorldState;
 import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -230,6 +231,9 @@ public final class TaskLocationManager {
      * 创造和旁观玩家不属于阶段任务个人记录参与者。
      */
     public static List<ServerPlayer> getEligiblePlayers(MinecraftServer server, String locationId) {
+        if (server == null) {
+            return List.of();
+        }
         TaskLocationDefinition location = getLocation(locationId)
                 .orElseThrow(() -> new IllegalArgumentException("任务地点不存在：" + locationId));
         if (!location.isEnabled()) {
@@ -238,6 +242,9 @@ public final class TaskLocationManager {
 
         List<ServerPlayer> result = new ArrayList<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(player)) {
+                continue;
+            }
             GameType gameType = player.gameMode.getGameModeForPlayer();
             if (gameType != GameType.SURVIVAL && gameType != GameType.ADVENTURE) {
                 continue;

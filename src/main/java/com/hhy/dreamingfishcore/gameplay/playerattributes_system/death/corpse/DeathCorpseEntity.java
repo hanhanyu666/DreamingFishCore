@@ -1,7 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.compat.CorpseAccessoryCompat;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.compat.CorpseAccessoryEntry;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -168,6 +170,11 @@ public final class DeathCorpseEntity extends Entity implements Container {
             return InteractionResult.SUCCESS;
         }
 
+        if (player instanceof ServerPlayer serverPlayer
+                && !AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            return InteractionResult.CONSUME;
+        }
+
         if (!resolved) {
             player.displayClientMessage(Component.translatable("message.dreamingfishcore.corpse.pending"), true);
             return InteractionResult.CONSUME;
@@ -226,7 +233,21 @@ public final class DeathCorpseEntity extends Entity implements Container {
         DeathCorpseInventory corpseBackup = corpseInventory.copy();
         ListTag playerBackup = player.getInventory().save(new ListTag());
 
-        DeathCorpseInventory.TransferResult result = corpseInventory.transferAllTo(player, true);
+        DeathCorpseInventory.TransferResult result;
+        try {
+            result = corpseInventory.transferAllTo(player, true);
+        } catch (RuntimeException | LinkageError exception) {
+            // 可选装备桥接或第三方 Inventory 实现抛异常时，转移可能已经搬走部分槽位；
+            // 必须在这里恢复两份快照，不能只把异常交给上层。
+            corpseInventory = corpseBackup;
+            player.getInventory().load(playerBackup);
+            player.getInventory().setChanged();
+            player.inventoryMenu.broadcastChanges();
+            setChanged();
+            DreamingFishCore.LOGGER.error("玩家 {} 付费复活物品转移异常，已回滚尸体与物品栏",
+                    player.getScoreboardName(), exception);
+            return false;
+        }
         if (!result.complete()) {
             List<CorpseAccessoryEntry> restoredSlots = result.restoredAccessorySlots();
             for (int index = restoredSlots.size() - 1; index >= 0; index--) {

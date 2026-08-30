@@ -86,6 +86,7 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             }
 
             float currentRespawnPoint = data.getRespawnPoint();
+            float originalRespawnPoint = currentRespawnPoint;
             boolean isInfected = data.isInfected();
 
             // 计算正常复活消耗
@@ -99,19 +100,38 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
                 return;
             }
 
-            // 新记录只解锁死亡点尸体；旧记录继续使用升级前的物品快照掉落流程。
-            boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
-                    ? DeathCorpseManager.finalizeForNormalRespawn(player, packet.lockCorpse)
-                    : DeathItemStorage.dropStoredItems(player);
-            if (!itemsResolved) {
+            // 先扣费并写入缓存，再执行尸体解锁/旧快照掉落；失败时统一回滚扣费，
+            // 避免“物品结算失败但复活点已经扣除”或“尸体已解锁却没有完成结算”。
+            try {
+                data.consumeRespawnPoint(cost);
+                PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+
+                // 新记录只解锁死亡点尸体；旧记录继续使用升级前的物品快照掉落流程。
+                boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
+                        ? DeathCorpseManager.finalizeForNormalRespawn(player, packet.lockCorpse)
+                        : DeathItemStorage.dropStoredItems(player);
+                if (!itemsResolved) {
+                    data.setRespawnPoint(originalRespawnPoint);
+                    PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+                    PendingDeathData.rollbackResolution(player, packet.deathId);
+                    sendResponse(player, false, currentRespawnPoint);
+                    return;
+                }
+
+                PendingDeathData.complete(player, packet.deathId);
+            } catch (RuntimeException exception) {
+                data.setRespawnPoint(originalRespawnPoint);
+                try {
+                    PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+                } catch (RuntimeException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
                 PendingDeathData.rollbackResolution(player, packet.deathId);
+                DreamingFishCore.LOGGER.error("玩家 {} 正常复活结算失败，已回滚复活点",
+                        player.getScoreboardName(), exception);
                 sendResponse(player, false, currentRespawnPoint);
                 return;
             }
-
-            data.consumeRespawnPoint(cost);
-            PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
-            PendingDeathData.complete(player, packet.deathId);
 
             // 发送成功消息，让客户端执行复活
             sendResponse(player, true, data.getRespawnPoint());

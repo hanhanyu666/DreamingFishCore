@@ -10,6 +10,8 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.Playe
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryWorldState;
 import com.hhy.dreamingfishcore.server.server_management_system.ServerGameRulesManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,13 +35,13 @@ import java.util.WeakHashMap;
  *
  * <p>所有数值集中在这里，且通过故事阶段 ID 门控。阶段推进后，饱食度自然回血会
  * 自动恢复为关闭状态，白天感染回落和每日重生储备也会停止，避免第一阶段的
- * 保护性数值泄漏到后续剧情。50% 上限只由 FoodData mixin 应用于饱食度自然回血，
+ * 保护性数值泄漏到后续剧情。70% 上限只由 FoodData mixin 应用于饱食度自然回血，
  * 药水、金苹果、状态效果和医疗物品等主动治疗不受影响。</p>
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class FirstStageSurvivalManager {
-    /** 第一阶段由饱食度触发的自然回血最多到最大生命值的 50%。 */
-    public static final float NATURAL_HEAL_CAP_RATIO = 0.50F;
+    /** 第一阶段由饱食度触发的自然回血最多到最大生命值的 70%。 */
+    public static final float NATURAL_HEAL_CAP_RATIO = 0.70F;
     /** 一个完整 Minecraft 白天（12000 tick）减少 5 个感染百分点。 */
     public static final float DAYLIGHT_INFECTION_REDUCTION = 5.0F;
     public static final long DAYLIGHT_TICKS = 12000L;
@@ -108,7 +110,7 @@ public final class FirstStageSurvivalManager {
         return player.getHealth() < player.getMaxHealth() * NATURAL_HEAL_CAP_RATIO;
     }
 
-    /** FoodData mixin 用它截断越过 50% 边界的最后一次饱食度回血。 */
+    /** FoodData mixin 用它截断越过 70% 边界的最后一次饱食度回血。 */
     public static float limitFoodNaturalHealing(Player player, float requested) {
         if (!shouldCapFoodNaturalHealing(player)) {
             return requested;
@@ -135,8 +137,9 @@ public final class FirstStageSurvivalManager {
 
     /** 登录后给玩家投递一次白芷的阶段规则私信。消息本身由 once=true 保证幂等。 */
     @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)
+    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
+        ServerPlayer player = event.getPlayer();
+        if (!AuthSessionGuard.isAuthenticated(player)
                 || !isFirstStage()
                 || !NpcMessageManager.isWorldDataLoaded()) {
             return;
@@ -181,12 +184,14 @@ public final class FirstStageSurvivalManager {
                 "故事阶段 {} 的临时生存规则已{}：自然回血上限={}, 白天感染回落={}, 每日重生补充={}",
                 stageId,
                 firstStage ? "启用" : "关闭",
-                firstStage ? "50%" : "关闭",
+                firstStage ? "70%" : "关闭",
                 firstStage ? "5点/白天" : "关闭",
                 firstStage ? "5点" : "关闭");
         if (firstStage && !previouslyFirstStage && NpcMessageManager.isWorldDataLoaded()) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                sendBaizhiProtocol(player);
+                if (AuthSessionGuard.isAuthenticated(player)) {
+                    sendBaizhiProtocol(player);
+                }
             }
         }
     }
@@ -233,7 +238,8 @@ public final class FirstStageSurvivalManager {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (!changedPlayers.contains(player.getUUID())) {
+            if (!changedPlayers.contains(player.getUUID())
+                    || !AuthSessionGuard.isAuthenticated(player)) {
                 continue;
             }
             RespawnPointSyncManager.syncRespawnPointToClient(player);

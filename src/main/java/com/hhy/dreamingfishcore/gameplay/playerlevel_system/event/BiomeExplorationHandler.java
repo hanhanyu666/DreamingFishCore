@@ -19,6 +19,7 @@ import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerL
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.network.Packet_BiomeDiscoveryNotify;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 
 import java.util.Objects;
 import java.util.Set;
@@ -85,7 +86,8 @@ public class BiomeExplorationHandler {
      */
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) return;
         if (player.level().isClientSide) return;
         if (player.tickCount % 20 != 0) return;
 
@@ -143,6 +145,9 @@ public class BiomeExplorationHandler {
      */
     private static void onBiomeEntered(ServerPlayer player, ResourceLocation biomeId,
                                        String biomeKey, boolean isNewBiome) {
+        if (!AuthSessionGuard.isAuthenticated(player)) {
+            return;
+        }
         int totalExplored = PlayerBiomesDataManager.getExploredBiomeCount(player.getUUID());
 
         long expReward = isNewBiome ? calculateExperienceReward(biomeId) : 0L;

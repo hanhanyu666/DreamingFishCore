@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.story_system.WorldHistoryLog;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -37,31 +38,36 @@ public final class Command_Story {
      * </pre>
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(
-                Commands.literal("dreamingfish")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("story")
-                                .then(Commands.literal("status")
-                                        .executes(Command_Story::showStatus))
-                                .then(Commands.literal("stage")
-                                        .requires(source -> source.hasPermission(3))
-                                        .then(Commands.literal("set")
-                                                .then(Commands.argument("stageId", StringArgumentType.word())
-                                                        .suggests((context, builder) ->
-                                                                SharedSuggestionProvider.suggest(
-                                                                        StoryManager.getAllStagesById().keySet(), builder))
-                                                        .executes(Command_Story::setStage))))
-                                .then(Commands.literal("content")
-                                        .requires(source -> source.hasPermission(3))
-                                        .then(Commands.literal("validate")
-                                                .executes(Command_Story::validateContent))
-                                        .then(Commands.literal("reload")
-                                                .then(Commands.argument("contentId", StringArgumentType.word())
-                                                        .executes(Command_Story::reloadContent))))
-                                .then(Commands.literal("history")
-                                        .then(Commands.argument("limit", IntegerArgumentType.integer(1, 50))
-                                                .executes(Command_Story::showHistory))
-                                        .executes(context -> showHistory(context, 10)))));
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("dreamingfish")
+                .requires(source -> source.hasPermission(2));
+        register(root);
+        dispatcher.register(root);
+    }
+
+    /** 将故事子树挂到统一的 /dreamingfish 根节点。 */
+    public static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(Commands.literal("story")
+                .then(Commands.literal("status")
+                        .executes(Command_Story::showStatus))
+                .then(Commands.literal("stage")
+                        .requires(source -> source.hasPermission(3))
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("stageId", StringArgumentType.word())
+                                        .suggests((context, builder) ->
+                                                SharedSuggestionProvider.suggest(
+                                                        StoryManager.getAllStagesById().keySet(), builder))
+                                        .executes(Command_Story::setStage))))
+                .then(Commands.literal("content")
+                        .requires(source -> source.hasPermission(3))
+                        .then(Commands.literal("validate")
+                                .executes(Command_Story::validateContent))
+                        .then(Commands.literal("reload")
+                                .then(Commands.argument("contentId", StringArgumentType.word())
+                                        .executes(Command_Story::reloadContent))))
+                .then(Commands.literal("history")
+                        .then(Commands.argument("limit", IntegerArgumentType.integer(1, 50))
+                                .executes(Command_Story::showHistory))
+                        .executes(context -> showHistory(context, 10))));
     }
 
     /** 读取命令参数，调用 StoryManager 切换阶段，再向执行者反馈结果。 */

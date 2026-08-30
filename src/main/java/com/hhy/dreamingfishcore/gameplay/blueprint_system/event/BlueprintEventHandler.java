@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.blueprint_system.event;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.blueprint_system.PlayerBlueprintData;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -21,7 +22,11 @@ public class BlueprintEventHandler {
         Player newPlayer = event.getEntity();   // 重生后的玩家
 
         // 只在真实死亡时清空蓝图
-        if (event.isWasDeath()) {
+        if (event.isWasDeath()
+                && ((original instanceof net.minecraft.server.level.ServerPlayer originalServer
+                && AuthSessionGuard.isAuthenticated(originalServer))
+                || (newPlayer instanceof net.minecraft.server.level.ServerPlayer newServer
+                && AuthSessionGuard.isAuthenticated(newServer)))) {
             handleDeathBlueprints(original, newPlayer);
         }
         // 注意：维度转换（如去末地）也会触发 Clone，但 isWasDeath() 为 false

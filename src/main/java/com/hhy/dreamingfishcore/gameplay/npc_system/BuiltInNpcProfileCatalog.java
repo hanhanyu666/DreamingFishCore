@@ -11,6 +11,7 @@ import java.io.Reader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 /** Reads the complete opening NPC profiles bundled in the mod JAR. */
 final class BuiltInNpcProfileCatalog {
@@ -35,7 +36,17 @@ final class BuiltInNpcProfileCatalog {
             }
             try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
                 Map<Integer, NpcData> parsed = GSON.fromJson(reader, NPC_MAP_TYPE);
-                return parsed == null ? Map.of() : parsed;
+                if (parsed == null || parsed.isEmpty()) {
+                    return Map.of();
+                }
+                Map<Integer, NpcData> retained = new LinkedHashMap<>();
+                parsed.forEach((id, profile) -> {
+                    if (id != null && profile != null && id == profile.getNpcId()
+                            && StoryNpcContentPolicy.isRetained(id)) {
+                        retained.put(id, profile);
+                    }
+                });
+                return retained;
             }
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error("读取内置 NPC 资料失败：{}", RESOURCE_PATH, exception);

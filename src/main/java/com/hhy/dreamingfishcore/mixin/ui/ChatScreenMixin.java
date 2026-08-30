@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.lwjgl.glfw.GLFW;
 
 /** Keeps the vanilla text entry/command suggestions while docking them to the custom movable chat window. */
 @Mixin(ChatScreen.class)
@@ -24,6 +25,22 @@ public abstract class ChatScreenMixin {
         Minecraft mc = Minecraft.getInstance();
         ImmersiveChatManager.positionInput(input,
                 mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());
+    }
+
+    @Inject(method = "removed", at = @At("HEAD"))
+    private void dreamingfish$clearPendingChatQuote(CallbackInfo ci) {
+        ImmersiveChatManager.onChatClosed();
+    }
+
+    @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
+    private void dreamingfish$sendQuotedMessage(int keyCode, int scanCode, int modifiers,
+                                                  CallbackInfoReturnable<Boolean> cir) {
+        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+                && ImmersiveChatManager.submitQuotedMessage(input.getValue())) {
+            input.setValue("");
+            Minecraft.getInstance().setScreen(null);
+            cir.setReturnValue(true);
+        }
     }
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)

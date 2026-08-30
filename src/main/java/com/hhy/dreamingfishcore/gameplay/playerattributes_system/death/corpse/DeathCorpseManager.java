@@ -5,6 +5,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDe
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.compat.CorpseAccessoryCompat;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.compat.CorpseAccessoryEntry;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -16,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -45,6 +47,10 @@ public final class DeathCorpseManager {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onPlayerDeathStart(LivingDeathEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player) || player.level().isClientSide()) {
+            return;
+        }
+        // 旁观只是登录前的显示状态，不是权限边界；未认证会话不得进入尸体结算链。
+        if (!AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
         CAPTURES.computeIfAbsent(player.getUUID(), ignored -> CaptureContext.from(player));
@@ -228,8 +234,12 @@ public final class DeathCorpseManager {
             return false;
         }
 
-        entity.setResolved(true);
-        return entity.transferAllToAtomically(player);
+        boolean transferred = entity.transferAllToAtomically(player);
+        if (transferred) {
+            // 只有物品已经完整转移且尸体已安全销毁后才改变状态；失败时保留可再次结算的尸体。
+            entity.setResolved(true);
+        }
+        return transferred;
     }
 
     private static Optional<DeathCorpseEntity> findPendingCorpse(ServerPlayer player) {
@@ -296,7 +306,11 @@ public final class DeathCorpseManager {
     private static CorpsePlacement resolvePlacement(CaptureContext context) {
         Optional<BlockPos> sameColumn = findSafeSurface(
                 context.level, BlockPos.containing(context.x, context.y, context.z));
-        Optional<BlockPos> dimensionSpawn = findSafeSurface(context.level, context.level.getSharedSpawnPos());
+        boolean endDimension = isEndDimension(context.level);
+        Optional<BlockPos> dimensionSpawn = findSafeSurfaceNear(
+                context.level,
+                context.level.getSharedSpawnPos(),
+                endDimension ? 128 : 16);
 
         if (context.y >= context.level.getMinBuildHeight()) {
             BlockPos recovery = sameColumn.or(() -> dimensionSpawn)
@@ -317,6 +331,16 @@ public final class DeathCorpseManager {
         }
         if (dimensionSpawn.isPresent()) {
             return placementAt(context.level, dimensionSpawn.get(), true);
+        }
+
+        // 末地掉入虚空时绝不能把尸体跨维度送回主世界；继续在末地出生岛寻找可站立位置。
+        if (endDimension) {
+            Optional<BlockPos> endSafeSurface = findSafeSurfaceNear(
+                    context.level, new BlockPos(0, context.level.getSeaLevel(), 0), 192);
+            return placementAt(
+                    context.level,
+                    endSafeSurface.orElseGet(() -> fallbackSpawn(context.level)),
+                    true);
         }
 
         ServerLevel overworld = context.level.getServer().overworld();
@@ -349,6 +373,54 @@ public final class DeathCorpseManager {
             return Optional.empty();
         }
         return Optional.of(feet.immutable());
+    }
+
+    /**
+     * 在指定位置周围寻找最近的安全地表。用于虚空和危险地形回退，避免只检查单列
+     * 导致末地出生岛被误判为空而跨维度生成尸体。
+     */
+    private static Optional<BlockPos> findSafeSurfaceNear(ServerLevel level, BlockPos origin, int maxRadius) {
+        if (level == null || origin == null || maxRadius < 0) {
+            return Optional.empty();
+        }
+        Optional<BlockPos> exact = findSafeSurface(level, origin);
+        if (exact.isPresent() || maxRadius == 0) {
+            return exact;
+        }
+
+        for (int radius = 1; radius <= maxRadius; radius++) {
+            int min = -radius;
+            int max = radius;
+            for (int offset = min; offset <= max; offset++) {
+                Optional<BlockPos> north = findSafeSurface(level,
+                        new BlockPos(origin.getX() + offset, origin.getY(), origin.getZ() + min));
+                if (north.isPresent()) {
+                    return north;
+                }
+                Optional<BlockPos> south = findSafeSurface(level,
+                        new BlockPos(origin.getX() + offset, origin.getY(), origin.getZ() + max));
+                if (south.isPresent()) {
+                    return south;
+                }
+            }
+            for (int offset = min + 1; offset < max; offset++) {
+                Optional<BlockPos> west = findSafeSurface(level,
+                        new BlockPos(origin.getX() + min, origin.getY(), origin.getZ() + offset));
+                if (west.isPresent()) {
+                    return west;
+                }
+                Optional<BlockPos> east = findSafeSurface(level,
+                        new BlockPos(origin.getX() + max, origin.getY(), origin.getZ() + offset));
+                if (east.isPresent()) {
+                    return east;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isEndDimension(ServerLevel level) {
+        return level != null && level.dimension().equals(Level.END);
     }
 
     private static BlockPos fallbackSpawn(ServerLevel level) {

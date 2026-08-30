@@ -63,21 +63,38 @@ public final class DeathItemStorage {
             return false;
         }
 
-        // keepInventory 始终开启，因此普通复活需要显式清除玩家身上的实际物品。
-        player.getInventory().clearContent();
-        player.getInventory().setChanged();
-        player.containerMenu.broadcastChanges();
-
-        int failedDrops = 0;
+        // 先把所有实体加入世界，再清空玩家物品栏。任意一个实体加入失败时，
+        // 回收本次已经加入的实体并保留原物品，避免“部分掉落后仍扣除物品”的数据损失。
+        ListTag inventoryBackup = player.getInventory().save(new ListTag());
+        List<ItemEntity> spawnedItems = new ArrayList<>();
         for (ItemStack stack : stacks) {
-            if (!spawnItemEntity(targetLevel, location.x(), location.y(), location.z(), stack)) {
-                failedDrops++;
+            ItemEntity itemEntity = createItemEntity(
+                    targetLevel, location.x(), location.y(), location.z(), stack);
+            if (!targetLevel.addFreshEntity(itemEntity)) {
+                discardSpawnedItems(spawnedItems);
+                DreamingFishCore.LOGGER.error("玩家 {} 的死亡掉落无法加入世界，已保留玩家物品栏",
+                        player.getScoreboardName());
+                return false;
             }
+            spawnedItems.add(itemEntity);
         }
 
-        if (failedDrops > 0) {
-            DreamingFishCore.LOGGER.error("玩家 {} 的死亡掉落中有 {} 个物品实体未能加入世界",
-                    player.getScoreboardName(), failedDrops);
+        try {
+            player.getInventory().clearContent();
+            player.getInventory().setChanged();
+            player.containerMenu.broadcastChanges();
+        } catch (RuntimeException exception) {
+            discardSpawnedItems(spawnedItems);
+            try {
+                player.getInventory().load(inventoryBackup);
+                player.getInventory().setChanged();
+                player.containerMenu.broadcastChanges();
+            } catch (RuntimeException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            DreamingFishCore.LOGGER.error("玩家 {} 清空死亡物品栏失败，已回滚掉落",
+                    player.getScoreboardName(), exception);
+            return false;
         }
         DreamingFishCore.LOGGER.info("玩家 {} 选择普通复活，物品已投放到 {} ({}, {}, {})",
                 player.getScoreboardName(), location.dimension(),
@@ -86,7 +103,7 @@ public final class DeathItemStorage {
     }
 
     /**
-     * keepInventory 已强制开启，保留物品只需确认持久化快照存在；实际物品无需搬运。
+     * 保留物品只需确认持久化快照存在；复活时由一次性自定义复制流程保留物品。
      */
     public static boolean keepStoredItems(ServerPlayer player) {
         if (!PendingDeathData.ensureInventorySnapshot(player)) {
@@ -115,7 +132,7 @@ public final class DeathItemStorage {
         }
     }
 
-    private static boolean spawnItemEntity(ServerLevel level, double x, double y, double z, ItemStack stack) {
+    private static ItemEntity createItemEntity(ServerLevel level, double x, double y, double z, ItemStack stack) {
         ItemEntity itemEntity = new ItemEntity(level, x, y - 0.3D, z, stack.copy());
         itemEntity.setPickUpDelay(40);
 
@@ -125,6 +142,14 @@ public final class DeathItemStorage {
                 -Mth.sin(angle) * speed,
                 0.2D,
                 Mth.cos(angle) * speed);
-        return level.addFreshEntity(itemEntity);
+        return itemEntity;
+    }
+
+    private static void discardSpawnedItems(List<ItemEntity> spawnedItems) {
+        for (ItemEntity itemEntity : spawnedItems) {
+            if (itemEntity.isAlive()) {
+                itemEntity.discard();
+            }
+        }
     }
 }

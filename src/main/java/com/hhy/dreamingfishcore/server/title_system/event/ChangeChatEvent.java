@@ -21,18 +21,17 @@ public class ChangeChatEvent {
     @SubscribeEvent
     public static void onPlayerChat(ServerChatEvent event) {
         ServerPlayer player = event.getPlayer();
+        event.setCanceled(true);
+        broadcastRichChat(player, event.getRawText(), "", "");
+    }
+
+    public static void broadcastRichChat(ServerPlayer player, String body, String quotedPlayerName, String quotedBody) {
         Title playerTitle = PlayerTitleManager.getPlayerTitleServer(player);
         Rank rank = PlayerRankManager.getPlayerRankServer(player);
-
         String titleName = playerTitle.getTitleName();
         int titleColor = playerTitle.getColor();
         String rankName = rank.getRankName();
         int rankColor = rank.getRankColor();
-        String body = event.getRawText();
-        long timestamp = System.currentTimeMillis();
-
-        event.setCanceled(true);
-
         Packet_RichChatMessage packet = new Packet_RichChatMessage(
                 player.getUUID(),
                 rankName,
@@ -41,7 +40,9 @@ public class ChangeChatEvent {
                 titleColor,
                 player.getScoreboardName(),
                 body,
-                timestamp);
+                System.currentTimeMillis(),
+                quotedPlayerName == null ? "" : quotedPlayerName,
+                quotedBody == null ? "" : quotedBody);
 
         for (ServerPlayer onlinePlayer : player.getServer().getPlayerList().getPlayers()) {
             DreamingFishCore_NetworkManager.sendToClient(packet, onlinePlayer);

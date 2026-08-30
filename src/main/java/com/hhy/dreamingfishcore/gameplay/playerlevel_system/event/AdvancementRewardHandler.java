@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerlevel_system.event;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.AdvancementType;
@@ -40,7 +41,8 @@ public class AdvancementRewardHandler {
      */
     @SubscribeEvent
     public static void onAdvancementEarned(AdvancementEvent.AdvancementEarnEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) return;
 
         AdvancementHolder holder = event.getAdvancement();
         Advancement advancement = holder.value();

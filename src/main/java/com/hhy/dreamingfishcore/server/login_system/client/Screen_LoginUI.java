@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.server.login_system.client;
 
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.server.login_system.PlayerLoginData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -67,7 +68,7 @@ public class Screen_LoginUI extends Screen {
         // 密码输入框
         this.passwordField = new EditBox(this.font, fieldX + 7, startY + 5, fieldWidth - 14, fieldHeight, Component.literal("密码"));
         this.passwordField.setHint(Component.literal(requireRegistration ? "请设置您的密码" : "请输入您的密码"));
-        this.passwordField.setMaxLength(32);
+        this.passwordField.setMaxLength(PlayerLoginData.MAX_PASSWORD_LENGTH);
         this.passwordField.setBordered(false);
         this.passwordField.setTextColor(TERMINAL_TEXT);
         this.passwordField.setTextColorUneditable(TERMINAL_MUTED_TEXT);
@@ -84,7 +85,7 @@ public class Screen_LoginUI extends Screen {
         this.confirmPasswordField = new EditBox(this.font, fieldX + 7, startY + CONFIRM_FIELD_GAP + 5,
                 fieldWidth - 14, fieldHeight, Component.literal("确认密码"));
         this.confirmPasswordField.setHint(Component.literal("请再次确认您的密码"));
-        this.confirmPasswordField.setMaxLength(32);
+        this.confirmPasswordField.setMaxLength(PlayerLoginData.MAX_PASSWORD_LENGTH);
         this.confirmPasswordField.setBordered(false);
         this.confirmPasswordField.setTextColor(TERMINAL_TEXT);
         this.confirmPasswordField.setTextColorUneditable(TERMINAL_MUTED_TEXT);
@@ -349,8 +350,10 @@ public class Screen_LoginUI extends Screen {
             return;
         }
 
-        if (password.length() < 4) {
-            statusMessage = Component.literal("§c密码长度至少需要4个字符！");
+        if (!PlayerLoginData.isPasswordLengthValid(password)) {
+            statusMessage = Component.literal("§c密码长度必须在"
+                    + PlayerLoginData.MIN_PASSWORD_LENGTH + "到"
+                    + PlayerLoginData.MAX_PASSWORD_LENGTH + "个字符之间！");
             messageColor = TERMINAL_RED;
             return;
         }

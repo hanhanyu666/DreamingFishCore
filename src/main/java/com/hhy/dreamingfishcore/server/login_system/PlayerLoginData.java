@@ -5,152 +5,136 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.Objects;
 import java.util.UUID;
 
+/** 玩家登录凭据及登录元数据。 */
 public class PlayerLoginData {
-    private UUID playerUUID;
-    private String passwordAfterHash;  //哈希后的密码
-    private String registerIP;   //注册时的ip
-    private String lastLoginIP;  //上次登录后的ip
-    private String lastLoginTime;  //上次登录后的时间
-    private GameType lastGameMode;
-    private long lastLogoutTime;  //上次退出时间戳（毫秒）- 用于快速登录判断
-    private boolean hasCompletedNewPlayerGuidence;  // 是否已完成新手教程
-    private boolean loginSessionCompleted;  // 当前会话是否已完成登录验证（用于区分登录验证状态和正常游戏状态）
+    public static final int MIN_PASSWORD_LENGTH = 4;
+    public static final int MAX_PASSWORD_LENGTH = 64;
 
-    //无参构造
+    private static final String PASSWORD_SCHEME = "pbkdf2_sha256";
+    private static final int PBKDF2_ITERATIONS = 210_000;
+    private static final int PBKDF2_KEY_BITS = 256;
+    private static final int PBKDF2_SALT_BYTES = 16;
+    private static final int MIN_ACCEPTED_ITERATIONS = 100_000;
+    private static final int MAX_ACCEPTED_ITERATIONS = 1_000_000;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private UUID playerUUID;
+    private String passwordAfterHash;  // 哈希后的密码
+    private String registerIP;         // 注册时的 IP
+    private String lastLoginIP;        // 上次登录后的 IP
+    private String lastLoginTime;      // 上次登录后的时间
+    private GameType lastGameMode;
+    private long lastLogoutTime;       // 上次退出时间戳（毫秒）- 用于快速登录判断
+    private boolean hasCompletedNewPlayerGuidence;  // 是否已完成新手教程
+    private boolean loginSessionCompleted;         // 当前会话是否已完成登录验证
+
     public PlayerLoginData() {
     }
 
-    //带参构造
-    public PlayerLoginData(UUID playerUUID, String passwordAfterHash, String registerIP, String lastLoginIP, String lastLoginTime, GameType lastGameMode) {
+    public PlayerLoginData(UUID playerUUID, String passwordAfterHash, String registerIP,
+                           String lastLoginIP, String lastLoginTime, GameType lastGameMode) {
         this.playerUUID = playerUUID;
         this.passwordAfterHash = passwordAfterHash;
         this.registerIP = registerIP;
         this.lastLoginIP = lastLoginIP;
         this.lastLoginTime = lastLoginTime;
         this.lastGameMode = lastGameMode;
-        this.lastLogoutTime = 0L;  // 默认为0，表示未记录
+        this.lastLogoutTime = 0L;
     }
 
-    /**
-     * 设置密码（SHA-256哈希 + UUID盐值）
-     * @param plainPassword 明文密码
-     */
+    /** 设置密码。新账号使用带随机盐的 PBKDF2；旧 SHA-256 记录仍可登录并自动迁移。 */
     public void setPassword(String plainPassword) {
-        // DreamingFishCore.LOGGER.info("setPassword方法开始执行，明文密码长度={}", plainPassword.length());
-
-        try {
-            // 使用 UUID 作为盐值，确保每个玩家的哈希值不同
-            String salt = playerUUID.toString();
-            String saltedPassword = plainPassword + salt;
-
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(saltedPassword.getBytes(StandardCharsets.UTF_8));
-
-            // 将字节数组转换为十六进制字符串
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-
-            this.passwordAfterHash = hexString.toString();
-            // DreamingFishCore.LOGGER.info("密码哈希完成，SHA-256哈希值={}", passwordAfterHash);
-        } catch (NoSuchAlgorithmException e) {
-            DreamingFishCore.LOGGER.error("SHA-256算法不可用", e);
-            throw new RuntimeException("SHA-256 algorithm not available", e);
+        validatePassword(plainPassword);
+        if (playerUUID == null) {
+            throw new IllegalStateException("无法为没有 UUID 的玩家设置密码");
         }
+
+        byte[] salt = new byte[PBKDF2_SALT_BYTES];
+        SECURE_RANDOM.nextBytes(salt);
+        byte[] derived = derivePassword(plainPassword, salt, PBKDF2_ITERATIONS);
+        this.passwordAfterHash = PASSWORD_SCHEME + "$" + PBKDF2_ITERATIONS + "$"
+                + Base64.getEncoder().encodeToString(salt) + "$"
+                + Base64.getEncoder().encodeToString(derived);
     }
 
-    /**
-     * 验证密码（接受明文）
-     * @param plainPassword 明文密码
-     */
+    /** 验证密码；成功验证旧格式时立即升级为 PBKDF2。 */
     public boolean verifyPassword(String plainPassword) {
-        if (passwordAfterHash == null || plainPassword == null) {
+        if (!isPasswordLengthValid(plainPassword)
+                || passwordAfterHash == null
+                || passwordAfterHash.isBlank()) {
             return false;
         }
 
-        try {
-            // 使用相同的盐值（UUID）重新计算哈希
-            String salt = playerUUID.toString();
-            String saltedPassword = plainPassword + salt;
-
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(saltedPassword.getBytes(StandardCharsets.UTF_8));
-
-            // 将字节数组转换为十六进制字符串
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-
-            String computedHash = hexString.toString();
-            boolean matches = computedHash.equals(passwordAfterHash);
-
-            DreamingFishCore.LOGGER.info("验证密码: 输入密码哈希={}, 存储密码哈希={}, 匹配={}",
-                computedHash, passwordAfterHash, matches);
-
-            return matches;
-        } catch (NoSuchAlgorithmException e) {
-            DreamingFishCore.LOGGER.error("SHA-256算法不可用", e);
-            return false;
+        if (passwordAfterHash.startsWith(PASSWORD_SCHEME + "$")) {
+            return verifyPbkdf2Password(plainPassword, passwordAfterHash);
         }
+
+        boolean legacyMatch = verifyLegacyPassword(plainPassword, passwordAfterHash);
+        if (legacyMatch) {
+            // 兼容迁移：不会要求玩家重新注册；登录成功后由现有登录流程保存新哈希。
+            setPassword(plainPassword);
+        }
+        return legacyMatch;
     }
 
-    /**
-     * 玩家修改密码
-     * @param targetPlayer 申请修改密码的玩家
-     * @param oldPassword 老密码
-     * @param newPassword 新密码
-     */
+    /** 供诊断和迁移测试使用，不暴露明文或哈希内容。 */
+    public boolean isUsingModernPasswordHash() {
+        return passwordAfterHash != null && passwordAfterHash.startsWith(PASSWORD_SCHEME + "$");
+    }
+
+    /** 玩家修改密码。 */
     public boolean changePassword(ServerPlayer targetPlayer, String oldPassword, String newPassword) {
         if (targetPlayer == null || oldPassword == null || newPassword == null) {
             return false;
         }
-
-        if (this.verifyPassword(oldPassword)) {
-            this.setPassword(newPassword);
-            targetPlayer.sendSystemMessage(Component.literal("§a您已成功修改了您的密码"), true);
-            return true;
-        } else {
-            targetPlayer.sendSystemMessage(Component.literal("§c您输入的旧密码有误，无法修改密码"), true);
+        if (!isPasswordLengthValid(newPassword)) {
+            targetPlayer.sendSystemMessage(Component.literal(
+                    "§c新密码长度必须在" + MIN_PASSWORD_LENGTH + "到" + MAX_PASSWORD_LENGTH + "个字符之间"), true);
             return false;
         }
+
+        if (verifyPassword(oldPassword)) {
+            setPassword(newPassword);
+            targetPlayer.sendSystemMessage(Component.literal("§a您已成功修改了您的密码"), true);
+            return true;
+        }
+        targetPlayer.sendSystemMessage(Component.literal("§c您输入的旧密码有误，无法修改密码"), true);
+        return false;
     }
 
-    /**
-     * 管理员强制修改密码
-     * @param adminPlayer 管理员玩家
-     * @param targetPlayer 需要修改密码的目标玩家
-     * @param newPassword 新密码
-     */
+    /** 管理员强制修改密码。 */
     public boolean forgeChangePassword(ServerPlayer adminPlayer, ServerPlayer targetPlayer, String newPassword) {
         if (adminPlayer == null || targetPlayer == null || newPassword == null) {
             return false;
         }
 
-        //不是管理员还想强行修改密码！休想！！
         if (adminPlayer.hasPermissions(2)) {
-            this.setPassword(newPassword);
-            adminPlayer.sendSystemMessage(Component.literal("§a您已成功修改玩家§e" + targetPlayer.getName().getString() + "§a的密码"), true);
-            targetPlayer.sendSystemMessage(Component.literal("§a您的登录密码已成功被管理员§e" + adminPlayer.getName().getString() + "§a修改"), true);
+            if (!isPasswordLengthValid(newPassword)) {
+                adminPlayer.sendSystemMessage(Component.literal(
+                        "§c新密码长度必须在" + MIN_PASSWORD_LENGTH + "到" + MAX_PASSWORD_LENGTH + "个字符之间"), true);
+                return false;
+            }
+            setPassword(newPassword);
+            adminPlayer.sendSystemMessage(Component.literal(
+                    "§a您已成功修改玩家§e" + targetPlayer.getName().getString() + "§a的密码"), true);
+            targetPlayer.sendSystemMessage(Component.literal(
+                    "§a您的登录密码已成功被管理员§e" + adminPlayer.getName().getString() + "§a修改"), true);
             return true;
-        } else {
-            adminPlayer.sendSystemMessage(Component.literal("§c不是管理员还想强行修改密码！休想！！"), true);
-            return false;
         }
+
+        adminPlayer.sendSystemMessage(Component.literal("§c不是管理员还想强行修改密码！休想！！"), true);
+        return false;
     }
 
     public UUID getPlayerUUID() {
@@ -209,29 +193,15 @@ public class PlayerLoginData {
         this.lastLogoutTime = lastLogoutTime;
     }
 
-    /**
-     * 检查是否可以快速登录（同IP且5分钟内退出）
-     * @param currentIp 当前玩家IP
-     * @return true表示可以快速登录
-     */
+    /** 检查是否可以快速登录（同 IP 且 5 分钟内退出）。 */
     public boolean canQuickLogin(String currentIp) {
-        if (lastLogoutTime == 0L) {
-//            DreamingFishCore.LOGGER.info("快速登录检查: 没有退出时间记录");
+        if (lastLogoutTime <= 0L || currentIp == null || lastLoginIP == null) {
             return false;
         }
 
         long timeSinceLogout = System.currentTimeMillis() - lastLogoutTime;
-        boolean ipMatches = currentIp.equals(lastLoginIP);
-        boolean withinTimeLimit = timeSinceLogout <= 300000;  // 5分钟 = 300000毫秒
-
-//        DreamingFishCore.LOGGER.info("快速登录检查详情:");
-//        DreamingFishCore.LOGGER.info("  当前IP: " + currentIp);
-//        DreamingFishCore.LOGGER.info("  上次IP: " + lastLoginIP);
-//        DreamingFishCore.LOGGER.info("  IP匹配: " + ipMatches);
-//        DreamingFishCore.LOGGER.info("  退出时间: " + lastLogoutTime);
-//        DreamingFishCore.LOGGER.info("  距离退出: " + (timeSinceLogout / 1000) + "秒");
-//        DreamingFishCore.LOGGER.info("  时间检查(<=300秒): " + withinTimeLimit);
-
+        boolean ipMatches = Objects.equals(currentIp, lastLoginIP);
+        boolean withinTimeLimit = timeSinceLogout >= 0L && timeSinceLogout <= 300_000L;
         return ipMatches && withinTimeLimit;
     }
 
@@ -249,5 +219,87 @@ public class PlayerLoginData {
 
     public void setLoginSessionCompleted(boolean loginSessionCompleted) {
         this.loginSessionCompleted = loginSessionCompleted;
+    }
+
+    private static void validatePassword(String plainPassword) {
+        if (!isPasswordLengthValid(plainPassword)) {
+            throw new IllegalArgumentException(
+                    "密码长度必须在" + MIN_PASSWORD_LENGTH + "到" + MAX_PASSWORD_LENGTH + "个字符之间");
+        }
+    }
+
+    public static boolean isPasswordLengthValid(String plainPassword) {
+        return plainPassword != null
+                && plainPassword.length() >= MIN_PASSWORD_LENGTH
+                && plainPassword.length() <= MAX_PASSWORD_LENGTH;
+    }
+
+    private boolean verifyPbkdf2Password(String plainPassword, String encoded) {
+        String[] parts = encoded.split("\\$", -1);
+        if (parts.length != 4 || !PASSWORD_SCHEME.equals(parts[0])) {
+            return false;
+        }
+
+        try {
+            int iterations = Integer.parseInt(parts[1]);
+            if (iterations < MIN_ACCEPTED_ITERATIONS || iterations > MAX_ACCEPTED_ITERATIONS) {
+                return false;
+            }
+            byte[] salt = Base64.getDecoder().decode(parts[2]);
+            byte[] expected = Base64.getDecoder().decode(parts[3]);
+            if (salt.length < 8 || expected.length == 0) {
+                return false;
+            }
+            byte[] actual = derivePassword(plainPassword, salt, iterations);
+            return MessageDigest.isEqual(actual, expected);
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            // 损坏的凭据只能导致登录失败，不能让网络线程抛出异常。
+            DreamingFishCore.LOGGER.warn("玩家 {} 的密码凭据格式无效", playerUUID);
+            return false;
+        }
+    }
+
+    private boolean verifyLegacyPassword(String plainPassword, String storedHash) {
+        if (playerUUID == null || storedHash.length() != 64
+                || !storedHash.matches("[0-9a-fA-F]{64}")) {
+            return false;
+        }
+        try {
+            byte[] computed = MessageDigest.getInstance("SHA-256")
+                    .digest((plainPassword + playerUUID).getBytes(StandardCharsets.UTF_8));
+            return MessageDigest.isEqual(computed, hexToBytes(storedHash));
+        } catch (NoSuchAlgorithmException | IllegalArgumentException exception) {
+            DreamingFishCore.LOGGER.error("兼容旧密码哈希失败", exception);
+            return false;
+        }
+    }
+
+    private static byte[] derivePassword(String plainPassword, byte[] salt, int iterations) {
+        try {
+            PBEKeySpec spec = new PBEKeySpec(
+                    plainPassword.toCharArray(), salt, iterations, PBKDF2_KEY_BITS);
+            try {
+                return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                        .generateSecret(spec).getEncoded();
+            } finally {
+                spec.clearPassword();
+            }
+        } catch (GeneralSecurityException exception) {
+            DreamingFishCore.LOGGER.error("PBKDF2算法不可用", exception);
+            throw new IllegalStateException("PBKDF2 algorithm not available", exception);
+        }
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int high = Character.digit(hex.charAt(i * 2), 16);
+            int low = Character.digit(hex.charAt(i * 2 + 1), 16);
+            if (high < 0 || low < 0) {
+                throw new IllegalArgumentException("invalid hex");
+            }
+            bytes[i] = (byte) ((high << 4) | low);
+        }
+        return bytes;
     }
 }

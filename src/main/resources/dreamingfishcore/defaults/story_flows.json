@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 2,
+  "flows": [
+    {
+      "id": "dreamingfishcore:flow/opening_abydos",
+      "stageId": "dreamingfishcore:dream_beginning",
+      "scope": "PLAYER",
+      "enabled": true,
+      "initialNodeId": "read_abydos_notice",
+      "nodes": [
+        {
+          "id": "read_abydos_notice",
+          "event": "NOTICE_READ",
+          "subjectId": "opening.desert_town",
+          "secondaryId": "",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "read_abydos_notice"},
+          "effects": [
+            {"id": "travel_guidance", "type": "CREATE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/travel_to_abydos",
+              "title": "前往阿拜多斯",
+              "content": "前往沙漠中的临时安置点阿拜多斯，在镇内完成安置。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "locationId": "dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3",
+              "sourceEventId": "dreamingfishcore:opening/event/read_abydos_notice",
+              "sourceName": "梦屿广播",
+              "sourceQuote": "阿拜多斯临时安置通知"
+            }},
+            {"id": "notice_hint", "type": "NOTIFY_PLAYER", "parameters": {
+              "text": "§e新的引导：前往阿拜多斯§r\n§7目标已记录在任务引导中。",
+              "durationMillis": "6500"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "nextNodeId": "enter_abydos"
+        },
+        {
+          "id": "enter_abydos",
+          "event": "LOCATION_ENTERED",
+          "subjectId": "",
+          "secondaryId": "",
+          "locationId": "dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "enter_abydos"},
+          "effects": [
+            {"id": "arrival_message", "type": "SEND_NPC_MESSAGE", "parameters": {
+              "messageId": "dreamingfishcore:opening/baizhi/abydos_arrival"
+            }},
+            {"id": "resolve_travel", "type": "RESOLVE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/travel_to_abydos"
+            }},
+            {"id": "baizhi_guidance", "type": "CREATE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/talk_to_baizhi",
+              "title": "去学校找白芷",
+              "content": "白芷在阿拜多斯的学校做医疗志愿。找到她并当面交谈。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "sourceEventId": "dreamingfishcore:opening/event/arrived_abydos",
+              "sourceNpcId": "101",
+              "sourceName": "白芷",
+              "sourceQuote": "安顿好以后到学校来找我。等待实体对话"
+            }},
+            {"id": "record_settle_task", "type": "RECORD_PERSONAL_TASK", "parameters": {
+              "taskId": "dreamingfishcore:opening/settle_in_abydos"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "nextNodeId": "meet_baizhi"
+        },
+        {
+          "id": "meet_baizhi",
+          "event": "NPC_INTERACTION",
+          "subjectId": "101",
+          "secondaryId": "",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "meet_baizhi"},
+          "effects": [
+            {"id": "contact_message", "type": "SEND_NPC_MESSAGE", "parameters": {
+              "messageId": "dreamingfishcore:opening/zhoucen/contact_channel"
+            }},
+            {"id": "resolve_baizhi_guidance", "type": "RESOLVE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/talk_to_baizhi"
+            }},
+            {"id": "zhoucen_guidance", "type": "CREATE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/contact_zhoucen",
+              "title": "联系周岑",
+              "content": "白芷已经当面说明了逐光会的大致情况。打开周岑发来的联络消息，听完具体安排后再决定是否加入。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "sourceEventId": "dreamingfishcore:opening/event/baizhi_conversation",
+              "sourceNpcId": "105",
+              "sourceName": "周岑",
+              "sourceQuote": "白芷已经把你介绍给周岑。注意查看他的联络消息和预设回复"
+            }},
+            {"id": "record_meet_task", "type": "RECORD_PERSONAL_TASK", "parameters": {
+              "taskId": "dreamingfishcore:opening/meet_baizhi"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "dialogueNpcId": 101,
+          "dialogueLines": [
+            "你就是刚到阿拜多斯的那位吧？先坐下，我看看有没有明显外伤。镇上正在筹建的逐光会，我也想当面跟你说清楚。",
+            "现在情况实在不是不太乐观，梦屿正在考虑建设人类逐光联合会，医院、维修队和搜救的人想先把彼此连起来，这样可以更好的实施救援和发放补给。周岑是目前的代表，我现在就把你介绍给周岑，等会儿终端会收到他的消息。"
+          ],
+          "nextNodeId": "ask_zhoucen"
+        },
+        {
+          "id": "ask_zhoucen",
+          "event": "NPC_REPLY",
+          "subjectId": "dreamingfishcore:opening/zhoucen/contact_channel",
+          "secondaryId": "ask_about_zhuiguang",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "ask_zhoucen", "membership": "NON_MEMBER"},
+          "effects": [
+            {"id": "resolve_contact_guidance", "type": "RESOLVE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/contact_zhoucen"
+            }},
+            {"id": "membership_guidance", "type": "CREATE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/choose_membership",
+              "title": "决定是否加入逐光会",
+              "content": "阅读周岑发来的介绍，然后使用消息下方的预设选项作出决定。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "sourceEventId": "dreamingfishcore:opening/event/zhuiguang_introduction",
+              "sourceNpcId": "105",
+              "sourceName": "周岑",
+              "sourceQuote": "加入与否由你自己决定"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "dialogueNpcId": 101,
+          "dialogueLines": [
+            "逐光会还只是个开头：仓库、救援交接点和能让人过夜的地方，都要一点点搭起来。愿意加入就一起建设，不加入也能在阿拜多斯生活、看病和做交易。",
+            "周岑负责登记和具体安排。我把他的联络方式发到你的终端了，先听他把条件讲完，再按自己的想法决定。"
+          ],
+          "nextNodeId": "membership_choice"
+        },
+        {
+          "id": "membership_choice",
+          "event": "PLAYER_AUTHENTICATED",
+          "subjectId": "",
+          "secondaryId": "",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "membership_choice", "membership": "NON_MEMBER"},
+          "effects": [],
+          "repeatable": true,
+          "dialogueNpcId": 101,
+          "dialogueLines": ["周岑会把成员要承担的事情、能得到的补给和基地安排讲清楚。你听完再选，不用急着回答。"]
+        },
+        {
+          "id": "join_zhuiguang",
+          "event": "NPC_REPLY",
+          "subjectId": "dreamingfishcore:opening/zhoucen/introduction",
+          "secondaryId": "join_zhuiguang",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "membership_choice", "membership": "MEMBER"},
+          "effects": [
+            {"id": "resolve_membership_guidance", "type": "RESOLVE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/choose_membership"
+            }},
+            {"id": "base_guidance", "type": "CREATE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/build_zhuiguang_base",
+              "title": "参与逐光会基地建设",
+              "content": "前往任务区域“人类逐光联合会”，与其他成员一起建设基地。成员在基地范围内会得到缓慢的生命恢复。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "locationId": "dreamingfishcore:location_zhuiguang_base",
+              "sourceEventId": "dreamingfishcore:opening/event/joined_zhuiguang",
+              "sourceNpcId": "105",
+              "sourceName": "周岑",
+              "sourceQuote": "基地现在缺的不是一个人盖完整座楼，而是每个人把能做的那部分做完"
+            }},
+            {"id": "record_choice_task", "type": "RECORD_PERSONAL_TASK", "parameters": {
+              "taskId": "dreamingfishcore:opening/choose_zhuiguang_path"
+            }},
+            {"id": "starter_supply", "type": "GIVE_ITEMS", "itemGrants": [
+              {"itemId": "minecraft:iron_pickaxe", "count": 1},
+              {"itemId": "minecraft:iron_axe", "count": 1},
+              {"itemId": "minecraft:bread", "count": 16},
+              {"itemId": "minecraft:stone_bricks", "count": 64},
+              {"itemId": "minecraft:oak_planks", "count": 64},
+              {"itemId": "minecraft:torch", "count": 32}
+            ]},
+            {"id": "supply_notice", "type": "NOTIFY_PLAYER", "parameters": {
+              "text": "§e逐光会补给已发放§r\n§7工具、口粮与首批建材已经交给你。",
+              "durationMillis": "7000"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "nextNodeId": "member_building"
+        },
+        {
+          "id": "remain_independent",
+          "event": "NPC_REPLY",
+          "subjectId": "dreamingfishcore:opening/zhoucen/introduction",
+          "secondaryId": "remain_independent",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "membership_choice", "membership": "NON_MEMBER"},
+          "effects": [
+            {"id": "resolve_membership_guidance", "type": "RESOLVE_GUIDANCE", "parameters": {
+              "id": "dreamingfishcore:guidance/opening/choose_membership"
+            }},
+            {"id": "record_choice_task", "type": "RECORD_PERSONAL_TASK", "parameters": {
+              "taskId": "dreamingfishcore:opening/choose_zhuiguang_path"
+            }},
+            {"id": "sync_player", "type": "SYNC_PLAYER"}
+          ],
+          "nextNodeId": "independent"
+        },
+        {
+          "id": "member_building",
+          "event": "PLAYER_AUTHENTICATED",
+          "subjectId": "",
+          "secondaryId": "",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "member_building", "membership": "MEMBER"},
+          "effects": [
+            {"id": "repair_base_guidance", "type": "CREATE_GUIDANCE", "once": false, "parameters": {
+              "id": "dreamingfishcore:guidance/opening/build_zhuiguang_base",
+              "title": "参与逐光会基地建设",
+              "content": "前往任务区域“人类逐光联合会”，与其他成员一起建设基地。成员在基地范围内会得到缓慢的生命恢复。",
+              "stageId": "dreamingfishcore:dream_beginning",
+              "locationId": "dreamingfishcore:location_zhuiguang_base",
+              "sourceEventId": "dreamingfishcore:opening/event/joined_zhuiguang",
+              "sourceNpcId": "105",
+              "sourceName": "周岑",
+              "sourceQuote": "基地现在缺的不是一个人盖完整座楼，而是每个人把能做的那部分做完"
+            }},
+            {"id": "repair_starter_supply", "type": "GIVE_ITEMS", "itemGrants": [
+              {"itemId": "minecraft:iron_pickaxe", "count": 1},
+              {"itemId": "minecraft:iron_axe", "count": 1},
+              {"itemId": "minecraft:bread", "count": 16},
+              {"itemId": "minecraft:stone_bricks", "count": 64},
+              {"itemId": "minecraft:oak_planks", "count": 64},
+              {"itemId": "minecraft:torch", "count": 32}
+            ]}
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "independent",
+          "event": "PLAYER_AUTHENTICATED",
+          "subjectId": "",
+          "secondaryId": "",
+          "locationId": "",
+          "scope": "PLAYER",
+          "conditions": {"cursor": "independent"},
+          "effects": [],
+          "repeatable": true
+        }
+      ]
+    }
+  ]
+}

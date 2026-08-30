@@ -4,10 +4,14 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginData;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.server.notice_system.network.Packet_NoticeListResponse;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -33,7 +37,7 @@ public final class NoticeDeliveryService {
      * 教程未完成时，游戏公告仍可在终端查看，但不会自动弹出；这里只补投服务器通知。
      */
     public static void deliverPendingOnLogin(ServerPlayer player) {
-        if (player == null) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 
@@ -44,6 +48,8 @@ public final class NoticeDeliveryService {
             DreamingFishCore.LOGGER.error(
                     "为玩家 {} 补投公告失败", player.getScoreboardName(), exception);
         }
+        // HUD 提醒卡需要在进入世界后就知道当前阶段的未读公告，不能等玩家打开终端。
+        syncVisibleNotices(player);
     }
 
     /**
@@ -59,7 +65,9 @@ public final class NoticeDeliveryService {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            deliverPendingOnLogin(player);
+            if (AuthSessionGuard.isAuthenticated(player)) {
+                deliverPendingOnLogin(player);
+            }
         }
     }
 
@@ -68,7 +76,7 @@ public final class NoticeDeliveryService {
      * 服务器通知（MAINTENANCE）不在此回调中重复投递；它们由登录链路负责。
      */
     public static void deliverPendingGameAfterTutorial(ServerPlayer player) {
-        if (player == null) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 
@@ -82,6 +90,7 @@ public final class NoticeDeliveryService {
                     "为玩家 {} 补投教程完成后的游戏公告失败",
                     player.getScoreboardName(), exception);
         }
+        syncVisibleNotices(player);
     }
 
     /**
@@ -99,6 +108,9 @@ public final class NoticeDeliveryService {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(player)) {
+                continue;
+            }
             try {
                 if (isDeliverableToPlayer(player, notice)
                         && !PlayerNoticeDataManager.hasDeliveredNotice(
@@ -110,12 +122,14 @@ public final class NoticeDeliveryService {
                         "向玩家 {} 发布公告 #{} 失败",
                         player.getScoreboardName(), notice.getNoticeId(), exception);
             }
+            // 即使公告没有自动弹出（例如教程尚未完成），终端提醒卡也应及时更新。
+            syncVisibleNotices(player);
         }
     }
 
     /** Returns the notices readable by this player in the current world state. */
     public static List<NoticeData> getVisibleNotices(ServerPlayer player) {
-        if (player == null) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
             return List.of();
         }
 
@@ -123,9 +137,34 @@ public final class NoticeDeliveryService {
         return NoticeManager.getVisibleNotices(snapshot.currentStageId());
     }
 
+    /**
+     * 将当前玩家可见公告及其已读 ID 同步给客户端。
+     * 这条链路同时服务终端列表和游戏内右下角提醒卡，避免两套未读判断漂移。
+     */
+    public static void syncVisibleNotices(ServerPlayer player) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
+            return;
+        }
+        try {
+            List<NoticeData> notices = getVisibleNotices(player);
+            Set<Integer> allReadNoticeIds = PlayerNoticeDataManager.getReadNoticeIds(player.getUUID());
+            Set<Integer> readNoticeIds = new HashSet<>();
+            for (NoticeData notice : notices) {
+                if (notice != null && allReadNoticeIds.contains(notice.getNoticeId())) {
+                    readNoticeIds.add(notice.getNoticeId());
+                }
+            }
+            DreamingFishCore_NetworkManager.sendToClient(
+                    player, new Packet_NoticeListResponse(notices, readNoticeIds));
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.error(
+                    "同步玩家 {} 的可见公告失败", player.getScoreboardName(), exception);
+        }
+    }
+
     /** Returns whether a notice is readable in the terminal right now. */
     public static boolean isVisibleToPlayer(ServerPlayer player, NoticeData notice) {
-        if (player == null || notice == null) {
+        if (player == null || notice == null || !AuthSessionGuard.isAuthenticated(player)) {
             return false;
         }
 
@@ -135,7 +174,7 @@ public final class NoticeDeliveryService {
 
     /** Returns whether a notice may be pushed automatically right now. */
     public static boolean isDeliverableToPlayer(ServerPlayer player, NoticeData notice) {
-        if (player == null || notice == null) {
+        if (player == null || notice == null || !AuthSessionGuard.isAuthenticated(player)) {
             return false;
         }
 
@@ -166,7 +205,8 @@ public final class NoticeDeliveryService {
      * 因而一条剧情广播和一条服务器公告同时到达时仍会分成两条提示。
      */
     private static void deliverBatch(ServerPlayer player, List<NoticeData> pending) {
-        if (player == null || pending == null || pending.isEmpty()) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)
+                || pending == null || pending.isEmpty()) {
             return;
         }
         boolean aggregateGameNotices = shouldAggregateGameNotices(pending);
@@ -189,7 +229,7 @@ public final class NoticeDeliveryService {
     }
 
     private static void deliver(ServerPlayer player, NoticeData notice) {
-        if (player == null || notice == null) {
+        if (player == null || notice == null || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 

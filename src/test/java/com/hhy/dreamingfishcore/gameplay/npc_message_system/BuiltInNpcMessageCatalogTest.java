@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
-import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.OpeningStoryDefinitionCatalog;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipAction;
 import org.junit.jupiter.api.Test;
 
@@ -19,13 +19,13 @@ class BuiltInNpcMessageCatalogTest {
         List<NpcMessageDefinition> additions =
                 BuiltInNpcMessageCatalog.createMissingMessages(existing);
 
-        assertEquals(56, additions.size());
-        assertEquals(4, countMessagesForNpc(additions, 1));
-        assertEquals(13, countMessagesForNpc(additions, 100));
+        assertEquals(15, additions.size());
+        assertEquals(0, countMessagesForNpc(additions, 1));
+        assertEquals(0, countMessagesForNpc(additions, 100));
         assertEquals(11, countMessagesForNpc(additions, 101));
-        assertEquals(6, countMessagesForNpc(additions, 102));
-        assertEquals(12, countMessagesForNpc(additions, 103));
-        assertEquals(6, countMessagesForNpc(additions, 104));
+        assertEquals(0, countMessagesForNpc(additions, 102));
+        assertEquals(0, countMessagesForNpc(additions, 103));
+        assertEquals(0, countMessagesForNpc(additions, 104));
         assertEquals(4, countMessagesForNpc(additions, 105));
 
         NpcMessageDefinition baizhi = findById(
@@ -38,18 +38,15 @@ class BuiltInNpcMessageCatalogTest {
         assertFalse(baizhi.getContent().contains("第一阶段"));
         assertTrue(baizhi.getContent().contains("阿拜多斯的学校"));
 
-        NpcMessageDefinition outerBand = findById(
-                additions, BuiltInNpcMessageCatalog.OUTER_BAND_LOAD_SHED_ID);
-        assertEquals(103, outerBand.getNpcId());
-        assertFalse(outerBand.isOnce());
+        assertTrue(additions.stream().noneMatch(definition -> definition.getNpcId() == 103));
 
         NpcMessageDefinition introduction = findById(
-                additions, OpeningStoryProgressManager.ZHOUCEN_INTRODUCTION_MESSAGE_ID);
+                additions, OpeningStoryDefinitionCatalog.ZHOUCEN_INTRODUCTION_MESSAGE_ID);
         assertEquals("人类逐光联合会", introduction.getSubject());
         assertEquals(2, introduction.getReplies().size());
         assertEquals(ZhuiguangMembershipAction.JOIN,
                 introduction.getReplies().stream()
-                        .filter(reply -> OpeningStoryProgressManager.JOIN_ZHUIGUANG_REPLY_ID
+                        .filter(reply -> OpeningStoryDefinitionCatalog.JOIN_ZHUIGUANG_REPLY_ID
                                 .equals(reply.getId()))
                         .findFirst()
                         .orElseThrow()
@@ -72,27 +69,6 @@ class BuiltInNpcMessageCatalogTest {
                 .filter(definition -> id.equals(definition.getId()))
                 .findFirst()
                 .orElseThrow();
-    }
-
-    @Test
-    void legacyOpeningGuidanceMovesToTheCurrentFirstStage() {
-        GuidanceSeed seed = new GuidanceSeed(
-                "dreamingfishcore:guidance/test",
-                "test",
-                "test")
-                .withStoryStage("dreamingfishcore:afterdream");
-        NpcMessageDefinition definition = new NpcMessageDefinition(
-                "dreamingfishcore:recorder/first_contact",
-                1,
-                "test",
-                "test",
-                NpcMessageDefinition.DeliveryTrigger.INTERACTION)
-                .withGuidance(seed);
-
-        assertTrue(BuiltInNpcMessageCatalog.migrateOpeningGuidanceStage(List.of(definition)));
-        assertEquals(BuiltInNpcMessageCatalog.OPENING_STAGE_ID,
-                definition.getGuidance().getStoryStageId());
-        assertFalse(BuiltInNpcMessageCatalog.migrateOpeningGuidanceStage(List.of(definition)));
     }
 
     @Test

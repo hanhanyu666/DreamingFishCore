@@ -5,6 +5,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_DeathScreenData;
 import net.minecraft.core.BlockPos;
@@ -12,7 +13,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.DimensionTransition;
 import net.minecraft.world.phys.Vec3;
@@ -47,21 +47,29 @@ public class DeathEventHandler {
             return;
         }
 
+        // 未认证玩家虽然暂时处于旁观模式，但不能借助死亡事件修改复活点、
+        // 创建尸体或触发死亡封禁。
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            return;
+        }
+
         // NeoForge 的玩家死亡链可能重复派发 LivingDeathEvent；同一次捕获只结算一次。
         if (DeathCorpseManager.isDeathConfigured(serverPlayer)) {
             return;
         }
 
-        // 付费保留仍依赖原版复活时复制旧玩家数据；尸体 Mixin 只会单独改写物品掉落判断。
-        serverPlayer.level().getGameRules().getRule(GameRules.RULE_KEEPINVENTORY)
-                .set(true, serverPlayer.server);
+        // 自定义尸体 Mixin 会在本次死亡中接管原版掉落；复活物品由
+        // CustomRespawnInventoryManager 按玩家一次性复制，不再修改全局 keepInventory。
 
         UUID deathPlayerUUID = serverPlayer.getUUID();
         UserBanList banList = serverPlayer.server.getPlayerList().getBans();
 
-        PlayerAttributesData deathPlayerAttributesData = PlayerAttributesDataManager.getPlayerAttributesData(deathPlayerUUID);
+        // 缺失属性档案时不能使用临时默认值创建一条没有结算记录的尸体；
+        // 让原版掉落规则接管，并保留后续人工修复数据的机会。
+        PlayerAttributesData deathPlayerAttributesData =
+                PlayerAttributesDataManager.findStoredPlayerAttributesData(deathPlayerUUID);
         if (deathPlayerAttributesData == null) {
-            DeathCorpseManager.configureCapture(serverPlayer, false);
+            DeathCorpseManager.finishCapture(serverPlayer);
             DreamingFishCore.LOGGER.error("玩家 {} 死亡时缺少属性数据，未创建待处理死亡记录",
                     serverPlayer.getScoreboardName());
             return;

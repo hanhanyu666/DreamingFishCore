@@ -306,7 +306,7 @@ public class ServerScreenUI_Screen extends Screen {
                 "根据目前的观察，未完全感染者在有天空的白天会逐渐回落，完整一个白天约降低 5 点；这不是治愈。",
                 "感染达到 100% 就会成为感染者，死亡时需要消耗更多复活点数；感染规则会随故事阶段变化。"
             },
-            "关注体征", "饱食度触发的普通自然回血最多恢复到最大生命的 50%；金苹果、恢复效果和医疗物资不受此限制。"),
+            "关注体征", "饱食度触发的普通自然回血最多恢复到最大生命的 70%；金苹果、恢复效果和医疗物资不受此限制。"),
         new HelpTopic(
             "05", "共同推进剧情", "逐光会筹建与你的选择", 0xFF78D6A3,
             new String[]{"全服任务", "个人对话", "加入与否"},
@@ -4260,6 +4260,8 @@ public class ServerScreenUI_Screen extends Screen {
         DreamingFishCore_NetworkManager.sendToServer(new Packet_MarkNoticeReadRequest(notice.getNoticeId()));
         // 更新本地已读状态
         cachedReadNoticeIds.add(notice.getNoticeId());
+        com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache.markRead(
+            notice.getNoticeId());
 
         // 更新全局未读标记
         hasUnreadNoticesGlobal = false;
@@ -4425,6 +4427,8 @@ public class ServerScreenUI_Screen extends Screen {
 
         cachedNotices = notices != null ? new ArrayList<>(notices) : new ArrayList<>();
         cachedReadNoticeIds = readNoticeIds != null ? readNoticeIds : new java.util.HashSet<>();
+        com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache.set(
+            cachedNotices, cachedReadNoticeIds);
 
         // 只在数据变化时重置滚动位置
         if (dataChanged) {

@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbType;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.network.Packet_SyncLimbInjury;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.entity.Entity;
@@ -66,7 +67,9 @@ public class LimbDamageEventHandler {
         }
 
         Entity hitEntity = ((net.minecraft.world.phys.EntityHitResult) rayTraceResult).getEntity();
-        if (hitEntity instanceof Player player && !player.level().isClientSide) {
+        if (hitEntity instanceof ServerPlayer player
+                && !player.level().isClientSide
+                && AuthSessionGuard.isAuthenticated(player)) {
             // 记录弹射物当前位置（用于判断击中哪个部位）
             PENDING_PROJECTILE_HITS.put(player.getUUID(), event.getEntity().position());
         }
@@ -86,9 +89,11 @@ public class LimbDamageEventHandler {
         if (event.getEntity().level().isClientSide) {
             return;
         }
-        if (!(event.getEntity() instanceof Player player)) {
+        if (!(event.getEntity() instanceof ServerPlayer serverPlayer)
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
+        Player player = serverPlayer;
 
         // 跳过创造模式玩家
         if (player.getAbilities().invulnerable) {
@@ -111,13 +116,11 @@ public class LimbDamageEventHandler {
         event.setAmount(newDamage);
 
         // 同步受伤部位到客户端（显示感叹号）
-        if (player instanceof ServerPlayer serverPlayer) {
-            long injuryTime = System.currentTimeMillis();
-            DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SyncLimbInjury(hitPart.name(), injuryTime),
-                    serverPlayer
-            );
-        }
+        long injuryTime = System.currentTimeMillis();
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_SyncLimbInjury(hitPart.name(), injuryTime),
+                serverPlayer
+        );
 
         // 清理弹射物记录
         PENDING_PROJECTILE_HITS.remove(player.getUUID());

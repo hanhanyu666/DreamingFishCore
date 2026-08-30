@@ -1,10 +1,10 @@
 package com.hhy.dreamingfishcore.server.login_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginData;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
-import com.hhy.dreamingfishcore.server.notice_system.event.NewPlayerGuide;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,18 +13,28 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
 
+/** 客户端提交的登录/注册响应。服务端永远以网络会话中的 UUID 为准。 */
 public class Packet_PlayerLoginResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_PlayerLoginResponse> TYPE =
+            new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                            DreamingFishCore.MODID, "login_system/packet_player_login_response"));
+    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_PlayerLoginResponse> STREAM_CODEC =
+            net.minecraft.network.codec.StreamCodec.of(
+                    (buf, packet) -> Packet_PlayerLoginResponse.encode(packet, buf),
+                    Packet_PlayerLoginResponse::decode);
 
-    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_PlayerLoginResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "login_system/packet_player_login_response"));
-    public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_PlayerLoginResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_PlayerLoginResponse.encode(packet, buf), Packet_PlayerLoginResponse::decode);
+    private static final UUID EMPTY_UUID = new UUID(0L, 0L);
 
     @Override
     public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
         return TYPE;
     }
-    //true是注册，false是登录
+
+    // true 是注册，false 是登录
     private final boolean loginOrRegister;
     private final String password;
+    /** 保留旧协议字段；服务端会校验它与 sender UUID 一致，不能由客户端选择账号。 */
     private final UUID playerUUID;
 
     public Packet_PlayerLoginResponse(boolean loginOrRegister, String password, UUID playerUUID) {
@@ -33,141 +43,164 @@ public class Packet_PlayerLoginResponse implements net.minecraft.network.protoco
         this.playerUUID = playerUUID;
     }
 
-    public static void encode(Packet_PlayerLoginResponse playerLoginResponse, FriendlyByteBuf buffer) {
-        buffer.writeBoolean(playerLoginResponse.loginOrRegister);
-        buffer.writeUtf(playerLoginResponse.password);
-        buffer.writeUUID(playerLoginResponse.playerUUID);
+    public static void encode(Packet_PlayerLoginResponse packet, FriendlyByteBuf buffer) {
+        buffer.writeBoolean(packet.loginOrRegister);
+        buffer.writeUtf(packet.password == null ? "" : packet.password,
+                PlayerLoginData.MAX_PASSWORD_LENGTH);
+        buffer.writeUUID(packet.playerUUID == null ? EMPTY_UUID : packet.playerUUID);
     }
 
     public static Packet_PlayerLoginResponse decode(FriendlyByteBuf buffer) {
         boolean loginOrRegister = buffer.readBoolean();
-        String password = buffer.readUtf();
+        String password = buffer.readUtf(PlayerLoginData.MAX_PASSWORD_LENGTH);
         UUID playerUUID = buffer.readUUID();
-
         return new Packet_PlayerLoginResponse(loginOrRegister, password, playerUUID);
     }
 
-    public static void handle(Packet_PlayerLoginResponse playerLoginResponse, IPayloadContext context) {
-        com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.info("收到密码响应包！");
-
-        if (playerLoginResponse == null) {
-            com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.error("密码响应包为null！");
-            return;
-        }
-        ServerPlayer serverPlayer = context.player() instanceof ServerPlayer player ? player : null;
-
-        if (serverPlayer == null) {
-            com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.error("服务端玩家实例为null！");
+    public static void handle(Packet_PlayerLoginResponse packet, IPayloadContext context) {
+        if (packet == null || context == null
+                || !(context.player() instanceof ServerPlayer serverPlayer)) {
             return;
         }
 
-        com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.info("玩家 {} 发送密码响应，loginOrRegister={}",
-                serverPlayer.getName().getString(), playerLoginResponse.loginOrRegister);
+        UUID senderUUID = serverPlayer.getUUID();
+        // 所有账号查找、密码验证和状态变更都在服务器主线程执行，避免读取到半更新对象。
+        context.enqueueWork(() -> processOnServerThread(serverPlayer, packet, senderUUID));
+    }
 
-        boolean loginOrRegister = playerLoginResponse.loginOrRegister;
-        String password = playerLoginResponse.password;
-        UUID playerUUID = playerLoginResponse.playerUUID;
-        PlayerLoginData playerLoginData = PlayerLoginDataManager.getLoginData(playerUUID);
+    private static void processOnServerThread(ServerPlayer serverPlayer,
+                                              Packet_PlayerLoginResponse packet,
+                                              UUID senderUUID) {
+        if (!isCurrentPlayer(serverPlayer, senderUUID)) {
+            return;
+        }
+        if (AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            sendResult(serverPlayer, false, "当前会话已经完成登录。");
+            return;
+        }
 
-        DreamingFishCore.LOGGER.info("准备提交到主线程执行，loginOrRegister={}", loginOrRegister);
-        context.enqueueWork(() -> {
-            // DreamingFishCore.LOGGER.info("进入主线程执行，loginOrRegister={}", loginOrRegister);
-            if (loginOrRegister) {
-                //注册
-                // DreamingFishCore.LOGGER.info("执行注册流程");
-                if (playerLoginData != null) {
-                    // 已注册
-                    DreamingFishCore.LOGGER.info("玩家已注册，拒绝重复注册");
-                    sendResult(serverPlayer, false, "您已经注册过了！请直接登录。");
-                    return;
-                }
+        // 频率限制必须在主线程、身份校验之前执行：这样伪造 UUID 的请求也会消耗
+        // 同一会话的配额，且多个网络线程同时排队时不会绕过锁定窗口。
+        if (!AuthSessionGuard.allowLoginAttempt(senderUUID)) {
+            long retryAfter = AuthSessionGuard.loginRetryAfterSeconds(senderUUID);
+            sendResult(serverPlayer, false,
+                    "尝试过于频繁，请在 " + retryAfter + " 秒后重试。");
+            return;
+        }
 
-                if (password == null || password.length() < 4) {
-                    DreamingFishCore.LOGGER.info("密码长度不足");
-                    sendResult(serverPlayer, false, "密码长度至少需要4个字符！");
-                    return;
-                }
+        if (!senderUUID.equals(packet.playerUUID)) {
+            AuthSessionGuard.recordLoginFailure(senderUUID);
+            DreamingFishCore.LOGGER.warn("拒绝玩家 {} 使用其他 UUID 提交登录响应",
+                    serverPlayer.getScoreboardName());
+            sendResult(serverPlayer, false, "身份校验失败，请重新连接服务器。");
+            return;
+        }
 
-                DreamingFishCore.LOGGER.info("开始创建新账号数据");
-                // 创建新账号
-                PlayerLoginData newPlayerLoginData = new PlayerLoginData(playerUUID, null, serverPlayer.getIpAddress(), null, null, GameType.SURVIVAL);
-                newPlayerLoginData.setPlayerUUID(playerUUID);
+        String password = packet.password;
+        if (!PlayerLoginData.isPasswordLengthValid(password)) {
+            AuthSessionGuard.recordLoginFailure(senderUUID);
+            sendResult(serverPlayer, false,
+                    "密码长度必须在" + PlayerLoginData.MIN_PASSWORD_LENGTH + "到"
+                            + PlayerLoginData.MAX_PASSWORD_LENGTH + "个字符之间。");
+            return;
+        }
 
-                // DreamingFishCore.LOGGER.info("开始哈希密码（这可能需要几秒钟）");
-                newPlayerLoginData.setPassword(password);
-                // DreamingFishCore.LOGGER.info("密码哈希完成");
-
-                // DreamingFishCore.LOGGER.info("保存登录数据到文件");
-                // 标记登录验证已完成
-                newPlayerLoginData.setLoginSessionCompleted(true);
-                PlayerLoginDataManager.saveLoginData(playerUUID, newPlayerLoginData);
-                // DreamingFishCore.LOGGER.info("登录数据保存完成");
-
-                // 使用服务器的默认游戏模式
-                GameType defaultGameMode = serverPlayer.getServer().getDefaultGameType();
-                serverPlayer.setGameMode(defaultGameMode);
-                DreamingFishCore.LOGGER.info("玩家 {} 注册成功，游戏模式: {}", serverPlayer.getName().getString(), defaultGameMode);
-
-                // DreamingFishCore.LOGGER.info("发送提示消息");
-                NotificationPushHelper.sendTopLeftNotification(
-                        serverPlayer, "§a注册成功！享受服务器吧！");
-
-                // 检查并发送复活提示
-                RevivalInfoManager.checkAndSendRevivalTip(serverPlayer);
-
-                // 发送新手教程（仅未完成过教程的玩家）
-                if (!newPlayerLoginData.gethasCompletedNewPlayerGuidence()) {
-                    NewPlayerGuide.sendNewPlayerGuide(serverPlayer);
-                } else {
-                    DreamingFishCore.LOGGER.info("玩家已完成过新手教程，跳过推送");
-                }
-                // DreamingFishCore.LOGGER.info("发送注册结果包");
-                sendResult(serverPlayer, true, "注册成功！");
+        try {
+            PlayerLoginData loginData = PlayerLoginDataManager.getLoginData(senderUUID);
+            if (packet.loginOrRegister) {
+                processRegistration(serverPlayer, senderUUID, password, loginData);
             } else {
-                //登录
-                if (playerLoginData == null) {
-                    // 未注册
-                    sendResult(serverPlayer, false, "您还未注册！请先注册账号。");
-                    return;
-                }
-
-                if (playerLoginData.verifyPassword(password)) {
-                    // 登录成功 - 恢复上次保存的游戏模式
-                    GameType lastGameMode = playerLoginData.getLastGameMode();
-                    if (lastGameMode == null) {
-                        // 如果没有保存的游戏模式，使用服务器默认
-                        lastGameMode = serverPlayer.getServer().getDefaultGameType();
-                    }
-                    serverPlayer.setGameMode(lastGameMode);
-                    DreamingFishCore.LOGGER.info("玩家 {} 登录成功，游戏模式恢复为: {}",
-                            serverPlayer.getName().getString(), lastGameMode);
-
-                    // 标记登录验证已完成
-                    playerLoginData.setLoginSessionCompleted(true);
-                    PlayerLoginDataManager.saveLoginData(playerUUID, playerLoginData);
-
-                    NotificationPushHelper.sendTopLeftNotification(
-                            serverPlayer, "§a登录成功！欢迎回来！");
-
-                    // 检查并发送复活提示
-                    RevivalInfoManager.checkAndSendRevivalTip(serverPlayer);
-                    sendResult(serverPlayer, true, "登录成功！");
-
-                    if (!playerLoginData.gethasCompletedNewPlayerGuidence()) {
-                        NewPlayerGuide.sendNewPlayerGuide(serverPlayer);
-                    }
-                } else {
-                    // 密码错误
-                    sendResult(serverPlayer, false, "密码错误！请重新输入。");
-                }
+                processLogin(serverPlayer, senderUUID, password, loginData);
             }
-        });
+        } catch (RuntimeException exception) {
+            AuthSessionGuard.recordLoginFailure(senderUUID);
+            DreamingFishCore.LOGGER.error("玩家 {} 登录流程异常",
+                    serverPlayer.getScoreboardName(), exception);
+            sendResult(serverPlayer, false, "登录服务暂时不可用，请稍后重试。");
+        }
+    }
+
+    private static void processRegistration(ServerPlayer player, UUID playerUUID,
+                                            String password, PlayerLoginData existingData) {
+        if (existingData != null) {
+            AuthSessionGuard.recordLoginFailure(playerUUID);
+            sendResult(player, false, "您已经注册过了！请直接登录。");
+            return;
+        }
+
+        PlayerLoginData newData = new PlayerLoginData(
+                playerUUID,
+                null,
+                player.getIpAddress(),
+                player.getIpAddress(),
+                String.valueOf(System.currentTimeMillis()),
+                GameType.SURVIVAL);
+        newData.setPassword(password);
+        newData.setLoginSessionCompleted(true);
+        if (!PlayerLoginDataManager.saveLoginDataChecked(playerUUID, newData)) {
+            AuthSessionGuard.recordLoginFailure(playerUUID);
+            sendResult(player, false, "登录数据暂时无法保存，请稍后重试。");
+            return;
+        }
+
+        player.setGameMode(player.getServer().getDefaultGameType());
+        AuthSessionGuard.markAuthenticated(player);
+        AuthSessionGuard.recordLoginSuccess(playerUUID);
+        NotificationPushHelper.sendTopLeftNotification(player, "§a注册成功！享受服务器吧！");
+        DreamingFishCore.LOGGER.info("玩家 {} 注册成功，游戏模式: {}",
+                player.getScoreboardName(), player.getServer().getDefaultGameType());
+        sendResult(player, true, "注册成功！");
+    }
+
+    private static void processLogin(ServerPlayer player, UUID playerUUID,
+                                     String password, PlayerLoginData loginData) {
+        if (loginData == null) {
+            AuthSessionGuard.recordLoginFailure(playerUUID);
+            sendResult(player, false, "您还未注册！请先注册账号。");
+            return;
+        }
+
+        if (!loginData.verifyPassword(password)) {
+            AuthSessionGuard.recordLoginFailure(playerUUID);
+            sendResult(player, false, "密码错误！请重新输入。");
+            return;
+        }
+
+        GameType gameMode = loginData.getLastGameMode();
+        if (gameMode == null) {
+            gameMode = player.getServer().getDefaultGameType();
+        }
+        loginData.setLastLoginIP(player.getIpAddress());
+        loginData.setLastLoginTime(String.valueOf(System.currentTimeMillis()));
+        loginData.setLoginSessionCompleted(true);
+        if (!PlayerLoginDataManager.saveLoginDataChecked(playerUUID, loginData)) {
+            loginData.setLoginSessionCompleted(false);
+            // 持久化失败时不能继续沿用旧的同 IP 快速登录窗口，否则下次连接会在
+            // 没有可靠落盘的情况下再次绕过密码验证。
+            loginData.setLastLogoutTime(0L);
+            AuthSessionGuard.recordLoginFailure(playerUUID);
+            sendResult(player, false, "登录数据暂时无法保存，请稍后重试。");
+            return;
+        }
+
+        player.setGameMode(gameMode);
+        AuthSessionGuard.markAuthenticated(player);
+        AuthSessionGuard.recordLoginSuccess(playerUUID);
+        NotificationPushHelper.sendTopLeftNotification(player, "§a登录成功！欢迎回来！");
+        DreamingFishCore.LOGGER.info("玩家 {} 登录成功，游戏模式恢复为: {}",
+                player.getScoreboardName(), gameMode);
+        sendResult(player, true, "登录成功！");
+    }
+
+    private static boolean isCurrentPlayer(ServerPlayer player, UUID uuid) {
+        return player != null
+                && uuid != null
+                && player.getServer() != null
+                && player.getServer().getPlayerList().getPlayer(uuid) == player;
     }
 
     private static void sendResult(ServerPlayer player, boolean success, String message) {
-        com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager.sendToClient(
-                new Packet_PlayerLoginResult(success, message),
-                player
-        );
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_PlayerLoginResult(success, message), player);
     }
 }

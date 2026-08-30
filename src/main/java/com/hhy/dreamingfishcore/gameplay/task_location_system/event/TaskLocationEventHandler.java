@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefini
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.network.Packet_SyncTaskLocationHud;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -62,6 +63,15 @@ public final class TaskLocationEventHandler {
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().isClientSide()) {
+            return;
+        }
+
+        // 未完成自定义登录的玩家即使处于旁观模式，也不能参与地点提示、模式切换或
+        // 任务结算候选；清理可能由同 UUID 旧实体留下的短生命周期状态。
+        if (!AuthSessionGuard.isAuthenticated(player)) {
+            UUID playerId = player.getUUID();
+            PLAYER_LOCATIONS.remove(playerId);
+            FORCED_ADVENTURE_PLAYERS.remove(playerId);
             return;
         }
 
@@ -156,7 +166,9 @@ public final class TaskLocationEventHandler {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onSelectFirstPoint(PlayerInteractEvent.LeftClickBlock event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !player.hasPermissions(3)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)
+                || !player.hasPermissions(3)) {
             return;
         }
         // The EconomySystem claim wand owns its own right-click selection protocol. Do not let an
@@ -173,6 +185,7 @@ public final class TaskLocationEventHandler {
     public static void onSelectSecondPoint(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != InteractionHand.MAIN_HAND
                 || !(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)
                 || !player.hasPermissions(3)) {
             return;
         }

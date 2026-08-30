@@ -4,7 +4,6 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
-import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
@@ -15,6 +14,7 @@ import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
 import com.hhy.dreamingfishcore.server.login_system.PlayerLoginDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.notice_system.PlayerNoticeDataManager;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
@@ -46,6 +46,7 @@ public final class WorldDataLifecycleEvents {
     public static void onServerStarting(ServerStartingEvent event) {
         MinecraftServer server = event.getServer();
         JsonDataStore.resetSession();
+        AuthSessionGuard.clear();
         autoSaveCounter = 0;
 
         runSafely("加载世界历史日志", () -> WorldHistoryLog.loadWorldData(server));
@@ -55,7 +56,7 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载群系探索", () -> PlayerBiomesDataManager.loadWorldData(server));
         runSafely("加载任务地点", TaskLocationManager::load);
         runSafely("加载故事系统", () -> StoryManager.loadWorldData(server));
-        runSafely("加载故事内容包", ContentPackManager::loadWorldData);
+        runSafely("加载故事内容包", () -> ContentPackManager.loadWorldData(server));
         runSafely("加载玩家任务", () -> TaskDataManager.loadWorldData(server));
         runSafely("加载随记本", () -> StoryBookDataManager.loadWorldData(server));
         runSafely("加载 NPC 关系", () -> NpcRelationManager.loadWorldData(server));
@@ -65,7 +66,6 @@ public final class WorldDataLifecycleEvents {
         runSafely("核对私信回复与 NPC 关系", NpcMessageManager::reconcileFavorabilityEffects);
         runSafely("加载复活信息", () -> RevivalInfoManager.loadWorldData(server));
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
-        runSafely("加载开场个人任务进度", () -> OpeningStoryProgressManager.loadWorldData(server));
     }
 
     @SubscribeEvent
@@ -123,11 +123,13 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存个人引导", () -> GuidanceManager.saveIfDirty(server));
         saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
-        saved &= runSaveSafely("保存开场个人任务进度", () -> OpeningStoryProgressManager.saveIfDirty(server));
+        // 故事流程游标最后保存，确保引导、任务和私信等效果数据已经先进入各自缓存。
+        saved &= runSaveSafely("保存故事流程玩家进度", () -> ContentPackManager.saveIfDirty(server));
         return saved;
     }
 
     private static void clearWorldCaches() {
+        AuthSessionGuard.clear();
         runSafely("清理登录数据缓存", PlayerLoginDataManager::clearServerCache);
         runSafely("清理玩家数据缓存", PlayerDataManager::clearWorldCache);
         runSafely("清理玩家属性缓存", PlayerAttributesDataManager::clearWorldCache);
@@ -143,7 +145,6 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理个人引导缓存", GuidanceManager::clearWorldCache);
         runSafely("清理复活信息缓存", RevivalInfoManager::clearWorldCache);
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
-        runSafely("清理开场个人任务缓存", OpeningStoryProgressManager::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

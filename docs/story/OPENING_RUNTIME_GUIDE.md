@@ -1,73 +1,69 @@
-# 《灯还亮着》内容投放说明
+# “梦的开始”上线投放说明
 
-## 已落地文件
+本说明对应阿拜多斯开场的 `story_flows.json` schema 2 实现。开场已经完全迁移到
+`StoryFlowEngine`；公告、地点、NPC 实体交互、NPC 预设回复和认证模块只提交事实事件，
+由流程节点统一推进玩家游标和效果。这里不发布余梦期及后续阶段内容。
 
-- run/config/dreamingfishcore/npc_data.json：普通开发实例实际读取的 NPC 配置；保留剧情记录员，并加入 100～104 五个开场发送者。
-- run/config/dreamingfishcore/npc_messages.json：45 条 NPC 私信，其中 10 条会生成独立的个人引导，并包含加入、延后加入和退出逐光会的身份入口。
-- docs/story/OPENING_PRELUDE_PLAN.md：前置篇轮次、玩家行为、分支与失败补救。
-- docs/story/OPENING_STORY_CONTENT.md：广播、临时约章、现场对白和环境文本。
+## 当前保留内容
 
-## 测试前
+- NPC 运行时只保留 `101` 白芷和 `105` 周岑。
+- 公告只保留 `opening.desert_town`（“阿拜多斯 · 临时安置通知”）。
+- 白芷、周岑的阿拜多斯文案，以及玩家与他们的私信历史继续保留。
+- 随记本仍是独立收藏系统，本轮没有接入故事流程。
 
-开发环境启动后执行：
+## 开场流程
 
-    /npc reload
-    /npc list
-    /npc messages list
-    /zhuiguang status
+1. 玩家完成登录认证后，流程从自己的 `read_abydos_notice` 游标开始；全服阶段不会因玩家行为自动变化。
+2. 玩家真正读完阿拜多斯公告后，`NOTICE_READ` 节点创建“前往阿拜多斯”引导。
+3. 玩家进入稳定地点 ID
+   `dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3` 后，`LOCATION_ENTERED` 节点发送白芷到达消息，
+   完成前往引导、记录“抵达阿拜多斯”个人任务，并创建“去学校找白芷”引导。
+4. 玩家与白芷实体交谈后，`NPC_INTERACTION` 节点发送周岑联络消息，完成会面任务并创建联络引导。
+5. 玩家回复周岑的联络消息，再阅读介绍消息；选择加入或保持独立是每名玩家自己的组织身份分支。
+6. 加入分支记录选择、发放一次性补给并创建基地建设引导；独立分支只记录选择，不承担成员建设任务。
 
-远程通信角色不必生成实体也能由服主发送私信。若需要测试现场对话，可执行：
+每个节点都按玩家流程游标匹配。一次性效果会写入效果日志，重连、重复点击、重复进入地点和服务器重启
+都不会重复发放物品或重复发送同一条开场消息。修复型节点可以声明 `once: false`，用于登录时补齐尚未
+落下的建设引导。
 
-    /npc spawn 101
-    /npc spawn 102
+## 阶段规则
 
-## 建议投放顺序
+阶段顺序固定为：梦的开始 → 余梦期 → 管制期 → 疑光期 → 破晓期。阶段只能由服主手动发布，故事流程节点
+不会自动切换阶段。后四阶段本轮只有空壳定义。
 
-当前主动剧情消息使用 MANUAL 触发，由服主在对应世界事实发生后发送。命令格式：
+## 运行文件
 
-    /npc message <玩家> <消息ID>
+- `config/dreamingfishcore/story_stage_data.json`：阶段和任务定义。
+- `config/dreamingfishcore/story_flows.json`：事实事件、节点条件、效果和流程台词。
+- `config/dreamingfishcore/npc_data.json`：白芷、周岑档案和面对面对话。
+- `config/dreamingfishcore/npc_messages.json`：白芷/周岑私信、预设回复和后续消息。
+- `config/dreamingfishcore/notices.json`：阿拜多斯公告。
+- 世界数据 `data/dreamingfishcore/story/flow_player_progress.json`：每名玩家的流程游标、完成节点、一次性效果日志和旗标。
 
-| 轮次 | 先发消息 | 结算后消息 |
-| --- | --- | --- |
-| R0 | dreamingfishcore:opening/liaison/network_online | 玩家回复自动产生对应后续消息 |
-| R1 | 对愿意建设的玩家补发 dreamingfishcore:opening/liaison/station_request | 无 |
-| R2 | dreamingfishcore:opening/liaison/first_rescue_call；dreamingfishcore:opening/baizhi/triage_request | dreamingfishcore:opening/liaison/first_rescue_record；dreamingfishcore:opening/baizhi/after_rescue |
-| R3 | dreamingfishcore:opening/liaison/founding_meeting | “加入”回复写入成员身份；独立协作保持非成员；约章副本允许读完后再决定 |
-| R4 | dreamingfishcore:opening/liang/first_signal | dreamingfishcore:opening/liang/power_diversion；dreamingfishcore:opening/liang/hold_signal |
-| E1 | dreamingfishcore:opening/yuchi/weak_signal | 玩家回复自动获得相应说明 |
-| R5 | dreamingfishcore:opening/baizhi/observation_room；dreamingfishcore:opening/jiang/initial_protocol | 根据玩家实际行为记录世界事实 |
-| R6 | 使用广播和世界历史文本结算 | 可再次发送 dreamingfishcore:opening/liang/hold_signal 给本轮新参与者 |
+流程进度与全服阶段状态分开保存；玩家加入逐光会不会改变全服阶段。
 
-熟悉与信任消息只在玩家达到对应好感度、且发生了匹配的真实行为后投放：
+## 服主检查与热重载
 
-- 白芷：familiar_note、trusted_note；
-- 江晚：familiar_uncertainty、trusted_personal；
-- 梁朔：familiar_record、trusted_fear；
-- 尉迟南：familiar_anomaly、trusted_reason；
-- 梦屿应急联络员：familiar_concern。
+```text
+/npc reload
+/npc list
+/npc messages list
+/dreamingfish story status
+/dreamingfish story content validate
+/dreamingfish story content reload <contentId>
+```
 
-这些消息不是主线必需情报，不需要为了投放而人工刷高好感度。
+阶段仍由服主手动发布，例如：
 
-## 成员身份操作
+```text
+/dreamingfish story stage set dreamingfishcore:dream_beginning
+/dreamingfish story stage set dreamingfishcore:afterdream
+```
 
-- 玩家默认是“独立协作者”，逐光会身份与幸存者/感染者、NPC 好感度、Rank 和称号彼此独立。
-- 成立消息、`dreamingfishcore:opening/liaison/join_later` 的加入回复会把身份改为逐光会成员。
-- `dreamingfishcore:opening/liaison/leave_request` 只可发给成员；确认退出后恢复为独立协作者。
-- 服主可用 `/zhuiguang status <玩家>` 查询，用 `/zhuiguang membership <玩家> member|independent` 纠正或恢复身份。
-- 独立协作者仍可收到公共求援、参与主线、建设和监督组织；身份条件只用于内部短信和后续组织职责。
+流程配置必须使用 schema 2。校验失败时会使用只读内置阿拜多斯流程，拒绝覆盖损坏的配置和玩家流程存档；
+本版本不读取旧的开场专用进度文件，也不把地点显示名称当作事实或自动映射。
 
-## 正式服上线前要替换的内容
+## 扩展节点
 
-1. 为联络站、接应点、中继、观察区和公共天线确定实际位置。
-2. 在对应 guidance 中填写维度与坐标，并把 hasLocation 改为 true；如果地点由玩家自由选择，保持 false，待剧情场所登记后由服务端生成定位。
-3. 确认 NPC 数字 ID 没有与正式内容冲突。100～104 目前是本内容包的临时保留段。
-4. 若生产服已有 npc_data.json，合并 100～104 条目，不要直接覆盖其他 NPC。
-5. 将两个配置文件放入生产实例的 config/dreamingfishcore 目录，再执行 /npc reload。
-6. 广播、世界历史和环境文本目前是文案资产，尚未自动绑定广播系统或世界事件，需要服主按轮次发布。
-
-## 内容投放边界
-
-- 普通消息回复记录个人关系；带 membershipAction 的回复还会由服务端写入逐光会成员身份。两者都不代替建筑、救援、档案保存或患者处理等世界事实。
-- guidance 只负责记住 NPC 已经告诉玩家的行动信息，不允许客户端手动声明完成。
-- 已经结算的唯一事件不为晚加入玩家重置；新人收到公共摘要，并从现有建筑、档案和下一轮行动进入故事。
-- 大阶段仍由服主发布，前置篇完成不会自动从余梦期切换到管制期。
+以后新增公告、线索、随机本或更多 NPC 内容时，在 `story_flows.json` 增加节点和效果即可。模块代码只需
+在边界处发出新的 `StoryEvent`，不再把一条剧情拆散写进公告、地点、NPC 和登录模块的互相调用中。

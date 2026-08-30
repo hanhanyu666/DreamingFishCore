@@ -9,6 +9,9 @@
 - 移动声追踪：玩家在丧尸视线外移动时，服务器按节流后的移动采样发出“声音”；符合距离和生存状态的丧尸可以直接接收目标。连续脚步会刷新同一个锁定的有效期，但玩家没有离开默认四格的声音锚点时不会反复改变隐藏寻路坐标。玩家在大建筑内移动超过该距离后，最新情报锚点仍会正常更新。
 - 目标广播：看见玩家或听见玩家的丧尸会在有限半径内广播目标；接收者可以继续转发，形成有限跳数/有限人数的 BFS 波次。
 - 分流包围：原版导航进入玩家附近后，丧尸会认领不同的环形方位，并根据两格左右的局部拥挤情况修正最后一小段移动方向；它不会重算或替换原版路径。玩家藏在密闭建筑内时，同一个方位会投影到对应方向、且原版寻路可到达的外墙位置，因此尸群会绕到建筑四周，再由普通破墙逻辑从各自方向攻入。个体一旦选中可达外墙或开始挖掘，就会暂时承诺该次突破：期间继续接收新脚步情报，但不会放弃已经走到一半或挖到一半的入口。
+- 任务地点保护（丧尸 AI）：启用后，位于任意启用的 `task_location`（包括“可建造”和“不可建造/强制保护”）内的丧尸不能挖掘、放置方块或破门；受影响方块/门即使在边界内而丧尸站在外侧也会受到保护。木门开启仍由独立的原版开门目标处理，不受此项禁止影响。
+- 保护区恢复：启用后，处于任意启用任务地点的玩家会持续获得生命恢复 I；效果由服务端短时续期，离开地点后自然消退。
+- 保护区刷怪：启用后，任意启用任务地点内不会自动生成 `MONSTER` 类怪物（自然生成、刷怪笼/试炼刷怪笼、结构/事件生成、增援等均拦截）；`/summon`、刷怪蛋、管理员脚本和实体转化等明确创建行为仍可用。
 - 外观：沿用原版僵尸骨骼和比例，使用十二套 64×64 社区/委托皮肤：`zombiedf1—5`、`qingmozangbi`、`left2mine_zombie`、`zombie_girl`、`hanhanyu_z`、`qingmo_z`、`wither_light_z` 和 `jijituan_z`。十二套皮肤全部共用发光眼睛渲染层，每只丧尸会从蓝、绿、粉、红、白、黄六种眼部贴图中取得一种；眼睛通过与原版蜘蛛眼相同的全亮渲染层显示，在黑暗中不会被环境光压暗。皮肤和眼色都按实体 UUID 稳定选择，重进世界不会随机换样，但发光只影响视觉，不会像火把一样照亮周围方块。
 
 所有能力都遵守“原版寻路优先”：原版近战目标和导航与堆墙/放置/挖掘处于同一 AI 优先级，但原版攻击目标先注册，因此只要原版攻击目标仍在运行，这些后备动作不会抢占它；攻击导航停止后还要连续确认路径不可达约 20 tick（约 1 秒）才会尝试。能绕过柱子、台阶或其他普通障碍时不会主动挖方块。开门只在实际碰到木门时按原版门交互逻辑处理。放置还要求目标至少高出丧尸约一格；刚放置的方块会短暂进入施工保护，半径 2 格内的丧尸会等待路径重新计算，不会互相拆建；同一玩家在这段保护窗口内也只允许一只丧尸放置一次，挖掘也会在这段时间让路。
@@ -38,6 +41,9 @@
   "hearing": true,
   "broadcasting": true,
   "surrounding": true,
+  "taskLocationProtection": true,
+  "taskLocationRegeneration": true,
+  "taskLocationSpawnProtection": true,
   "trackingRange": 45.0,
   "hearingRange": 45.0,
   "broadcastRange": 20.0,
@@ -55,19 +61,26 @@
   "placementBlock": "minecraft:cobblestone",
   "placementBlocks": 16,
   "naturalSpawn": true,
-  "vanillaZombieSpawnPercent": 50,
-  "customZombieSpawnPercent": 90,
+  "zombieFamilySpawnPercent": 120,
+  "vanillaZombieSpawnPercent": 40,
+  "customZombieSpawnPercent": 60,
   "otherMonsterSpawnPercent": 80,
   "stageOverrides": {
     "dreamingfishcore:dream_beginning": {
       "digging": false,
       "placingBlocks": false,
-      "stacking": false
+      "stacking": false,
+      "taskLocationProtection": false,
+      "taskLocationRegeneration": false,
+      "taskLocationSpawnProtection": false
     },
     "dreamingfishcore:afterdream": {
       "digging": true,
       "placingBlocks": true,
-      "stacking": true
+      "stacking": true,
+      "taskLocationProtection": true,
+      "taskLocationRegeneration": true,
+      "taskLocationSpawnProtection": true
     }
   }
 }
@@ -101,12 +114,18 @@
 | `surroundRadius` | `2.4` | 围绕玩家认领方位的目标半径；必须小于触发距离 |
 | `surroundSteeringStrength` | `0.55` | 环形方位对原版路径方向的混合强度，范围 `0.05—0.9` |
 | `stackMinimumTargetHeight` | `4.0` | 玩家脚面至少比发起堆叠的丧尸高多少格，才允许使用人墙 |
-| `naturalSpawn` | `true` | 是否启用自然怪物刷怪池的安全追加；原版/数据包条目始终保留，关闭时不追加新丧尸 |
-| `vanillaZombieSpawnPercent` | `50` | 原版僵尸保留其修改前权重的百分之多少 |
-| `customZombieSpawnPercent` | `90` | 新丧尸获得修改前原版僵尸权重的百分之多少 |
-| `otherMonsterSpawnPercent` | `80` | 除原版僵尸和新丧尸外，其余 `MONSTER` 刷怪条目保留的权重百分比 |
+| `taskLocationProtection` | `true` | 任务地点内禁止丧尸挖掘、放置方块和破门；可建造与强制保护模式都适用，开木门不受影响 |
+| `taskLocationRegeneration` | `true` | 任务地点内玩家持续获得生命恢复 I |
+| `taskLocationSpawnProtection` | `true` | 任务地点内禁止自动生成敌对 `MONSTER`；刷怪蛋、`/summon` 等明确创建行为不受影响 |
+| `naturalSpawn` | `true` | 是否启用自然怪物刷怪池中的僵尸条目拆分和其他怪物权重调整 |
+| `zombieFamilySpawnPercent` | `120` | 僵尸家族总权重相对原版的百分比；`120` 表示提高 20% |
+| `vanillaZombieSpawnPercent` | `40` | 调整后僵尸家族权重分给原版僵尸/尸壳的份额 |
+| `customZombieSpawnPercent` | `60` | 调整后僵尸家族权重分给逐光丧尸的份额 |
+| `otherMonsterSpawnPercent` | `80` | 其他 `MONSTER` 条目相对原版的权重；`80` 表示降低 20% |
 
-默认刷怪数学关系仍按原版僵尸权重 `Z`、其他某种怪物权重 `M` 的比例计算：原版僵尸/新丧尸/其他怪物的有效因子为 `5/9/8`。实现现在只向事件列表追加缺少的权重，不删除或修改原版、数据包和其他模组的条目，因此即使某个自定义条目不兼容，也不会把整个怪物池清空。新丧尸同时继承当地原版僵尸条目的每组最小/最大数量；没有原版僵尸刷怪条目的维度或生物群系不会凭空增加新丧尸。为保证刷怪安全，配置为 `0` 的类别原有条目仍会保留（安全追加模式不会用删除操作强行清空它们）。
+刷怪总量遵守原版的 `MONSTER` 上限。对每个原版僵尸家族条目，代码先按 `zombieFamilySpawnPercent` 调整总权重，再按 `vanillaZombieSpawnPercent` 与 `customZombieSpawnPercent` 拆分。例如原权重 `100`、僵尸家族总权重 `120`、内部比例 `40/60` 时，结果就是原版僵尸 `48`、逐光丧尸 `72`。蜘蛛、骷髅、苦力怕等其他条目则各自保留 `80%` 权重。权重会由游戏在抽取时自动归一化；实际实体总数仍由原版/ServerCore 的 `MONSTER` 上限决定。整数权重无法精确表示的小条目会采用最近整数；没有原版僵尸或尸壳刷怪条目的维度或生物群系不会凭空增加新丧尸。
+
+拆分后的条目会按有效类型、权重和数量复用同一个 `SpawnerData` 对象。NeoForge 的自然刷怪器会在抽取后再次验证条目，这个对象稳定性是让逐光丧尸能够通过第二次验证的必要条件。
 
 `diggableBlocks` 非空时会变成严格白名单；`protectedBlocks` 始终优先阻止挖掘。所有破坏/放置都会经过 NeoForge 的 `mobGriefing` 和实体破坏事件钩子。
 
@@ -115,7 +134,8 @@
 ## 管理命令
 
 - `/dreamingfish zombie status`：查看当前故事阶段解析出的能力开关。
-- `/dreamingfish zombie set <能力> <true|false>`（权限等级 3）：直接修改当前故事阶段的能力覆盖值并原子写回 JSON；在线实体约半秒内生效。能力名可用 `digging`、`open_doors`、`breaking_doors`、`placing_blocks`、`stacking`、`hearing`、`broadcasting`、`surrounding`。
+- `/dreamingfish zombie set <能力> <true|false>`（权限等级 3）：直接修改当前故事阶段的能力覆盖值并原子写回 JSON；在线实体约半秒内生效。能力名可用 `digging`、`open_doors`、`breaking_doors`、`placing_blocks`、`stacking`、`hearing`、`broadcasting`、`surrounding`、`task_location_protection`、`task_location_regeneration`、`task_location_spawn_protection`。
+- `/dreamingfish zombie enable_all`（权限等级 3）：一键开启当前故事阶段的全部丧尸能力及保护区规则，并一次性原子写回配置；不会改动自然生成比例等非能力参数。
 - `/dreamingfish zombie reload`（权限等级 3）：热重载 JSON；在线实体会在约半秒内应用新阶段设置。若校验失败，会保留上一份有效配置并返回错误，不会意外开启全部能力。
 - 数值参数（距离、跳数、人数上限等）在 JSON 中编辑后执行 `reload`；`status` 会显示当前阶段解析出的追踪和广播参数。
 - `/summon dreamingfishcore:siege_zombie` 或创造栏中的“丧尸刷怪蛋”可用于测试。
@@ -143,6 +163,12 @@
 2. 在屋外生成丧尸，玩家进入屋内后切换生存并持续走动，让丧尸通过移动声获得目标。若玩家从未被看见且完全静止，按设计不会凭空暴露位置。
 3. 原版寻路会先尝试寻找正常入口；确认不可达约 20 tick 后，丧尸应走到朝向玩家的墙面，先破坏头部高度方块，再破坏同一方向的身体高度方块，形成两格高入口后恢复原版追击。
 4. 若没有破坏，依次检查 `/dreamingfish zombie status`、`mobGriefing`、`diggableBlocks` 白名单以及目标墙体硬度是否超过 `maxDigHardness`。门仍交给开门/破门目标，不会被普通挖掘目标抢占。
+
+### 保护区禁止刷怪测试
+
+1. 确认 `taskLocationSpawnProtection: true`，执行 `/dreamingfish zombie reload`；在 `task_locations.json` 中使用一个已启用的 `BUILDABLE` 或 `PROTECTED` 地点。
+2. 在地点边界内等待夜间自然刷怪，或观察刷怪笼/试炼刷怪笼：敌对 `MONSTER` 不应在边界内生成，增援、结构和事件产生的敌对怪物也会被拦截。地点外的刷怪不受影响。
+3. 用 `/summon minecraft:zombie` 或丧尸刷怪蛋做对照；这些明确创建方式保留，方便管理员测试和剧情脚本。若要让自动刷怪重新出现，可执行 `/dreamingfish zombie set task_location_spawn_protection false`，测试后再设回 `true`。
 
 ### 分流包围测试
 

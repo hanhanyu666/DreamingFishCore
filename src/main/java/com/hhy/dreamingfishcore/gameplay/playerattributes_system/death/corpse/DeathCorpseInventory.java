@@ -340,11 +340,19 @@ public final class DeathCorpseInventory {
     }
 
     public void clear() {
-        mainInventory.clear();
-        armorInventory.clear();
-        offhandInventory.clear();
+        // 这些列表对应固定的容器槽位，不能调用 clear() 使长度变成 0；否则
+        // 玩家在容器仍打开时再次读取槽位会触发越界，并破坏后续快照结构。
+        clearFixedSlots(mainInventory);
+        clearFixedSlots(armorInventory);
+        clearFixedSlots(offhandInventory);
         additionalItems.clear();
         accessoryItems.clear();
+    }
+
+    private static void clearFixedSlots(List<ItemStack> slots) {
+        for (int index = 0; index < slots.size(); index++) {
+            slots.set(index, ItemStack.EMPTY);
+        }
     }
 
     public List<ItemStack> getAllItems() {

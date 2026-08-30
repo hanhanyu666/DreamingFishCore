@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.item.items.medicine;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.health.PlayerCustomHealthManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResultHolder;
@@ -70,6 +71,9 @@ public class Easy_Aid_Kit extends Item {
         }
 
         ServerPlayer serverPlayer = (ServerPlayer) player;
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            return InteractionResultHolder.fail(heldItemStack);
+        }
         //读取 NBT 中存储的 “是否正在使用急救包” 状态
         CompoundTag playerData = serverPlayer.getPersistentData();
         boolean isUsing = playerData.getBoolean(USING_FIRST_AID);
@@ -110,9 +114,14 @@ public class Easy_Aid_Kit extends Item {
     public static class FirstAidTickHandler {
         @SubscribeEvent
         public static void onPlayerTick(PlayerTickEvent.Post event) {
-            if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()) { return; }
+            if (!(event.getEntity() instanceof ServerPlayer serverPlayer)
+                    || event.getEntity().level().isClientSide()
+                    || !serverPlayer.isAlive()) { return; }
 
-            ServerPlayer serverPlayer = (ServerPlayer) event.getEntity();
+            if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
+                clearUsingState(serverPlayer);
+                return;
+            }
             CompoundTag playerData = serverPlayer.getPersistentData();
             boolean isUsing = playerData.getBoolean(USING_FIRST_AID);
 

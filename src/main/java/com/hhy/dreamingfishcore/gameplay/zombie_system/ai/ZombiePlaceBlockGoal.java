@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.zombie_system.ai;
 
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntity;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieSpeciesConfig;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieTaskLocationRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.sounds.SoundSource;
@@ -263,7 +264,8 @@ public final class ZombiePlaceBlockGoal extends Goal {
             BlockState placingState,
             SiegeZombieEntity zombie) {
         BlockState existing = level.getBlockState(pos);
-        if (ZombieConstructionMemory.isRecentlyPlaced(level, pos)
+        if (ZombieTaskLocationRules.blocksDestructiveAction(zombie, pos)
+                || ZombieConstructionMemory.isRecentlyPlaced(level, pos)
                 || !(existing.isAir() || existing.canBeReplaced())
                 || placingState.isAir()
                 || placingState.liquid()

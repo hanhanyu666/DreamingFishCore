@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.Dea
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.DeathItemStorage;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.PendingDeathData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.CustomRespawnInventoryManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -79,6 +80,7 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
             }
 
             float currentRespawnPoint = data.getRespawnPoint();
+            float originalRespawnPoint = currentRespawnPoint;
             boolean isInfected = data.isInfected();
 
             // 计算保留物品消耗（基础消耗 + 30）
@@ -92,19 +94,41 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
                 return;
             }
 
-            // 新记录先从尸体还原；旧记录继续使用升级前的物品快照。
-            boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
-                    ? DeathCorpseManager.restoreForKeepInventory(player)
-                    : DeathItemStorage.keepStoredItems(player);
-            if (!itemsResolved) {
+            // 先记录扣费，再尝试从尸体还原。这样尸体还原失败时可以完整回滚点数，
+            // 而不会出现“物品已经取走、点数却没有结算”的半完成状态。
+            try {
+                data.consumeRespawnPoint(cost);
+                PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+
+                // 新记录先从尸体还原；旧记录继续使用升级前的物品快照。
+                boolean itemsResolved = PendingDeathData.hasCorpseReference(player)
+                        ? DeathCorpseManager.restoreForKeepInventory(player)
+                        : DeathItemStorage.keepStoredItems(player);
+                if (!itemsResolved) {
+                    data.setRespawnPoint(originalRespawnPoint);
+                    PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+                    PendingDeathData.rollbackResolution(player, packet.deathId);
+                    sendResponse(player, false, currentRespawnPoint);
+                    return;
+                }
+
+                // 不再依赖全局 keepInventory；只为这一次已成功还原物品的复活复制物品栏。
+                CustomRespawnInventoryManager.request(player);
+                PendingDeathData.complete(player, packet.deathId);
+            } catch (RuntimeException exception) {
+                CustomRespawnInventoryManager.cancel(player);
+                data.setRespawnPoint(originalRespawnPoint);
+                try {
+                    PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+                } catch (RuntimeException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
                 PendingDeathData.rollbackResolution(player, packet.deathId);
+                DreamingFishCore.LOGGER.error("玩家 {} 保留物品结算失败，已取消复活",
+                        player.getScoreboardName(), exception);
                 sendResponse(player, false, currentRespawnPoint);
                 return;
             }
-
-            data.consumeRespawnPoint(cost);
-            PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
-            PendingDeathData.complete(player, packet.deathId);
 
             // 发送成功消息
             sendResponse(player, true, data.getRespawnPoint());

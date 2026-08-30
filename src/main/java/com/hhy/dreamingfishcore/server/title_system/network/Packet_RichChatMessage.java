@@ -12,7 +12,12 @@ import java.util.UUID;
 
 /** Structured server-to-client player chat message used by the immersive chat renderer. */
 public record Packet_RichChatMessage(UUID playerId, String rank, int rankColor, String title, int titleColor,
-                                     String playerName, String body, long timestamp) implements CustomPacketPayload {
+                                     String playerName, String body, long timestamp,
+                                     String quotedPlayerName, String quotedBody) implements CustomPacketPayload {
+    public Packet_RichChatMessage(UUID playerId, String rank, int rankColor, String title, int titleColor,
+                                   String playerName, String body, long timestamp) {
+        this(playerId, rank, rankColor, title, titleColor, playerName, body, timestamp, "", "");
+    }
     public static final Type<Packet_RichChatMessage> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "chat/rich_player_message"));
     public static final StreamCodec<RegistryFriendlyByteBuf, Packet_RichChatMessage> STREAM_CODEC = StreamCodec.of(
@@ -32,6 +37,8 @@ public record Packet_RichChatMessage(UUID playerId, String rank, int rankColor, 
         buf.writeUtf(packet.playerName, 64);
         buf.writeUtf(packet.body, 256);
         buf.writeLong(packet.timestamp);
+        buf.writeUtf(packet.quotedPlayerName == null ? "" : packet.quotedPlayerName, 64);
+        buf.writeUtf(packet.quotedBody == null ? "" : packet.quotedBody, 256);
     }
 
     private static Packet_RichChatMessage decode(RegistryFriendlyByteBuf buf) {
@@ -43,7 +50,10 @@ public record Packet_RichChatMessage(UUID playerId, String rank, int rankColor, 
         String playerName = buf.readUtf(64);
         String body = buf.readUtf(256);
         long timestamp = buf.readLong();
-        return new Packet_RichChatMessage(playerId, rank, rankColor, title, titleColor, playerName, body, timestamp);
+        String quotedPlayerName = buf.readUtf(64);
+        String quotedBody = buf.readUtf(256);
+        return new Packet_RichChatMessage(playerId, rank, rankColor, title, titleColor, playerName, body, timestamp,
+                quotedPlayerName, quotedBody);
     }
 
     public static void handle(Packet_RichChatMessage packet, IPayloadContext context) {
@@ -55,6 +65,8 @@ public record Packet_RichChatMessage(UUID playerId, String rank, int rankColor, 
                 packet.titleColor,
                 packet.playerName,
                 packet.body,
-                packet.timestamp));
+                packet.timestamp,
+                packet.quotedPlayerName,
+                packet.quotedBody));
     }
 }

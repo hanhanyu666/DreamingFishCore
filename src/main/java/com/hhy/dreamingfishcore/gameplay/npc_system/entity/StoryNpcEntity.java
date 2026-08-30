@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.npc_system.entity;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcAppearanceData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcManager;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -85,6 +86,15 @@ public class StoryNpcEntity extends PathfinderMob {
 
     @Override
     public void tick() {
+        // 旧世界里可能还保存着已下线角色的实体；配置白名单收口后让它们
+        // 在第一次服务端 tick 自动消失，避免继续占据交互和渲染入口。
+        // 只依据本轮明确的内容白名单判断下线角色，不依赖 NpcManager 当前是否成功
+        // 读取配置。这样配置文件暂时损坏时，保留的白芷/周岑实体不会被误删；
+        // 已删除角色仍会在第一次服务端 tick 消失。
+        if (!level().isClientSide && !StoryNpcContentPolicy.isRetained(getNpcId())) {
+            discard();
+            return;
+        }
         super.tick();
         if (!level().isClientSide
                 && !getPersistentData().getBoolean(LOCK_SPAWN_FACING_TAG)

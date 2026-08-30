@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.server.notice_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryFlowEngine;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeDeliveryService;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
@@ -68,7 +68,10 @@ public class Packet_MarkNoticeReadRequest implements net.minecraft.network.proto
         }
 
         PlayerNoticeDataManager.markAsRead(serverPlayer.getUUID(), msg.noticeId);
-        OpeningStoryProgressManager.onNoticeOpened(serverPlayer, notice);
+        StoryFlowEngine.onNoticeRead(
+                serverPlayer, notice.getNoticeKey(), notice.getNoticeTitle());
+        // 立即刷新 HUD 提醒卡，避免玩家关闭终端后仍看到已读公告提示。
+        NoticeDeliveryService.syncVisibleNotices(serverPlayer);
         DreamingFishCore.LOGGER.debug("玩家 {} 标记公告 {} 为已读", serverPlayer.getName().getString(), msg.noticeId);
     }
 

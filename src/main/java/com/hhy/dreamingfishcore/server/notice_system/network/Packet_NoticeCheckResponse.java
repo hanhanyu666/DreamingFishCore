@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.server.notice_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.api.distmarker.Dist;
@@ -53,8 +54,13 @@ public class Packet_NoticeCheckResponse implements net.minecraft.network.protoco
 
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_NoticeCheckResponse msg) {
+        NoticeClientCache.setUnreadHint(msg.hasNewNotice, msg.latestNoticeId);
         if (msg.hasNewNotice) {
             Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) {
+                DreamingFishCore.LOGGER.debug("收到新公告提醒，但客户端玩家尚未就绪");
+                return;
+            }
             // 显示提示消息
             mc.player.displayClientMessage(
                 net.minecraft.network.chat.Component.literal("§a§l[新公告] §e" + msg.latestNoticeTitle),

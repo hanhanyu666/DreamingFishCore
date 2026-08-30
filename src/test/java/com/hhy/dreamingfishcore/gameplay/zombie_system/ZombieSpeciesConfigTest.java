@@ -48,6 +48,9 @@ class ZombieSpeciesConfigTest {
         assertTrue(settings.hearing());
         assertTrue(settings.broadcasting());
         assertTrue(settings.surrounding());
+        assertTrue(settings.taskLocationProtection());
+        assertTrue(settings.taskLocationRegeneration());
+        assertTrue(settings.taskLocationSpawnProtection());
         assertEquals(45.0D, settings.trackingRange());
         assertEquals(45.0D, settings.hearingRange());
         assertEquals(20.0D, settings.broadcastRange());
@@ -61,8 +64,9 @@ class ZombieSpeciesConfigTest {
         assertEquals(0, settings.digCooldownTicks());
         assertEquals(4.0D, settings.stackMinimumTargetHeight());
         assertTrue(settings.naturalSpawn());
-        assertEquals(50, settings.vanillaZombieSpawnPercent());
-        assertEquals(90, settings.customZombieSpawnPercent());
+        assertEquals(120, settings.zombieFamilySpawnPercent());
+        assertEquals(40, settings.vanillaZombieSpawnPercent());
+        assertEquals(60, settings.customZombieSpawnPercent());
         assertEquals(80, settings.otherMonsterSpawnPercent());
 
         JsonObject json = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8))
@@ -73,13 +77,17 @@ class ZombieSpeciesConfigTest {
         assertEquals(45.0D, json.get("trackingRange").getAsDouble());
         assertEquals(20.0D, json.get("broadcastRange").getAsDouble());
         assertTrue(json.get("surrounding").getAsBoolean());
+        assertTrue(json.get("taskLocationProtection").getAsBoolean());
+        assertTrue(json.get("taskLocationRegeneration").getAsBoolean());
+        assertTrue(json.get("taskLocationSpawnProtection").getAsBoolean());
         assertEquals(2.4D, json.get("surroundRadius").getAsDouble());
         assertEquals(4.0D, json.get("alertRetargetDistance").getAsDouble());
         assertEquals(160, json.get("breachCommitmentTicks").getAsInt());
         assertEquals(4.0D, json.get("stackMinimumTargetHeight").getAsDouble());
         assertTrue(json.get("naturalSpawn").getAsBoolean());
-        assertEquals(50, json.get("vanillaZombieSpawnPercent").getAsInt());
-        assertEquals(90, json.get("customZombieSpawnPercent").getAsInt());
+        assertEquals(120, json.get("zombieFamilySpawnPercent").getAsInt());
+        assertEquals(40, json.get("vanillaZombieSpawnPercent").getAsInt());
+        assertEquals(60, json.get("customZombieSpawnPercent").getAsInt());
         assertEquals(80, json.get("otherMonsterSpawnPercent").getAsInt());
         assertFalse(json.has("naturalSpawnWeight"));
         assertFalse(json.has("naturalSpawnMinCount"));
@@ -101,6 +109,9 @@ class ZombieSpeciesConfigTest {
                       "placingBlocks": false,
                       "stacking": false,
                       "surrounding": false,
+                      "taskLocationProtection": false,
+                      "taskLocationRegeneration": false,
+                      "taskLocationSpawnProtection": false,
                       "naturalSpawn": false
                     },
                     "dreamingfishcore:afterdream": {
@@ -115,7 +126,11 @@ class ZombieSpeciesConfigTest {
                       "digging": true,
                       "placingBlocks": true,
                       "stacking": true,
+                      "taskLocationProtection": true,
+                      "taskLocationRegeneration": true,
+                      "taskLocationSpawnProtection": true,
                       "naturalSpawn": true,
+                      "zombieFamilySpawnPercent": 150,
                       "vanillaZombieSpawnPercent": 40,
                       "customZombieSpawnPercent": 120,
                       "otherMonsterSpawnPercent": 75
@@ -135,6 +150,9 @@ class ZombieSpeciesConfigTest {
         assertFalse(early.placingBlocks());
         assertFalse(early.stacking());
         assertFalse(early.surrounding());
+        assertFalse(early.taskLocationProtection());
+        assertFalse(early.taskLocationRegeneration());
+        assertFalse(early.taskLocationSpawnProtection());
         assertTrue(early.openDoors());
         assertFalse(early.naturalSpawn());
 
@@ -147,10 +165,14 @@ class ZombieSpeciesConfigTest {
         assertEquals(6.0D, late.alertRetargetDistance());
         assertEquals(240, late.breachCommitmentTicks());
         assertTrue(late.surrounding());
+        assertTrue(late.taskLocationProtection());
+        assertTrue(late.taskLocationRegeneration());
+        assertTrue(late.taskLocationSpawnProtection());
         assertEquals(3.0D, late.surroundRadius());
         assertEquals(5.0D, late.stackMinimumTargetHeight());
         assertTrue(late.openDoors());
         assertTrue(late.naturalSpawn());
+        assertEquals(150, late.zombieFamilySpawnPercent());
         assertEquals(40, late.vanillaZombieSpawnPercent());
         assertEquals(120, late.customZombieSpawnPercent());
         assertEquals(75, late.otherMonsterSpawnPercent());
@@ -170,9 +192,11 @@ class ZombieSpeciesConfigTest {
 
         ZombieSpeciesConfig config = ZombieSpeciesConfig.load(path);
 
-        assertEquals(50, config.resolveForStage("dreamingfishcore:afterdream")
+        assertEquals(120, config.resolveForStage("dreamingfishcore:afterdream")
+                .zombieFamilySpawnPercent());
+        assertEquals(40, config.resolveForStage("dreamingfishcore:afterdream")
                 .vanillaZombieSpawnPercent());
-        assertEquals(90, config.resolveForStage("dreamingfishcore:afterdream")
+        assertEquals(60, config.resolveForStage("dreamingfishcore:afterdream")
                 .customZombieSpawnPercent());
         assertEquals(80, config.resolveForStage("dreamingfishcore:afterdream")
                 .otherMonsterSpawnPercent());
@@ -290,5 +314,41 @@ class ZombieSpeciesConfigTest {
                 .getAsJsonObject("dreamingfishcore:dream_beginning")
                 .get("digging")
                 .getAsBoolean());
+    }
+
+    @Test
+    void inGameEnableAllTogglePersistsAllAbilitiesForOnlyTheSelectedStage() throws IOException {
+        Path path = temporaryDirectory.resolve("zombie_species.json");
+        ZombieSpeciesConfig.reload(path);
+
+        ZombieSpeciesConfig.ResolvedSettings changed = ZombieSpeciesConfig.setAllAbilitiesForStage(
+                path,
+                "dreamingfishcore:dream_beginning",
+                true);
+
+        for (ZombieSpeciesConfig.Ability ability : ZombieSpeciesConfig.Ability.values()) {
+            assertTrue(changed.isAbilityEnabled(ability), ability.name());
+        }
+        assertTrue(ZombieSpeciesConfig.current()
+                .resolveForStage("dreamingfishcore:afterdream")
+                .digging());
+
+        ZombieSpeciesConfig reloaded = ZombieSpeciesConfig.reload(path);
+        ZombieSpeciesConfig.ResolvedSettings persisted = reloaded.resolveForStage(
+                "dreamingfishcore:dream_beginning");
+        for (ZombieSpeciesConfig.Ability ability : ZombieSpeciesConfig.Ability.values()) {
+            assertTrue(persisted.isAbilityEnabled(ability), ability.name());
+        }
+        JsonObject override = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8))
+                .getAsJsonObject()
+                .getAsJsonObject("stageOverrides")
+                .getAsJsonObject("dreamingfishcore:dream_beginning");
+        for (String field : new String[] {
+                "digging", "openDoors", "breakingDoors", "placingBlocks",
+                "stacking", "hearing", "broadcasting", "surrounding",
+                "taskLocationProtection", "taskLocationRegeneration",
+                "taskLocationSpawnProtection"}) {
+            assertTrue(override.get(field).getAsBoolean(), field);
+        }
     }
 }

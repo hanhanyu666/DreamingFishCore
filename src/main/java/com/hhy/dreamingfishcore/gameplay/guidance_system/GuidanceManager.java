@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.network.Packet_GuidanceSnapshotResponse;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
@@ -43,15 +44,22 @@ public final class GuidanceManager {
                     GSON,
                     DATA_TYPE,
                     ConcurrentHashMap::new);
+            boolean[] removedOutOfScope = {false};
             loadedData.forEach((playerId, entries) -> {
                 if (isUuid(playerId) && entries != null) {
+                    int before = entries.size();
                     List<GuidanceEntry> valid = entries.stream()
                             .filter(GuidanceManager::isValidEntry)
+                            .filter(GuidanceManager::isRetainedEntry)
                             .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                    removedOutOfScope[0] |= before != valid.size();
                     PLAYER_ENTRIES.put(playerId, valid);
                 }
             });
-            dirty = false;
+            dirty = removedOutOfScope[0];
+            if (dirty) {
+                DreamingFishCore.LOGGER.info("已移除来源 NPC 已下线的旧个人引导记录");
+            }
             DreamingFishCore.LOGGER.info("个人引导数据加载完成，共 {} 名玩家", PLAYER_ENTRIES.size());
         } catch (Exception exception) {
             dirty = false;
@@ -69,7 +77,8 @@ public final class GuidanceManager {
             String sourceNpcName,
             String sourceQuote) {
         ensureLoaded();
-        if (!isValidSeed(seed) || sourceMessageRecordId == null || sourceMessageRecordId.isBlank()) {
+        if (!isValidSeed(seed) || sourceMessageRecordId == null || sourceMessageRecordId.isBlank()
+                || (sourceNpcId != 0 && !StoryNpcContentPolicy.isRetained(sourceNpcId))) {
             return false;
         }
         List<GuidanceEntry> entries = entriesFor(playerId);
@@ -100,13 +109,34 @@ public final class GuidanceManager {
             String sourceEventId,
             String sourceName,
             String sourceQuote) {
+        return createFromStoryEvent(
+                playerId, seed, sourceEventId, 0, sourceName, sourceQuote);
+    }
+
+    /** 为流程效果保留 NPC 来源，使引导记录能显示真实的对白来源。 */
+    public static synchronized boolean createFromStoryEvent(
+            UUID playerId,
+            GuidanceSeed seed,
+            String sourceEventId,
+            int sourceNpcId,
+            String sourceName,
+            String sourceQuote) {
         return createFromMessage(
                 playerId,
                 seed,
                 sourceEventId,
-                0,
+                sourceNpcId,
                 sourceName == null ? "" : sourceName,
                 sourceQuote == null ? "" : sourceQuote);
+    }
+
+    /** 查询个人引导定义是否已经存在（ACTIVE、RESOLVED、ARCHIVED 都算存在）。 */
+    public static synchronized boolean hasDefinition(UUID playerId, String definitionId) {
+        if (!loaded || playerId == null || definitionId == null || definitionId.isBlank()) {
+            return false;
+        }
+        return entriesFor(playerId).stream()
+                .anyMatch(entry -> entry != null && definitionId.equals(entry.getDefinitionId()));
     }
 
     /**
@@ -225,6 +255,13 @@ public final class GuidanceManager {
                 && entry.getStoryStageId().length() <= 160
                 && entry.getLocationLabel().length() <= 256
                 && entry.getDimension().length() <= 160;
+    }
+
+    /** Notice/location events use sourceNpcId=0; NPC-derived records obey the current content whitelist. */
+    private static boolean isRetainedEntry(GuidanceEntry entry) {
+        return entry != null
+                && (entry.getSourceNpcId() == 0
+                || StoryNpcContentPolicy.isRetained(entry.getSourceNpcId()));
     }
 
     private static boolean isUuid(String value) {

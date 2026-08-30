@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerlevel_system.event;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -90,7 +91,8 @@ public class MobKillHandler {
 
         // 击杀者是否是玩家
         DamageSource source = event.getSource();
-        if (!(source.getEntity() instanceof ServerPlayer player)) return;
+        if (!(source.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) return;
 
         // 计算经验
         int experience = getExperienceForMob(mob);

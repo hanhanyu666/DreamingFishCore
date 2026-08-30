@@ -1,14 +1,35 @@
 package com.hhy.dreamingfishcore.gameplay.story_system;
 
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
+
 import java.util.List;
 
 /**
  * “梦的开始”阶段中随模组发布的四项开场任务。
  *
- * <p>稳定字符串 ID 供剧情执行器引用；数字编号只用于旧界面排序与兼容。</p>
+ * <p>稳定字符串 ID 供故事流程和任务视图共同引用；数字编号只用于任务列表排序。</p>
  */
 public final class OpeningStoryDefinitionCatalog {
     public static final String STAGE_ID = StoryWorldState.DEFAULT_STAGE_ID;
+
+    /** 阿拜多斯任务地点的稳定 ID；剧情逻辑不再依赖可改的中文显示名。 */
+    public static final String ABYDOS_LOCATION_ID =
+            "dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3";
+    /** 逐光会基地预留的稳定地点 ID；地点尚未登记时引导仍可创建。 */
+    public static final String ZHUIGUANG_LOCATION_ID =
+            "dreamingfishcore:location_zhuiguang_base";
+    public static final int BAIZHI_NPC_ID = StoryNpcContentPolicy.BAIZHI_ID;
+    public static final int ZHOUCEN_NPC_ID = StoryNpcContentPolicy.ZHOUCEN_ID;
+
+    public static final String BAIZHI_ARRIVAL_MESSAGE_ID =
+            "dreamingfishcore:opening/baizhi/abydos_arrival";
+    public static final String ZHOUCEN_CONTACT_MESSAGE_ID =
+            "dreamingfishcore:opening/zhoucen/contact_channel";
+    public static final String ZHOUCEN_INTRODUCTION_MESSAGE_ID =
+            "dreamingfishcore:opening/zhoucen/introduction";
+    public static final String ASK_ABOUT_ZHUIGUANG_REPLY_ID = "ask_about_zhuiguang";
+    public static final String JOIN_ZHUIGUANG_REPLY_ID = "join_zhuiguang";
+    public static final String REMAIN_INDEPENDENT_REPLY_ID = "remain_independent";
 
     public static final String SETTLE_IN_ABYDOS_TASK_ID =
             "dreamingfishcore:opening/settle_in_abydos";
@@ -72,7 +93,9 @@ public final class OpeningStoryDefinitionCatalog {
         boolean changed = false;
         for (StoryTaskData builtIn : createTasks()) {
             boolean exists = stage.getTasks().stream()
-                    .anyMatch(task -> builtIn.getTaskKey().equals(task.getTaskKey()));
+                    .filter(task -> builtIn.getTaskKey().equals(task.getTaskKey()))
+                    .findAny()
+                    .isPresent();
             if (!exists) {
                 stage.addTask(builtIn);
                 changed = true;
@@ -84,8 +107,9 @@ public final class OpeningStoryDefinitionCatalog {
     private static StoryTaskData task(String id, int number, String name, String content) {
         StoryTaskData task = new StoryTaskData(id, number, name, content, 0L, 0L);
         task.setPublishedByDefault(true);
-        // 正式服按任务地点的中文名称判定，地点稳定 ID 无需预先写进任务定义。
-        task.setLocationId("");
+        // 任务地点使用稳定 ID；显示名称只属于 UI 文案，允许服主日后改名。
+        task.setLocationId(id.equals(SETTLE_IN_ABYDOS_TASK_ID) ? ABYDOS_LOCATION_ID : "");
         return task;
     }
+
 }

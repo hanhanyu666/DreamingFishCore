@@ -62,9 +62,29 @@ public final class NotificationRenderer {
         // Notification panels are part of the HUD and can contain many translucent
         // primitives. Batch them for one buffer submission per notification pass.
         guiGraphics.drawManaged(() -> {
-            renderTopLeft(guiGraphics, mc);
             renderCenterTop(guiGraphics, mc);
         });
+    }
+
+    /**
+     * Draw the top-left notification pass after the complete vanilla HUD and
+     * late HUD integrations have finished.  Xaero's minimap deliberately
+     * injects its final overlay at the return of {@code Gui#render}, which is
+     * after {@link RenderGuiEvent.Post}; keeping this pass separate prevents
+     * the minimap from covering notifications without changing their layout.
+     */
+    public static void renderTopLeftAfterHud(GuiGraphics guiGraphics) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
+            return;
+        }
+        // Avoid opening a managed draw pass on frames where there is nothing to
+        // render.  This keeps the late-HUD hook effectively free while idle.
+        if (NotificationManager.getActive(NotificationPosition.TOP_LEFT).isEmpty()) {
+            return;
+        }
+
+        guiGraphics.drawManaged(() -> renderTopLeft(guiGraphics, mc));
     }
 
     public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,

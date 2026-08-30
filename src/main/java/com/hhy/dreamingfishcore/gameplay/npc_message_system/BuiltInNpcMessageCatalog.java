@@ -3,6 +3,8 @@ package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageCatalog;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -20,7 +22,7 @@ import java.util.Set;
  * 这样已有服务器可以保留自己的文案，新版本只会增加本次开场需要的内容。</p>
  */
 public final class BuiltInNpcMessageCatalog {
-    public static final String OPENING_STAGE_ID = "dreamingfishcore:dream_beginning";
+    public static final String OPENING_STAGE_ID = StoryStageCatalog.DREAM_BEGINNING_ID;
     private static final String BUILT_IN_MESSAGE_RESOURCE =
             "/dreamingfishcore/defaults/npc_messages.json";
     private static final Gson GSON = new GsonBuilder().create();
@@ -31,7 +33,7 @@ public final class BuiltInNpcMessageCatalog {
 
     static final String LEGACY_BAIZHI_PROTOCOL_SUBJECT = "白芷 · 第一阶段临时生理协议";
     static final String LEGACY_BAIZHI_PROTOCOL_CONTENT =
-            "这里是白芷。先把目前能确认的规则写清楚：第一阶段允许身体依靠自然状态缓慢恢复，但自然回血最多只到最大生命值的 50%；超过这条线，要靠医疗物资或人工处理。\n\n白天的观察窗口会让未完全感染者的感染读数逐渐回落；完整一个白天约降低 5 点（感染值按 0—100 计）。这不是治愈，也不会把已经转为感染者的状态直接逆转。\n\n重生节点每天会补回 5 点分裂储备，上限 100 点；死亡时的消耗规则不变。把它当作临时缓冲，不要因此冒险。阶段推进后协议可能调整，我会在终端里再通知你。";
+            "这里是白芷。先把目前能确认的规则写清楚：第一阶段允许身体依靠自然状态缓慢恢复，但自然回血最多只到最大生命值的 70%；超过这条线，要靠医疗物资或人工处理。\n\n白天的观察窗口会让未完全感染者的感染读数逐渐回落；完整一个白天约降低 5 点（感染值按 0—100 计）。这不是治愈，也不会把已经转为感染者的状态直接逆转。\n\n重生节点每天会补回 5 点分裂储备，上限 100 点；死亡时的消耗规则不变。把它当作临时缓冲，不要因此冒险。阶段推进后协议可能调整，我会在终端里再通知你。";
     static final String PREVIOUS_BAIZHI_OBSERVATIONS_CONTENT =
             "我把这几天观察到的情况理了一遍，你先记着。\n\n"
                     + "人的身体还会自己慢慢恢复，不过伤势缓到一半左右就会停住。再往上，光靠吃东西和休息没有用，得找药，或者让懂得处理伤口的人来。金苹果和其他能直接恢复伤势的东西不受这个限制。\n\n"
@@ -42,18 +44,6 @@ public final class BuiltInNpcMessageCatalog {
     static final String BAIZHI_OBSERVATIONS_CONTENT =
             "我是白芷，很高兴认识你，我现在在阿拜多斯的学校做医疗志愿，你可以随时来找我。\n\n"
                     + "危机刚刚爆发，根据我最近的观察，目前大家的自愈能力尚未完全消失，但是应该有所下降，光靠进食似乎无法完全恢复自身的健康，需要额外的药品进行辅助。当然了，感染程度以及重生机制都会随着时间流逝缓慢恢复，这一切实在是太突然了，我还需要更多的观察，请多加小心。";
-
-    /** 可由管理员投递的外缘带企业短信。 */
-    public static final String OUTER_BAND_LOAD_SHED_ID =
-            "dreamingfishcore:outer_band/load_shed_ticket";
-    public static final String OUTER_BAND_WATER_NOTICE_ID =
-            "dreamingfishcore:outer_band/water_quality_notice";
-    public static final String OUTER_BAND_COLD_CHAIN_ID =
-            "dreamingfishcore:outer_band/cold_chain_manifest";
-    public static final String OUTER_BAND_HR_NOTICE_ID =
-            "dreamingfishcore:outer_band/personnel_status";
-
-    private static final String LEGACY_OPENING_STAGE_ID = "dreamingfishcore:afterdream";
 
     private BuiltInNpcMessageCatalog() {
     }
@@ -75,12 +65,8 @@ public final class BuiltInNpcMessageCatalog {
         List<NpcMessageDefinition> additions = new ArrayList<>();
         List<NpcMessageDefinition> builtInMessages = loadCompleteMessages();
         if (builtInMessages.isEmpty()) {
-            builtInMessages = List.of(
-                    createBaizhiProtocol(),
-                    createLoadShedTicket(),
-                    createWaterQualityNotice(),
-                    createColdChainManifest(),
-                    createPersonnelStatusNotice());
+            // 资源缺失时只保留白芷的最小观察消息；删除的角色绝不在代码回退中复活。
+            builtInMessages = List.of(createBaizhiProtocol());
         }
         for (NpcMessageDefinition definition : builtInMessages) {
             if (definition != null) {
@@ -106,36 +92,20 @@ public final class BuiltInNpcMessageCatalog {
                             "内置 NPC 私信为空：{}", BUILT_IN_MESSAGE_RESOURCE);
                     return List.of();
                 }
-                return new ArrayList<>(config.getMessages());
+                List<NpcMessageDefinition> retained = new ArrayList<>();
+                for (NpcMessageDefinition definition : config.getMessages()) {
+                    if (definition != null
+                            && StoryNpcContentPolicy.isRetained(definition.getNpcId())) {
+                        retained.add(definition);
+                    }
+                }
+                return retained;
             }
         } catch (Exception exception) {
             DreamingFishCore.LOGGER.error(
                     "读取内置 NPC 私信失败：{}", BUILT_IN_MESSAGE_RESOURCE, exception);
             return List.of();
         }
-    }
-
-    /**
-     * 将旧开场消息的引导阶段从重构前的 afterdream 迁移到第一阶段。
-     * 只处理明确的旧值，不覆盖服主已经自定义的其他阶段。
-     */
-    public static boolean migrateOpeningGuidanceStage(
-            List<NpcMessageDefinition> definitions) {
-        if (definitions == null) {
-            return false;
-        }
-        boolean changed = false;
-        for (NpcMessageDefinition definition : definitions) {
-            if (definition == null
-                    || !"dreamingfishcore:recorder/first_contact".equals(definition.getId())
-                    || definition.getGuidance() == null
-                    || !LEGACY_OPENING_STAGE_ID.equals(definition.getGuidance().getStoryStageId())) {
-                continue;
-            }
-            definition.getGuidance().withStoryStage(OPENING_STAGE_ID);
-            changed = true;
-        }
-        return changed;
     }
 
     /**
@@ -212,47 +182,4 @@ public final class BuiltInNpcMessageCatalog {
                 .priority(100);
     }
 
-    private static NpcMessageDefinition createLoadShedTicket() {
-        return new NpcMessageDefinition(
-                OUTER_BAND_LOAD_SHED_ID,
-                103,
-                "外缘带联合能源 · 工单 E-17 负荷切离回执",
-                "【外缘带联合能源｜自动工单 E-17】生产区负载已切离。医院冷库、北岸水泵与避难所风机列为一级保电对象。\n\n现场操作账号：梁朔。总部批准栏：空。系统提示：本记录不构成公司恢复营业承诺。\n\n人工附注：如果你还能收到这条短信，只回报坐标、剩余电量和可接收人数。别发长句，链路按字计费——现在不是财务意义上的计费，是电池意义上的。",
-                NpcMessageDefinition.DeliveryTrigger.MANUAL)
-                .once(false)
-                .priority(20);
-    }
-
-    private static NpcMessageDefinition createWaterQualityNotice() {
-        return new NpcMessageDefinition(
-                OUTER_BAND_WATER_NOTICE_ID,
-                103,
-                "北岸水务 · 供水质量例外告知",
-                "【北岸水务｜客户服务自动通知】净化线处于手动旁路，当前水压与余氯读数无法完成常规复核。请将饮用水煮沸后使用，优先供给伤员与儿童。\n\n本通知不构成恢复供水承诺，也不代表外缘带任何企业已恢复正常运营。若发现管线破损，请保留阀门编号、时间和现场照片；系统恢复后将按工单顺序处理。",
-                NpcMessageDefinition.DeliveryTrigger.MANUAL)
-                .once(false)
-                .priority(19);
-    }
-
-    private static NpcMessageDefinition createColdChainManifest() {
-        return new NpcMessageDefinition(
-                OUTER_BAND_COLD_CHAIN_ID,
-                103,
-                "梦屿远岸冷链 · 资产异常清单",
-                "【外缘带远岸冷链｜交接清单】冷库 A、B 区已停止自动盘点；仍有温控记录的箱体优先交给医院。\n\n系统把所有未扫描人员标记为‘待确认资产’，梁朔在纸面上逐一改回了‘人’。如果你接手这份清单，请保留原编号，不要为了让报表好看而删掉空白项。",
-                NpcMessageDefinition.DeliveryTrigger.MANUAL)
-                .once(false)
-                .priority(18);
-    }
-
-    private static NpcMessageDefinition createPersonnelStatusNotice() {
-        return new NpcMessageDefinition(
-                OUTER_BAND_HR_NOTICE_ID,
-                103,
-                "外缘带企业应急网 · 人员状态核验",
-                "【外缘带企业应急网｜自动核验】请在 30 分钟内回复：姓名、当前地点、可执行工作、是否需要转移。逾期将被标记为‘失联’，不会自动从救援名单中删除。\n\n系统尾注：未经核验的撤离承诺不构成公司承诺。人工附注：名单后面每多一个名字，线路就多撑一会儿。",
-                NpcMessageDefinition.DeliveryTrigger.MANUAL)
-                .once(false)
-                .priority(17);
-    }
 }

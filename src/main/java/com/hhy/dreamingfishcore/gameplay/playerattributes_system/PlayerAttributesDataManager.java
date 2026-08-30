@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.StrengthSyncManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import net.minecraft.server.MinecraftServer;
@@ -60,6 +61,18 @@ public class PlayerAttributesDataManager {
         return ATTRIBUTES_CACHE.containsKey(player.getUUID());
     }
 
+    /** 判断指定 UUID 是否已有持久化属性档案，供离线玩家事务操作使用。 */
+    public static boolean hasPlayerAttributesData(UUID playerUUID) {
+        ensureLoaded();
+        return playerUUID != null && ATTRIBUTES_CACHE.containsKey(playerUUID);
+    }
+
+    /** 返回已存在的属性档案；不会为缺失 UUID 静默创建默认对象。 */
+    public static PlayerAttributesData findStoredPlayerAttributesData(UUID playerUUID) {
+        ensureLoaded();
+        return playerUUID == null ? null : ATTRIBUTES_CACHE.get(playerUUID);
+    }
+
     /** 世界玩家属性存档是否已经加载，供服务器 tick 级规则做启动期防护。 */
     public static boolean isLoaded() {
         return loaded;
@@ -79,7 +92,9 @@ public class PlayerAttributesDataManager {
         PlayerAttributesData newAttributesData = new PlayerAttributesData(playerUUID, player.getScoreboardName(), realLevel);
         ATTRIBUTES_CACHE.put(playerUUID, newAttributesData);
         markDirty();
-        StrengthSyncManager.syncStrengthToClient(player);
+        if (AuthSessionGuard.isAuthenticated(player)) {
+            StrengthSyncManager.syncStrengthToClient(player);
+        }
     }
 
     public static PlayerAttributesData getPlayerAttributesData(UUID playerUUID) {

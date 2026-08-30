@@ -3,7 +3,9 @@ package com.hhy.dreamingfishcore.client.ui.chat;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.server.title_system.network.Packet_QuotedChatMessage;
 import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -78,6 +80,10 @@ public final class ImmersiveChatManager {
     private static final int COMMAND_SUGGESTION_GAP = 2;
     private static final int SCROLLBAR_HIT_PADDING = 3;
     private static final long CLEAR_CONFIRMATION_MS = 3_000L;
+    private static final int QUOTE_PREVIEW_HEIGHT = 30;
+    private static final int QUOTE_PREVIEW_GAP = 4;
+    private static final int QUOTE_PREVIEW_MARGIN_X = 8;
+    private static final int QUOTE_PREVIEW_CLOSE_SIZE = 10;
 
     private static final int PANEL_BG = 0xA025282A;
     private static final int MENTION_HIGHLIGHT_BG = 0xFF596166;
@@ -134,6 +140,10 @@ public final class ImmersiveChatManager {
     private static double resizeStartMouseY;
     @Nullable
     private static ScrollbarMetrics scrollbarMetrics;
+    @Nullable
+    private static QuoteTarget quotedMessage;
+    @Nullable
+    private static QuotePreviewMetrics quotePreviewMetrics;
     private static int scrollbarDragOffsetY;
     private static long clearConfirmationUntilMs;
     private static int clearConfirmationClicksRemaining;
@@ -143,6 +153,12 @@ public final class ImmersiveChatManager {
 
     public static void receivePlayerMessage(UUID playerId, String rank, int rankColor, String title, int titleColor,
                                             String playerName, String body, long timestamp) {
+        receivePlayerMessage(playerId, rank, rankColor, title, titleColor, playerName, body, timestamp, "", "");
+    }
+
+    public static void receivePlayerMessage(UUID playerId, String rank, int rankColor, String title, int titleColor,
+                                            String playerName, String body, long timestamp,
+                                            String quotedPlayerName, String quotedBody) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
@@ -154,8 +170,19 @@ public final class ImmersiveChatManager {
         // can make a brand-new message look older than the entire HUD visibility window and disappear instantly.
         long receivedAt = System.currentTimeMillis();
         ChatEntry entry = ChatEntry.player(receivedAt, playerId, clean(rank), rankColor, clean(title), titleColor,
-                clean(playerName), cleanBody(body));
+                clean(playerName), cleanBody(body), quotedPlayerName, quotedBody);
         addEntry(entry, true);
+    }
+
+    public static boolean submitQuotedMessage(String value) {
+        if (quotedMessage == null || value == null) return false;
+        String body = cleanBody(value).trim();
+        if (body.isBlank() || body.startsWith("/")) return false;
+        QuoteTarget quote = quotedMessage;
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_QuotedChatMessage(body, quote.playerName(), quote.body()));
+        quotedMessage = null;
+        quotePreviewMetrics = null;
+        return true;
     }
 
     public static void captureVanillaMessage(Component message, @Nullable GuiMessageTag tag) {
@@ -177,6 +204,8 @@ public final class ImmersiveChatManager {
         HIT_AVATARS.clear();
         HIT_PLAYER_MESSAGES.clear();
         scrollbarMetrics = null;
+        quotedMessage = null;
+        quotePreviewMetrics = null;
         clearConfirmationUntilMs = 0L;
         clearConfirmationClicksRemaining = 0;
     }
@@ -278,13 +307,15 @@ public final class ImmersiveChatManager {
             }
             graphics.disableScissor();
 
-            if (focused) {
-                drawScrollbar(graphics, layout, viewportY, viewportHeight, totalHeight);
-                drawResizeHandle(graphics, layout);
-                drawClearConfirmation(graphics, mc.font, layout);
-            } else {
-                scrollbarMetrics = null;
-            }
+        if (focused) {
+            drawScrollbar(graphics, layout, viewportY, viewportHeight, totalHeight);
+            drawResizeHandle(graphics, layout);
+            drawClearConfirmation(graphics, mc.font, layout);
+            drawQuotePreview(graphics, mc.font, screenWidth, screenHeight);
+        } else {
+            scrollbarMetrics = null;
+            quotePreviewMetrics = null;
+        }
         });
     }
 
@@ -308,7 +339,8 @@ public final class ImmersiveChatManager {
      */
     public static int commandSuggestionScreenHeight(int screenHeight) {
         int panelTop = screenHeight - INPUT_PANEL_HEIGHT - INPUT_BOTTOM_MARGIN;
-        return panelTop - COMMAND_SUGGESTION_GAP + 15;
+        int quoteOffset = quotedMessage == null ? 0 : QUOTE_PREVIEW_HEIGHT + QUOTE_PREVIEW_GAP;
+        return panelTop - quoteOffset - COMMAND_SUGGESTION_GAP + 15;
     }
 
     public static void drawInputBackground(GuiGraphics graphics) {
@@ -330,8 +362,24 @@ public final class ImmersiveChatManager {
                 INPUT_PANEL_RADIUS, 0xB80A0C0E, 0x426B7276);
     }
 
+    /** Clears the pending message quote when the chat screen closes. */
+    public static void onChatClosed() {
+        activeInput = null;
+        dragMode = DragMode.NONE;
+        quotedMessage = null;
+        quotePreviewMetrics = null;
+    }
+
     public static boolean handleMouseClicked(double mouseX, double mouseY, int button, int screenWidth, int screenHeight) {
         ImmersiveChatConfig.Layout layout = ImmersiveChatConfig.resolve(screenWidth, screenHeight);
+
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
+                && quotePreviewMetrics != null
+                && quotePreviewMetrics.containsClose(mouseX, mouseY)) {
+            quotedMessage = null;
+            quotePreviewMetrics = null;
+            return true;
+        }
 
         if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             // 右键玩家消息本身即可引用发送者；头像仍保留同样的快捷操作。
@@ -339,14 +387,14 @@ public final class ImmersiveChatManager {
                 HitPlayerMessage message = HIT_PLAYER_MESSAGES.get(index);
                 if (isInside(mouseX, mouseY, message.x(), message.y(), message.width(), message.height())) {
                     cancelClearConfirmation();
-                    return insertMention(message.playerName());
+                    return selectQuote(message.playerName(), message.body());
                 }
             }
             for (int index = HIT_AVATARS.size() - 1; index >= 0; index--) {
                 HitAvatar avatar = HIT_AVATARS.get(index);
                 if (isInside(mouseX, mouseY, avatar.x(), avatar.y(), avatar.size(), avatar.size())) {
                     cancelClearConfirmation();
-                    return insertMention(avatar.playerName());
+                    return selectQuote(avatar.playerName(), avatar.body());
                 }
             }
             if (isInside(mouseX, mouseY, layout.x(), layout.y(), layout.width(), layout.height())) {
@@ -420,6 +468,15 @@ public final class ImmersiveChatManager {
         String insertion = (needsLeadingSpace ? " " : "") + "@" + playerName + (hasTrailingSpace ? "" : " ");
         activeInput.insertText(insertion);
         activeInput.setFocused(true);
+        return true;
+    }
+
+    private static boolean selectQuote(String playerName, String body) {
+        if (!insertMention(playerName)) {
+            return false;
+        }
+        quotedMessage = new QuoteTarget(playerName, body);
+        quotePreviewMetrics = null;
         return true;
     }
 
@@ -602,13 +659,18 @@ public final class ImmersiveChatManager {
                 int headerHeight = wrappedHeader
                         ? HEADER_HEIGHT * 2
                         : HEADER_HEIGHT;
-                int height = Math.max(PLAYER_HEAD_SIZE + 3, headerHeight + bodyHeight + 3);
-                result.add(new EntryLayout(entry, bodyLines, height, mentioned, wrappedHeader));
+                List<FormattedCharSequence> quoteLines = entry.hasQuote()
+                        ? font.split(Component.literal("@" + entry.quotedPlayerName() + ": " + entry.quotedBody())
+                        .withStyle(Style.EMPTY.withItalic(true)), unscaledWidth(Math.max(40, contentWidth - 8)))
+                        : List.of();
+                int quoteHeight = quoteLines.isEmpty() ? 0 : Math.min(2, quoteLines.size()) * BODY_LINE_HEIGHT + 4;
+                int height = Math.max(PLAYER_HEAD_SIZE + 3, headerHeight + quoteHeight + bodyHeight + 3);
+                result.add(new EntryLayout(entry, bodyLines, quoteLines, quoteHeight, height, mentioned, wrappedHeader));
             } else {
                 int contentWidth = Math.max(60, viewportWidth - 10);
                 List<FormattedCharSequence> bodyLines = font.split(displayBody, unscaledWidth(contentWidth));
                 int height = Math.max(SYSTEM_LINE_HEIGHT + 4, bodyLines.size() * SYSTEM_LINE_HEIGHT + 6);
-                result.add(new EntryLayout(entry, bodyLines, height, false, false));
+                result.add(new EntryLayout(entry, bodyLines, List.of(), 0, height, false, false));
             }
         }
         return List.copyOf(result);
@@ -709,8 +771,10 @@ public final class ImmersiveChatManager {
         int headY = y + 2;
         drawPlayerHead(graphics, entry, x, headY, alpha);
         if (focused && !entry.playerName().isBlank()) {
-            HIT_AVATARS.add(new HitAvatar(x, headY, PLAYER_HEAD_SIZE, entry.playerName()));
-            HIT_PLAYER_MESSAGES.add(new HitPlayerMessage(x - 4, y, width + 8, layout.height(), entry.playerName()));
+            String quoteBody = entry.body().getString();
+            HIT_AVATARS.add(new HitAvatar(x, headY, PLAYER_HEAD_SIZE, entry.playerName(), quoteBody));
+            HIT_PLAYER_MESSAGES.add(new HitPlayerMessage(x - 4, y, width + 8, layout.height(),
+                    entry.playerName(), quoteBody));
         }
         int contentX = x + PLAYER_HEAD_SIZE + PLAYER_HEAD_GAP;
         int contentWidth = Math.max(42, width - PLAYER_HEAD_SIZE - PLAYER_HEAD_GAP);
@@ -720,6 +784,25 @@ public final class ImmersiveChatManager {
 
         int headerHeight = wrappedHeader ? HEADER_HEIGHT * 2 : HEADER_HEIGHT;
         int bodyY = y + headerHeight + 2;
+        if (layout.quoteHeight() > 0) {
+            int quoteHeight = layout.quoteHeight();
+            UiPanelRenderer.smoothRoundedRectBatched(graphics, contentX, bodyY, contentWidth, quoteHeight,
+                    2, withAlpha(0xFF242A2E, Math.min(alpha, 190)), 0x00000000);
+            graphics.fill(contentX + 2, bodyY + 3, contentX + 3, bodyY + quoteHeight - 3,
+                    withAlpha(0xFF8C989D, alpha));
+            graphics.pose().pushPose();
+            graphics.pose().translate(contentX + 6, bodyY + 2, 0.0F);
+            graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
+            int quoteIndex = 0;
+            for (FormattedCharSequence line : layout.quoteLines()) {
+                if (quoteIndex >= 2) break;
+                graphics.drawString(font, line, 0, Math.round(quoteIndex * BODY_LINE_HEIGHT / CHAT_TEXT_SCALE),
+                        withAlpha(0xFFB8C0C2, alpha), true);
+                quoteIndex++;
+            }
+            graphics.pose().popPose();
+            bodyY += quoteHeight + 2;
+        }
         int lineColor = withAlpha(BODY_COLOR, Math.min(255, alpha));
         graphics.pose().pushPose();
         graphics.pose().translate(contentX, bodyY, 0.0F);
@@ -901,6 +984,40 @@ public final class ImmersiveChatManager {
                 4, 0xEC2A2621, 0xC4FFD54A);
         drawScaledString(graphics, font, displayText, boxX + 6, boxY + 3,
                 0xFFFFD54A, true);
+    }
+
+    private static void drawQuotePreview(GuiGraphics graphics, Font font, int screenWidth, int screenHeight) {
+        QuoteTarget quote = quotedMessage;
+        if (quote == null || quote.playerName().isBlank()) {
+            quotePreviewMetrics = null;
+            return;
+        }
+
+        int inputTop = screenHeight - INPUT_PANEL_HEIGHT - INPUT_BOTTOM_MARGIN;
+        int boxX = QUOTE_PREVIEW_MARGIN_X;
+        int boxWidth = Math.max(80, screenWidth - QUOTE_PREVIEW_MARGIN_X * 2);
+        int boxY = inputTop - QUOTE_PREVIEW_GAP - QUOTE_PREVIEW_HEIGHT;
+        UiPanelRenderer.smoothRoundedRectBatched(graphics, boxX, boxY, boxWidth, QUOTE_PREVIEW_HEIGHT,
+                4, 0xE51A1E22, 0x9A68747A);
+        graphics.fill(boxX + 3, boxY + 4, boxX + 5, boxY + QUOTE_PREVIEW_HEIGHT - 4, 0xFF6EB6D8);
+
+        String header = "引用 " + quote.playerName();
+        drawScaledString(graphics, font, trimToScaledWidth(font, header, boxWidth - 28),
+                boxX + 10, boxY + 4, 0xFFE4E8E8, true);
+        String body = quote.body().isBlank() ? "（空消息）" : quote.body();
+        String clippedBody = trimToScaledWidth(font, body, boxWidth - 28);
+        drawScaledString(graphics, font, clippedBody, boxX + 10, boxY + 15, 0xFFB8C0C2, false);
+
+        int closeX = boxX + boxWidth - QUOTE_PREVIEW_CLOSE_SIZE - 4;
+        int closeY = boxY + (QUOTE_PREVIEW_HEIGHT - QUOTE_PREVIEW_CLOSE_SIZE) / 2;
+        int closeColor = 0xFF9BA5A8;
+        graphics.fill(closeX + 2, closeY, closeX + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeY + 1, closeColor);
+        graphics.fill(closeX + 2, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 1,
+                closeX + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeY + QUOTE_PREVIEW_CLOSE_SIZE, closeColor);
+        graphics.fill(closeX, closeY + 2, closeX + 1, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeColor);
+        graphics.fill(closeX + QUOTE_PREVIEW_CLOSE_SIZE - 1, closeY + 2,
+                closeX + QUOTE_PREVIEW_CLOSE_SIZE, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeColor);
+        quotePreviewMetrics = new QuotePreviewMetrics(closeX, closeY, QUOTE_PREVIEW_CLOSE_SIZE);
     }
 
     private static void drawResizeHandle(GuiGraphics graphics, ImmersiveChatConfig.Layout layout) {
@@ -1257,17 +1374,25 @@ public final class ImmersiveChatManager {
     }
 
     private record ChatEntry(EntryKind kind, long timestamp, @Nullable UUID playerId, String rank, int rankColor,
-                             String title, int titleColor, String playerName, Component body, int repeatCount) {
+                             String title, int titleColor, String playerName, Component body, int repeatCount,
+                             String quotedPlayerName, String quotedBody) {
         static ChatEntry player(long timestamp, UUID playerId, String rank, int rankColor, String title,
                                 int titleColor, String playerName, String body) {
+            return player(timestamp, playerId, rank, rankColor, title, titleColor, playerName, body, "", "");
+        }
+
+        static ChatEntry player(long timestamp, UUID playerId, String rank, int rankColor, String title,
+                                int titleColor, String playerName, String body, String quotedPlayerName, String quotedBody) {
             return new ChatEntry(EntryKind.PLAYER, timestamp, playerId, rank, rankColor, title, titleColor,
-                    playerName, Component.literal(body), 1);
+                    playerName, Component.literal(body), 1, clean(quotedPlayerName), cleanBody(quotedBody).replace('\n', ' '));
         }
 
         static ChatEntry system(long timestamp, Component body) {
             return new ChatEntry(EntryKind.SYSTEM, timestamp, null, "", 0x9BA4A8, "", 0x9BA4A8,
-                    "", body == null ? Component.empty() : body, 1);
+                    "", body == null ? Component.empty() : body, 1, "", "");
         }
+
+        boolean hasQuote() { return !quotedPlayerName.isBlank() && !quotedBody.isBlank(); }
 
         boolean hasSameRepeatIdentity(ChatEntry other) {
             if (other == null || kind != other.kind) {
@@ -1276,26 +1401,42 @@ public final class ImmersiveChatManager {
             if (kind == EntryKind.PLAYER && !Objects.equals(playerId, other.playerId)) {
                 return false;
             }
-            return body.getString().equals(other.body.getString());
+            return body.getString().equals(other.body.getString())
+                    && Objects.equals(quotedPlayerName, other.quotedPlayerName)
+                    && Objects.equals(quotedBody, other.quotedBody);
         }
 
         ChatEntry withRepeatCount(int count) {
             return new ChatEntry(kind, timestamp, playerId, rank, rankColor, title, titleColor,
-                    playerName, body, Math.max(1, count));
+                    playerName, body, Math.max(1, count), quotedPlayerName, quotedBody);
         }
     }
 
-    private record EntryLayout(ChatEntry entry, List<FormattedCharSequence> bodyLines, int height,
+    private record EntryLayout(ChatEntry entry, List<FormattedCharSequence> bodyLines,
+                               List<FormattedCharSequence> quoteLines, int quoteHeight, int height,
                                boolean mentioned, boolean wrappedHeader) {
     }
 
     private record HitLine(int x, int y, int width, int height, FormattedCharSequence content) {
     }
 
-    private record HitAvatar(int x, int y, int size, String playerName) {
+    private record HitAvatar(int x, int y, int size, String playerName, String body) {
     }
 
-    private record HitPlayerMessage(int x, int y, int width, int height, String playerName) {
+    private record HitPlayerMessage(int x, int y, int width, int height, String playerName, String body) {
+    }
+
+    private record QuoteTarget(String playerName, String body) {
+        private QuoteTarget {
+            playerName = clean(playerName);
+            body = cleanBody(body).replace('\n', ' ');
+        }
+    }
+
+    private record QuotePreviewMetrics(int closeX, int closeY, int size) {
+        boolean containsClose(double mouseX, double mouseY) {
+            return isInside(mouseX, mouseY, closeX, closeY, size, size);
+        }
     }
 
     private record ScrollbarMetrics(int trackX, int trackY, int trackHeight, int thumbY, int thumbHeight) {
@@ -1325,6 +1466,8 @@ public final class ImmersiveChatManager {
         int titleColor;
         String playerName;
         String body;
+        String quotedPlayerName;
+        String quotedBody;
 
         static HistoryRecord from(ChatEntry entry) {
             HistoryRecord record = new HistoryRecord();
@@ -1337,6 +1480,8 @@ public final class ImmersiveChatManager {
             record.titleColor = entry.titleColor();
             record.playerName = entry.playerName();
             record.body = entry.body().getString();
+            record.quotedPlayerName = entry.quotedPlayerName();
+            record.quotedBody = entry.quotedBody();
             return record;
         }
 
@@ -1352,7 +1497,7 @@ public final class ImmersiveChatManager {
                         return null;
                     }
                     return ChatEntry.player(timestamp, uuid, clean(rank), rankColor, clean(title), titleColor,
-                            clean(playerName), body);
+                            clean(playerName), body, quotedPlayerName, quotedBody);
                 } catch (IllegalArgumentException ignored) {
                     return null;
                 }

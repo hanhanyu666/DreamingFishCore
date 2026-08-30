@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.server.notice_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeCategory;
+import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI_Screen;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import net.minecraft.network.FriendlyByteBuf;
@@ -108,6 +109,7 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_NoticeListResponse msg) {
         DreamingFishCore.LOGGER.info("收到 {} 条公告", msg.notices.size());
+        NoticeClientCache.set(msg.notices, msg.readNoticeIds);
         // 将公告数据传递给UI
         ServerScreenUI_Screen.setNoticeData(msg.notices, msg.readNoticeIds);
     }

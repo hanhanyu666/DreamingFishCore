@@ -1,11 +1,13 @@
 package com.hhy.dreamingfishcore.server.notice_system;
 
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageCatalog;
+
 import java.util.Collections;
 import java.util.List;
 
 /** Definition and deterministic backfilling rule for the single opening guide notice. */
 public final class BuiltInNoticeCatalog {
-    public static final String OPENING_STAGE_ID = "dreamingfishcore:dream_beginning";
+    public static final String OPENING_STAGE_ID = StoryStageCatalog.DREAM_BEGINNING_ID;
     public static final String OPENING_STORY_DATE = "危机第1日";
     public static final String DESERT_TOWN_KEY = "opening.desert_town";
 

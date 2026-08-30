@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.item.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.item.items.Item_AidKit;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.health.PlayerCustomHealthManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,11 +27,17 @@ public class AidKitEventHandler {
 
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!event.getEntity().isAlive() || event.getEntity().level().isClientSide()) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !player.isAlive()
+                || player.level().isClientSide()) {
             return;
         }
 
-        ServerPlayer player = (ServerPlayer) event.getEntity();
+        if (!AuthSessionGuard.isAuthenticated(player)) {
+            // 登录前不执行回血/耐久消耗；同时清掉上次异常断线遗留的使用状态。
+            clearAllAidKitStates(player);
+            return;
+        }
 
         // 获取手持的急救包
         ItemStack aidKitStack = Item_AidKit.getHeldAidKit(player);

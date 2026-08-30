@@ -18,6 +18,7 @@ import com.hhy.dreamingfishcore.server.title_system.command.Command_Title;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraft.commands.Commands;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class DreamingFishCore_CommandManager {
@@ -36,12 +37,17 @@ public final class DreamingFishCore_CommandManager {
 
         Command_Npc.register(dispatcher);
         Command_Guidance.register(dispatcher);
-        Command_Story.register(dispatcher);
         Command_Zhuiguang.register(dispatcher);
-        Command_TaskLocation.register(dispatcher);
         Command_Biomes.register(dispatcher);
         Command_OverAllLevel.register(dispatcher);
         Command_Task.register(dispatcher);
-        Command_ZombieSpecies.register(dispatcher);
+
+        // 这些模块共享同一个根节点；子命令各自保留所需的 2/3 级权限。
+        var dreamingFishRoot = Commands.literal("dreamingfish")
+                .requires(source -> source.hasPermission(2));
+        Command_Story.register(dreamingFishRoot);
+        Command_TaskLocation.register(dreamingFishRoot);
+        Command_ZombieSpecies.register(dreamingFishRoot);
+        dispatcher.register(dreamingFishRoot);
     }
 }

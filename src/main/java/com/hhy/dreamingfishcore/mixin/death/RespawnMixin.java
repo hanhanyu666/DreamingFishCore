@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 现有复活系统仍依赖全局 keepInventory=true 来复制旧玩家数据。
- * 这里只改写 Player.dropEquipment 内部的那一次规则读取，让物品进入真实的
- * LivingDropsEvent；经验值及其他 keepInventory 行为保持原样。
+ * 自定义尸体流程必须在原版死亡掉落规则开关下都能捕获物品。
+ * 这里只改写 Player.dropEquipment 内部的那一次规则读取，让正在捕获的玩家物品进入真实的
+ * LivingDropsEvent；未被自定义流程接管的实体仍遵循世界自身的 keepInventory 规则。
  */
 @Mixin(Player.class)
 public abstract class RespawnMixin {

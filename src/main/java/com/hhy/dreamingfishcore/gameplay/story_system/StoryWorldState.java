@@ -22,7 +22,7 @@ public final class StoryWorldState {
     /** 存档结构版本；版本变化时由 validateAndMigrateLoadedState 负责迁移或拒绝。 */
     public static final int CURRENT_SCHEMA_VERSION = 2;
     /** 新世界没有其他进度时使用的第一阶段。 */
-    public static final String DEFAULT_STAGE_ID = "dreamingfishcore:dream_beginning";
+    public static final String DEFAULT_STAGE_ID = StoryStageCatalog.DREAM_BEGINNING_ID;
 
     // 限制存档中可增长集合的大小，避免错误脚本无限写入世界数据。
     private static final int MAX_WORLD_FLAGS = 4096;
@@ -455,7 +455,7 @@ public final class StoryWorldState {
     }
 
     /** 统一校验阶段、任务、旗标和运营内容使用的稳定 ID。 */
-    static String requireValidId(String id, String fieldName) {
+    public static String requireValidId(String id, String fieldName) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {
             throw new IllegalArgumentException(fieldName + "ID非法：" + id);
         }

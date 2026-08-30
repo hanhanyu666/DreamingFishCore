@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -53,7 +54,9 @@ public class PlayerStrengthManager {
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         // 仅在服务端执行，且玩家存活
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()
+                || !(event.getEntity() instanceof ServerPlayer serverPlayer)
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
 
@@ -94,7 +97,10 @@ public class PlayerStrengthManager {
     public static void onLivingJump(LivingEvent.LivingJumpEvent event) {
         LivingEntity livingEntity = event.getEntity();
         // 仅在服务端执行，且是存活的玩家
-        if (livingEntity.level().isClientSide() || !(livingEntity instanceof ServerPlayer serverPlayer) || !serverPlayer.isAlive()) {
+        if (livingEntity.level().isClientSide()
+                || !(livingEntity instanceof ServerPlayer serverPlayer)
+                || !serverPlayer.isAlive()
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
 
@@ -258,6 +264,7 @@ public class PlayerStrengthManager {
     public static boolean consumeStrength(ServerPlayer player, int amount) {
         //创造和旁观模式不受体力消耗影响
         if (player == null || !player.isAlive()
+                || !AuthSessionGuard.isAuthenticated(player)
                 || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
                 || player.gameMode.getGameModeForPlayer() == GameType.SPECTATOR) {
             return false;
@@ -291,6 +298,7 @@ public class PlayerStrengthManager {
     public static void restoreStrength(ServerPlayer player, int amount) {
         //创造和旁观模式不执行体力恢复
         if (player == null || !player.isAlive()
+                || !AuthSessionGuard.isAuthenticated(player)
                 || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE
                 || player.gameMode.getGameModeForPlayer() == GameType.SPECTATOR) {
             return;

@@ -8,6 +8,7 @@ import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -27,46 +28,19 @@ import net.minecraft.network.chat.Component;
  */
 public class Command_Notice {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-
-        // /notice add "标题" "内容"
-        dispatcher.register(
-                Commands.literal("notice")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("add")
-                                .then(Commands.argument("input", StringArgumentType.greedyString())
-                                        .executes(Command_Notice::executeAddNotice)
-                                )
-                        )
-        );
-
-        // /notice delete <ID>
-        dispatcher.register(
-                Commands.literal("notice")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("delete")
-                                .then(Commands.argument("id", IntegerArgumentType.integer(1))
-                                        .executes(Command_Notice::executeDeleteNotice)
-                                )
-                        )
-        );
-
-        // /notice list
-        dispatcher.register(
-                Commands.literal("notice")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("list")
-                                .executes(Command_Notice::executeListNotices)
-                        )
-        );
-
-        // /notice reload
-        dispatcher.register(
-                Commands.literal("notice")
-                        .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("reload")
-                                .executes(Command_Notice::executeReload)
-                        )
-        );
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("notice")
+                .requires(source -> source.hasPermission(2));
+        root.then(Commands.literal("add")
+                .then(Commands.argument("input", StringArgumentType.greedyString())
+                        .executes(Command_Notice::executeAddNotice)));
+        root.then(Commands.literal("delete")
+                .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                        .executes(Command_Notice::executeDeleteNotice)));
+        root.then(Commands.literal("list")
+                .executes(Command_Notice::executeListNotices));
+        root.then(Commands.literal("reload")
+                .executes(Command_Notice::executeReload));
+        dispatcher.register(root);
     }
 
     /** 添加服务器通知（MAINTENANCE，旧命令格式仍然有效）或带故事元数据的游戏公告。 */

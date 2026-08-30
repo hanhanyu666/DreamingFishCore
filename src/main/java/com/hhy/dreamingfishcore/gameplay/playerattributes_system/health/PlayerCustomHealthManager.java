@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.health;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -24,7 +25,8 @@ public class PlayerCustomHealthManager {
      */
     public static boolean handleMedicineHeal(ServerPlayer player, double healAmount, long cooldownMillis, int durabilityCost) {
         //非空和有效性校验
-        if (player == null || healAmount <= 0 || cooldownMillis < 0) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)
+                || healAmount <= 0 || cooldownMillis < 0) {
             return false;
         }
         UUID playerUUID = player.getUUID();

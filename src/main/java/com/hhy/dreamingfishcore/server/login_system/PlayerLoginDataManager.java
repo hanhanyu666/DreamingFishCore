@@ -50,6 +50,9 @@ public final class PlayerLoginDataManager {
                     ConcurrentHashMap::new);
             loadedData.forEach((uuid, loginData) -> {
                 if (uuid != null && loginData != null) {
+                    // 账号身份以外层 map key 为准；旧文件中的字段可能缺失或被手工改写。
+                    // 这样密码迁移和会话校验始终绑定到实际登录 UUID。
+                    loginData.setPlayerUUID(uuid);
                     LOGIN_DATA_CACHE.put(uuid, loginData);
                 }
             });
@@ -85,6 +88,7 @@ public final class PlayerLoginDataManager {
         if (data != null) {
             data.forEach((uuid, loginData) -> {
                 if (uuid != null && loginData != null) {
+                    loginData.setPlayerUUID(uuid);
                     LOGIN_DATA_CACHE.put(uuid, loginData);
                 }
             });
@@ -113,15 +117,35 @@ public final class PlayerLoginDataManager {
      * 保存玩家登录数据。更新内存后立即尝试原子落盘。
      */
     public static synchronized void saveLoginData(UUID playerUUID, PlayerLoginData data) {
+        saveLoginDataChecked(playerUUID, data);
+    }
+
+    /** 更新登录数据并返回本次原子写入是否成功，供认证流程决定是否放行会话。 */
+    public static synchronized boolean saveLoginDataChecked(UUID playerUUID, PlayerLoginData data) {
         ensureLoaded();
         if (playerUUID == null || data == null) {
             throw new IllegalArgumentException("玩家 UUID 和登录数据不能为空");
         }
 
-        LOGIN_DATA_CACHE.put(playerUUID, data);
+        data.setPlayerUUID(playerUUID);
+        // 先写入候选快照，落盘成功后再提交到内存缓存。否则注册保存失败时，
+        // 当前会话会把未落盘账号误认为“已经注册”，只能靠重新连接恢复。
+        Map<UUID, PlayerLoginData> candidate = new ConcurrentHashMap<>(LOGIN_DATA_CACHE);
+        candidate.put(playerUUID, data);
         dirty = true;
-        saveIfDirty();
+        boolean saved;
+        try {
+            JsonDataStore.writeAtomic(LOGIN_DATA_PATH, GSON, candidate);
+            LOGIN_DATA_CACHE.put(playerUUID, data);
+            dirty = false;
+            saved = true;
+        } catch (Exception exception) {
+            // 保留原缓存和 dirty 状态，统一保存周期仍可重试已有修改。
+            DreamingFishCore.LOGGER.error("写入登录数据失败，保留 dirty 状态等待下次保存", exception);
+            saved = false;
+        }
         DreamingFishCore.LOGGER.debug("已更新玩家 {} 的登录数据", playerUUID);
+        return saved;
     }
 
     /**

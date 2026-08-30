@@ -6,13 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FirstStageSurvivalManagerTest {
     @Test
-    void foodNaturalHealingStopsExactlyAtHalfHealth() {
+    void foodNaturalHealingStopsExactlyAtSeventyPercentHealth() {
         assertEquals(1.0F,
                 FirstStageSurvivalManager.capFoodNaturalHealingAmount(4.0F, 20.0F, 1.0F));
         assertEquals(0.25F,
-                FirstStageSurvivalManager.capFoodNaturalHealingAmount(9.75F, 20.0F, 1.0F));
+                FirstStageSurvivalManager.capFoodNaturalHealingAmount(13.75F, 20.0F, 1.0F));
         assertEquals(0.0F,
-                FirstStageSurvivalManager.capFoodNaturalHealingAmount(10.0F, 20.0F, 1.0F));
+                FirstStageSurvivalManager.capFoodNaturalHealingAmount(14.0F, 20.0F, 1.0F));
         assertEquals(0.0F,
                 FirstStageSurvivalManager.capFoodNaturalHealingAmount(15.0F, 20.0F, 1.0F));
     }

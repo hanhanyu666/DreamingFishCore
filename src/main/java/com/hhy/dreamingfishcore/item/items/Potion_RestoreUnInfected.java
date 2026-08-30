@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -52,6 +53,9 @@ public class Potion_RestoreUnInfected extends Item {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResultHolder.fail(stack);
         }
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            return InteractionResultHolder.fail(stack);
+        }
 
         // 获取玩家属性数据
         PlayerAttributesData attributesData = PlayerAttributesDataManager.getPlayerAttributesData(serverPlayer.getUUID());
@@ -76,6 +80,9 @@ public class Potion_RestoreUnInfected extends Item {
         }
 
         if (!(livingEntity instanceof ServerPlayer serverPlayer)) {
+            return stack;
+        }
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return stack;
         }
 

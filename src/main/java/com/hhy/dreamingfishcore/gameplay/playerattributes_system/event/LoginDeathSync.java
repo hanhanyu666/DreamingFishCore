@@ -1,29 +1,31 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.event;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
-
-import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageClientSync;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RespawnPointSyncManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.StrengthSyncManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
 import static com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager.getPlayerAttributesData;
 
-//重生恢复所有默认状态
+/** 登录后及重生后的属性、死亡状态同步。 */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class LoginDeathSync {
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 
@@ -35,53 +37,39 @@ public class LoginDeathSync {
             player.setHealth((float) data.getMaxHealth());
             PlayerAttributesDataManager.markDirty();
 
-            // 立即同步所有属性数据到客户端
             StrengthSyncManager.syncStrengthToClient(player);
             PlayerCourageClientSync.sendCourageDataToClient(
-                    player,
-                    data.getCurrentCourage(),
-                    data.getMaxCourage()
-            );
+                    player, data.getCurrentCourage(), data.getMaxCourage());
             PlayerInfectionClientSync.sendInfectionDataToClient(
-                    player,
-                    data.getCurrentInfection(),
-                    data.isInfected()
-            );
+                    player, data.getCurrentInfection(), data.isInfected());
         }
 
         DeathCorpseManager.sendQueuedRespawnLocation(player);
     }
 
+    /** 认证成功后才发送任何个人属性、死亡状态或复活通知。 */
     @SubscribeEvent
-    public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-
-            if (serverPlayer == null) return;
-            PlayerAttributesData attrData = getPlayerAttributesData(serverPlayer.getUUID());
-            StrengthSyncManager.syncStrengthToClient(serverPlayer);
-            if (attrData == null) return;
-            PlayerCourageClientSync.sendCourageDataToClient(serverPlayer, attrData.getCurrentCourage(), attrData.getMaxCourage());
-            PlayerInfectionClientSync.sendInfectionDataToClient(
-                    serverPlayer,
-                    attrData.getCurrentInfection(),
-                    attrData.isInfected()
-            );
-            // 同步复活点数
-            RespawnPointSyncManager.syncRespawnPointToClient(serverPlayer);
-//            DreamingFishCore.LOGGER.info("玩家 {} 登录，同步属性：勇气值({}/{})，感染值({})，复活点数({})",
-//                    serverPlayer.getScoreboardName(),
-//                    attrData.getCurrentCourage(),
-//                    attrData.getMaxCourage(),
-//                    attrData.getCurrentInfection(),
-//                    attrData.getRespawnPoint()
-//            );
-
-            // 检查是否有未处理的死亡状态（玩家死亡后退出重连）
-            if (DeathEventHandler.hasDeathState(serverPlayer)) {
-                DeathEventHandler.restoreDeathState(serverPlayer);
-            }
-
-            DeathCorpseManager.sendQueuedRespawnLocation(serverPlayer);
+    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
+        ServerPlayer player = event.getPlayer();
+        if (!AuthSessionGuard.isAuthenticated(player)) {
+            return;
         }
+
+        PlayerAttributesData attrData = getPlayerAttributesData(player.getUUID());
+        StrengthSyncManager.syncStrengthToClient(player);
+        if (attrData == null) {
+            return;
+        }
+        PlayerCourageClientSync.sendCourageDataToClient(
+                player, attrData.getCurrentCourage(), attrData.getMaxCourage());
+        PlayerInfectionClientSync.sendInfectionDataToClient(
+                player, attrData.getCurrentInfection(), attrData.isInfected());
+        RespawnPointSyncManager.syncRespawnPointToClient(player);
+
+        if (DeathEventHandler.hasDeathState(player)) {
+            DeathEventHandler.restoreDeathState(player);
+        }
+        DeathCorpseManager.sendQueuedRespawnLocation(player);
+        RevivalInfoManager.checkAndSendRevivalTip(player);
     }
 }

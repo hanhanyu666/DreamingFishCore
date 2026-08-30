@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.Packet_SyncFullTaskData;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import net.minecraft.server.MinecraftServer;
@@ -113,6 +114,9 @@ public class TaskDataManager {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(player)) {
+                continue;
+            }
             Packet_SyncFullTaskData packet = new Packet_SyncFullTaskData(
                     player.getUUID(),
                     TASK_PLAYER_DATA_CACHE,
@@ -124,7 +128,7 @@ public class TaskDataManager {
 
     /** 个人剧情进度变化时只刷新对应玩家，避免每一步都打扰全服客户端。 */
     public static void syncFullTaskData(ServerPlayer player) {
-        if (player == null) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
         DreamingFishCore_NetworkManager.sendToClient(

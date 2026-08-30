@@ -6,12 +6,13 @@ import com.google.gson.reflect.TypeToken;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
-import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryFlowEngine;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageSnapshotResponse;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipAction;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
@@ -89,8 +90,10 @@ public final class NpcMessageManager {
                     NpcMessageConfig::new);
             boolean migrated = false;
             if (config.getSchemaVersion() == 1) {
-                migrated |= BuiltInNpcMessageCatalog.migrateOpeningGuidanceStage(
-                        config.getMessages());
+                int definitionCountBeforeFilter = config.getMessages().size();
+                config.getMessages().removeIf(definition -> definition == null
+                        || !StoryNpcContentPolicy.isRetained(definition.getNpcId()));
+                migrated |= definitionCountBeforeFilter != config.getMessages().size();
                 migrated |= BuiltInNpcMessageCatalog.migrateBaizhiObservationsCopy(
                         config.getMessages());
                 List<NpcMessageDefinition> additions =
@@ -130,7 +133,10 @@ public final class NpcMessageManager {
                 if (!isUuid(playerId) || data == null) {
                     continue;
                 }
-                data.getMessages().removeIf(record -> !isValidRecord(record));
+                int messageCountBeforeFilter = data.getMessages().size();
+                data.getMessages().removeIf(record -> !isValidRecord(record)
+                        || !StoryNpcContentPolicy.isRetained(record.getNpcId()));
+                migratedCopy |= messageCountBeforeFilter != data.getMessages().size();
                 migratedCopy |= BuiltInNpcMessageCatalog.migrateDeliveredBaizhiObservations(
                         data.getMessages());
                 if (data.getMessages().size() > MAX_STORED_MESSAGES_PER_PLAYER) {
@@ -237,8 +243,7 @@ public final class NpcMessageManager {
             }
         }
 
-        OpeningStoryProgressManager.onNpcReply(
-                player, definition.getId(), reply.getId());
+        StoryFlowEngine.onNpcReply(player, definition.getId(), reply.getId());
 
         syncToClient(player);
         GuidanceManager.syncToClient(player);
@@ -638,67 +643,9 @@ public final class NpcMessageManager {
             return new NpcMessageConfig(bundledMessages);
         }
 
-        String acknowledgementId = "dreamingfishcore:recorder/first_contact_acknowledgement";
-        GuidanceSeed firstGuide = new GuidanceSeed(
-                "dreamingfishcore:guidance/watch_zhuiguang_foundation",
-                "关注逐光会的筹建",
-                "留意剧情记录员后续发来的地点、物资和建设需求。")
-                .withStoryStage(BuiltInNpcMessageCatalog.OPENING_STAGE_ID);
-        NpcMessageDefinition firstContact = new NpcMessageDefinition(
-                "dreamingfishcore:recorder/first_contact",
-                1,
-                "通信恢复",
-                "我是剧情记录员。梦屿的通信网络刚刚恢复，逐光会也才开始筹建。如果你愿意参与，就先留意终端；需要前往的地点和建设物资，我会在这里告诉你。",
-                NpcMessageDefinition.DeliveryTrigger.INTERACTION)
-                .priority(10)
-                .withGuidance(firstGuide)
-                .withReplies(List.of(
-                        new NpcMessageReplyDefinition(
-                                "ready",
-                                "收到，我会留意后续消息。",
-                                3,
-                                acknowledgementId),
-                        new NpcMessageReplyDefinition(
-                                "ask_more",
-                                "你愿意告诉我更多内部情况吗？",
-                                1,
-                                "dreamingfishcore:recorder/familiar_information")
-                                .requiringFavorability(100, 1000)));
-
-        NpcMessageDefinition acknowledgement = new NpcMessageDefinition(
-                acknowledgementId,
-                1,
-                "已建立联络",
-                "好。我会记住你愿意帮忙。逐光会现在还不是一个成熟组织，它会由真正参与建设的人一起塑造成形。",
-                NpcMessageDefinition.DeliveryTrigger.FOLLOW_UP);
-
-        NpcMessageDefinition familiar = new NpcMessageDefinition(
-                "dreamingfishcore:recorder/familiar_information",
-                1,
-                "只对熟人说的话",
-                "既然我们已经熟悉，我可以多说一点：最早的安排仍在变化，不要把任何人的短期判断当作最终答案。先保留记录，再和其他幸存者交叉验证。",
-                NpcMessageDefinition.DeliveryTrigger.INTERACTION)
-                .priority(20)
-                .requiringFavorability(100, 1000)
-                .withReplies(List.of(new NpcMessageReplyDefinition(
-                        "understood",
-                        "明白，我会先验证再下结论。",
-                        2,
-                        "")));
-
-        NpcMessageDefinition trusted = new NpcMessageDefinition(
-                "dreamingfishcore:recorder/trusted_information",
-                1,
-                "信任频道",
-                "你已经证明自己会认真保存语境。以后涉及敏感地点或未经证实的信息，我会先通过这条私人频道与你核对。",
-                NpcMessageDefinition.DeliveryTrigger.INTERACTION)
-                .priority(30)
-                .requiringFavorability(600, 1000);
-
-        List<NpcMessageDefinition> definitions = new ArrayList<>(
-                List.of(firstContact, acknowledgement, familiar, trusted));
-        definitions.addAll(BuiltInNpcMessageCatalog.createMissingMessages(definitions));
-        return new NpcMessageConfig(definitions);
+        // 任何资源缺失回退都只能生成白名单角色的最小消息，不能复活已删除 NPC。
+        return new NpcMessageConfig(
+                BuiltInNpcMessageCatalog.createMissingMessages(List.of()));
     }
 
     private static void ensureLoaded() {

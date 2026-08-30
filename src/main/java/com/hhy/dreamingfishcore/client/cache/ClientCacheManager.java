@@ -8,6 +8,7 @@ import com.hhy.dreamingfishcore.gameplay.task_system.TaskPlayerData;
 import com.hhy.dreamingfishcore.gameplay.task_system.client.cache.TaskClientCache;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.client.cache.NpcMessageClientCache;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache.GuidanceClientCache;
+import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
 import com.hhy.dreamingfishcore.server.playerdata_system.client.cache.PlayerDataClientCache;
 import net.neoforged.api.distmarker.Dist;
@@ -138,6 +139,7 @@ public final class ClientCacheManager {
         TaskClientCache.clear();
         NpcMessageClientCache.clear();
         GuidanceClientCache.clear();
+        NoticeClientCache.clear();
         EconomyTerminalClientCache.clear();
     }
 

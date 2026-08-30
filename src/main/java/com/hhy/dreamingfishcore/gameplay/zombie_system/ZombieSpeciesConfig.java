@@ -64,6 +64,12 @@ public final class ZombieSpeciesConfig {
     private boolean broadcasting = true;
     /** Fans visible attackers around a player instead of driving every path into one point. */
     private boolean surrounding = true;
+    /** Prevents this species from mining, placing blocks, or breaking doors in task locations. */
+    private boolean taskLocationProtection = true;
+    /** Grants Regeneration I to players inside an active task location. */
+    private boolean taskLocationRegeneration = true;
+    /** Prevents naturally spawned hostile monsters from appearing in task locations. */
+    private boolean taskLocationSpawnProtection = true;
 
     /** Maximum distance at which the vanilla player target goal may acquire a player. */
     private double trackingRange = 45.0D;
@@ -112,13 +118,15 @@ public final class ZombieSpeciesConfig {
     private double stackJumpVelocity = 0.52D;
     private double stackJumpHorizontalSpeed = 0.20D;
 
-    /** Enables the percentage-based natural monster-pool augmentation. */
+    /** Enables the natural monster-pool zombie split. */
     private boolean naturalSpawn = true;
-    /** Remaining vanilla-zombie weight relative to its original biome entry. */
-    private int vanillaZombieSpawnPercent = 50;
-    /** New-zombie weight relative to the original vanilla-zombie biome entry. */
-    private int customZombieSpawnPercent = 90;
-    /** Weight retained by every non-vanilla-zombie hostile entry. */
+    /** Total zombie-family weight relative to the original entry (120 = +20%). */
+    private int zombieFamilySpawnPercent = 120;
+    /** Share of the scaled zombie-family weight retained by vanilla. */
+    private int vanillaZombieSpawnPercent = 40;
+    /** Share of the scaled zombie-family weight assigned to the new species. */
+    private int customZombieSpawnPercent = 60;
+    /** Weight multiplier for every non-zombie hostile entry (80 = -20%). */
     private int otherMonsterSpawnPercent = 80;
 
     private Map<String, StageOverride> stageOverrides = new LinkedHashMap<>();
@@ -209,6 +217,46 @@ public final class ZombieSpeciesConfig {
         return candidate.resolveForStage(validatedStageId);
     }
 
+    /**
+     * Persists one atomic all-abilities toggle for a story stage.  This is
+     * used by the in-game shortcut so a failed write can never leave only a
+     * subset of the ability gates changed.
+     */
+    public static synchronized ResolvedSettings setAllAbilitiesForStage(
+            String stageId,
+            boolean enabled) {
+        return setAllAbilitiesForStage(getConfigPath(), stageId, enabled);
+    }
+
+    static synchronized ResolvedSettings setAllAbilitiesForStage(
+            Path path,
+            String stageId,
+            boolean enabled) {
+        if (path == null) {
+            throw new IllegalArgumentException("配置路径不能为空");
+        }
+        String validatedStageId = requireId(stageId, "stageId");
+
+        ZombieSpeciesConfig candidate = GSON.fromJson(GSON.toJson(current), ZombieSpeciesConfig.class);
+        if (candidate == null) {
+            throw new IllegalStateException("无法复制当前丧尸配置");
+        }
+        StageOverride override = candidate.stageOverrides.computeIfAbsent(
+                validatedStageId, ignored -> new StageOverride());
+        for (Ability ability : Ability.values()) {
+            override.setAbility(ability, enabled);
+        }
+        candidate.validateAndNormalize();
+
+        try {
+            JsonDataStore.writeAtomic(path, GSON, candidate);
+        } catch (IOException exception) {
+            throw new IllegalStateException("保存丧尸物种配置失败", exception);
+        }
+        current = candidate;
+        return candidate.resolveForStage(validatedStageId);
+    }
+
     public static synchronized ZombieSpeciesConfig load(Path path) {
         ZombieSpeciesConfig defaults = defaults();
         if (Files.notExists(path)) {
@@ -287,6 +335,10 @@ public final class ZombieSpeciesConfig {
 
     public boolean isNaturalSpawn() {
         return naturalSpawn;
+    }
+
+    public int getZombieFamilySpawnPercent() {
+        return zombieFamilySpawnPercent;
     }
 
     public int getVanillaZombieSpawnPercent() {
@@ -380,6 +432,10 @@ public final class ZombieSpeciesConfig {
                 valueOr(override == null ? null : override.hearing, hearing),
                 valueOr(override == null ? null : override.broadcasting, broadcasting),
                 valueOr(override == null ? null : override.surrounding, surrounding),
+                valueOr(override == null ? null : override.taskLocationProtection, taskLocationProtection),
+                valueOr(override == null ? null : override.taskLocationRegeneration, taskLocationRegeneration),
+                valueOr(override == null ? null : override.taskLocationSpawnProtection,
+                        taskLocationSpawnProtection),
                 valueOr(override == null ? null : override.speedMultiplier, speedMultiplier),
                 valueOr(override == null ? null : override.trackingRange, trackingRange),
                 valueOr(override == null ? null : override.hearingRange, hearingRange),
@@ -409,6 +465,7 @@ public final class ZombieSpeciesConfig {
                 valueOr(override == null ? null : override.stackJumpVelocity, stackJumpVelocity),
                 valueOr(override == null ? null : override.stackJumpHorizontalSpeed, stackJumpHorizontalSpeed),
                 valueOr(override == null ? null : override.naturalSpawn, naturalSpawn),
+                valueOr(override == null ? null : override.zombieFamilySpawnPercent, zombieFamilySpawnPercent),
                 valueOr(override == null ? null : override.vanillaZombieSpawnPercent, vanillaZombieSpawnPercent),
                 valueOr(override == null ? null : override.customZombieSpawnPercent, customZombieSpawnPercent),
                 valueOr(override == null ? null : override.otherMonsterSpawnPercent, otherMonsterSpawnPercent),
@@ -440,7 +497,10 @@ public final class ZombieSpeciesConfig {
         STACKING,
         HEARING,
         BROADCASTING,
-        SURROUNDING
+        SURROUNDING,
+        TASK_LOCATION_PROTECTION,
+        TASK_LOCATION_REGENERATION,
+        TASK_LOCATION_SPAWN_PROTECTION
     }
 
     /** Immutable runtime snapshot. A new snapshot is cheap and is refreshed when an entity notices a config change. */
@@ -454,6 +514,9 @@ public final class ZombieSpeciesConfig {
             boolean hearing,
             boolean broadcasting,
             boolean surrounding,
+            boolean taskLocationProtection,
+            boolean taskLocationRegeneration,
+            boolean taskLocationSpawnProtection,
             double speedMultiplier,
             double trackingRange,
             double hearingRange,
@@ -483,6 +546,7 @@ public final class ZombieSpeciesConfig {
             double stackJumpVelocity,
             double stackJumpHorizontalSpeed,
             boolean naturalSpawn,
+            int zombieFamilySpawnPercent,
             int vanillaZombieSpawnPercent,
             int customZombieSpawnPercent,
             int otherMonsterSpawnPercent,
@@ -506,6 +570,9 @@ public final class ZombieSpeciesConfig {
                 case HEARING -> hearing;
                 case BROADCASTING -> broadcasting;
                 case SURROUNDING -> surrounding;
+                case TASK_LOCATION_PROTECTION -> taskLocationProtection;
+                case TASK_LOCATION_REGENERATION -> taskLocationRegeneration;
+                case TASK_LOCATION_SPAWN_PROTECTION -> taskLocationSpawnProtection;
             };
         }
 
@@ -545,6 +612,9 @@ public final class ZombieSpeciesConfig {
         private Boolean hearing;
         private Boolean broadcasting;
         private Boolean surrounding;
+        private Boolean taskLocationProtection;
+        private Boolean taskLocationRegeneration;
+        private Boolean taskLocationSpawnProtection;
         private Double speedMultiplier;
         private Double trackingRange;
         private Double hearingRange;
@@ -574,6 +644,7 @@ public final class ZombieSpeciesConfig {
         private Double stackJumpVelocity;
         private Double stackJumpHorizontalSpeed;
         private Boolean naturalSpawn;
+        private Integer zombieFamilySpawnPercent;
         private Integer vanillaZombieSpawnPercent;
         private Integer customZombieSpawnPercent;
         private Integer otherMonsterSpawnPercent;
@@ -591,6 +662,9 @@ public final class ZombieSpeciesConfig {
                 case HEARING -> hearing = enabled;
                 case BROADCASTING -> broadcasting = enabled;
                 case SURROUNDING -> surrounding = enabled;
+                case TASK_LOCATION_PROTECTION -> taskLocationProtection = enabled;
+                case TASK_LOCATION_REGENERATION -> taskLocationRegeneration = enabled;
+                case TASK_LOCATION_SPAWN_PROTECTION -> taskLocationSpawnProtection = enabled;
             }
         }
     }
@@ -640,6 +714,8 @@ public final class ZombieSpeciesConfig {
         stackCooldownTicks = requireRange(stackCooldownTicks, 0, 20 * 60, "stackCooldownTicks");
         stackJumpVelocity = requireRange(stackJumpVelocity, 0.1D, 1.5D, "stackJumpVelocity");
         stackJumpHorizontalSpeed = requireRange(stackJumpHorizontalSpeed, 0.0D, 1.0D, "stackJumpHorizontalSpeed");
+        zombieFamilySpawnPercent = requireRange(
+                zombieFamilySpawnPercent, 0, 1000, "zombieFamilySpawnPercent");
         vanillaZombieSpawnPercent = requireRange(
                 vanillaZombieSpawnPercent, 0, 1000, "vanillaZombieSpawnPercent");
         customZombieSpawnPercent = requireRange(
@@ -785,6 +861,11 @@ public final class ZombieSpeciesConfig {
         if (override.stackJumpHorizontalSpeed != null) {
             override.stackJumpHorizontalSpeed = requireRange(
                     override.stackJumpHorizontalSpeed, 0.0D, 1.0D, prefix + "stackJumpHorizontalSpeed");
+        }
+        if (override.zombieFamilySpawnPercent != null) {
+            override.zombieFamilySpawnPercent = requireRange(
+                    override.zombieFamilySpawnPercent, 0, 1000,
+                    prefix + "zombieFamilySpawnPercent");
         }
         if (override.vanillaZombieSpawnPercent != null) {
             override.vanillaZombieSpawnPercent = requireRange(

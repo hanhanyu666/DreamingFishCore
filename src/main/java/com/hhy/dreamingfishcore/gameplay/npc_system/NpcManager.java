@@ -7,7 +7,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_OpenNpcDialogueGUI;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
-import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgressManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryFlowEngine;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
@@ -50,7 +50,6 @@ public class NpcManager {
     public static synchronized void load() {
         if (Files.notExists(NPC_DATA_PATH)) {
             npcCache = new ConcurrentHashMap<>();
-            createDefaultNpc();
             ensureBuiltInOpeningNpcs();
             configWritable = true;
             save();
@@ -69,12 +68,18 @@ public class NpcManager {
                     GSON,
                     NPC_MAP_TYPE,
                     ConcurrentHashMap::new);
-            npcCache = new ConcurrentHashMap<>(loaded);
+            npcCache = new ConcurrentHashMap<>();
+            loaded.forEach((id, npc) -> {
+                if (id != null && npc != null && id == npc.getNpcId()
+                        && StoryNpcContentPolicy.isRetained(id)) {
+                    npcCache.put(id, npc);
+                }
+            });
             configWritable = true;
             if (npcCache.isEmpty()) {
-                createDefaultNpc();
+                DreamingFishCore.LOGGER.info("NPC 配置中没有保留角色，将写入白芷和周岑的最小内容集");
             }
-            if (ensureBuiltInOpeningNpcs()) {
+            if (npcCache.size() != loaded.size() || ensureBuiltInOpeningNpcs()) {
                 save();
             }
             DreamingFishCore.LOGGER.info("NPC数据加载完成，共 {} 个NPC", npcCache.size());
@@ -163,7 +168,7 @@ public class NpcManager {
                     1);
             // 白芷剧情在玩家点击“交谈”后推进；这里不重新打开界面，
             // 让客户端保留当前台词索引，不会每次点击都跳回第一句。
-            OpeningStoryProgressManager.onNpcInteraction(player, npcId);
+            StoryFlowEngine.onNpcInteraction(player, npcId);
         } else if (interactionType == NpcInteractionType.GIFT_ITEM) {
             handleGift(player, npc);
         }
@@ -181,6 +186,11 @@ public class NpcManager {
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity loadedEntity : level.getEntities().getAll()) {
                 if (loadedEntity instanceof StoryNpcEntity entity) {
+                    if (!StoryNpcContentPolicy.isRetained(entity.getNpcId())) {
+                        // /npc reload 也立即清理已经加载的旧角色，不必等待下一次实体 tick。
+                        entity.discard();
+                        continue;
+                    }
                     Optional<NpcData> npc = getNpc(entity.getNpcId());
                     if (npc.isPresent()) {
                         entity.applyNpcData(npc.get());
@@ -227,7 +237,7 @@ public class NpcManager {
                 npc.getNpcGender(),
                 npc.getNpcProfession(),
                 npc.getStoryStageId(),
-                OpeningStoryProgressManager.getDialogueOverride(player, npc.getNpcId())
+                StoryFlowEngine.getDialogueOverride(player, npc.getNpcId())
                         .orElseGet(npc::getDialogues),
                 thought == null ? "" : thought.getThoughtText(),
                 thought == null ? "" : thought.getWantedItemId(),
@@ -267,26 +277,6 @@ public class NpcManager {
         return actions;
     }
 
-    private static void createDefaultNpc() {
-        NpcData npc = new NpcData(1, "剧情记录员", "他记录着服务器共同推进的故事，也会记住每位玩家与他的交情。", "未知", "记录员");
-        List<String> dialogues = new ArrayList<>();
-        dialogues.add("欢迎回来。这个世界的故事不是一个人写完的。");
-        dialogues.add("如果你带来了我正在寻找的东西，我会记住这份帮助。");
-        npc.setDialogues(dialogues);
-        npc.setStoryStageId(1);
-        npc.setCurrentThought(new NpcThoughtData("我现在想要一个苹果，用来确认赠礼系统是否正常。", "minecraft:apple", "", 20, 0.0D));
-        Map<String, Integer> requirements = new HashMap<>();
-        requirements.put(NpcInteractionType.DIALOGUE.name(), 0);
-        requirements.put(NpcInteractionType.GIFT_ITEM.name(), 0);
-        requirements.put(NpcInteractionType.FOLLOW.name(), 300);
-        requirements.put(NpcInteractionType.SET_HOME.name(), 300);
-        requirements.put(NpcInteractionType.VIEW_BACKPACK.name(), 600);
-        requirements.put(NpcInteractionType.ASSIGN_TASK.name(), 100);
-        requirements.put(NpcInteractionType.WARNING_RULES.name(), 600);
-        npc.setActionFavorabilityRequirements(requirements);
-        npcCache.put(npc.getNpcId(), npc);
-    }
-
     /**
      * 为开场内容补齐约定的临时 NPC 槽位。
      *
@@ -298,7 +288,7 @@ public class NpcManager {
         if (!builtInNpcs.isEmpty()) {
             boolean changed = false;
             for (NpcData npc : builtInNpcs.values()) {
-                if (npc != null) {
+                if (npc != null && StoryNpcContentPolicy.isRetained(npc.getNpcId())) {
                     changed |= putOpeningNpc(npc);
                 }
             }
@@ -311,36 +301,12 @@ public class NpcManager {
     private static boolean ensureFallbackOpeningNpcs() {
         boolean changed = false;
         changed |= putOpeningNpc(createOpeningNpc(
-                100,
-                "梦屿应急联络员",
-                "负责逐光会筹建、救援调度和临时约章的轮值席位。",
-                "应急通信协调员",
-                "先别问总部在哪。我们现在连一张不会过时的总部平面图都没有。"));
-        changed |= putOpeningNpc(createOpeningNpc(
                 101,
                 "白芷",
                 "梦屿中央医院感染医学科住院医师，目前在梦屿与外缘带地区的阿拜多斯医院工作。\n"
                         + "随着你们逐渐的认识，你对她的了解会变多",
                 "临床观察员",
                 "镇上正在筹建逐光会。先照顾好伤员，等你安顿下来，我再把具体安排告诉你。"));
-        changed |= putOpeningNpc(createOpeningNpc(
-                102,
-                "江晚",
-                "负责整理感染风险记录，始终区分已经证实的事实和仍待验证的推测。",
-                "风险记录员",
-                "已知事实、合理推测和没有证据的愿望，必须写在不同的栏里。"));
-        changed |= putOpeningNpc(createOpeningNpc(
-                103,
-                "梁朔",
-                "仍在外缘带维护供电、供水和通信设施的基础设施工程师。",
-                "基础设施工程师",
-                "这里是外缘中继。听见就回一个字，别发长句，电压不够你们客套。"));
-        changed |= putOpeningNpc(createOpeningNpc(
-                104,
-                "尉迟南",
-                "通兰天文台的远距通信值守员，保存着尚未解释的异常信号记录。",
-                "远距通信值守员",
-                "我需要先确认时间戳。能收到和应该广播，是两个问题。"));
         changed |= putOpeningNpc(createOpeningNpc(
                 105,
                 "周岑",

@@ -205,10 +205,13 @@ public final class StoryManager {
 
         StoryDefinitionDocument document = GSON.fromJson(object, StoryDefinitionDocument.class);
         boolean openingTasksAdded = ensureBuiltInOpeningDefinitions(document);
+        boolean stageShellsAdded = ensureBuiltInStageShells(document);
         validateDefinitionDocument(document);
-        if (openingTasksAdded) {
+        if (openingTasksAdded || stageShellsAdded) {
             writeDefinitionDocument(document);
-            DreamingFishCore.LOGGER.info("已向故事定义补齐开场阶段的四项任务");
+            DreamingFishCore.LOGGER.info(
+                    "已向故事定义补齐五阶段模型{}",
+                    openingTasksAdded ? "及开场四项任务" : "");
         }
         return document;
     }
@@ -244,7 +247,7 @@ public final class StoryManager {
         }
     }
 
-    /** 创建“梦的开始”与“余梦期”的默认阶段定义。 */
+    /** 创建五阶段骨架；只有“梦的开始”包含当前已确认的阿拜多斯开场任务。 */
     private static StoryDefinitionDocument createDefaultDefinitions() {
         StoryStageData dreamBeginning = new StoryStageData(
                 StoryWorldState.DEFAULT_STAGE_ID,
@@ -252,14 +255,46 @@ public final class StoryManager {
                 "梦的开始",
                 OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION);
         OpeningStoryDefinitionCatalog.createTasks().forEach(dreamBeginning::addTask);
-        StoryStageData afterdream = new StoryStageData(
-                "dreamingfishcore:afterdream",
-                2,
-                "余梦期",
-                "");
+        List<StoryStageData> stages = new ArrayList<>();
+        stages.add(dreamBeginning);
+        StoryStageCatalog.seeds().stream()
+                .filter(seed -> !seed.id().equals(StoryWorldState.DEFAULT_STAGE_ID))
+                .map(seed -> new StoryStageData(seed.id(), seed.number(), seed.name(), ""))
+                .forEach(stages::add);
         return new StoryDefinitionDocument(
                 DEFINITION_SCHEMA_VERSION,
-                List.of(dreamBeginning, afterdream));
+                stages);
+    }
+
+    /** 旧配置只含前两阶段时自动补齐后三个空壳，不植入任何后续文案或任务。 */
+    private static boolean ensureBuiltInStageShells(StoryDefinitionDocument document) {
+        if (document == null || document.stages == null) {
+            return false;
+        }
+        Set<String> existing = document.stages.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(StoryStageData::getStageId)
+                .collect(java.util.stream.Collectors.toSet());
+        boolean changed = false;
+        for (StoryStageCatalog.StageSeed seed : StoryStageCatalog.seeds()) {
+            if (existing.add(seed.id())) {
+                StoryStageData stage = new StoryStageData(
+                        seed.id(),
+                        seed.number(),
+                        seed.name(),
+                        seed.id().equals(OpeningStoryDefinitionCatalog.STAGE_ID)
+                                ? OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION
+                                : "");
+                // 若旧配置尚未建立“梦的开始”，补入的骨架也必须带当前确认的
+                // 阿拜多斯开场任务；否则新世界会进入一个没有入口任务的空阶段。
+                if (seed.id().equals(OpeningStoryDefinitionCatalog.STAGE_ID)) {
+                    OpeningStoryDefinitionCatalog.createTasks().forEach(stage::addTask);
+                }
+                document.stages.add(stage);
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /** 为已有服务器只补缺失任务；保留服主对阶段和同 ID 任务作出的改写。 */
@@ -784,6 +819,21 @@ public final class StoryManager {
             DreamingFishCore.LOGGER.warn("记录个人故事任务 {} 失败", taskKey, exception);
             return false;
         }
+    }
+
+    /** 以稳定任务 ID 查询某名玩家是否已经取得个人故事记录。 */
+    public static synchronized boolean isPlayerFinishedTask(String taskKey, UUID playerUUID) {
+        if (taskKey == null || taskKey.isBlank() || playerUUID == null || !loaded) {
+            return false;
+        }
+        if (!TASKS_BY_KEY.containsKey(taskKey)) {
+            return false;
+        }
+        if (isPersonalStoryTask(taskKey)) {
+            return state.hasPersonalTaskCompletion(taskKey, playerUUID);
+        }
+        StoryWorldState.TaskProgress progress = state.getTaskProgress(taskKey);
+        return progress != null && progress.hasParticipant(playerUUID);
     }
 
     /** 返回某个故事任务是否有独立的个人部分。 */

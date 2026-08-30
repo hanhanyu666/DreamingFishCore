@@ -6,16 +6,18 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.Packet_SyncFullTaskData;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class TaskSyncEvent {
     @SubscribeEvent
-    public static void onPlayerLogging(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
+    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
+        ServerPlayer player = event.getPlayer();
+        if (AuthSessionGuard.isAuthenticated(player)) {
             var playerUUID = player.getUUID();
             //从缓存里面获取全量任务数据
             var storyStages = StoryManager.getStagesForPlayer(playerUUID);

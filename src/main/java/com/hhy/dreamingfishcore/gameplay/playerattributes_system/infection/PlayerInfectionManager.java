@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -32,7 +33,9 @@ public class PlayerInfectionManager {
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()
+                || !(event.getEntity() instanceof ServerPlayer serverPlayer)
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
         if (serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
@@ -91,7 +94,7 @@ public class PlayerInfectionManager {
     }
 
     public static void addInfection(ServerPlayer player, float amount) {
-        if (player == null || amount <= 0) {
+        if (player == null || amount <= 0 || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 
@@ -125,7 +128,7 @@ public class PlayerInfectionManager {
     }
 
     public static void reduceInfection(ServerPlayer player, float amount) {
-        if (player == null || amount <= 0) {
+        if (player == null || amount <= 0 || !AuthSessionGuard.isAuthenticated(player)) {
             return;
         }
 

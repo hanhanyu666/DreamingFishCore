@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -105,7 +106,9 @@ public class PlayerCourageManager {
     //判断玩家状态，执行勇气值变更（夜晚无人扣除）与buff逻辑
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         
-        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive() || !(event.getEntity() instanceof ServerPlayer serverPlayer)) {
+        if (event.getEntity().level().isClientSide() || !event.getEntity().isAlive()
+                || !(event.getEntity() instanceof ServerPlayer serverPlayer)
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
         if (serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
@@ -275,7 +278,8 @@ public class PlayerCourageManager {
         LivingEntity targetEntity = event.getEntity(); // 被击杀的生物
 
         // 1. 处理玩家死亡事件：附近玩家扣除勇气值
-        if (targetEntity instanceof ServerPlayer deadPlayer) {
+        if (targetEntity instanceof ServerPlayer deadPlayer
+                && AuthSessionGuard.isAuthenticated(deadPlayer)) {
             handleNearbyPlayerDeathCouragePenalty(deadPlayer);
         }
 
@@ -286,7 +290,9 @@ public class PlayerCourageManager {
         LivingEntity killerEntity = (LivingEntity) event.getSource().getEntity(); // 击杀者
 
         //过滤条件：击杀者是存活的ServerPlayer + 非创造模式
-        if (!(killerEntity instanceof ServerPlayer serverPlayer) || !serverPlayer.isAlive()) {
+        if (!(killerEntity instanceof ServerPlayer serverPlayer)
+                || !serverPlayer.isAlive()
+                || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;
         }
         if (serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
@@ -331,7 +337,8 @@ public class PlayerCourageManager {
             // 过滤：自身、非存活、非服务端玩家
             if (onlinePlayer.getUUID().equals(currentPlayerUUID)
                     || !onlinePlayer.isAlive()
-                    || !(onlinePlayer instanceof ServerPlayer)) {
+                    || !(onlinePlayer instanceof ServerPlayer onlineServerPlayer)
+                    || !AuthSessionGuard.isAuthenticated(onlineServerPlayer)) {
                 continue;
             }
             // 距离判断
@@ -433,7 +440,8 @@ public class PlayerCourageManager {
      * @param deadPlayer 死亡的玩家
      */
     private static void handleNearbyPlayerDeathCouragePenalty(ServerPlayer deadPlayer) {
-        if (deadPlayer == null || deadPlayer.level() == null) {
+        if (deadPlayer == null || deadPlayer.level() == null
+                || !AuthSessionGuard.isAuthenticated(deadPlayer)) {
             return;
         }
 
@@ -451,7 +459,8 @@ public class PlayerCourageManager {
             // 过滤：死亡玩家自身、非存活、非服务端玩家
             if (nearbyPlayer.getUUID().equals(deadPlayerUUID)
                     || !nearbyPlayer.isAlive()
-                    || !(nearbyPlayer instanceof ServerPlayer nearbyServerPlayer)) {
+                    || !(nearbyPlayer instanceof ServerPlayer nearbyServerPlayer)
+                    || !AuthSessionGuard.isAuthenticated(nearbyServerPlayer)) {
                 continue;
             }
 
@@ -544,6 +553,9 @@ public class PlayerCourageManager {
      * @param maxCourage 玩家最大勇气值
      */
     private static void changeCourageValue(ServerPlayer serverPlayer, PlayerAttributesData attributesData, float changeAmount, float maxCourage, boolean canBreakNormalRecoveryCap) {
+        if (!AuthSessionGuard.isAuthenticated(serverPlayer)) {
+            return;
+        }
         float currentCourage = attributesData.getCurrentCourage();
         float newCourage = currentCourage + changeAmount;
 
