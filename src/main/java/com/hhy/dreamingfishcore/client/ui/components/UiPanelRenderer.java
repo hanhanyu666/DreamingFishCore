@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.client.ui.components;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import org.joml.Matrix4f;
 
@@ -61,11 +62,34 @@ public final class UiPanelRenderer {
         VertexConsumer consumer = guiGraphics.bufferSource().getBuffer(RenderType.gui());
         Matrix4f pose = guiGraphics.pose().last().pose();
 
+        drawSmoothRoundedRect(consumer, pose, x, y, width, height,
+                roundedRadius, fillColor, borderColor);
+        if (flush) {
+            guiGraphics.flush();
+        }
+    }
+
+    /** Appends a smooth panel to an arbitrary capture/buffer source. */
+    public static void smoothRoundedRectTo(MultiBufferSource target, Matrix4f pose,
+                                            int x, int y, int width, int height,
+                                            int radius, int fillColor, int borderColor) {
+        if (width <= 0 || height <= 0
+                || (fillColor >>> 24) == 0 && (borderColor >>> 24) == 0) {
+            return;
+        }
+        float roundedRadius = Math.max(0.0F,
+                Math.min(radius, Math.min(width / 2.0F, height / 2.0F)));
+        drawSmoothRoundedRect(target.getBuffer(RenderType.gui()), pose,
+                x, y, width, height, roundedRadius, fillColor, borderColor);
+    }
+
+    private static void drawSmoothRoundedRect(VertexConsumer consumer, Matrix4f pose,
+                                               int x, int y, int width, int height,
+                                               float roundedRadius,
+                                               int fillColor, int borderColor) {
+
         if (roundedRadius < 1.0F || width < 3 || height < 3) {
             drawSmoothSquare(consumer, pose, x, y, width, height, fillColor, borderColor);
-            if (flush) {
-                guiGraphics.flush();
-            }
             return;
         }
 
@@ -80,9 +104,12 @@ public final class UiPanelRenderer {
                 roundedRadius, edgeWidth, fillColor);
         drawSmoothEdgeBand(consumer, pose, x, y, width, height,
                 roundedRadius, edgeWidth, edgeColor & 0x00FFFFFF, edgeColor);
-        if (flush) {
-            guiGraphics.flush();
-        }
+    }
+
+    /** Appends a solid rectangle to an arbitrary GUI capture. */
+    public static void fillTo(MultiBufferSource target, Matrix4f pose,
+                              int x, int y, int right, int bottom, int color) {
+        addSmoothRect(target.getBuffer(RenderType.gui()), pose, x, y, right, bottom, color);
     }
 
     public static void roundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height,
@@ -111,6 +138,33 @@ public final class UiPanelRenderer {
             guiGraphics.fill(x + 1, y, right - 1, y + 1, color);
             guiGraphics.fill(x, y + 1, right, bottom - 1, color);
             guiGraphics.fill(x + 1, bottom - 1, right - 1, bottom, color);
+        }
+    }
+
+    /** Appends the pixel-rounded panel variant to an arbitrary GUI capture. */
+    public static void roundedRectTo(MultiBufferSource target, Matrix4f pose,
+                                     int x, int y, int width, int height,
+                                     int radius, int color) {
+        if (width <= 0 || height <= 0 || (color >>> 24) == 0) {
+            return;
+        }
+
+        VertexConsumer consumer = target.getBuffer(RenderType.gui());
+        int right = x + width;
+        int bottom = y + height;
+        int cornerDepth = pixelCornerDepth(width, height, radius);
+        if (cornerDepth == 0) {
+            addSmoothRect(consumer, pose, x, y, right, bottom, color);
+        } else if (cornerDepth == 2) {
+            addSmoothRect(consumer, pose, x + 2, y, right - 2, y + 1, color);
+            addSmoothRect(consumer, pose, x + 1, y + 1, right - 1, y + 2, color);
+            addSmoothRect(consumer, pose, x, y + 2, right, bottom - 2, color);
+            addSmoothRect(consumer, pose, x + 1, bottom - 2, right - 1, bottom - 1, color);
+            addSmoothRect(consumer, pose, x + 2, bottom - 1, right - 2, bottom, color);
+        } else {
+            addSmoothRect(consumer, pose, x + 1, y, right - 1, y + 1, color);
+            addSmoothRect(consumer, pose, x, y + 1, right, bottom - 1, color);
+            addSmoothRect(consumer, pose, x + 1, bottom - 1, right - 1, bottom, color);
         }
     }
 
@@ -226,6 +280,40 @@ public final class UiPanelRenderer {
             guiGraphics.fill(x, y + 1, x + 1, bottom - 1, color);
             guiGraphics.fill(right - 1, y + 1, right, bottom - 1, color);
             guiGraphics.fill(x + 1, bottom - 1, right - 1, bottom, color);
+        }
+    }
+
+    /** Appends the pixel-rounded border variant to an arbitrary GUI capture. */
+    public static void roundedBorderTo(MultiBufferSource target, Matrix4f pose,
+                                       int x, int y, int width, int height,
+                                       int radius, int color) {
+        if (width <= 0 || height <= 0 || (color >>> 24) == 0) {
+            return;
+        }
+
+        VertexConsumer consumer = target.getBuffer(RenderType.gui());
+        int right = x + width;
+        int bottom = y + height;
+        int cornerDepth = pixelCornerDepth(width, height, radius);
+        if (cornerDepth == 0) {
+            addSmoothRect(consumer, pose, x, y, right, y + 1, color);
+            addSmoothRect(consumer, pose, x, bottom - 1, right, bottom, color);
+            addSmoothRect(consumer, pose, x, y + 1, x + 1, bottom - 1, color);
+            addSmoothRect(consumer, pose, right - 1, y + 1, right, bottom - 1, color);
+        } else if (cornerDepth == 2) {
+            addSmoothRect(consumer, pose, x + 2, y, right - 2, y + 1, color);
+            addSmoothRect(consumer, pose, x + 1, y + 1, x + 2, y + 2, color);
+            addSmoothRect(consumer, pose, right - 2, y + 1, right - 1, y + 2, color);
+            addSmoothRect(consumer, pose, x, y + 2, x + 1, bottom - 2, color);
+            addSmoothRect(consumer, pose, right - 1, y + 2, right, bottom - 2, color);
+            addSmoothRect(consumer, pose, x + 1, bottom - 2, x + 2, bottom - 1, color);
+            addSmoothRect(consumer, pose, right - 2, bottom - 2, right - 1, bottom - 1, color);
+            addSmoothRect(consumer, pose, x + 2, bottom - 1, right - 2, bottom, color);
+        } else {
+            addSmoothRect(consumer, pose, x + 1, y, right - 1, y + 1, color);
+            addSmoothRect(consumer, pose, x, y + 1, x + 1, bottom - 1, color);
+            addSmoothRect(consumer, pose, right - 1, y + 1, right, bottom - 1, color);
+            addSmoothRect(consumer, pose, x + 1, bottom - 1, right - 1, bottom, color);
         }
     }
 

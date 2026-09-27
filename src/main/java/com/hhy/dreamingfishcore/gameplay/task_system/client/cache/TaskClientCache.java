@@ -50,19 +50,35 @@ public final class TaskClientCache {
         return storyStages.get(stageId);
     }
 
-    public static boolean hasUnfinishedTasks() {
+    /** 判断一个通用任务缓存条目是否其实属于故事任务。故事任务只由故事视图渲染。 */
+    public static boolean isStoryTaskId(int taskId) {
         for (StoryStageData stage : storyStages.values()) {
             if (stage == null || stage.getTasks() == null) {
                 continue;
             }
             for (StoryTaskData task : stage.getTasks()) {
-                if (task != null && !task.isClientPlayerFinished()) {
+                if (task != null && task.getTaskId() == taskId) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasUnfinishedTasks() {
+        for (StoryStageData stage : storyStages.values()) {
+            if (stage == null || !stage.isCurrentStage() || stage.getTasks() == null) {
+                continue;
+            }
+            for (StoryTaskData task : stage.getTasks()) {
+                if (task != null && task.isActionRequired()) {
                     return true;
                 }
             }
         }
         for (TaskPlayerData task : playerTasks.values()) {
-            if (task != null && !task.isClientPlayerFinished()) {
+            if (task != null && !isStoryTaskId(task.getTaskId())
+                    && !task.isClientPlayerFinished()) {
                 return true;
             }
         }

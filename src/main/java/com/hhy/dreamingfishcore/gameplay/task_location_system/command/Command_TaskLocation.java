@@ -211,7 +211,8 @@ public final class Command_TaskLocation {
         int eligiblePlayers = TaskLocationManager.getEligiblePlayers(
                 context.getSource().getServer(), location.getId()).size();
         context.getSource().sendSuccess(
-                () -> Component.literal(describe(location) + "\n当前合格在场玩家：" + eligiblePlayers), false);
+                () -> Component.literal(describe(location) + "\n地点 ID：" + location.getId()
+                        + "\n当前合格在场玩家：" + eligiblePlayers), false);
         return 1;
     }
 

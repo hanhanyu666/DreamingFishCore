@@ -92,10 +92,17 @@ public class PlayerNoticeDataManager {
         return getReadNoticeIds(playerUUID).contains(noticeId);
     }
 
-    public static void markAsRead(UUID playerUUID, int noticeId) {
+    /**
+     * Marks a notice read and reports whether this call changed state.  Story
+     * events are edge-triggered; callers must not re-emit NOTICE_READ every
+     * time the terminal is opened.
+     */
+    public static boolean markAsRead(UUID playerUUID, int noticeId) {
         if (getReadNoticeIds(playerUUID).add(noticeId)) {
             readDirty = true;
+            return true;
         }
+        return false;
     }
 
     public static void markMultipleAsRead(UUID playerUUID, Set<Integer> noticeIds) {

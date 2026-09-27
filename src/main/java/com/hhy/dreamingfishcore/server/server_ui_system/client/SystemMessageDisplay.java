@@ -12,6 +12,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
+
 /** Compatibility entry point for the server information message area. */
 public final class SystemMessageDisplay {
     private static final long MESSAGE_DURATION_MS = 8000L;
@@ -43,6 +45,18 @@ public final class SystemMessageDisplay {
                                             int playerInfoBoxY, int playerInfoBoxHeight) {
         NotificationRenderer.renderTopRight(
                 guiGraphics, font, rightEdge, playerInfoBoxY, playerInfoBoxHeight);
+    }
+
+    public static List<NotificationManager.ActiveNotification> getActiveMessages() {
+        return NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
+    }
+
+    public static void renderSystemMessages(
+            GuiGraphics guiGraphics, Font font, int rightEdge,
+            int playerInfoBoxY, int playerInfoBoxHeight,
+            List<NotificationManager.ActiveNotification> entries) {
+        NotificationRenderer.renderTopRight(guiGraphics, font, rightEdge,
+                playerInfoBoxY, playerInfoBoxHeight, entries);
     }
 
     private static int getPlayerRankBorderColor() {

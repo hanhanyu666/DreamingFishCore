@@ -44,6 +44,8 @@ public final class DeathCorpseEntity extends Entity implements Container {
             + DeathCorpseInventory.ARMOR_SIZE + DeathCorpseInventory.OFFHAND_SIZE;
     private static final int EMPTY_DESPAWN_TICKS = 20;
     private static final long CORPSE_LIFETIME_MILLIS = 24L * 60L * 60L * 1000L;
+    /** 待结算尸体自愈检查间隔：区块被重新载入后不必等玩家右键才发现结算已经完成。 */
+    private static final int SETTLEMENT_CHECK_INTERVAL_TICKS = 20;
 
     private static final EntityDataAccessor<Optional<UUID>> OWNER_UUID = SynchedEntityData.defineId(
             DeathCorpseEntity.class, EntityDataSerializers.OPTIONAL_UUID);
@@ -67,6 +69,7 @@ public final class DeathCorpseEntity extends Entity implements Container {
     private DeathCorpseInventory corpseInventory = new DeathCorpseInventory();
     private boolean resolved;
     private int emptyTicks;
+    private int settlementCheckTicks = SETTLEMENT_CHECK_INTERVAL_TICKS;
     private long createdAtMillis = System.currentTimeMillis();
     private boolean suppressItemDrops;
     private double recoveryX;
@@ -131,6 +134,12 @@ public final class DeathCorpseEntity extends Entity implements Container {
     public void tick() {
         super.tick();
 
+        // 结算时区块未加载会让尸体被留在“等待复活结算”；这里周期性按主人的死亡记录自愈。
+        if (!level().isClientSide && !resolved && --settlementCheckTicks <= 0) {
+            settlementCheckTicks = SETTLEMENT_CHECK_INTERVAL_TICKS;
+            DeathCorpseManager.reconcileSettlement(this);
+        }
+
         if (!level().isClientSide && hasExpired()) {
             suppressItemDrops = true;
             discard();
@@ -175,6 +184,10 @@ public final class DeathCorpseEntity extends Entity implements Container {
             return InteractionResult.CONSUME;
         }
 
+        if (!resolved) {
+            // 主人再次右键时先按当前死亡记录判定一次，避免孤儿尸体永远停留在待结算。
+            DeathCorpseManager.reconcileSettlement(this);
+        }
         if (!resolved) {
             player.displayClientMessage(Component.translatable("message.dreamingfishcore.corpse.pending"), true);
             return InteractionResult.CONSUME;

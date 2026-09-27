@@ -27,19 +27,41 @@ final class ImmersiveChatConfig {
             .resolve("chat_history");
 
     private static LayoutData data = load();
+    private static volatile Layout cachedLayout;
+    private static volatile int cachedScreenWidth = -1;
+    private static volatile int cachedScreenHeight = -1;
 
     private ImmersiveChatConfig() {
     }
 
-    static synchronized Layout resolve(int screenWidth, int screenHeight) {
-        if (data.width <= 0 || data.height <= 0) {
-            data.x = DEFAULT_X;
-            data.y = Math.max(20, screenHeight - DEFAULT_HEIGHT - DEFAULT_BOTTOM_GAP);
-            data.width = DEFAULT_WIDTH;
-            data.height = DEFAULT_HEIGHT;
+    static Layout resolve(int screenWidth, int screenHeight) {
+        Layout cached = cachedLayout;
+        if (cached != null
+                && cachedScreenWidth == screenWidth
+                && cachedScreenHeight == screenHeight) {
+            return cached;
         }
-        clamp(screenWidth, screenHeight);
-        return new Layout(data.x, data.y, data.width, data.height);
+
+        synchronized (ImmersiveChatConfig.class) {
+            cached = cachedLayout;
+            if (cached != null
+                    && cachedScreenWidth == screenWidth
+                    && cachedScreenHeight == screenHeight) {
+                return cached;
+            }
+            if (data.width <= 0 || data.height <= 0) {
+                data.x = DEFAULT_X;
+                data.y = Math.max(20, screenHeight - DEFAULT_HEIGHT - DEFAULT_BOTTOM_GAP);
+                data.width = DEFAULT_WIDTH;
+                data.height = DEFAULT_HEIGHT;
+            }
+            clamp(screenWidth, screenHeight);
+            cached = new Layout(data.x, data.y, data.width, data.height);
+            cachedScreenWidth = screenWidth;
+            cachedScreenHeight = screenHeight;
+            cachedLayout = cached;
+            return cached;
+        }
     }
 
     static synchronized void set(int x, int y, int width, int height, int screenWidth, int screenHeight,
@@ -49,6 +71,9 @@ final class ImmersiveChatConfig {
         data.width = width;
         data.height = height;
         clamp(screenWidth, screenHeight);
+        cachedLayout = null;
+        cachedScreenWidth = -1;
+        cachedScreenHeight = -1;
         if (persist) {
             save();
         }

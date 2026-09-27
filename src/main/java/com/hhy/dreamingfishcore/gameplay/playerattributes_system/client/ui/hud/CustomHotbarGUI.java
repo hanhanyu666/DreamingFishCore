@@ -9,6 +9,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Player;
@@ -19,9 +21,12 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
+import net.neoforged.neoforge.client.ItemDecoratorHandler;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomHotbarGUI {
@@ -60,6 +65,24 @@ public class CustomHotbarGUI {
     private static final int MEDICINE_RING_HEAD = 0xFFFFFFFF;
     private static final int MEDICINE_TEXT_COLOR = 0xFFECE8DD;
     private static final int MEDICINE_DIM_TEXT_COLOR = 0xFF929891;
+    private static final RasterSpan[] MEDICINE_DISK_SPANS =
+            createDiskSpans(MEDICINE_RING_RADIUS + 2);
+    private static final RasterSpan[] MEDICINE_RING_SPANS =
+            createRingSpans(MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS);
+    private static final RingPixel[] MEDICINE_RING_PROGRESS_PIXELS =
+            createRingPixels(MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS);
+
+    /* Reusable collection storage feeding the retained hotbar item cache. */
+    private static final int MAX_BATCHED_HOTBAR_ITEMS = SLOT_COUNT + 1;
+    private static final ItemStack[] BATCHED_ITEM_STACKS = new ItemStack[MAX_BATCHED_HOTBAR_ITEMS];
+    private static final int[] BATCHED_ITEM_X = new int[MAX_BATCHED_HOTBAR_ITEMS];
+    private static final int[] BATCHED_ITEM_Y = new int[MAX_BATCHED_HOTBAR_ITEMS];
+    private static final Item[] CACHED_DECORATOR_ITEMS = new Item[MAX_BATCHED_HOTBAR_ITEMS];
+    private static final ItemDecoratorHandler[] CACHED_DECORATORS =
+            new ItemDecoratorHandler[MAX_BATCHED_HOTBAR_ITEMS];
+    private static final HotbarItemRenderCache HOTBAR_ITEM_RENDER_CACHE =
+            new HotbarItemRenderCache(MAX_BATCHED_HOTBAR_ITEMS);
+    private static int batchedItemCount;
 
     private static int lastSelectedSlot = -1;
     private static long lastHotbarInteractionTime = 0L;
@@ -85,9 +108,12 @@ public class CustomHotbarGUI {
         event.setCanceled(true);
     }
 
-    @SubscribeEvent
-    public static void renderCustomHotbar(RenderGuiEvent.Post event) {
-        Minecraft mc = Minecraft.getInstance();
+    public static boolean shouldRenderHud(Minecraft mc) {
+        return shouldRenderCustomHotbar(mc);
+    }
+
+    /** Draws into the shared managed gameplay-HUD pass. */
+    public static void renderBatched(GuiGraphics guiGraphics, Minecraft mc) {
         if (!shouldRenderCustomHotbar(mc)) {
             return;
         }
@@ -99,7 +125,6 @@ public class CustomHotbarGUI {
             registerHotbarInteraction();
         }
 
-        GuiGraphics guiGraphics = event.getGuiGraphics();
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
         float scale = getHotbarAnimationScale();
@@ -107,22 +132,20 @@ public class CustomHotbarGUI {
         int y = getHotbarBaseTopY(screenHeight);
         int anchorY = screenHeight - HOTBAR_BOTTOM_MARGIN;
 
-        // Batch the HUD primitives so each slot/panel does not force a separate
-        // BufferSource submission while the GUI event is unmanaged.
-        guiGraphics.drawManaged(() -> {
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(screenWidth / 2.0f, anchorY, 0.0f);
-            guiGraphics.pose().scale(scale, scale, 1.0f);
-            guiGraphics.pose().translate(-screenWidth / 2.0f, -anchorY, 0.0f);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(screenWidth / 2.0f, anchorY, 0.0f);
+        guiGraphics.pose().scale(scale, scale, 1.0f);
+        guiGraphics.pose().translate(-screenWidth / 2.0f, -anchorY, 0.0f);
 
-            drawHotbarFrame(guiGraphics, x, y);
-            drawHotbarItems(guiGraphics, mc, player, x, y);
-            drawOffhandSlot(guiGraphics, mc, player, x, y);
+        batchedItemCount = 0;
+        drawHotbarFrame(guiGraphics, x, y);
+        collectHotbarItems(guiGraphics, player, x, y);
+        collectOffhandSlot(guiGraphics, player, x, y);
+        renderBatchedHotbarItems(guiGraphics, mc, player, scale);
 
-            guiGraphics.pose().popPose();
+        guiGraphics.pose().popPose();
 
-            drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
-        });
+        drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
     }
 
     @SubscribeEvent
@@ -251,7 +274,7 @@ public class CustomHotbarGUI {
                 HOTBAR_RADIUS, HOTBAR_BG, HOTBAR_BORDER);
     }
 
-    private static void drawHotbarItems(GuiGraphics guiGraphics, Minecraft mc, Player player, int x, int y) {
+    private static void collectHotbarItems(GuiGraphics guiGraphics, Player player, int x, int y) {
         int selectedSlot = player.getInventory().selected;
         for (int i = 0; i < SLOT_COUNT; i++) {
             int slotX = x + HOTBAR_PADDING + i * SLOT_STEP;
@@ -261,22 +284,21 @@ public class CustomHotbarGUI {
                 UiPanelRenderer.smoothRoundedRectBatched(guiGraphics,
                         slotX, slotY, SLOT_STEP, HOTBAR_HEIGHT - 4,
                         4, SELECTED_BG, 0x00000000);
-                UiPanelRenderer.smoothRoundedRectBatched(guiGraphics,
+                UiPanelRenderer.crispRoundedRectBatched(guiGraphics,
                         slotX + 5, y + HOTBAR_HEIGHT - 3, SLOT_STEP - 10, 2,
-                        1, SELECTED_UNDERLINE, 0x00000000);
+                        1, SELECTED_UNDERLINE);
             }
 
             ItemStack stack = player.getInventory().getItem(i);
             if (!stack.isEmpty()) {
                 int itemX = slotX + (SLOT_STEP - ITEM_SIZE) / 2;
                 int itemY = y + (HOTBAR_HEIGHT - ITEM_SIZE) / 2;
-                guiGraphics.renderItem(stack, itemX, itemY);
-                guiGraphics.renderItemDecorations(mc.font, stack, itemX, itemY);
+                queueHotbarItem(stack, itemX, itemY);
             }
         }
     }
 
-    private static void drawOffhandSlot(GuiGraphics guiGraphics, Minecraft mc, Player player, int hotbarX, int y) {
+    private static void collectOffhandSlot(GuiGraphics guiGraphics, Player player, int hotbarX, int y) {
         ItemStack stack = player.getOffhandItem();
         if (stack.isEmpty()) {
             return;
@@ -292,8 +314,88 @@ public class CustomHotbarGUI {
 
         int itemX = x + (OFFHAND_SLOT_WIDTH - ITEM_SIZE) / 2;
         int itemY = y + (HOTBAR_HEIGHT - ITEM_SIZE) / 2;
-        guiGraphics.renderItem(stack, itemX, itemY);
-        guiGraphics.renderItemDecorations(mc.font, stack, itemX, itemY);
+        queueHotbarItem(stack, itemX, itemY);
+    }
+
+    private static void queueHotbarItem(ItemStack stack, int x, int y) {
+        if (batchedItemCount >= MAX_BATCHED_HOTBAR_ITEMS) {
+            return;
+        }
+        BATCHED_ITEM_STACKS[batchedItemCount] = stack;
+        BATCHED_ITEM_X[batchedItemCount] = x;
+        BATCHED_ITEM_Y[batchedItemCount] = y;
+        batchedItemCount++;
+    }
+
+    private static void renderBatchedHotbarItems(GuiGraphics guiGraphics, Minecraft mc,
+                                                  Player player, float scale) {
+        if (batchedItemCount == 0) {
+            return;
+        }
+
+        try {
+            boolean cacheableScale = Math.abs(scale - HOTBAR_IDLE_SCALE) < 0.0001F
+                    || Math.abs(scale - HOTBAR_ACTIVE_SCALE) < 0.0001F;
+            boolean usedRetainedCache = HOTBAR_ITEM_RENDER_CACHE.renderModels(guiGraphics, mc, player,
+                    BATCHED_ITEM_STACKS, BATCHED_ITEM_X, BATCHED_ITEM_Y,
+                    batchedItemCount, scale, cacheableScale);
+
+            if (usedRetainedCache) {
+                drawDynamicItemDecorations(guiGraphics, mc);
+            } else {
+                // During the short scale transitions the model geometry is
+                // immediate, so its decorations must use the same live pose.
+                for (int index = 0; index < batchedItemCount; index++) {
+                    guiGraphics.renderItemDecorations(mc.font, BATCHED_ITEM_STACKS[index],
+                            BATCHED_ITEM_X[index], BATCHED_ITEM_Y[index]);
+                }
+            }
+        } finally {
+            batchedItemCount = 0;
+        }
+    }
+
+    private static void drawDynamicItemDecorations(GuiGraphics guiGraphics, Minecraft mc) {
+        Player player = mc.player;
+        float partialTick = player == null
+                ? 0.0F
+                : mc.getTimer().getGameTimeDeltaPartialTick(true);
+        for (int index = 0; index < batchedItemCount; index++) {
+            ItemStack stack = BATCHED_ITEM_STACKS[index];
+            int x = BATCHED_ITEM_X[index];
+            int y = BATCHED_ITEM_Y[index];
+            float cooldown = player == null
+                    ? 0.0F
+                    : player.getCooldowns().getCooldownPercent(stack.getItem(), partialTick);
+            if (cooldown > 0.0F) {
+                int top = y + Mth.floor(16.0F * (1.0F - cooldown));
+                int bottom = top + Mth.ceil(16.0F * cooldown);
+                guiGraphics.pose().pushPose();
+                if (stack.getCount() != 1) {
+                    // Match GuiGraphics#renderItemDecorations: count text moves
+                    // the following overlay to the same z plane.
+                    guiGraphics.pose().translate(0.0F, 0.0F, 200.0F);
+                }
+                guiGraphics.fill(RenderType.guiOverlay(), x, top, x + 16, bottom,
+                        Integer.MAX_VALUE);
+                guiGraphics.pose().popPose();
+            }
+
+            // Third-party decorators may animate or change without mutating
+            // the ItemStack, so they deliberately remain live.
+            Item item = stack.getItem();
+            if (CACHED_DECORATOR_ITEMS[index] != item) {
+                CACHED_DECORATOR_ITEMS[index] = item;
+                CACHED_DECORATORS[index] = ItemDecoratorHandler.of(stack);
+            }
+            CACHED_DECORATORS[index].render(guiGraphics, mc.font, stack, x, y);
+        }
+    }
+
+    public static void invalidateItemRenderCache() {
+        HOTBAR_ITEM_RENDER_CACHE.invalidate();
+        java.util.Arrays.fill(CACHED_DECORATOR_ITEMS, null);
+        java.util.Arrays.fill(CACHED_DECORATORS, null);
     }
 
     private static MedicineUseInfo getMedicineUseInfo(Player player) {
@@ -532,11 +634,9 @@ public class CustomHotbarGUI {
     }
 
     private static void drawMedicineProgressRing(GuiGraphics guiGraphics, int centerX, int centerY, float progress) {
-        drawDisk(guiGraphics, centerX, centerY, MEDICINE_RING_RADIUS + 2, 0x26000000);
-        drawRing(guiGraphics, centerX, centerY, MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS,
-                MEDICINE_RING_TRACK, 1.0f);
-        drawRing(guiGraphics, centerX, centerY, MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS,
-                MEDICINE_RING_FILL, progress);
+        drawRasterSpans(guiGraphics, centerX, centerY, MEDICINE_DISK_SPANS, 0x26000000);
+        drawRasterSpans(guiGraphics, centerX, centerY, MEDICINE_RING_SPANS, MEDICINE_RING_TRACK);
+        drawRingProgress(guiGraphics, centerX, centerY, MEDICINE_RING_FILL, progress);
 
         if (progress > 0.0f) {
             double angle = -Math.PI / 2.0 + Math.PI * 2.0 * progress;
@@ -553,44 +653,75 @@ public class CustomHotbarGUI {
         guiGraphics.fill(centerX - 1, centerY - 1, centerX + 2, centerY + 2, 0xFFFFFFFF);
     }
 
-    private static void drawRing(GuiGraphics guiGraphics, int centerX, int centerY, int radius, int thickness,
-                                 int color, float progress) {
+    private static void drawRingProgress(GuiGraphics guiGraphics, int centerX, int centerY,
+                                         int color, float progress) {
         float clampedProgress = Math.max(0.0f, Math.min(1.0f, progress));
-        int innerRadius = Math.max(0, radius - thickness);
-        int innerSq = innerRadius * innerRadius;
-        int outerSq = radius * radius;
-
-        for (int dy = -radius; dy <= radius; dy++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                int distanceSq = dx * dx + dy * dy;
-                if (distanceSq > outerSq || distanceSq <= innerSq) {
-                    continue;
-                }
-
-                double angle = Math.atan2(dy, dx) + Math.PI / 2.0;
-                if (angle < 0.0) {
-                    angle += Math.PI * 2.0;
-                }
-
-                float pixelProgress = (float) (angle / (Math.PI * 2.0));
-                if (pixelProgress <= clampedProgress) {
-                    guiGraphics.fill(centerX + dx, centerY + dy,
-                            centerX + dx + 1, centerY + dy + 1, color);
-                }
+        for (RingPixel pixel : MEDICINE_RING_PROGRESS_PIXELS) {
+            if (pixel.progress() <= clampedProgress) {
+                guiGraphics.fill(centerX + pixel.x(), centerY + pixel.y(),
+                        centerX + pixel.x() + 1, centerY + pixel.y() + 1, color);
             }
         }
     }
 
-    private static void drawDisk(GuiGraphics guiGraphics, int centerX, int centerY, int radius, int color) {
+    private static void drawRasterSpans(GuiGraphics guiGraphics, int centerX, int centerY,
+                                        RasterSpan[] spans, int color) {
+        for (RasterSpan span : spans) {
+            guiGraphics.fill(centerX + span.minX(), centerY + span.y(),
+                    centerX + span.maxXExclusive(), centerY + span.y() + 1, color);
+        }
+    }
+
+    private static RasterSpan[] createDiskSpans(int radius) {
+        List<RasterSpan> spans = new ArrayList<>(radius * 2 + 1);
         int radiusSq = radius * radius;
-        for (int dy = -radius; dy <= radius; dy++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                if (dx * dx + dy * dy <= radiusSq) {
-                    guiGraphics.fill(centerX + dx, centerY + dy,
-                            centerX + dx + 1, centerY + dy + 1, color);
-                }
+        for (int y = -radius; y <= radius; y++) {
+            int halfWidth = (int) Math.floor(Math.sqrt(radiusSq - y * y));
+            spans.add(new RasterSpan(y, -halfWidth, halfWidth + 1));
+        }
+        return spans.toArray(new RasterSpan[0]);
+    }
+
+    private static RasterSpan[] createRingSpans(int radius, int thickness) {
+        List<RasterSpan> spans = new ArrayList<>((radius * 2 + 1) * 2);
+        int outerSq = radius * radius;
+        int innerRadius = Math.max(0, radius - thickness);
+        int innerSq = innerRadius * innerRadius;
+        for (int y = -radius; y <= radius; y++) {
+            int outerHalfWidth = (int) Math.floor(Math.sqrt(outerSq - y * y));
+            if (y * y > innerSq) {
+                spans.add(new RasterSpan(y, -outerHalfWidth, outerHalfWidth + 1));
+                continue;
+            }
+
+            int innerHalfWidth = (int) Math.floor(Math.sqrt(innerSq - y * y));
+            if (outerHalfWidth > innerHalfWidth) {
+                spans.add(new RasterSpan(y, -outerHalfWidth, -innerHalfWidth));
+                spans.add(new RasterSpan(y, innerHalfWidth + 1, outerHalfWidth + 1));
             }
         }
+        return spans.toArray(new RasterSpan[0]);
+    }
+
+    private static RingPixel[] createRingPixels(int radius, int thickness) {
+        List<RingPixel> pixels = new ArrayList<>((radius * 2 + 1) * (radius * 2 + 1));
+        int innerRadius = Math.max(0, radius - thickness);
+        int innerSq = innerRadius * innerRadius;
+        int outerSq = radius * radius;
+        for (int y = -radius; y <= radius; y++) {
+            for (int x = -radius; x <= radius; x++) {
+                int distanceSq = x * x + y * y;
+                if (distanceSq > outerSq || distanceSq <= innerSq) {
+                    continue;
+                }
+                double angle = Math.atan2(y, x) + Math.PI / 2.0;
+                if (angle < 0.0) {
+                    angle += Math.PI * 2.0;
+                }
+                pixels.add(new RingPixel(x, y, (float) (angle / (Math.PI * 2.0))));
+            }
+        }
+        return pixels.toArray(new RingPixel[0]);
     }
 
     private static void drawSoftRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
@@ -599,5 +730,11 @@ public class CustomHotbarGUI {
     }
 
     private record MedicineUseInfo(float progress, int timeTicks, String label) {
+    }
+
+    private record RasterSpan(int y, int minX, int maxXExclusive) {
+    }
+
+    private record RingPixel(int x, int y, float progress) {
     }
 }

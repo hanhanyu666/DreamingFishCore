@@ -2,24 +2,27 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.render.GuiQuadBatchRenderer;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.sync.LimbClientInjurySync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbType;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import org.joml.Matrix4f;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomStatueGUI {
@@ -55,7 +58,6 @@ public class CustomStatueGUI {
     private static final int STATUS_SIGNAL_WIDTH = 54;
     private static final int STATUS_BAR_HEIGHT = 6;
     private static final int HUD_ICON_SIZE = 10;
-    private static final int HUD_ICON_TEXTURE_SIZE = 16;
     private static final int STATUS_ICON_TO_BAR_SPACING = 4;
     private static final int STATUS_BAR_TO_PLAYER_SPACING = 2;
     private static final int STATUS_BAR_SPACING = 6;
@@ -86,17 +88,29 @@ public class CustomStatueGUI {
     private static final float COURAGE_DANGER_THRESHOLD = 0.25f;
     private static final float INFECTION_DANGER_THRESHOLD = 0.45f;
     private static final ResourceLocation HEALTH_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/health_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/health_v2");
     private static final ResourceLocation FOOD_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/food_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/food_v2");
     private static final ResourceLocation ARMOR_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/armor_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/armor_v2");
     private static final ResourceLocation INFECTION_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/infection_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/infection_v2");
     private static final ResourceLocation STAMINA_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/stamina_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/stamina_v2");
     private static final ResourceLocation COURAGE_ICON =
-            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "textures/gui/hud_icons/courage_v2.png");
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "dreamingfish_hud/courage_v2");
+    private static final ResourceLocation[] HUD_ICON_TEXTURES = {
+            HEALTH_ICON, FOOD_ICON, ARMOR_ICON, INFECTION_ICON, STAMINA_ICON, COURAGE_ICON
+    };
+    private static final TextureAtlasSprite[] CACHED_HUD_ICON_SPRITES =
+            new TextureAtlasSprite[HUD_ICON_TEXTURES.length];
+    private static ResourceLocation cachedHudIconAtlas;
+    private static final int MAX_QUEUED_HUD_ICONS = STATUS_ROW_COUNT + 2;
+    private static final int[] QUEUED_HUD_ICON_INDEX = new int[MAX_QUEUED_HUD_ICONS];
+    private static final int[] QUEUED_HUD_ICON_X = new int[MAX_QUEUED_HUD_ICONS];
+    private static final int[] QUEUED_HUD_ICON_Y = new int[MAX_QUEUED_HUD_ICONS];
+    private static final int[] QUEUED_HUD_ICON_ALPHA = new int[MAX_QUEUED_HUD_ICONS];
+    private static int queuedHudIconCount;
 
     // 肢体受伤标记配置（老贴图上的红色脉冲点）
     private static final int INJURY_DOT_COLOR = 0x90D64038;
@@ -147,6 +161,21 @@ public class CustomStatueGUI {
     // behaviour identical while avoiding repeated concurrent-map iteration.
     private static long lastInjuryCleanupTime = 0L;
     private static final long INJURY_CLEANUP_INTERVAL = 250L;
+    private static int cachedHealthTextCurrentBits = Integer.MIN_VALUE;
+    private static int cachedHealthTextMaxBits = Integer.MIN_VALUE;
+    private static int cachedFoodTextValue = Integer.MIN_VALUE;
+    private static int cachedArmorTextValue = Integer.MIN_VALUE;
+    private static int cachedInfectionTextPercent = Integer.MIN_VALUE;
+    private static StatusValueTexts cachedStatusValueTexts =
+            new StatusValueTexts("", "", "", "");
+    private static int cachedStrengthTextCurrent = Integer.MIN_VALUE;
+    private static int cachedStrengthTextMax = Integer.MIN_VALUE;
+    private static String cachedStrengthText = "";
+    private static int cachedCourageTextCurrent = Integer.MIN_VALUE;
+    private static int cachedCourageTextMax = Integer.MIN_VALUE;
+    private static String cachedCourageText = "";
+    private static int cachedExperienceLevelTextValue = Integer.MIN_VALUE;
+    private static String cachedExperienceLevelText = "";
 
     /**
      * 记录屏幕参数，避免 GUI 缩放变化时沿用旧布局状态
@@ -168,9 +197,21 @@ public class CustomStatueGUI {
     /**
      * 渲染小人图片
      */
-    @SubscribeEvent
-    public static void renderCustomPlayerIcon(RenderGuiEvent.Post event) {
-        Minecraft mc = Minecraft.getInstance();
+    public static boolean shouldRenderHud(Minecraft mc) {
+        Player player = mc.player;
+        return player != null && CustomHotbarGUI.isHudVisibleScreen(mc) && !player.isDeadOrDying()
+                && !mc.options.hideGui && !mc.getDebugOverlay().showDebugScreen()
+                && !player.isSpectator()
+                && (mc.gameMode == null || mc.gameMode.getPlayerMode() != GameType.CREATIVE);
+    }
+
+    public static void invalidateHudIconCache() {
+        java.util.Arrays.fill(CACHED_HUD_ICON_SPRITES, null);
+        cachedHudIconAtlas = null;
+    }
+
+    /** Draws into the caller's managed HUD pass. */
+    public static void renderBatched(GuiGraphics guiGraphics, Minecraft mc) {
         Player player = mc.player;
         if (player == null || !CustomHotbarGUI.isHudVisibleScreen(mc) || player.isDeadOrDying()
                 || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
@@ -179,7 +220,6 @@ public class CustomStatueGUI {
             return;
         }
 
-        GuiGraphics guiGraphics = event.getGuiGraphics();
         // 获取屏幕缩放后的宽高
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
@@ -242,7 +282,8 @@ public class CustomStatueGUI {
         float maxCourage = fetchedMaxCourage <= 0 ? 100 : fetchedMaxCourage; // 避免除以0异常
 
         float currentInfection = PlayerInfectionManager.getCurrentInfectionClient(player);
-        int maxInfection = 100;
+        int fetchedMaxInfection = PlayerInfectionManager.getInfectionMaximumClient(player);
+        int maxInfection = fetchedMaxInfection <= 0 ? 100 : fetchedMaxInfection;
         int infectionColor = getInfectionColor((int) currentInfection, maxInfection);
         int playerModelColor = getPlayerModelHealthColor(healthPercent);
         boolean courageDanger = currentCourage / maxCourage <= COURAGE_DANGER_THRESHOLD;
@@ -254,6 +295,18 @@ public class CustomStatueGUI {
 
         boolean revealSideValues = shouldRevealBottomSideValues(currentTime, currentStrength, maxStrength,
                 currentCourage, maxCourage);
+        StatusValueTexts statusValueTexts = getStatusValueTexts(
+                currentHealth, maxHealth, currentFood, currentArmor,
+                Math.round(currentInfection / maxInfection * 100.0F));
+        String strengthValueText = revealSideValues
+                ? getStrengthValueText(currentStrength, maxStrength)
+                : "";
+        String courageValueText = revealSideValues
+                ? getCourageValueText(Math.round(currentCourage), Math.round(maxCourage))
+                : "";
+        String experienceLevelText = experienceLevel > 0
+                ? getExperienceLevelText(experienceLevel)
+                : "";
 
         if (SHOW_LEFT_STATUS_BARS) {
             updateLeftStatusFlashTimes(currentTime, currentHealth, maxHealth,
@@ -261,52 +314,52 @@ public class CustomStatueGUI {
         }
 
         final boolean renderFlashing = isFlashing;
+        queuedHudIconCount = 0;
 
-        // GuiGraphics is unmanaged while the HUD event is dispatched, so every ordinary
-        // fill/text operation would otherwise end the GPU batch. Keep this whole HUD in one
-        // managed batch; item rendering still performs its own required flush internally.
-        guiGraphics.drawManaged(() -> {
-            if (showEquipmentDurability) {
-                drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
-            }
-            drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
-            HudPlayerWireframeRenderer.render(
-                    guiGraphics, player, modelCenterX, modelFootY, playerModelColor, renderFlashing);
-            cleanupAndDrawLimbInjuryIcons(guiGraphics, player, modelCenterX, modelTopY, currentTime);
+        if (showEquipmentDurability) {
+            drawEquipmentDurability(guiGraphics, player, LEFT_OFFSET, modelTopY, modelFootY);
+        }
+        drawPlayerGroundShadow(guiGraphics, modelCenterX, modelFootY);
+        HudPlayerWireframeRenderer.render(
+                guiGraphics, player, modelCenterX, modelFootY, playerModelColor, renderFlashing);
+        cleanupAndDrawLimbInjuryIcons(guiGraphics, player, modelCenterX, modelTopY, currentTime);
 
-            drawSplitExperienceSegment(guiGraphics, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                    strengthRatio, STRENGTH_BAR_COLOR, false);
-            drawSplitExperienceSegment(guiGraphics, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
-                    experienceProgress, EXPERIENCE_BAR_COLOR, false);
-            drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                    courageRatio, COURAGE_BAR_COLOR, courageDanger);
-            if (showOxygen) {
-                float oxygenRatio = maxAir > 0 ? currentAir / (float) maxAir : 0.0f;
-                drawSplitExperienceSegment(guiGraphics, courageActionBarX, oxygenBarY,
-                        SPLIT_EXPERIENCE_SIDE_WIDTH, oxygenRatio, OXYGEN_BAR_COLOR, oxygenRatio <= 0.25f);
-            }
-            drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
-                    strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
-            drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
-                    courageActionBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
-            if (revealSideValues) {
-                drawSegmentValue(guiGraphics, mc, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                        currentStrength + "/" + maxStrength, STRENGTH_BAR_COLOR);
-                drawSegmentValue(guiGraphics, mc, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
-                        Math.round(currentCourage) + "/" + Math.round(maxCourage), COURAGE_BAR_COLOR);
-            }
-            if (experienceLevel > 0) {
-                drawSegmentValue(guiGraphics, mc, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
-                        Integer.toString(experienceLevel), EXPERIENCE_BAR_COLOR);
-            }
+        drawSplitExperienceSegment(guiGraphics, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                strengthRatio, STRENGTH_BAR_COLOR, false);
+        drawSplitExperienceSegment(guiGraphics, experienceBarX, experienceBarY, SPLIT_EXPERIENCE_CENTER_WIDTH,
+                experienceProgress, EXPERIENCE_BAR_COLOR, false);
+        drawSplitExperienceSegment(guiGraphics, courageActionBarX, courageActionBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                courageRatio, COURAGE_BAR_COLOR, courageDanger);
+        if (showOxygen) {
+            float oxygenRatio = maxAir > 0 ? currentAir / (float) maxAir : 0.0f;
+            drawSplitExperienceSegment(guiGraphics, courageActionBarX, oxygenBarY,
+                    SPLIT_EXPERIENCE_SIDE_WIDTH, oxygenRatio, OXYGEN_BAR_COLOR, oxygenRatio <= 0.25f);
+        }
+        drawHudIcon(guiGraphics, STAMINA_ICON, strengthBarX - HUD_ICON_SIZE - 4,
+                strengthBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+        drawHudIcon(guiGraphics, COURAGE_ICON, courageActionBarX + SPLIT_EXPERIENCE_SIDE_WIDTH + 4,
+                courageActionBarY - (HUD_ICON_SIZE - SPLIT_EXPERIENCE_BAR_HEIGHT) / 2, 210);
+        if (revealSideValues) {
+            drawSegmentValue(guiGraphics, mc, strengthBarX, strengthBarY, SPLIT_EXPERIENCE_SIDE_WIDTH,
+                    strengthValueText, STRENGTH_BAR_COLOR);
+            drawSegmentValue(guiGraphics, mc, courageActionBarX, courageActionBarY,
+                    SPLIT_EXPERIENCE_SIDE_WIDTH, courageValueText, COURAGE_BAR_COLOR);
+        }
+        if (experienceLevel > 0) {
+            drawSegmentValue(guiGraphics, mc, experienceBarX, experienceBarY,
+                    SPLIT_EXPERIENCE_CENTER_WIDTH, experienceLevelText, EXPERIENCE_BAR_COLOR);
+        }
 
-            if (SHOW_LEFT_STATUS_BARS) {
-                drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent, currentHealth, maxHealth,
-                        currentFood / 20.0f, currentFood, currentArmor / 20.0f, currentArmor,
-                        currentInfection / maxInfection, infectionColor, currentInfection, statusFade, infectionDanger,
-                        currentTime);
-            }
-        });
+        if (SHOW_LEFT_STATUS_BARS) {
+            drawStatusBars(guiGraphics, mc, statusBarX, statusBarY, healthPercent,
+                    currentFood / 20.0f, currentArmor / 20.0f,
+                    currentInfection / maxInfection, infectionColor, statusFade,
+                    infectionDanger, currentTime, statusValueTexts);
+        }
+        // This explicit boundary submits the shared panel/text batch before
+        // the custom-icon atlas mesh. The coordinator puts both task cards in
+        // the same batch ahead of this renderer.
+        drawQueuedHudIcons(guiGraphics);
     }
 
     /**
@@ -654,26 +707,24 @@ public class CustomStatueGUI {
     }
 
     private static void drawStatusBars(GuiGraphics guiGraphics, Minecraft mc, int x, int y,
-                                       float healthRatio, float currentHealth, float maxHealth,
-                                       float foodRatio, int currentFood,
-                                       float armorRatio, int currentArmor,
-                                       float infectionRatio, int infectionColor, float currentInfection,
+                                       float healthRatio, float foodRatio, float armorRatio,
+                                       float infectionRatio, int infectionColor,
                                        float fade, boolean infectionDanger,
-                                       long currentTime) {
+                                       long currentTime, StatusValueTexts valueTexts) {
         int healthColor = getHealthColor(healthRatio);
         boolean healthDanger = healthRatio <= 0.25f;
         boolean foodDanger = foodRatio <= 0.25f;
         drawStatusBar(guiGraphics, mc, x, y, healthRatio, healthColor, healthDanger, fade,
-                STATUS_SIGNAL_WIDTH, HEALTH_ICON, formatStatNumber(currentHealth) + "/" + formatStatNumber(maxHealth),
+                STATUS_SIGNAL_WIDTH, HEALTH_ICON, valueTexts.health(),
                 currentTime, lastHealthFlashTime, healthRevealStartTime, healthRevealLastChangeTime);
         drawStatusBar(guiGraphics, mc, x, y + statusBarStep(1), foodRatio, FOOD_BAR_COLOR, foodDanger, fade,
-                STATUS_SIGNAL_WIDTH, FOOD_ICON, currentFood + "/20", currentTime, lastFoodFlashTime,
+                STATUS_SIGNAL_WIDTH, FOOD_ICON, valueTexts.food(), currentTime, lastFoodFlashTime,
                 foodRevealStartTime, foodRevealLastChangeTime);
         drawStatusBar(guiGraphics, mc, x, y + statusBarStep(2), armorRatio, ARMOR_BAR_COLOR, false, fade,
-                STATUS_SIGNAL_WIDTH, ARMOR_ICON, Integer.toString(currentArmor), currentTime, lastArmorFlashTime,
+                STATUS_SIGNAL_WIDTH, ARMOR_ICON, valueTexts.armor(), currentTime, lastArmorFlashTime,
                 armorRevealStartTime, armorRevealLastChangeTime);
         drawStatusBar(guiGraphics, mc, x, y + statusBarStep(3), infectionRatio, infectionColor, infectionDanger, fade,
-                STATUS_SIGNAL_WIDTH, INFECTION_ICON, Math.round(currentInfection) + "%", currentTime,
+                STATUS_SIGNAL_WIDTH, INFECTION_ICON, valueTexts.infection(), currentTime,
                 lastInfectionFlashTime, infectionRevealStartTime, infectionRevealLastChangeTime);
     }
 
@@ -774,16 +825,120 @@ public class CustomStatueGUI {
         return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 
+    private static StatusValueTexts getStatusValueTexts(float currentHealth, float maxHealth,
+                                                        int food, int armor, int infectionPercent) {
+        int currentHealthBits = Float.floatToIntBits(currentHealth);
+        int maxHealthBits = Float.floatToIntBits(maxHealth);
+        if (currentHealthBits != cachedHealthTextCurrentBits
+                || maxHealthBits != cachedHealthTextMaxBits
+                || food != cachedFoodTextValue
+                || armor != cachedArmorTextValue
+                || infectionPercent != cachedInfectionTextPercent) {
+            cachedHealthTextCurrentBits = currentHealthBits;
+            cachedHealthTextMaxBits = maxHealthBits;
+            cachedFoodTextValue = food;
+            cachedArmorTextValue = armor;
+            cachedInfectionTextPercent = infectionPercent;
+            cachedStatusValueTexts = new StatusValueTexts(
+                    formatStatNumber(currentHealth) + "/" + formatStatNumber(maxHealth),
+                    food + "/20",
+                    Integer.toString(armor),
+                    infectionPercent + "%");
+        }
+        return cachedStatusValueTexts;
+    }
+
+    private static String getStrengthValueText(int current, int maximum) {
+        if (current != cachedStrengthTextCurrent || maximum != cachedStrengthTextMax) {
+            cachedStrengthTextCurrent = current;
+            cachedStrengthTextMax = maximum;
+            cachedStrengthText = current + "/" + maximum;
+        }
+        return cachedStrengthText;
+    }
+
+    private static String getCourageValueText(int current, int maximum) {
+        if (current != cachedCourageTextCurrent || maximum != cachedCourageTextMax) {
+            cachedCourageTextCurrent = current;
+            cachedCourageTextMax = maximum;
+            cachedCourageText = current + "/" + maximum;
+        }
+        return cachedCourageText;
+    }
+
+    private static String getExperienceLevelText(int level) {
+        if (level != cachedExperienceLevelTextValue) {
+            cachedExperienceLevelTextValue = level;
+            cachedExperienceLevelText = Integer.toString(level);
+        }
+        return cachedExperienceLevelText;
+    }
+
+    private record StatusValueTexts(String health, String food, String armor, String infection) {
+    }
+
     private static void drawHudIcon(GuiGraphics guiGraphics, ResourceLocation icon, int x, int y, int alpha) {
-        if (alpha <= 0) {
+        if (alpha <= 0 || queuedHudIconCount >= MAX_QUEUED_HUD_ICONS) {
             return;
         }
 
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, Math.max(0, Math.min(255, alpha)) / 255.0F);
-        guiGraphics.blit(icon, x, y, HUD_ICON_SIZE, HUD_ICON_SIZE, 0.0F, 0.0F,
-                HUD_ICON_TEXTURE_SIZE, HUD_ICON_TEXTURE_SIZE,
-                HUD_ICON_TEXTURE_SIZE, HUD_ICON_TEXTURE_SIZE);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        int iconIndex = hudIconIndex(icon);
+        if (iconIndex < 0) {
+            return;
+        }
+        QUEUED_HUD_ICON_INDEX[queuedHudIconCount] = iconIndex;
+        QUEUED_HUD_ICON_X[queuedHudIconCount] = x;
+        QUEUED_HUD_ICON_Y[queuedHudIconCount] = y;
+        QUEUED_HUD_ICON_ALPHA[queuedHudIconCount] = Math.min(255, alpha);
+        queuedHudIconCount++;
+    }
+
+    private static void drawQueuedHudIcons(GuiGraphics guiGraphics) {
+        if (queuedHudIconCount == 0) {
+            return;
+        }
+
+        // All six custom icons are GUI sprites and therefore share the GUI
+        // atlas. Submit their quads together instead of building/drawing one
+        // immediate mesh per icon.
+        guiGraphics.flush();
+        ensureHudIconSprites();
+        Matrix4f pose = guiGraphics.pose().last().pose();
+        BufferBuilder buffer = GuiQuadBatchRenderer.begin();
+        try {
+            for (int index = 0; index < queuedHudIconCount; index++) {
+                int x = QUEUED_HUD_ICON_X[index];
+                int y = QUEUED_HUD_ICON_Y[index];
+                float alpha = QUEUED_HUD_ICON_ALPHA[index] / 255.0F;
+                TextureAtlasSprite sprite = CACHED_HUD_ICON_SPRITES[QUEUED_HUD_ICON_INDEX[index]];
+                GuiQuadBatchRenderer.addSprite(buffer, pose, sprite,
+                        x, y, HUD_ICON_SIZE, HUD_ICON_SIZE, alpha);
+            }
+            GuiQuadBatchRenderer.draw(buffer, cachedHudIconAtlas);
+        } finally {
+            queuedHudIconCount = 0;
+        }
+    }
+
+    private static int hudIconIndex(ResourceLocation icon) {
+        if (icon == HEALTH_ICON) return 0;
+        if (icon == FOOD_ICON) return 1;
+        if (icon == ARMOR_ICON) return 2;
+        if (icon == INFECTION_ICON) return 3;
+        if (icon == STAMINA_ICON) return 4;
+        if (icon == COURAGE_ICON) return 5;
+        return -1;
+    }
+
+    private static void ensureHudIconSprites() {
+        if (CACHED_HUD_ICON_SPRITES[0] != null) {
+            return;
+        }
+        for (int index = 0; index < HUD_ICON_TEXTURES.length; index++) {
+            CACHED_HUD_ICON_SPRITES[index] = Minecraft.getInstance().getGuiSprites()
+                    .getSprite(HUD_ICON_TEXTURES[index]);
+        }
+        cachedHudIconAtlas = CACHED_HUD_ICON_SPRITES[0].atlasLocation();
     }
 
     private static void drawStatusSegment(GuiGraphics guiGraphics, int x, int y, int width, float progress,
@@ -893,8 +1048,6 @@ public class CustomStatueGUI {
      */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
-        
-
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.player.isSpectator() || !CustomHotbarGUI.isHudVisibleScreen(mc)) {
             return;

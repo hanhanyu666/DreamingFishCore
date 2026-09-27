@@ -2,6 +2,8 @@
 package com.hhy.dreamingfishcore.gameplay.task_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
+import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -42,15 +44,19 @@ public class Packet_SyncCompleteTask implements net.minecraft.network.protocol.c
             ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null; // 获取发送请求的玩家
             if (player == null) return;
 
+            // 故事任务由 Java 状态机验证事实后记录，客户端不能通过旧的
+            // “完成任务”按钮伪造主线进度；管理员命令仍可用于人工结算。
+            if (packet.isServerTask || StoryManager.isStoryTaskNumber(packet.taskId)) {
+                DreamingFishCore.LOGGER.warn("拒绝客户端直接完成故事任务：taskId={}, player={}",
+                        packet.taskId, player.getScoreboardName());
+                return;
+            }
+
             UUID playerUUID = player.getUUID();
             String playerName = player.getGameProfile().getName();
 
-            // 根据任务类型调用对应方法更新数据
-            if (packet.isServerTask) {
-                TaskDataManager.playerCompleteStoryTask(packet.taskId, playerName, playerUUID);
-            } else {
-                TaskDataManager.playerCompleteOwnTask(packet.taskId, playerName, playerUUID);
-            }
+            // 仅允许旧的通用玩家任务走客户端完成入口；主线任务已经在上面拒绝。
+            TaskDataManager.playerCompleteOwnTask(packet.taskId, playerName, playerUUID);
         });
     }
 }

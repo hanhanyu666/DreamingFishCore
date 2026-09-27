@@ -130,13 +130,14 @@ public class Easy_Aid_Kit extends Item {
                 playerData.putInt(DURABILITY_CONSUME_TICK, 0);
                 //未使用时，清空启动时间戳
                 playerData.remove(FIRST_AID_START_TIME);
-                //移除效果
-                serverPlayer.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
                 return;
             }
 
-            if (!serverPlayer.hasEffect(MobEffects.MOVEMENT_SLOWDOWN)) {
-                serverPlayer.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 2, 0, false, false, false));
+            // 提前续期，避免减速到期后重加引起 FOV 抽动；保留其他来源的效果。
+            MobEffectInstance slowness = serverPlayer.getEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            if (slowness == null || (slowness.getAmplifier() == 0
+                    && !slowness.isInfiniteDuration() && slowness.getDuration() <= 20)) {
+                serverPlayer.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, false, false));
             }
 
             ItemStack aidKitStack = getHeldAidKit(serverPlayer);
@@ -205,7 +206,7 @@ public class Easy_Aid_Kit extends Item {
             if (playerData.getBoolean(USING_FIRST_AID)) {
                 playerData.putBoolean(USING_FIRST_AID, false);
                 playerData.putInt(DURABILITY_CONSUME_TICK, 0);
-                player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+                // 治疗减速自然到期，不能删除其他系统的缓慢效果。
                 //清除使用状态时，清空启动时间戳
                 playerData.remove(FIRST_AID_START_TIME);
             }

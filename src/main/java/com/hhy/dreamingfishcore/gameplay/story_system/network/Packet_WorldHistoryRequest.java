@@ -73,7 +73,7 @@ public final class Packet_WorldHistoryRequest implements net.minecraft.network.p
                  TASK_SUCCEEDED,
                  TASK_FAILED,
                  ENDING_CHANGED -> true;
-            case WORLD_FLAG_CHANGED, CONTENT_RELOADED -> false;
+            case WORLD_FLAG_CHANGED, CONTENT_RELOADED, RECAP_PUBLISHED -> false;
         };
     }
 }

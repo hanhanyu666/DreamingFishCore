@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen.Screen_StoryFragment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -51,11 +52,18 @@ public class Packet_OpenStoryFragmentGUI implements net.minecraft.network.protoc
     }
 
     public static void encode(Packet_OpenStoryFragmentGUI packet, FriendlyByteBuf buf) {
+        if (packet == null
+                || packet.title == null
+                || packet.content == null
+                || packet.title.length() > StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH
+                || packet.content.length() > StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH) {
+            throw new IllegalArgumentException("随记本片段正文超过网络上限");
+        }
         buf.writeVarInt(packet.fragmentId);
         buf.writeVarInt(packet.stageId);
         buf.writeVarInt(packet.chapterId);
-        buf.writeUtf(packet.title, Short.MAX_VALUE);
-        buf.writeUtf(packet.content, Short.MAX_VALUE);
+        buf.writeUtf(packet.title, StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH);
+        buf.writeUtf(packet.content, StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH);
         buf.writeUtf(packet.time == null ? "" : packet.time, 256);
         buf.writeUtf(packet.authorName == null ? "" : packet.authorName, 256);
     }
@@ -65,8 +73,8 @@ public class Packet_OpenStoryFragmentGUI implements net.minecraft.network.protoc
                 buf.readVarInt(),
                 buf.readVarInt(),
                 buf.readVarInt(),
-                buf.readUtf(Short.MAX_VALUE),
-                buf.readUtf(Short.MAX_VALUE),
+                buf.readUtf(StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH),
+                buf.readUtf(StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH),
                 buf.readUtf(256),
                 buf.readUtf(256)
         );

@@ -1,17 +1,14 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.first_stage;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.gameplay.npc_message_system.BuiltInNpcMessageCatalog;
-import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RespawnPointSyncManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryWorldState;
 import com.hhy.dreamingfishcore.server.server_management_system.ServerGameRulesManager;
-import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
-import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,10 +30,10 @@ import java.util.WeakHashMap;
 /**
  * 第一阶段的临时生存宽松规则。
  *
- * <p>所有数值集中在这里，且通过故事阶段 ID 门控。阶段推进后，饱食度自然回血会
- * 自动恢复为关闭状态，白天感染回落和每日重生储备也会停止，避免第一阶段的
- * 保护性数值泄漏到后续剧情。70% 上限只由 FoodData mixin 应用于饱食度自然回血，
- * 药水、金苹果、状态效果和医疗物品等主动治疗不受影响。</p>
+ * <p>所有数值集中在这里，且通过故事阶段 ID 或面具事件门控。阶段推进后，饱食度自然回血会
+ * 自动恢复为关闭状态；白天感染回落则持续到首个防护面具实际发放，之后才停止。每日重生储备
+ * 仍只在第一阶段补充，避免第一阶段的保护性数值泄漏到后续剧情。70% 上限只由 FoodData mixin
+ * 应用于饱食度自然回血，药水、金苹果、状态效果和医疗物品等主动治疗不受影响。</p>
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class FirstStageSurvivalManager {
@@ -78,6 +75,7 @@ public final class FirstStageSurvivalManager {
             return;
         }
 
+        boolean firstStage = isFirstStage();
         long day = currentDay(server);
         if (state.lastObservedDay == Long.MIN_VALUE) {
             state.lastObservedDay = day;
@@ -87,13 +85,15 @@ public final class FirstStageSurvivalManager {
         } else if (day > state.lastObservedDay) {
             long elapsedDays = day - state.lastObservedDay;
             state.lastObservedDay = day;
-            if (isFirstStage() && PlayerAttributesDataManager.isLoaded()) {
+            if (firstStage && PlayerAttributesDataManager.isLoaded()) {
                 rechargeRespawnPoints(server, elapsedDays);
             }
         }
 
-        if (!isFirstStage()
-                || !PlayerAttributesDataManager.isLoaded()) {
+        // 第二阶段的剧情入口不等于面具规则已经生效；在首个面具实际发放前，
+        // 仍保留原有的白天感染值自然回落。面具事件发生后才全局停止每日回落。
+        if (!PlayerAttributesDataManager.isLoaded()
+                || PlayerInfectionManager.isPostMaskEraEnabled()) {
             return;
         }
         applyDaylightInfectionRecovery(server);
@@ -135,18 +135,6 @@ public final class FirstStageSurvivalManager {
         return Math.max(0.0F, Math.min(requested, cap - currentHealth));
     }
 
-    /** 登录后给玩家投递一次白芷的阶段规则私信。消息本身由 once=true 保证幂等。 */
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
-        ServerPlayer player = event.getPlayer();
-        if (!AuthSessionGuard.isAuthenticated(player)
-                || !isFirstStage()
-                || !NpcMessageManager.isWorldDataLoaded()) {
-            return;
-        }
-        sendBaizhiProtocol(player);
-    }
-
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onServerStopped(ServerStoppedEvent event) {
         RUNTIME_STATES.remove(event.getServer());
@@ -176,39 +164,22 @@ public final class FirstStageSurvivalManager {
         if (stageId.equals(state.appliedStageId)) {
             return;
         }
-        boolean previouslyFirstStage = StoryWorldState.DEFAULT_STAGE_ID.equals(state.appliedStageId);
         boolean firstStage = StoryWorldState.DEFAULT_STAGE_ID.equals(stageId);
         ServerGameRulesManager.applyNaturalRegenerationPolicy(server, firstStage);
         state.appliedStageId = stageId;
         DreamingFishCore.LOGGER.info(
-                "故事阶段 {} 的临时生存规则已{}：自然回血上限={}, 白天感染回落={}, 每日重生补充={}",
+                "故事阶段 {} 的临时生存规则已{}：自然回血上限={}, 面具前白天感染回落={}, 每日重生补充={}",
                 stageId,
                 firstStage ? "启用" : "关闭",
                 firstStage ? "70%" : "关闭",
-                firstStage ? "5点/白天" : "关闭",
+                "首个面具发放前",
                 firstStage ? "5点" : "关闭");
-        if (firstStage && !previouslyFirstStage && NpcMessageManager.isWorldDataLoaded()) {
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                if (AuthSessionGuard.isAuthenticated(player)) {
-                    sendBaizhiProtocol(player);
-                }
-            }
-        }
-    }
-
-    private static void sendBaizhiProtocol(ServerPlayer player) {
-        try {
-            NpcMessageManager.sendConfiguredMessage(
-                    player, BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID);
-        } catch (RuntimeException exception) {
-            // 登录或阶段切换不应因为可选的剧情私信失败而被中断。
-            DreamingFishCore.LOGGER.warn(
-                    "无法向玩家 {} 投递白芷第一阶段规则私信",
-                    player.getScoreboardName(), exception);
-        }
     }
 
     private static void applyDaylightInfectionRecovery(MinecraftServer server) {
+        if (PlayerInfectionManager.isPostMaskEraEnabled()) {
+            return;
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!isEligibleForSurvivalRules(player)
                     || player.tickCount % INFECTION_DECAY_INTERVAL_TICKS != 0

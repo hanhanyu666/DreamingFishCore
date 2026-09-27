@@ -15,6 +15,8 @@ public class EnUsLanguageProvider extends LanguageProvider {
         add("key.dreamingfishcore.open_screen_o", "Open Information Panel");
         add("key.dreamingfishcore.open_terminal_u", "Open Server Terminal");
         add("key.dreamingfishcore.fps_marker", "FPS Marker");
+        add("key.dreamingfishcore.guidance_scroll", "Hold and scroll to switch story tracking");
+        add("key.dreamingfishcore.guidance_next", "Track next story action");
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "Dreamingfish Blueprints");
         add(DreamingFishCore_Items.GUITAR.get(), "Guitar");
@@ -29,6 +31,8 @@ public class EnUsLanguageProvider extends LanguageProvider {
         add(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get(), "Professional Aid Kit");
         add(DreamingFishCore_Items.REVIVAL_CHARM.get(), "Revival Charm");
         add(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get(), "Gene Resurgence Potion");
+        add(DreamingFishCore_Items.PROTECTIVE_MASK.get(), "Protective Mask");
+        add("item.dreamingfishcore.protective_mask.tooltip", "A protective mask produced under the Zhuiguang Society's direction. For now, it can prevent infection from spreading...");
         add("item.dreamingfishcore.siege_zombie_spawn_egg", "Zombie Spawn Egg");
         add("entity.dreamingfishcore.siege_zombie", "Zombie");
     }

@@ -253,6 +253,7 @@ public final class WorldHistoryLog {
 
     /** 重大事件类型。名称会直接写入 JSONL，因此已经发布后不要随意改名。 */
     public enum EventType {
+        RECAP_PUBLISHED,
         STAGE_CHANGED,
         WORLD_FLAG_CHANGED,
         OPERATION_ROUND_STARTED,

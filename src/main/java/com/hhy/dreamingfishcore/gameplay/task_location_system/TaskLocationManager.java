@@ -123,6 +123,27 @@ public final class TaskLocationManager {
         return Optional.ofNullable(LOCATIONS.get(locationId));
     }
 
+    /**
+     * Resolves a story location reference by either its internal id or its display name.
+     *
+     * <p>Story content is allowed to use the human-facing name so that moving a location's
+     * bounds (or recreating it with the same name) does not invalidate a dialogue/task trigger.
+     * Existing id references still take precedence for backwards compatibility.</p>
+     */
+    public static synchronized Optional<TaskLocationDefinition> resolveLocationReference(
+            String reference) {
+        ensureLoaded();
+        if (reference == null || reference.isBlank()) {
+            return Optional.empty();
+        }
+        String trimmed = reference.trim();
+        TaskLocationDefinition byId = LOCATIONS.get(trimmed);
+        if (byId != null) {
+            return Optional.of(byId);
+        }
+        return getLocationByName(trimmed);
+    }
+
     /** 供服主命令使用的名称查询；名称在配置中必须唯一。 */
     public static synchronized Optional<TaskLocationDefinition> getLocationByName(String locationName) {
         ensureLoaded();
@@ -234,7 +255,7 @@ public final class TaskLocationManager {
         if (server == null) {
             return List.of();
         }
-        TaskLocationDefinition location = getLocation(locationId)
+        TaskLocationDefinition location = resolveLocationReference(locationId)
                 .orElseThrow(() -> new IllegalArgumentException("任务地点不存在：" + locationId));
         if (!location.isEnabled()) {
             return List.of();

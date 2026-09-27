@@ -19,42 +19,68 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
     }
     private final float currentInfection;
     private final boolean infected;
+    private final int infectionLevel;
+    private final int infectionMaximum;
 
     public Packet_SyncInfectionData(float currentInfection, boolean infected) {
+        this(currentInfection, infected, infected ? 1 : 0, 100);
+    }
+
+    public Packet_SyncInfectionData(float currentInfection, boolean infected, int infectionLevel) {
+        this(currentInfection, infected, infectionLevel, infectionLevel == 2 ? 200 : 100);
+    }
+
+    public Packet_SyncInfectionData(float currentInfection, boolean infected,
+                                    int infectionLevel, int infectionMaximum) {
         this.currentInfection = currentInfection;
         this.infected = infected;
+        this.infectionLevel = Math.max(0, Math.min(infectionLevel, 2));
+        this.infectionMaximum = infectionMaximum >= 200 ? 200 : 100;
     }
 
     public static void encode(Packet_SyncInfectionData packet, FriendlyByteBuf buf) {
         buf.writeFloat(packet.currentInfection);
         buf.writeBoolean(packet.infected);
+        buf.writeVarInt(packet.infectionLevel);
+        buf.writeVarInt(packet.infectionMaximum);
     }
 
     public static Packet_SyncInfectionData decode(FriendlyByteBuf buf) {
         float current = buf.readFloat();
         boolean infected = buf.readBoolean();
-        return new Packet_SyncInfectionData(current, infected);
+        int infectionLevel = buf.readVarInt();
+        int infectionMaximum = buf.readVarInt();
+        return new Packet_SyncInfectionData(current, infected, infectionLevel, infectionMaximum);
     }
 
     public static void handle(Packet_SyncInfectionData packet, IPayloadContext context) {
         final float safeCurrentInfection = packet.currentInfection;
         final boolean safeInfected = packet.infected;
+        final int safeInfectionLevel = packet.infectionLevel;
+        final int safeInfectionMaximum = packet.infectionMaximum;
 
-        context.enqueueWork(() -> processOnMainThread(safeCurrentInfection, safeInfected));
+        context.enqueueWork(() -> processOnMainThread(
+                safeCurrentInfection, safeInfected, safeInfectionLevel, safeInfectionMaximum));
     }
 
-    private static void processOnMainThread(float currentInfection, boolean infected) {
-        new ClientRunnable(currentInfection, infected).run();
+    private static void processOnMainThread(
+            float currentInfection, boolean infected, int infectionLevel, int infectionMaximum) {
+        new ClientRunnable(currentInfection, infected, infectionLevel, infectionMaximum).run();
     }
 
     @OnlyIn(Dist.CLIENT)
     private static class ClientRunnable implements Runnable {
         private final float currentInfection;
         private final boolean infected;
+        private final int infectionLevel;
+        private final int infectionMaximum;
 
-        public ClientRunnable(float currentInfection, boolean infected) {
+        public ClientRunnable(float currentInfection, boolean infected,
+                              int infectionLevel, int infectionMaximum) {
             this.currentInfection = currentInfection;
             this.infected = infected;
+            this.infectionLevel = infectionLevel;
+            this.infectionMaximum = infectionMaximum;
         }
 
         @Override
@@ -63,7 +89,9 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
             Player player = minecraft.player;
             if (player == null) return;
 
-            PlayerInfectionManager.setInfectionDataClient(player, this.currentInfection, this.infected);
+            PlayerInfectionManager.setInfectionDataClient(
+                    player, this.currentInfection, this.infected,
+                    this.infectionLevel, this.infectionMaximum);
         }
     }
 
@@ -73,5 +101,13 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
 
     public boolean isInfected() {
         return infected;
+    }
+
+    public int getInfectionLevel() {
+        return infectionLevel;
+    }
+
+    public int getInfectionMaximum() {
+        return infectionMaximum;
     }
 }

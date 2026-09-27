@@ -75,9 +75,10 @@ public class Packet_NormalRespawnResponse implements net.minecraft.network.proto
             mc.player.respawn();
             mc.setScreen(null);
         } else {
-            // 失败：显示错误消息
+            // 服务端会另外发送具体原因（余量耗尽、请求失效、结算异常）；
+            // 这里只做中性提示，避免用错误的原因误导玩家。
             mc.player.displayClientMessage(
-                    Component.literal("§c复活点不足！"),
+                    Component.literal("§c复活结算未完成，请查看提示后重新选择。"),
                     true
             );
         }

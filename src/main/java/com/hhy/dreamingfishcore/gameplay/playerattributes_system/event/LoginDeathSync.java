@@ -34,14 +34,14 @@ public class LoginDeathSync {
             data.setCurrentStrength(data.getMaxStrength());
             data.setCurrentCourage(data.getMaxCourage() / 2);
             data.syncMaxHealthToPlayer(player);
-            player.setHealth((float) data.getMaxHealth());
+            player.setHealth(player.getMaxHealth());
             PlayerAttributesDataManager.markDirty();
 
             StrengthSyncManager.syncStrengthToClient(player);
             PlayerCourageClientSync.sendCourageDataToClient(
                     player, data.getCurrentCourage(), data.getMaxCourage());
             PlayerInfectionClientSync.sendInfectionDataToClient(
-                    player, data.getCurrentInfection(), data.isInfected());
+                    player, data.getCurrentInfection(), data.isInfected(), data.getInfectionLevel());
         }
 
         DeathCorpseManager.sendQueuedRespawnLocation(player);
@@ -60,10 +60,12 @@ public class LoginDeathSync {
         if (attrData == null) {
             return;
         }
+        // 认证完成后再补一次等级生命 modifier，覆盖玩家实体重建和饰品属性刷新带来的时序差异。
+        attrData.syncMaxHealthToPlayer(player);
         PlayerCourageClientSync.sendCourageDataToClient(
                 player, attrData.getCurrentCourage(), attrData.getMaxCourage());
         PlayerInfectionClientSync.sendInfectionDataToClient(
-                player, attrData.getCurrentInfection(), attrData.isInfected());
+                player, attrData.getCurrentInfection(), attrData.isInfected(), attrData.getInfectionLevel());
         RespawnPointSyncManager.syncRespawnPointToClient(player);
 
         if (DeathEventHandler.hasDeathState(player)) {

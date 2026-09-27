@@ -46,7 +46,9 @@ public final class NotificationRenderer {
     // weak keys let completed notifications disappear from the cache naturally.
     private static final Map<Notification, CachedLines> LEFT_LINES_CACHE = new WeakHashMap<>();
     private static final Map<Notification, CachedLines> TOP_RIGHT_LINES_CACHE = new WeakHashMap<>();
+    private static final Map<Notification, CenterLayout> CENTER_LAYOUT_CACHE = new WeakHashMap<>();
     private static Font lineCacheFont;
+    private static volatile boolean lineCachesDirty;
 
     private NotificationRenderer() {
     }
@@ -57,13 +59,16 @@ public final class NotificationRenderer {
         if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
             return;
         }
+        List<NotificationManager.ActiveNotification> entries =
+                NotificationManager.getActive(NotificationPosition.CENTER_TOP);
+        if (entries.isEmpty()) {
+            return;
+        }
 
         GuiGraphics guiGraphics = event.getGuiGraphics();
         // Notification panels are part of the HUD and can contain many translucent
         // primitives. Batch them for one buffer submission per notification pass.
-        guiGraphics.drawManaged(() -> {
-            renderCenterTop(guiGraphics, mc);
-        });
+        guiGraphics.drawManaged(() -> renderCenterTop(guiGraphics, mc, entries));
     }
 
     /**
@@ -80,22 +85,31 @@ public final class NotificationRenderer {
         }
         // Avoid opening a managed draw pass on frames where there is nothing to
         // render.  This keeps the late-HUD hook effectively free while idle.
-        if (NotificationManager.getActive(NotificationPosition.TOP_LEFT).isEmpty()) {
+        List<NotificationManager.ActiveNotification> entries =
+                NotificationManager.getActive(NotificationPosition.TOP_LEFT);
+        if (entries.isEmpty()) {
             return;
         }
 
-        guiGraphics.drawManaged(() -> renderTopLeft(guiGraphics, mc));
+        guiGraphics.drawManaged(() -> renderTopLeft(guiGraphics, mc, entries));
     }
 
     public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,
                                       int anchorY, int anchorHeight) {
+        List<NotificationManager.ActiveNotification> entries =
+                NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
+        renderTopRight(guiGraphics, font, rightEdge, anchorY, anchorHeight, entries);
+    }
+
+    public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,
+                                      int anchorY, int anchorHeight,
+                                      List<NotificationManager.ActiveNotification> entries) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
+        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
+                || mc.screen != null || entries.isEmpty()) {
             return;
         }
 
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
         int currentY = anchorY + anchorHeight + 2;
         long now = System.currentTimeMillis();
         for (int index = entries.size() - 1; index >= 0; index--) {
@@ -114,7 +128,6 @@ public final class NotificationRenderer {
                 continue;
             }
 
-            Component message = notification.message();
             int chromeWidth = TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH
                     + TOP_RIGHT_ACCENT_GAP + TOP_RIGHT_RIGHT_PADDING;
             int maxTextWidth = Math.max(24,
@@ -131,8 +144,11 @@ public final class NotificationRenderer {
                     TOP_RIGHT_VERTICAL_PADDING * 2 + scaledTextHeight);
             int boxX = rightEdge - boxWidth - 2;
             int boxRight = boxX + boxWidth;
-            int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
-            guiGraphics.enableScissor(boxRight - animatedWidth, currentY, boxRight, currentY + boxHeight);
+            boolean clipAnimation = visibility < 0.999f;
+            if (clipAnimation) {
+                int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
+                guiGraphics.enableScissor(boxRight - animatedWidth, currentY, boxRight, currentY + boxHeight);
+            }
             drawTopRightPanel(guiGraphics, boxX, currentY, boxWidth, boxHeight, notification, alpha);
 
             int textX = boxX + TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH + TOP_RIGHT_ACCENT_GAP;
@@ -141,13 +157,15 @@ public final class NotificationRenderer {
             guiGraphics.pose().translate(textX, textY, 0.0f);
             guiGraphics.pose().scale(TOP_RIGHT_TEXT_SCALE, TOP_RIGHT_TEXT_SCALE, 1.0f);
             int lineY = 0;
+            int textColor = scaledColor(notification.theme().textColor(), alpha);
             for (FormattedCharSequence line : displayLines) {
-                guiGraphics.drawString(font, line, 0, lineY,
-                        scaledColor(notification.theme().textColor(), alpha), false);
+                guiGraphics.drawString(font, line, 0, lineY, textColor, false);
                 lineY += rawLineStep;
             }
             guiGraphics.pose().popPose();
-            guiGraphics.disableScissor();
+            if (clipAnimation) {
+                guiGraphics.disableScissor();
+            }
             currentY += boxHeight + TOP_RIGHT_STACK_GAP;
         }
     }
@@ -169,9 +187,8 @@ public final class NotificationRenderer {
                 scaleAlpha(accent, Math.round(alpha * 0.88f)));
     }
 
-    private static void renderTopLeft(GuiGraphics guiGraphics, Minecraft mc) {
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.TOP_LEFT);
+    private static void renderTopLeft(GuiGraphics guiGraphics, Minecraft mc,
+                                      List<NotificationManager.ActiveNotification> entries) {
         int currentY = TOP_MARGIN;
         long now = System.currentTimeMillis();
         for (NotificationManager.ActiveNotification entry : entries) {
@@ -194,9 +211,15 @@ public final class NotificationRenderer {
                     : 0.0f;
             float visibility = intro * (1.0f - outro);
             int alpha = Math.round(visibility * 255.0f);
-            int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
-            guiGraphics.enableScissor(LEFT_MARGIN, currentY,
-                    LEFT_MARGIN + animatedWidth, currentY + boxHeight);
+            if (alpha <= 0) {
+                continue;
+            }
+            boolean clipAnimation = visibility < 0.999f;
+            if (clipAnimation) {
+                int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
+                guiGraphics.enableScissor(LEFT_MARGIN, currentY,
+                        LEFT_MARGIN + animatedWidth, currentY + boxHeight);
+            }
             drawPanel(guiGraphics, LEFT_MARGIN, currentY, boxWidth, boxHeight, notification, alpha, 3);
 
             int textX = LEFT_MARGIN + INNER_PADDING + ACCENT_WIDTH + 5;
@@ -206,18 +229,15 @@ public final class NotificationRenderer {
                         scaledColor(notification.theme().textColor(), alpha), true);
                 textY += mc.font.lineHeight + 3;
             }
-            guiGraphics.disableScissor();
+            if (clipAnimation) {
+                guiGraphics.disableScissor();
+            }
             currentY += boxHeight + 4;
         }
     }
 
-    private static void renderCenterTop(GuiGraphics guiGraphics, Minecraft mc) {
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.CENTER_TOP);
-        if (entries.isEmpty()) {
-            return;
-        }
-
+    private static void renderCenterTop(GuiGraphics guiGraphics, Minecraft mc,
+                                        List<NotificationManager.ActiveNotification> entries) {
         NotificationManager.ActiveNotification entry = entries.get(0);
         Notification notification = entry.notification();
         long elapsed = entry.ageMs(System.currentTimeMillis());
@@ -236,15 +256,12 @@ public final class NotificationRenderer {
         Font font = mc.font;
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int maxPanelWidth = Math.max(CENTER_MIN_WIDTH, screenWidth - CENTER_SIDE_MARGIN * 2);
-        String title = notification.title().getString();
-        String detail = notification.message().getString();
-        title = LoadingScreenUi.trimToWidth(title, font, maxPanelWidth - 52);
-        detail = LoadingScreenUi.trimToWidth(detail, font, maxPanelWidth - 52);
-
-        int contentWidth = Math.max(font.width(title), detail.isEmpty() ? 0 : font.width(detail)) + 52;
-        int panelWidth = Math.max(CENTER_MIN_WIDTH, Math.min(maxPanelWidth, contentWidth));
-        boolean hasDetail = !detail.isEmpty();
-        int panelHeight = hasDetail ? 38 : 29;
+        CenterLayout layout = getCenterLayout(font, notification, maxPanelWidth);
+        String title = layout.title();
+        String detail = layout.detail();
+        int panelWidth = layout.panelWidth();
+        boolean hasDetail = layout.hasDetail();
+        int panelHeight = layout.panelHeight();
         int animatedWidth = Math.max(24, Math.round(panelWidth * (0.86f + intro * 0.14f)));
         int y = 16 - Math.round((1.0f - intro) * 26.0f) - Math.round(outro * 10.0f);
         int x = (screenWidth - animatedWidth) / 2;
@@ -300,6 +317,27 @@ public final class NotificationRenderer {
         });
     }
 
+    private static CenterLayout getCenterLayout(Font font, Notification notification,
+                                                int maxPanelWidth) {
+        ensureLineCacheFont(font);
+        CenterLayout cached = CENTER_LAYOUT_CACHE.get(notification);
+        if (cached != null && cached.maxPanelWidth() == maxPanelWidth) {
+            return cached;
+        }
+
+        String title = LoadingScreenUi.trimToWidth(
+                notification.title().getString(), font, maxPanelWidth - 52);
+        String detail = LoadingScreenUi.trimToWidth(
+                notification.message().getString(), font, maxPanelWidth - 52);
+        int contentWidth = Math.max(font.width(title), detail.isEmpty() ? 0 : font.width(detail)) + 52;
+        int panelWidth = Math.max(CENTER_MIN_WIDTH, Math.min(maxPanelWidth, contentWidth));
+        boolean hasDetail = !detail.isEmpty();
+        CenterLayout result = new CenterLayout(
+                title, detail, panelWidth, hasDetail ? 38 : 29, hasDetail, maxPanelWidth);
+        CENTER_LAYOUT_CACHE.put(notification, result);
+        return result;
+    }
+
     private static int maxWidth(Font font, List<FormattedCharSequence> lines) {
         int width = 0;
         for (FormattedCharSequence line : lines) {
@@ -309,12 +347,19 @@ public final class NotificationRenderer {
     }
 
     private static void ensureLineCacheFont(Font font) {
-        if (lineCacheFont == font) {
+        if (!lineCachesDirty && lineCacheFont == font) {
             return;
         }
         LEFT_LINES_CACHE.clear();
         TOP_RIGHT_LINES_CACHE.clear();
+        CENTER_LAYOUT_CACHE.clear();
         lineCacheFont = font;
+        lineCachesDirty = false;
+    }
+
+    /** Defers cache disposal to the next render after a resource-pack reload. */
+    public static void invalidateLayoutCaches() {
+        lineCachesDirty = true;
     }
 
     private static void drawPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
@@ -424,5 +469,9 @@ public final class NotificationRenderer {
     }
 
     private record CachedLines(List<FormattedCharSequence> lines, int maxWidth) {
+    }
+
+    private record CenterLayout(String title, String detail, int panelWidth,
+                                int panelHeight, boolean hasDetail, int maxPanelWidth) {
     }
 }

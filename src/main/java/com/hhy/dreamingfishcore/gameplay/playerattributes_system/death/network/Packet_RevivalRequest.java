@@ -9,6 +9,7 @@ import com.hhy.dreamingfishcore.common.util.Utf8JsonFileIO;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -146,8 +147,7 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
         try {
             boolean senderIsInfected = senderData.isInfected();
             senderData.setRespawnPoint(senderData.getRespawnPoint() / 2.0F);
-            targetData.setInfected(senderIsInfected);
-            targetData.setCurrentInfection(senderIsInfected ? 100.0F : 0.0F);
+            PlayerInfectionManager.applyRevivalInfectionState(senderData, targetData);
             targetData.setRespawnPoint(100.0F);
             targetData.setCurrentCourage(50.0F);
             targetData.setCurrentStrength(targetData.getMaxStrength());
@@ -300,16 +300,26 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
                 || player.getOffhandItem().is(DreamingFishCore_Items.REVIVAL_CHARM.get());
     }
 
-    private record AttributesSnapshot(boolean infected, float infection, float respawnPoint,
-                                      float courage, int strength) {
+    private record AttributesSnapshot(boolean infected, int infectionLevel, float infection,
+                                      boolean protectiveMaskReceived,
+                                      long infectionTreatmentDeadlineActiveTick,
+                                      float respawnPoint, float courage, int strength) {
         private static AttributesSnapshot capture(PlayerAttributesData data) {
-            return new AttributesSnapshot(data.isInfected(), data.getCurrentInfection(),
+            return new AttributesSnapshot(data.isInfected(), data.getInfectionLevel(),
+                    data.getCurrentInfection(), data.hasReceivedProtectiveMask(),
+                    data.getInfectionTreatmentDeadlineActiveTick(),
                     data.getRespawnPoint(), data.getCurrentCourage(), data.getCurrentStrength());
         }
 
         private void restore(PlayerAttributesData data) {
-            data.setInfected(infected);
+            data.setInfectionLevel(infectionLevel);
+            if (infected && infectionLevel == 0) {
+                data.setInfectionLevel(1);
+            }
             data.setCurrentInfection(infection);
+            data.setProtectiveMaskReceived(protectiveMaskReceived);
+            data.setInfectionTreatmentDeadlineActiveTick(
+                    infectionTreatmentDeadlineActiveTick);
             data.setRespawnPoint(respawnPoint);
             data.setCurrentCourage(courage);
             data.setCurrentStrength(strength);

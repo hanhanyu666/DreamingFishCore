@@ -1,12 +1,17 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.mojang.math.Axis;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.entity.player.Player;
+import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Draws a compact Minecraft-style player silhouette for the HUD.
@@ -272,9 +277,11 @@ final class HudPlayerWireframeRenderer {
         }
 
         private void render(GuiGraphics graphics, int surfaceColor, int haloColor, int outlineColor) {
-            renderSpans(graphics, haloSpans, haloColor);
-            renderSpans(graphics, surfaceSpans, surfaceColor);
-            renderSpans(graphics, boundarySpans, outlineColor);
+            VertexConsumer consumer = graphics.bufferSource().getBuffer(RenderType.gui());
+            Matrix4f pose = graphics.pose().last().pose();
+            renderSpans(consumer, pose, haloSpans, haloColor);
+            renderSpans(consumer, pose, surfaceSpans, surfaceColor);
+            renderSpans(consumer, pose, boundarySpans, outlineColor);
         }
 
         private void buildSpans() {
@@ -309,18 +316,22 @@ final class HudPlayerWireframeRenderer {
             }
 
             List<Span> merged = new ArrayList<>(source.size());
+            Map<Long, Integer> latestByBounds = new HashMap<>();
             for (Span span : source) {
-                int last = merged.size() - 1;
-                if (last >= 0) {
-                    Span previous = merged.get(last);
+                long boundsKey = (long) span.startX() << 32
+                        | span.endXExclusive() & 0xFFFFFFFFL;
+                Integer previousIndex = latestByBounds.get(boundsKey);
+                if (previousIndex != null) {
+                    Span previous = merged.get(previousIndex);
                     if (previous.y() + previous.height() == span.y()
                             && previous.startX() == span.startX()
                             && previous.endXExclusive() == span.endXExclusive()) {
-                        merged.set(last, new Span(previous.y(), previous.startX(),
+                        merged.set(previousIndex, new Span(previous.y(), previous.startX(),
                                 previous.endXExclusive(), previous.height() + span.height()));
                         continue;
                     }
                 }
+                latestByBounds.put(boundsKey, merged.size());
                 merged.add(span);
             }
             return merged.toArray(Span[]::new);
@@ -345,11 +356,19 @@ final class HudPlayerWireframeRenderer {
             }
         }
 
-        private void renderSpans(GuiGraphics graphics, Span[] spans, int color) {
+        private void renderSpans(VertexConsumer consumer, Matrix4f pose,
+                                 Span[] spans, int color) {
             for (Span span : spans) {
-                graphics.fill(originX + span.startX(), originY + span.y(),
-                        originX + span.endXExclusive(),
-                        originY + span.y() + span.height(), color);
+                int left = originX + span.startX();
+                int top = originY + span.y();
+                int right = originX + span.endXExclusive();
+                int bottom = top + span.height();
+                // Same winding and render type as GuiGraphics#fill, but reuse
+                // the consumer and pose for every raster span.
+                consumer.addVertex(pose, right, bottom, 0.0F).setColor(color);
+                consumer.addVertex(pose, right, top, 0.0F).setColor(color);
+                consumer.addVertex(pose, left, top, 0.0F).setColor(color);
+                consumer.addVertex(pose, left, bottom, 0.0F).setColor(color);
             }
         }
 

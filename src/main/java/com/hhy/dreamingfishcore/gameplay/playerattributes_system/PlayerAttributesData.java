@@ -1,8 +1,10 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 
 import java.util.UUID;
@@ -12,6 +14,18 @@ import java.util.UUID;
  * 所有属性最大值与玩家等级关联，提供属性消耗/恢复的边界检查
  */
 public class PlayerAttributesData {
+    public static final int INFECTION_LEVEL_NONE = 0;
+    public static final int INFECTION_LEVEL_ONE = 1;
+    public static final int INFECTION_LEVEL_TWO = 2;
+    /** 感染值的持久化上限；旧阶段使用的 100 仍由感染系统按玩家状态决定。 */
+    public static final float INFECTION_STORAGE_MAX = 200.0F;
+
+    /** Minecraft 的原版最大生命基础值；等级生命通过独立 modifier 叠加在其上。 */
+    private static final double VANILLA_MAX_HEALTH = 20.0D;
+    private static final double HEALTH_EPSILON = 1.0E-6D;
+    private static final ResourceLocation LEVEL_HEALTH_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "level_health");
+
     // 基础字段
     private UUID playerUUID;
     private String playerName;
@@ -25,17 +39,30 @@ public class PlayerAttributesData {
     private float maxCourage;
     private float currentCourage;
 
-    // 感染值（0-100，100为完全感染）
+    // 感染值（持久化范围 0-200；具体阶段的感染阈值由感染系统决定）
     private float currentInfection;
 
-    // 是否为感染者（感染值达到100后转变）
+    // 是否为感染者（兼容旧存档；具体等级见 infectionLevel）
     private boolean isInfected;
+
+    // 感染者等级：0=非感染者，1=一级，2=二级。旧存档缺失该字段时按状态迁移。
+    private int infectionLevel;
+
+    // 是否已经通过江晚的剧情交互领取过防护面具；这是领取事实，不改变感染等级。
+    private boolean protectiveMaskReceived;
+
+    /**
+     * 面具阶段新晋一级感染者的治疗截止活动 tick。
+     * -1 表示不是“新一级”治疗窗口（旧一级感染者也使用 -1）。
+     */
+    private long infectionTreatmentDeadlineActiveTick = -1L;
 
     // 复活点数（0-100，感染者死亡时消耗）
     private float respawnPoint;
+    private com.hhy.dreamingfishcore.gameplay.hospital_system.DailyTemplateSupportProgress dailyTemplateSupport = new com.hhy.dreamingfishcore.gameplay.hospital_system.DailyTemplateSupportProgress();
 
-    //血量系统
-    private double maxHealth; //最大血量
+    //血量系统：保存等级系统自身的目标值，不包含饰品、装备及其他模组的 modifier
+    private double maxHealth;
 
     // 防重复提示标记（各属性不足时避免刷屏）
     private boolean strengthWarned;
@@ -61,6 +88,9 @@ public class PlayerAttributesData {
 
         this.currentInfection = 0;
         this.isInfected = false;
+        this.infectionLevel = INFECTION_LEVEL_NONE;
+        this.protectiveMaskReceived = false;
+        this.infectionTreatmentDeadlineActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -89,6 +119,9 @@ public class PlayerAttributesData {
 
         this.currentInfection = 0;
         this.isInfected = false;
+        this.infectionLevel = INFECTION_LEVEL_NONE;
+        this.protectiveMaskReceived = false;
+        this.infectionTreatmentDeadlineActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -118,6 +151,9 @@ public class PlayerAttributesData {
 
         this.currentInfection = 0;
         this.isInfected = false;
+        this.infectionLevel = INFECTION_LEVEL_NONE;
+        this.protectiveMaskReceived = false;
+        this.infectionTreatmentDeadlineActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -154,8 +190,22 @@ public class PlayerAttributesData {
         return caculateHealth;
     }
 
+    /**
+     * 计算等级系统对最大生命值的增量，不包含原版基础值和其他模组的属性加成。
+     */
+    public double calculateHealthBonusByLevel(int level) {
+        return Math.max(0.0D, calculateMaxHealthByLevel(level) - VANILLA_MAX_HEALTH);
+    }
+
     // ========== 等级更新（同步更新所有属性最大值） ==========
     public void setLevel(int level, ServerPlayer player) {  // 新增ServerPlayer参数
+        // 在更新内存中的等级上限前先处理旧版 base value，避免等级升级时丢失旧值迁移信息。
+        if (player != null) {
+            AttributeInstance maxHealthAttribute = player.getAttribute(Attributes.MAX_HEALTH);
+            if (maxHealthAttribute != null) {
+                migrateLegacyBaseValue(maxHealthAttribute);
+            }
+        }
         this.level = level;
 
         // 更新各属性最大值（包含最大血量）
@@ -183,16 +233,40 @@ public class PlayerAttributesData {
         AttributeInstance maxHealthAttribute = player.getAttribute(Attributes.MAX_HEALTH);
         if (maxHealthAttribute == null) return;
 
-        // 设置最大生命值的基础值（清除所有modifiers，仅保留基础值）
-        maxHealthAttribute.setBaseValue(this.maxHealth);
+        // 旧版本曾把等级生命直接写入 base value。这里只在能明确识别旧值时恢复
+        // 原版基础值，避免已有存档在切换到 modifier 方案后把等级加成重复计算。
+        migrateLegacyBaseValue(maxHealthAttribute);
 
-        // 确保当前生命值不超过新的最大值
-        if (player.getHealth() > this.maxHealth) {
-            player.setHealth((float) this.maxHealth);
+        // 等级生命只维护本模组自己的持久 modifier，绝不触碰护符、装备或其他模组的 modifier。
+        // 持久化 modifier 可随玩家退出/重新加入保存；重生或登录时仍会通过本方法重建。
+        double levelHealthBonus = calculateHealthBonusByLevel(this.level);
+        if (levelHealthBonus > HEALTH_EPSILON) {
+            maxHealthAttribute.addOrReplacePermanentModifier(new AttributeModifier(
+                    LEVEL_HEALTH_MODIFIER_ID,
+                    levelHealthBonus,
+                    AttributeModifier.Operation.ADD_VALUE));
+        } else {
+            maxHealthAttribute.removeModifier(LEVEL_HEALTH_MODIFIER_ID);
         }
 
-        // 同步生命值到客户端（避免显示异常）
-        player.setHealth(player.getHealth());
+        // 不主动改写当前生命值。属性变更会由 LivingEntity 在最终 modifier 刷新后
+        // 按实体的有效最大生命值（包含护符/装备/其他模组加成）执行必要的下限裁剪，
+        // 避免外部饰品尚未完成刷新时被误裁到等级基础值。
+    }
+
+    /**
+     * 将旧版“把等级上限写进 base value”的存档迁移回原版基础值。
+     * 仅当当前 base 恰好等于旧版保存的等级上限时才迁移，避免覆盖外部模组自己的 base 设置。
+     */
+    private void migrateLegacyBaseValue(AttributeInstance maxHealthAttribute) {
+        double legacyBaseValue = this.maxHealth;
+        if (legacyBaseValue > VANILLA_MAX_HEALTH + HEALTH_EPSILON
+                && Math.abs(maxHealthAttribute.getBaseValue() - legacyBaseValue) <= HEALTH_EPSILON) {
+            maxHealthAttribute.setBaseValue(VANILLA_MAX_HEALTH);
+            DreamingFishCore.LOGGER.info(
+                    "玩家 {} 的旧版等级生命基础值已迁移为 modifier（{} → {}）",
+                    playerName, legacyBaseValue, VANILLA_MAX_HEALTH);
+        }
     }
 
     /**
@@ -208,18 +282,19 @@ public class PlayerAttributesData {
         }
         // 获取当前血量（从玩家实体同步，避免数据不一致）
         double currentHealth = player.getHealth();
-        // 边界判断：已达最大血量，无需恢复
-        if (currentHealth >= this.maxHealth) {
+        // 以实体最终最大生命值为上限，包含饰品/装备/其他模组的加成。
+        double effectiveMaxHealth = player.getMaxHealth();
+        if (currentHealth >= effectiveMaxHealth) {
             return false;
         }
         // 计算新血量（不超过最大血量）
-        double newHealth = Math.min(currentHealth + healAmount, this.maxHealth);
+        double newHealth = Math.min(currentHealth + healAmount, effectiveMaxHealth);
         // 同步血量到玩家实体
         player.setHealth((float) newHealth);
         // 同步客户端显示（防止血量显示异常）
         player.setHealth(player.getHealth());
         DreamingFishCore.LOGGER.info("玩家 {} 使用自定义药品回血：{} → {}（最大血量：{}）",
-                this.playerName, currentHealth, newHealth, this.maxHealth);
+                this.playerName, currentHealth, newHealth, effectiveMaxHealth);
         return true;
     }
 
@@ -232,8 +307,8 @@ public class PlayerAttributesData {
         if (player == null) {
             return;
         }
-        // 边界控制：不低于0，不超过最大血量
-        double finalHealth = Math.max(0, Math.min(newHealth, this.maxHealth));
+        // 边界控制：不低于0，不超过实体最终最大血量（包含外部加成）。
+        double finalHealth = Math.max(0, Math.min(newHealth, player.getMaxHealth()));
         player.setHealth((float) finalHealth);
         player.setHealth(player.getHealth()); // 同步客户端
     }
@@ -273,6 +348,7 @@ public class PlayerAttributesData {
         }
     }
 
+    /** 返回等级系统自身的生命值目标，不含实体上的外部属性修饰符。 */
     public double getMaxHealth() {
         return maxHealth;
     }
@@ -281,9 +357,9 @@ public class PlayerAttributesData {
         this.maxHealth = maxHealth;
     }
 
-    // 感染值增加（上限100）
+    // 感染值增加（持久化上限200；阶段阈值由感染系统决定）
     public void addInfection(float amount) {
-        currentInfection = Math.min(currentInfection + amount, 100);
+        currentInfection = Math.min(currentInfection + amount, INFECTION_STORAGE_MAX);
     }
 
     // 感染值减少（下限0）
@@ -365,7 +441,11 @@ public class PlayerAttributesData {
     }
 
     public void setCurrentInfection(float currentInfection) {
-        this.currentInfection = currentInfection;
+        if (Float.isNaN(currentInfection) || Float.isInfinite(currentInfection)) {
+            this.currentInfection = 0.0F;
+            return;
+        }
+        this.currentInfection = Math.max(0.0F, Math.min(currentInfection, INFECTION_STORAGE_MAX));
     }
 
     public boolean isStrengthWarned() {
@@ -393,14 +473,159 @@ public class PlayerAttributesData {
     }
 
     public boolean isInfected() {
-        return isInfected;
+        return isInfected || infectionLevel > INFECTION_LEVEL_NONE;
     }
 
     public void setInfected(boolean infected) {
         isInfected = infected;
+        if (infected) {
+            if (infectionLevel == INFECTION_LEVEL_NONE) {
+                infectionLevel = INFECTION_LEVEL_ONE;
+            }
+        } else {
+            infectionLevel = INFECTION_LEVEL_NONE;
+        }
+    }
+
+    public int getInfectionLevel() {
+        return normalizeInfectionLevel(infectionLevel);
+    }
+
+    /**
+     * 设置感染者等级并同步旧的布尔状态。等级 0 表示非感染者；等级 1、2 均表示感染者。
+     */
+    public void setInfectionLevel(int infectionLevel) {
+        int normalized = normalizeInfectionLevel(infectionLevel);
+        this.infectionLevel = normalized;
+        this.isInfected = normalized > INFECTION_LEVEL_NONE;
+        if (normalized != INFECTION_LEVEL_ONE) {
+            this.infectionTreatmentDeadlineActiveTick = -1L;
+        }
+    }
+
+    public boolean hasReceivedProtectiveMask() {
+        return protectiveMaskReceived;
+    }
+
+    public long getInfectionTreatmentDeadlineActiveTick() {
+        return infectionTreatmentDeadlineActiveTick;
+    }
+
+    public boolean hasPendingInfectionTreatmentWindow() {
+        return getInfectionLevel() == INFECTION_LEVEL_ONE
+                && infectionTreatmentDeadlineActiveTick >= 0L;
+    }
+
+    /** 仅由面具阶段感染规则设置；旧一级感染者不会自动获得该截止时间。 */
+    public void startInfectionTreatmentWindow(long deadlineActiveTick) {
+        if (getInfectionLevel() != INFECTION_LEVEL_ONE) {
+            return;
+        }
+        infectionTreatmentDeadlineActiveTick = Math.max(0L, deadlineActiveTick);
+    }
+
+    public void setInfectionTreatmentDeadlineActiveTick(long deadlineActiveTick) {
+        if (deadlineActiveTick < -1L) {
+            infectionTreatmentDeadlineActiveTick = -1L;
+        } else {
+            infectionTreatmentDeadlineActiveTick = deadlineActiveTick;
+        }
+    }
+
+    public void clearInfectionTreatmentDeadline() {
+        infectionTreatmentDeadlineActiveTick = -1L;
+    }
+
+    public void setProtectiveMaskReceived(boolean protectiveMaskReceived) {
+        this.protectiveMaskReceived = protectiveMaskReceived;
+    }
+
+    /**
+     * 记录玩家已经从医疗组领取面具。
+     * 面具只记录领取事实，不会改变玩家的感染等级，也不会缩放感染值。
+     *
+     * @return 是否修改了玩家属性
+     */
+    public boolean recordProtectiveMaskReceipt() {
+        if (protectiveMaskReceived) {
+            return false;
+        }
+        protectiveMaskReceived = true;
+        return true;
+    }
+
+    public boolean isLevelOneInfected() {
+        return isInfected() && getInfectionLevel() == INFECTION_LEVEL_ONE;
+    }
+
+    public boolean isLevelTwoInfected() {
+        return isInfected() && getInfectionLevel() == INFECTION_LEVEL_TWO;
+    }
+
+    /**
+     * 修复感染等级与旧布尔字段之间的不一致。
+     *
+     * <p>感染值达到多少才转为感染者由感染系统根据当前阶段判断；这里不能仅凭原始数值
+     * 推断等级，否则面具发放后重启服务器时会把 100 点误判成一级感染。</p>
+     *
+     * @return 是否发生了需要写回存档的变化
+     */
+    public boolean normalizeInfectionState() {
+        boolean changed = false;
+        float boundedInfection = currentInfection;
+        if (Float.isNaN(boundedInfection) || Float.isInfinite(boundedInfection)) {
+            boundedInfection = 0.0F;
+        } else {
+            boundedInfection = Math.max(0.0F, Math.min(boundedInfection, INFECTION_STORAGE_MAX));
+        }
+        if (Float.compare(currentInfection, boundedInfection) != 0) {
+            currentInfection = boundedInfection;
+            changed = true;
+        }
+
+        int normalizedLevel = normalizeInfectionLevel(infectionLevel);
+        if (normalizedLevel != infectionLevel) {
+            infectionLevel = normalizedLevel;
+            changed = true;
+        }
+        // 旧存档中的 isInfected=true 没有等级字段，统一迁移为一级感染者。
+        if (isInfected && infectionLevel == INFECTION_LEVEL_NONE) {
+            infectionLevel = INFECTION_LEVEL_ONE;
+            changed = true;
+        }
+        // 等级字段是新事实来源；即使旧布尔字段缺失，也不能把二级状态当成幸存者。
+        if (infectionLevel > INFECTION_LEVEL_NONE && !isInfected) {
+            isInfected = true;
+            changed = true;
+        }
+        if (infectionLevel == INFECTION_LEVEL_NONE && isInfected) {
+            isInfected = false;
+            changed = true;
+        }
+        long normalizedDeadline = infectionTreatmentDeadlineActiveTick;
+        if (normalizedDeadline < -1L) {
+            normalizedDeadline = -1L;
+        }
+        if (normalizedLevel != INFECTION_LEVEL_ONE) {
+            normalizedDeadline = -1L;
+        }
+        if (normalizedDeadline != infectionTreatmentDeadlineActiveTick) {
+            infectionTreatmentDeadlineActiveTick = normalizedDeadline;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static int normalizeInfectionLevel(int level) {
+        return Math.max(INFECTION_LEVEL_NONE, Math.min(level, INFECTION_LEVEL_TWO));
     }
 
     // ========== 复活点数相关 ==========
+    public com.hhy.dreamingfishcore.gameplay.hospital_system.DailyTemplateSupportProgress getDailyTemplateSupport() {
+        if (dailyTemplateSupport == null) dailyTemplateSupport = new com.hhy.dreamingfishcore.gameplay.hospital_system.DailyTemplateSupportProgress();
+        return dailyTemplateSupport;
+    }
+
     public float getRespawnPoint() {
         return respawnPoint;
     }

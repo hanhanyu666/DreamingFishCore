@@ -5,16 +5,17 @@ import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.render.PlayerFaceBatchRenderer;
 import com.hhy.dreamingfishcore.server.title_system.network.Packet_QuotedChatMessage;
 import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.ChatVisiblity;
 import net.minecraft.world.level.storage.LevelResource;
@@ -33,8 +34,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -101,6 +104,7 @@ public final class ImmersiveChatManager {
     private static final int MUTED_COLOR = 0xFFA7AAA7;
 
     private static final List<ChatEntry> MESSAGES = new ArrayList<>();
+    private static final Map<UUID, PlayerInfo> CACHED_PLAYER_INFO = new HashMap<>();
     /**
      * Persist chat history away from the render thread.  A single daemon
      * writer preserves arrival order; clear operations enqueue a barrier on the
@@ -124,8 +128,20 @@ public final class ImmersiveChatManager {
     private static final List<HitLine> HIT_LINES = new ArrayList<>();
     private static final List<HitAvatar> HIT_AVATARS = new ArrayList<>();
     private static final List<HitPlayerMessage> HIT_PLAYER_MESSAGES = new ArrayList<>();
+    private static ResourceLocation[] queuedHeadSkins = new ResourceLocation[16];
+    private static int[] queuedHeadX = new int[16];
+    private static int[] queuedHeadY = new int[16];
+    private static int[] queuedHeadSize = new int[16];
+    private static float[] queuedHeadAlpha = new float[16];
+    private static int queuedHeadCount;
     private static String activeSessionKey = "";
     private static String activeSafeSessionKey = "";
+    private static boolean sessionIdentityInitialized;
+    private static Object cachedSessionConnection;
+    private static Object cachedSessionLevel;
+    private static Object cachedIntegratedServer;
+    private static Object cachedCurrentServer;
+    private static long unfocusedVisibleUntilMs;
     private static int scrollOffsetPx = 0;
     private static int maxScrollPx = 0;
     private static EditBox activeInput;
@@ -197,6 +213,7 @@ public final class ImmersiveChatManager {
 
     public static void clearVisibleMessages() {
         MESSAGES.clear();
+        unfocusedVisibleUntilMs = 0L;
         invalidateLayoutCache();
         scrollOffsetPx = 0;
         maxScrollPx = 0;
@@ -217,6 +234,22 @@ public final class ImmersiveChatManager {
             return;
         }
         ensureSession(mc);
+        if (!focused && unfocusedVisibleUntilMs == 0L) {
+            scrollbarMetrics = null;
+            quotePreviewMetrics = null;
+            return;
+        }
+        long now = System.currentTimeMillis();
+
+        // ChatComponent invokes this method at the display frame rate. Once the
+        // newest message has fully faded, stop before resolving the synchronized
+        // layout, clearing hit-test lists, or walking cached message rows.
+        if (!focused && now >= unfocusedVisibleUntilMs) {
+            unfocusedVisibleUntilMs = 0L;
+            scrollbarMetrics = null;
+            quotePreviewMetrics = null;
+            return;
+        }
 
         int screenWidth = graphics.guiWidth();
         int screenHeight = graphics.guiHeight();
@@ -248,15 +281,29 @@ public final class ImmersiveChatManager {
 
         Font font = mc.font;
         List<EntryLayout> layouts = getCachedLayouts(font, Math.max(40, viewportWidth));
+
+        /*
+         * The unfocused chat is completely invisible after its 13 second
+         * lifetime.  Returning here avoids two reverse scans of as many as 800
+         * cached history rows, a scissor transition, and an otherwise empty
+         * managed GUI pass on every ordinary gameplay frame.
+         */
+        if (!focused && !hasVisibleUnfocusedEntry(layouts, now)) {
+            scrollbarMetrics = null;
+            quotePreviewMetrics = null;
+            return;
+        }
+
         int calculatedTotalHeight = 0;
-        for (EntryLayout entryLayout : layouts) {
-            calculatedTotalHeight += entryLayout.height() + ENTRY_GAP;
+        if (focused) {
+            for (EntryLayout entryLayout : layouts) {
+                calculatedTotalHeight += entryLayout.height() + ENTRY_GAP;
+            }
+            maxScrollPx = Math.max(0, calculatedTotalHeight - viewportHeight);
+            scrollOffsetPx = Math.max(0, Math.min(scrollOffsetPx, maxScrollPx));
         }
         final int totalHeight = calculatedTotalHeight;
-        maxScrollPx = Math.max(0, totalHeight - viewportHeight);
-        scrollOffsetPx = Math.max(0, Math.min(scrollOffsetPx, maxScrollPx));
-
-        long now = System.currentTimeMillis();
+        queuedHeadCount = 0;
 
         // Render the complete chat pass as one managed batch.  GuiGraphics
         // otherwise flushes after every text/fill primitive while the chat
@@ -291,7 +338,7 @@ public final class ImmersiveChatManager {
                                 revealRight, Math.min(viewportBottom, cursorBottom));
                     }
                     drawEntry(graphics, font, entryLayout, viewportX, entryTop,
-                            viewportWidth, renderAlpha, focused);
+                            viewportWidth, renderAlpha, focused, !reveal);
                     if (reveal) {
                         graphics.disableScissor();
                     }
@@ -304,6 +351,16 @@ public final class ImmersiveChatManager {
                 if (focused && cursorBottom < viewportY - scrollOffsetPx - viewportHeight) {
                     break;
                 }
+            }
+            if (queuedHeadCount > 0) {
+                // Submit every buffered chat primitive once, then draw all
+                // visible heads in one submission per distinct skin. This
+                // replaces two setColor flushes and two blits per message.
+                graphics.flush();
+                PlayerFaceBatchRenderer.drawMany(graphics,
+                        queuedHeadSkins, queuedHeadX, queuedHeadY,
+                        queuedHeadSize, queuedHeadAlpha, queuedHeadCount);
+                queuedHeadCount = 0;
             }
             graphics.disableScissor();
 
@@ -750,16 +807,17 @@ public final class ImmersiveChatManager {
     }
 
     private static void drawEntry(GuiGraphics graphics, Font font, EntryLayout layout,
-                                  int x, int y, int width, int alpha, boolean focused) {
+                                  int x, int y, int width, int alpha, boolean focused,
+                                  boolean batchHead) {
         if (layout.entry().kind() == EntryKind.PLAYER) {
-            drawPlayerEntry(graphics, font, layout, x, y, width, alpha, focused);
+            drawPlayerEntry(graphics, font, layout, x, y, width, alpha, focused, batchHead);
         } else {
             drawSystemEntry(graphics, font, layout, x, y, width, alpha, focused);
         }
     }
 
     private static void drawPlayerEntry(GuiGraphics graphics, Font font, EntryLayout layout, int x, int y,
-                                        int width, int alpha, boolean focused) {
+                                        int width, int alpha, boolean focused, boolean batchHead) {
         ChatEntry entry = layout.entry();
 
         if (layout.mentioned()) {
@@ -769,7 +827,7 @@ public final class ImmersiveChatManager {
         }
 
         int headY = y + 2;
-        drawPlayerHead(graphics, entry, x, headY, alpha);
+        drawPlayerHead(graphics, entry, x, headY, alpha, batchHead);
         if (focused && !entry.playerName().isBlank()) {
             String quoteBody = entry.body().getString();
             HIT_AVATARS.add(new HitAvatar(x, headY, PLAYER_HEAD_SIZE, entry.playerName(), quoteBody));
@@ -933,15 +991,30 @@ public final class ImmersiveChatManager {
         graphics.pose().popPose();
     }
 
-    private static void drawPlayerHead(GuiGraphics graphics, ChatEntry entry, int x, int y, int alpha) {
+    private static void drawPlayerHead(GuiGraphics graphics, ChatEntry entry,
+                                       int x, int y, int alpha, boolean batch) {
         Minecraft mc = Minecraft.getInstance();
-        PlayerInfo playerInfo = mc.getConnection() == null || entry.playerId() == null
-                ? null
-                : mc.getConnection().getPlayerInfo(entry.playerId());
+        UUID playerId = entry.playerId();
+        PlayerInfo playerInfo = playerId == null ? null : CACHED_PLAYER_INFO.get(playerId);
+        if (playerInfo == null && mc.getConnection() != null && playerId != null) {
+            playerInfo = mc.getConnection().getPlayerInfo(playerId);
+            if (playerInfo != null) {
+                CACHED_PLAYER_INFO.put(playerId, playerInfo);
+            }
+        }
         if (playerInfo != null) {
-            graphics.setColor(1.0f, 1.0f, 1.0f, alpha / 255.0f);
-            PlayerFaceRenderer.draw(graphics, playerInfo.getSkin(), x, y, PLAYER_HEAD_SIZE);
-            graphics.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+            // Resolve the skin from the cached PlayerInfo so an asynchronously
+            // downloaded texture can still replace its temporary default.
+            ResourceLocation skin = playerInfo.getSkin().texture();
+            if (batch) {
+                queuePlayerHead(skin, x, y, PLAYER_HEAD_SIZE, alpha / 255.0F);
+            } else {
+                // Keep the per-entry reveal scissor exact during the short
+                // intro/outro. Stable rows take the shared face batch below.
+                graphics.flush();
+                PlayerFaceBatchRenderer.drawOne(
+                        graphics, skin, x, y, PLAYER_HEAD_SIZE, alpha / 255.0F);
+            }
             return;
         }
 
@@ -1107,6 +1180,21 @@ public final class ImmersiveChatManager {
         return intro * (1.0f - outro);
     }
 
+    private static boolean hasVisibleUnfocusedEntry(List<EntryLayout> layouts, long now) {
+        for (int index = layouts.size() - 1; index >= 0; index--) {
+            long timestamp = layouts.get(index).entry().timestamp();
+            if (now - timestamp >= UNFOCUSED_LIFETIME_MS) {
+                // Entries are appended chronologically. Once this reverse scan
+                // reaches an expired row, every earlier row is expired too.
+                return false;
+            }
+            if (Math.round(230.0f * unfocusedVisibility(timestamp, now)) > MIN_ALPHA) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static float easeOutCubic(float progress) {
         float clamped = Math.max(0.0f, Math.min(1.0f, progress));
         float remaining = 1.0f - clamped;
@@ -1136,6 +1224,8 @@ public final class ImmersiveChatManager {
         while (MESSAGES.size() > MAX_MESSAGES) {
             MESSAGES.remove(0);
         }
+        unfocusedVisibleUntilMs = Math.max(unfocusedVisibleUntilMs,
+                entry.timestamp() + UNFOCUSED_LIFETIME_MS);
         invalidateLayoutCache();
         if (persist) {
             // Keep the history append-only. Replaying each raw occurrence rebuilds the same folded count.
@@ -1144,6 +1234,24 @@ public final class ImmersiveChatManager {
     }
 
     private static void ensureSession(Minecraft mc) {
+        Object connection = mc.getConnection();
+        Object level = mc.level;
+        Object integratedServer = mc.getSingleplayerServer();
+        Object currentServer = mc.getCurrentServer();
+        if (sessionIdentityInitialized
+                && cachedSessionConnection == connection
+                && cachedSessionLevel == level
+                && cachedIntegratedServer == integratedServer
+                && cachedCurrentServer == currentServer) {
+            return;
+        }
+
+        sessionIdentityInitialized = true;
+        cachedSessionConnection = connection;
+        cachedSessionLevel = level;
+        cachedIntegratedServer = integratedServer;
+        cachedCurrentServer = currentServer;
+        CACHED_PLAYER_INFO.clear();
         String sessionKey = getSessionKey(mc);
         if (sessionKey.equals(activeSessionKey)) {
             return;
@@ -1154,7 +1262,26 @@ public final class ImmersiveChatManager {
         invalidateLayoutCache();
         scrollOffsetPx = 0;
         maxScrollPx = 0;
+        unfocusedVisibleUntilMs = 0L;
         loadHistory();
+    }
+
+    private static void queuePlayerHead(ResourceLocation skin, int x, int y,
+                                        int size, float alpha) {
+        if (queuedHeadCount == queuedHeadSkins.length) {
+            int newCapacity = queuedHeadSkins.length * 2;
+            queuedHeadSkins = java.util.Arrays.copyOf(queuedHeadSkins, newCapacity);
+            queuedHeadX = java.util.Arrays.copyOf(queuedHeadX, newCapacity);
+            queuedHeadY = java.util.Arrays.copyOf(queuedHeadY, newCapacity);
+            queuedHeadSize = java.util.Arrays.copyOf(queuedHeadSize, newCapacity);
+            queuedHeadAlpha = java.util.Arrays.copyOf(queuedHeadAlpha, newCapacity);
+        }
+        queuedHeadSkins[queuedHeadCount] = skin;
+        queuedHeadX[queuedHeadCount] = x;
+        queuedHeadY[queuedHeadCount] = y;
+        queuedHeadSize[queuedHeadCount] = size;
+        queuedHeadAlpha[queuedHeadCount] = Math.max(0.0F, Math.min(1.0F, alpha));
+        queuedHeadCount++;
     }
 
     private static String getSessionKey(Minecraft mc) {

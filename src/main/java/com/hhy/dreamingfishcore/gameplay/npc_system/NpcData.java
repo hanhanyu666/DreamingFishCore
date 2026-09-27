@@ -64,6 +64,8 @@ public class NpcData {
 
     public void setNpcGender(String npcGender) {
         this.npcGender = npcGender;
+        // 新字段一旦明确写入，旧拼写字段不应在 getter 中“复活”旧资料。
+        this.npcFeamale = null;
     }
 
     public String getNpcProfession() {

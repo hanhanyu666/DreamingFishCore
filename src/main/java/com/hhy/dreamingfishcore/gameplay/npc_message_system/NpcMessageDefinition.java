@@ -137,15 +137,4 @@ public class NpcMessageDefinition {
         return this;
     }
 
-    /** 仅供内置文案的精确版本迁移使用；返回内容是否实际变化。 */
-    boolean replaceText(String subject, String content) {
-        String safeSubject = subject == null ? "" : subject;
-        String safeContent = content == null ? "" : content;
-        if (getSubject().equals(safeSubject) && getContent().equals(safeContent)) {
-            return false;
-        }
-        this.subject = safeSubject;
-        this.content = safeContent;
-        return true;
-    }
 }

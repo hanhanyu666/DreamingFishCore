@@ -5,6 +5,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
@@ -55,8 +56,9 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载玩家属性", () -> PlayerAttributesDataManager.loadWorldData(server));
         runSafely("加载群系探索", () -> PlayerBiomesDataManager.loadWorldData(server));
         runSafely("加载任务地点", TaskLocationManager::load);
-        runSafely("加载故事系统", () -> StoryManager.loadWorldData(server));
         runSafely("加载故事内容包", () -> ContentPackManager.loadWorldData(server));
+        // 阶段 Java 文件在创建任务定义时读取文案目录，因此文案必须先就绪。
+        runSafely("加载故事系统", () -> StoryManager.loadWorldData(server));
         runSafely("加载玩家任务", () -> TaskDataManager.loadWorldData(server));
         runSafely("加载随记本", () -> StoryBookDataManager.loadWorldData(server));
         runSafely("加载 NPC 关系", () -> NpcRelationManager.loadWorldData(server));
@@ -66,11 +68,17 @@ public final class WorldDataLifecycleEvents {
         runSafely("核对私信回复与 NPC 关系", NpcMessageManager::reconcileFavorabilityEffects);
         runSafely("加载复活信息", () -> RevivalInfoManager.loadWorldData(server));
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
+        // 所有投影管理器都完成加载后，再补做一次当前阶段入口。
+        // 这样重启时即使没有玩家在线，也不会丢失阶段公告/倒计时到期公告；
+        // 玩家私信和个人引导仍在登录时按各自事实幂等重建。
+        // 所有剧情投影在依赖管理器加载完成后只从 StoryManager 进入一次。
+        runSafely("核对当前故事阶段入口", () -> StoryManager.onServicesReady(server));
     }
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         StoryManager.tickActiveTime(event.getServer());
+        PlayerInfectionManager.tickTreatmentWindows(event.getServer());
         if (++autoSaveCounter >= AUTO_SAVE_INTERVAL_TICKS) {
             autoSaveCounter = 0;
             saveDirtyData(event.getServer());
@@ -123,8 +131,8 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存个人引导", () -> GuidanceManager.saveIfDirty(server));
         saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
-        // 故事流程游标最后保存，确保引导、任务和私信等效果数据已经先进入各自缓存。
-        saved &= runSaveSafely("保存故事流程玩家进度", () -> ContentPackManager.saveIfDirty(server));
+        // StoryManager 已经保存统一的剧情事实；内容包管理器只负责文案配置，
+        // 不再拥有第二份阶段状态。
         return saved;
     }
 

@@ -1,79 +1,110 @@
-# 故事内容包（流程运行时）
+# 当前开服剧情内容包
 
-故事模块现在只有一条运行链：外部模块提交已经在服务端验证过的 `StoryEvent`，
-`StoryFlowEngine` 按当前手动阶段、玩家流程游标和节点条件选择一个节点，再按顺序执行
-JSON 中的效果。阿拜多斯开场也完全走这条链，不再有单独的开场推进器。
+新增 `story_operations.json` 管理手写总结草稿和固定人数门槛的世界任务；发布和切章仍由服主操作，详见 [剧情运营指南](story/STORY_OPERATIONS_GUIDE.md)。
 
-## 内容文件
+医院小章随余梦期自动开放：模板说明 → 共同建设 → 人工验收 → 正式复查，并提供每日模板维护。已处于余梦期的存档更新重启后自动接入。配置、命令与验收步骤见 [医院发布指南](story/HOSPITAL_ROLLOUT.md)。
 
-- `story_stage_data.json`：五个手动阶段和任务定义。
-- `story_flows.json`：事件节点、流程状态、效果参数和 NPC 台词。
-- `npc_data.json`：NPC 档案；本上线批次只保留 101 白芷、105 周岑。
-- `npc_messages.json`：NPC 终端私信及预设回复。
-- `notices.json`：公告配置；当前本地投放文件包含阿拜多斯安置公告。
+本文只记录当前简易版。`PROJECT-M.D.G.A` 和其他设计稿仅供未来讨论，不是当前流程的
+实现依据。
 
-玩家流程状态保存在世界数据 `data/dreamingfishcore/story/flow_player_progress.json`，
-每条流程按玩家保存 `cursor`、一次性效果记录和流程旗标。它与全服故事阶段状态分开，
-因此玩家选择加入逐光会不会改变全服阶段。
+## 当前边界
 
-## 节点格式（schemaVersion 2）
+- 第一阶段：玩家完成“加入逐光会 / 保持独立”的个人选择。
+- 第二阶段：按《余梦期-逐光会公开救治.md》执行公开救治、江晚复核、药剂、面具。
+- 阶段由服主手动切换；第一阶段个人选择不会自动切换全服阶段。
+- 随机本、线索、调查板、投票和第三阶段以后暂不实现。
 
-```json
-{
-  "id": "enter_abydos",
-  "event": "LOCATION_ENTERED",
-  "locationId": "dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3",
-  "scope": "PLAYER",
-  "conditions": {"cursor": "enter_abydos"},
-  "effects": [
-    {"id": "arrival_message", "type": "SEND_NPC_MESSAGE", "parameters": {
-      "messageId": "dreamingfishcore:opening/baizhi/abydos_arrival"
-    }},
-    {"id": "resolve_travel", "type": "RESOLVE_GUIDANCE", "parameters": {
-      "id": "dreamingfishcore:guidance/opening/travel_to_abydos"
-    }}
-  ],
-  "nextNodeId": "meet_baizhi"
-}
-```
+## 代码和文案的分工
 
-`subjectId` 用于公告 key、NPC ID 或消息定义 ID，`secondaryId` 用于预设回复 ID，
-`locationId` 必须是稳定地点 ID。`initialNodeId` 是新玩家在该流程中的第一个游标。
-每个效果都要有节点内唯一的稳定 `id`；一次性效果日志使用这个 ID，不依赖数组顺序。
+| 内容 | 唯一流程代码 | 可编辑文案 |
+| --- | --- | --- |
+| 梦的开始 | `gameplay/opening_story_system/OpeningStory.java` | `story_text.json`、NPC/私信配置 |
+| 余梦期 | `gameplay/afterdream_story_system/AfterdreamStory.java` | `story_text.json`、白芷私信配置 |
+| 医院小章与每日维护 | `gameplay/hospital_system/` | `hospital.json`、`story_text.json` 的 `hospital.*` |
+| 感染规则 | `playerattributes_system/infection/PlayerInfectionManager.java` | 无 |
+| 全服入口和存档 | `gameplay/story_system/StoryManager.java` | 无 |
 
-可用条件包括：
+story_operations.json 仅支持已注册接入点和固定人数门槛；不定义任意节点、奖励或状态跳转。新增具体玩法仍修改对应阶段 Java 文件。
 
-- `cursor`：玩家当前等待的节点；
-- `membership`：`ANY`、`MEMBER` 或 `NON_MEMBER`；
-- `playerFlag`：该流程玩家旗标；
-- `worldFlag`：全服故事旗标。
-
-效果由服务端注册，当前通用效果有 `SEND_NPC_MESSAGE`、`CREATE_GUIDANCE`、
-`RESOLVE_GUIDANCE`、`RECORD_PERSONAL_TASK`、`GIVE_ITEMS`、`NOTIFY_PLAYER`、
-`SYNC_PLAYER`、`SET_PLAYER_FLAG` 和 `SET_WORLD_FLAG`。效果默认只执行一次；修复类
-效果可以写 `"once": false`。未注册效果会让当前节点停留在原游标并记录错误，不会跳过节点。
-
-`dialogueNpcId` 和 `dialogueLines` 可以直接放在节点上。只要节点的条件与玩家当前游标
-匹配，打开对应 NPC 就会看到这些台词；台词不再写在 Java 状态分支里。
-
-## 当前阿拜多斯流程
-
-`阅读公告 → 进入阿拜多斯 → 与白芷交谈 → 回复周岑联络消息 → 阅读逐光会介绍 →
-加入或保持独立`。每个事实只消费一个节点，重复打开公告、重复进入地点、重复点击或
-重复回复都不会重复推进；加入分支只修改该玩家的组织身份。
-
-## 阶段规则
-
-阶段顺序固定为“梦的开始 → 余梦期 → 管制期 → 疑光期 → 破晓期”，只能由服主命令手动切换。
-流程节点不能自动切换阶段。后四阶段本轮仍是空壳，随记本也没有接入流程运行时。
-
-## 热重载
+## 第一阶段：梦的开始
 
 ```text
-/dreamingfish story content validate
-/dreamingfish story content reload <contentId>
+读阿拜多斯公告
+  → 进入阿拜多斯地点
+  → 与白芷交谈
+  → 查看并回复周岑联络消息
+  → 阅读周岑介绍
+       ├─ 加入逐光会 → 写入身份、发一次补给、建立基地引导
+       └─ 保持独立   → 写入选择，不发成员补给
 ```
 
-校验会同时检查阶段引用、节点跳转和已有玩家游标；失败时旧流程继续运行。部署到已有
-服务器时，必须把 `story_flows.json` 更新到 schema 2。新版本不读取旧的开场专用状态、
-不自动迁移旧地点名称；如需留档，请由服主在停服维护前自行备份旧文件。
+状态定义在 `OpeningStoryStep`，处理方法集中在 `OpeningStory`。离开第一阶段后旧入口
+停止；进入第二阶段时“建设逐光会基地”归档并保留实际结果，不再成为 HUD 当前目标。
+
+## 第二阶段：余梦期
+
+```text
+阶段切换
+  → 公开救治公告
+  → 白芷医疗说明私信
+  → 玩家读信
+  → 进入医疗接待点
+  → 第一次江晚交互：共同开场
+  → 第二次江晚交互：终端复核并发一瓶药剂
+  → 0/1 级实际服药清零后完成医疗
+  → 首次接待启动全服 48,000 在线活动 tick 倒计时
+  → 到期发布面具公告
+  → 玩家重新打开江晚并成功领取面具
+```
+
+0、1、2 级首次复核都发一瓶基因复苏试剂；二级感染者不能使用当前药剂。倒计时到期
+不等于面具已经领取，首次接待所在的同一对话会话不会直接发面具。NPC 界面刷新也不
+算新会话，必须关闭后重新打开江晚。
+
+面具实际放入背包后才开启全局感染规则：幸存者上限改为 200、停止每日自然回落、面具
+只阻断一级感染者传播；新达到阈值的一级感染者拥有 24,000 tick 治疗窗口，逾期只将
+该玩家转为二级并触发一次病毒进化公告。
+
+## 唯一剧情存档
+
+```text
+<世界>/data/dreamingfishcore/story/story_state.json
+```
+
+文件中的 `StoryWorldState` 同时保存当前阶段、活动 tick、两阶段个人事实和余梦期全服
+倒计时。公告已读、私信记录、引导和普通任务仍由各自系统保存，但只是显示/交互投影，
+不拥有剧情步骤。
+
+当前代码不会读取或迁移旧的：
+
+```text
+world_state.json
+opening_player_progress.json
+afterdream_player_progress.json
+flow_player_progress.json
+story_flows.json
+story_stage_data.json
+```
+
+旧版本切换由运营者停服后手工写新的 `story_state.json`；本模组不会在线猜测旧游标。
+
+## 配置职责
+
+| 文件 | 允许内容 |
+| --- | --- |
+| `config/dreamingfishcore/story_text.json` | 阶段名、任务文字、公告正文、对白、引导和通知 |
+| `config/dreamingfishcore/npc_messages.json` | 私信正文、预设回复、关系条件 |
+| `config/dreamingfishcore/npc_data.json` | NPC 身份、外观、普通非主线对白 |
+| `config/dreamingfishcore/notices.json` | 已创建公告的存档和展示文字 |
+| `config/dreamingfishcore/task_locations.json` | 地点边界、维度和名称 |
+
+改一句话只改 `story_text.json` 或对应私信配置；改顺序、奖励或感染条件只改 Java。不要
+在配置里新增自动触发器，也不要让客户端完成包直接修改故事状态。
+
+## 修改时只看这条链
+
+游戏事件/网络包 → `StoryManager` → 当前阶段 `*Story.java` → 公告、私信、NPC、引导、
+任务投影。新入口先加到 `StoryManager`，不要在 NPC、公告或 HUD 中复制状态判断。
+
+流程代码改完后，当前开发阶段只做一次本地 `compileJava`；远程服务器保持不动，直到
+本地流程确认完成。

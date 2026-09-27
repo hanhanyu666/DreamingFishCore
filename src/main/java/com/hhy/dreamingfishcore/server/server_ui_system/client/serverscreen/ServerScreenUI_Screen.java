@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.client.cache.EconomyTerminalClientCache;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
@@ -20,7 +21,9 @@ import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMe
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageReplyRequest;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageSnapshotRequest;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.server.server_ui_system.client.ServerInformationDisplay;
 import com.hhy.dreamingfishcore.server.economy_bridge.network.Packet_EconomyTerminalRequest;
 import com.hhy.dreamingfishcore.server.playerdata_system.network.Packet_RequestPlayerStats;
 import com.hhy.dreamingfishcore.server.title_system.PlayerTitleManager;
@@ -104,6 +107,15 @@ public class ServerScreenUI_Screen extends Screen {
     private static final int TABLET_CARD_BORDER_COLOR = 0xFF344555;
     private static final int TABLET_TEXT_COLOR = 0xFFE8EDF2;
     private static final int TABLET_MUTED_TEXT_COLOR = 0xFFA7B2BE;
+    // NPC 私信未读状态使用独立的暖金色层级，和普通蓝色消息一眼区分。
+    private static final int NPC_UNREAD_ACCENT_COLOR = 0xFFFFC857;
+    private static final int NPC_UNREAD_CARD_COLOR = 0xFF4A3821;
+    private static final int NPC_UNREAD_CARD_ACTIVE_COLOR = 0xFF5A4324;
+    private static final int NPC_UNREAD_CARD_HOVER_COLOR = 0xFF624925;
+    private static final int NPC_UNREAD_BORDER_COLOR = 0xFFD39A3A;
+    private static final int NPC_UNREAD_TEXT_COLOR = 0xFFFFF0C2;
+    private static final int NPC_UNREAD_BADGE_COLOR = 0xFF805A1C;
+    private static final int NPC_UNREAD_DETAIL_BODY_COLOR = 0xFF30281D;
     // 注意：游戏化卡片配色、进度条颜色等常量已移至 ServerScreenUI_RendererUtils
 
     // ==================== 动画时间配置 ====================
@@ -206,8 +218,8 @@ public class ServerScreenUI_Screen extends Screen {
     private int noticeDetailMaxScroll = 0;
     private final int[] noticeDetailBackArea = new int[4];
     private final int[] noticeDetailContentArea = new int[4];
-    /** 游戏公告的阶段筛选；首次打开或阶段切换后默认选中当前已开放阶段。 */
-    private String selectedNoticeStageId = null;
+    /** 游戏公告的阶段筛选；空字符串表示查看全部已开放阶段的历史公告。 */
+    private String selectedNoticeStageId = "";
     private final List<NoticeStageClickArea> noticeStageClickAreas = new ArrayList<>();
     /** 仅用于记录当前阶段侧栏的布局尺寸，点击热区仍由 noticeStageClickAreas 管理。 */
     private int noticeStageFilterHeight = 0;
@@ -234,18 +246,35 @@ public class ServerScreenUI_Screen extends Screen {
     // ==================== 任务系统数据 ====================
     /** 故事任务卡片同时容纳世界任务说明和对应的个人线索。 */
     private static final int TASK_CARD_HEIGHT = 62;
-    private static final int VISIBLE_TASKS = 3;  // 可见任务数量
+    private static final int VISIBLE_TASKS = 4;  // 默认一次展示四项任务
+    /** 主线阶段和任务暂由服主推进，客户端不显示自动完成比例。 */
+    private static final boolean MANUAL_STORY_PROGRESS = true;
     private static long taskScrollOffset = 0;  // 任务滚动偏移量
     private static boolean taskShowServerTasks = true;  // 保留旧快照兼容状态；故事页现在统一显示所有任务
-    private static String selectedStageId = null;  // 当前选中的阶段ID，null表示显示阶段列表
+    private static String selectedStageId = null;  // 当前选中的阶段ID；打开故事页时默认为当前阶段
     private static long stageScrollOffset = 0;  // 阶段网格滚动行偏移量
-    private int stageGridColumns = 1;
-    private int stageGridVisibleRows = 1;
-    private int stageGridCardHeight = 64;
-    private int stageGridGap = 8;
-    private final List<StageClickArea> stageClickAreas = new ArrayList<>();
+    private int taskGridColumns = 1;
+    private int taskGridVisibleRows = 1;
+    private int taskGridCardHeight = 52;
+    private int taskGridGap = 6;
     private final List<StageClickArea> storyStageNavClickAreas = new ArrayList<>();
-    // 注意：任务点击区域已移至 PageRenderer.taskClickArea 和 taskTabArea
+    /** 故事页右侧统一纵向内容滚动；总结和任务列表属于同一阅读流。 */
+    private static long storyContentScrollOffset = 0L;
+    private int storyContentMaxScroll = 0;
+    /** 当前打开的故事任务详情；空字符串表示任务列表。 */
+    private String selectedStoryTaskKey = "";
+    private long storyTaskDetailScrollOffset = 0L;
+    private int storyTaskDetailMaxScroll = 0;
+    private final List<StoryTaskClickArea> storyTaskClickAreas = new ArrayList<>();
+    private final int[] storyContentArea = new int[4];
+    private final int[] storyTaskDetailBackArea = new int[4];
+    private final int[] storyTaskTrackArea = new int[4];
+    private String storyTaskTrackDefinition = "";
+    private final int[] storyTaskDetailContentArea = new int[4];
+    private final int[] storyStageListArea = new int[4];
+    private int storyStageMaxScroll = 0;
+    private static final int STORY_TASK_CARD_HEIGHT = 78;
+    private static final int STORY_TASK_CARD_GAP = 8;
 
     // ==================== NPC 私信 ====================
     private static int selectedMessageNpcId = -1;
@@ -255,7 +284,6 @@ public class ServerScreenUI_Screen extends Screen {
     private static String selectedMessageRecordId = "";
     private static long messageDetailScrollOffset = 0L;
     private int messageDetailMaxScroll = 0;
-    private int lastReadRequestedNpcId = -1;
     private final List<ConversationClickArea> conversationClickAreas = new ArrayList<>();
     private final List<MessageClickArea> messageClickAreas = new ArrayList<>();
     private final List<MessageReplyClickArea> messageReplyClickAreas = new ArrayList<>();
@@ -288,15 +316,15 @@ public class ServerScreenUI_Screen extends Screen {
             },
             "夜间行动", "带上光源、尽量结伴，并为撤离预留至少 20 点体力；不要让体力和勇气同时见底。"),
         new HelpTopic(
-            "03", "死亡与重生", "复活点数、物品栏与尸体", 0xFFFFC857,
+            "03", "死亡与重生", "模板重建余量、物品栏与尸体", 0xFFFFC857,
             new String[]{"幸存者 5 点", "感染者 20 点", "每日 +5 点"},
             new String[]{
-                "正常重生会扣除基础复活点数，物品留在死亡地点的尸体中，需要返回取回。",
+                "正常重生会扣除基础模板重建余量，物品留在死亡地点的尸体中，需要返回取回。",
                 "也可额外消耗 30 点保留物品栏：幸存者总计 35 点，感染者总计 50 点。",
                 "尸体会保存归属与位置；正常重生时可以锁定尸体，保护留下的物品。",
-                "目前每个游戏日会补回 5 点复活点数，上限 100；连基础消耗都无法支付时仍需等待救援。"
+                "余梦期的余量停止自然恢复。维护服务开放后，可向医疗工作人员提交物资，每个主世界游戏日办理一次；所需物品与恢复量以现场说明为准。"
             },
-            "出发前检查", "在个人档案查看剩余复活点数。每日补充是缓冲，不是鼓励把最后一点储备用光。"),
+            "出发前检查", "在个人档案查看剩余模板重建余量。余量上限为 100；最后一点余量仍可完成一次标准重建，耗尽后的下一次死亡需要他人救援。"),
         new HelpTopic(
             "04", "感染与体征", "受伤会推动感染恶化", 0xFF8B5CF6,
             new String[]{"受伤会累积", "白天 -5 / 日", "100% 感染者"},
@@ -304,7 +332,7 @@ public class ServerScreenUI_Screen extends Screen {
                 "生命值净下降就会增加感染，增加量约为损失生命的 1/5；被丧尸击败还会额外增加。",
                 "在感染者 32 格内停留，每 30 秒也会增加 1 点感染；达到 80% 后获得虚弱 I 与缓慢 I。",
                 "根据目前的观察，未完全感染者在有天空的白天会逐渐回落，完整一个白天约降低 5 点；这不是治愈。",
-                "感染达到 100% 就会成为感染者，死亡时需要消耗更多复活点数；感染规则会随故事阶段变化。"
+                "感染达到 100% 就会成为感染者，死亡时需要消耗更多模板重建余量；感染规则会随故事阶段变化。"
             },
             "关注体征", "饱食度触发的普通自然回血最多恢复到最大生命的 70%；金苹果、恢复效果和医疗物资不受此限制。"),
         new HelpTopic(
@@ -585,7 +613,9 @@ public class ServerScreenUI_Screen extends Screen {
         int onlinePlayers = mc.player != null && mc.player.connection != null ?
             mc.player.connection.getOnlinePlayers().size() : 0;
         drawTopDateTime(guiGraphics, tabletX + 6, tabletY + 12, tabletWidth - 12, 16);
-        drawTabletStatusBar(guiGraphics, tabletX + tabletWidth - 148, tabletY + 12, 130, 16, onlinePlayers, 20, 20.0f);
+        String tpsText = ServerInformationDisplay.getServerTpsText(mc);
+        drawTabletStatusBar(guiGraphics, tabletX + tabletWidth - 148, tabletY + 12, 130, 16,
+            onlinePlayers, 20, tpsText);
 
         boolean revealContent = !skipAnimation && !isClosing && getAnimationProgress() < 1.0f;
         if (revealContent) {
@@ -651,8 +681,10 @@ public class ServerScreenUI_Screen extends Screen {
         drawText(guiGraphics, "PLAYER", x + 12, y + 12, TABLET_MUTED_TEXT_COLOR);
 
         float infection = PlayerInfectionManager.getCurrentInfectionClient(player);
-        String status = infection >= 100 ? "感染者" : "幸存者";
-        int statusColor = infection >= 100 ? 0xFFFF6677 : 0xFF50D890;
+        boolean profileInfected = PlayerAttributesClientCache.isInfected(player.getUUID());
+        int infectionMaximum = PlayerInfectionManager.getInfectionMaximumClient(player);
+        String status = profileInfected ? "感染者" : "幸存者";
+        int statusColor = profileInfected ? 0xFFFF6677 : 0xFF50D890;
         String playerName = player.getScoreboardName();
         if (mc.font.width(playerName) > heroW - 24) {
             playerName = ServerScreenUI_RendererUtils.truncateText(mc.font, playerName, heroW - 24 - mc.font.width("...")) + "...";
@@ -739,10 +771,10 @@ public class ServerScreenUI_Screen extends Screen {
         int attrBottom = y + contentH;
         int attrH = Math.max(0, attrBottom - attrY);
         drawSoftRect(guiGraphics, rightX, attrY, rightW, attrH, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
-        boolean infected = ClientCacheManager.isInfected(player.getUUID());
+        boolean infected = PlayerAttributesClientCache.isInfected(player.getUUID());
         float respawnPoint = ClientCacheManager.getRespawnPoint(player.getUUID());
         int deathCost = infected ? 20 : 5;
-        int respawnTimes = (int) (respawnPoint / deathCost);
+        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, deathCost);
         String respawnWarning = respawnTimes <= 0 ? "警告: 无法复活" : (respawnTimes < 2 ? "警告: 复活不足" : "");
         drawText(guiGraphics, "身体状态", rightX + 12, attrY + 9, TABLET_TEXT_COLOR);
         if (!respawnWarning.isEmpty()) {
@@ -770,10 +802,10 @@ public class ServerScreenUI_Screen extends Screen {
             strength + "/" + maxStrength, 0xFF50D890);
         drawMiniBar(guiGraphics, innerX + barW + columnGap, innerY + rowH + rowGap, barW, rowH, "勇气", courage / maxCourage,
             String.format("%.0f/%.0f", courage, maxCourage), 0xFFB58BFF);
-        drawMiniBar(guiGraphics, innerX, innerY + (rowH + rowGap) * 2, barW, rowH, "感染", infection / 100.0f,
-            String.format("%.1f/100", infection), 0xFF8B5CF6);
-        drawMiniBar(guiGraphics, innerX + barW + columnGap, innerY + (rowH + rowGap) * 2, barW, rowH, "分裂", respawnPoint / 100.0f,
-            String.format("%.1f/%d次", respawnPoint, respawnTimes), infected ? 0xFFFF6677 : 0xFF7AA8C7);
+        drawMiniBar(guiGraphics, innerX, innerY + (rowH + rowGap) * 2, barW, rowH, "感染", infection / infectionMaximum,
+            String.format("%.1f/%d", infection, infectionMaximum), 0xFF8B5CF6);
+        drawMiniBar(guiGraphics, innerX + barW + columnGap, innerY + (rowH + rowGap) * 2, barW, rowH, "模板重建余量", respawnPoint / 100.0f,
+            String.format("%.1f/100", respawnPoint), infected ? 0xFFFF6677 : 0xFF7AA8C7);
     }
 
     private void renderRankManagementPage(GuiGraphics guiGraphics, int mouseX, int mouseY,
@@ -905,20 +937,43 @@ public class ServerScreenUI_Screen extends Screen {
     private void renderStoryTaskPage(GuiGraphics guiGraphics, int mouseX, int mouseY, int x, int y, int width, int height) {
         float virtualMouseX = mouseX / uiScale;
         float virtualMouseY = mouseY / uiScale;
+        storyTaskClickAreas.clear();
+        setArea(storyContentArea, 0, 0, 0, 0);
+        setArea(storyTaskDetailBackArea, 0, 0, 0, 0);
+        setArea(storyTaskDetailContentArea, 0, 0, 0, 0);
         var storyStages = getPlayerVisibleStoryStages(ClientCacheManager.getStoryStages());
-        if (selectedStageId != null && storyStages.values().stream()
+        if (storyStages.isEmpty()) {
+            drawText(guiGraphics, "故事进展", x + 4, y + 2, TABLET_TEXT_COLOR);
+            renderPlaceholderPage(guiGraphics, x, y + 28, width, Math.max(0, height - 28),
+                    "故事阶段尚未同步", "请稍候再打开故事进展");
+            return;
+        }
+        String defaultStageId = storyStages.values().stream()
+                .filter(java.util.Objects::nonNull)
+                .filter(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::isCurrentStage)
+                .map(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::getStageId)
+                .findFirst()
+                .orElseGet(() -> storyStages.values().stream()
+                        .filter(java.util.Objects::nonNull)
+                        .min(java.util.Comparator.comparingInt(
+                                com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::getStageNumber))
+                        .map(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::getStageId)
+                        .orElse(null));
+        if (selectedStageId == null || storyStages.values().stream()
                 .noneMatch(stage -> stage != null && selectedStageId.equals(stage.getStageId()))) {
-            // 世界阶段推进或客户端快照更新后，回收已经不可见的旧阶段选择，避免剧透/空白页。
-            selectedStageId = null;
+            // 故事页不再有“阶段卡片列表”中间态；每次进入直接落在当前阶段。
+            selectedStageId = defaultStageId;
             stageScrollOffset = 0L;
             taskScrollOffset = 0L;
+            storyContentScrollOffset = 0L;
+            clearStoryTaskDetail();
         }
         int totalStoryTasks = storyStages.values().stream()
                 .filter(java.util.Objects::nonNull)
                 .mapToInt(stage -> stage.getTasks() == null ? 0 : stage.getTasks().size())
                 .sum();
         drawText(guiGraphics, "故事进展", x + 4, y + 2, TABLET_TEXT_COLOR);
-        String overview = storyStages.size() + " 个阶段 · " + totalStoryTasks + " 项世界任务";
+        String overview = storyStages.size() + " 个阶段 · " + totalStoryTasks + " 项剧情任务";
         drawText(guiGraphics, overview, x + width - mc.font.width(overview) - 4, y + 2,
             totalStoryTasks > 0 ? TABLET_MUTED_TEXT_COLOR : 0xFFFFC857);
 
@@ -933,10 +988,16 @@ public class ServerScreenUI_Screen extends Screen {
         taskShowServerTasks = true;
         int contentY = y + 28;
         int contentH = Math.max(0, y + height - contentY);
-        if (selectedStageId == null) {
-            renderStoryStageList(guiGraphics, virtualMouseX, virtualMouseY, x, contentY, width, contentH, storyStages);
+        int sidebarWidth = renderStoryStageList(
+                guiGraphics, virtualMouseX, virtualMouseY, x, contentY, width, contentH, storyStages);
+        int detailsX = x + sidebarWidth + 10;
+        int detailsWidth = Math.max(1, width - sidebarWidth - 10);
+        if (isStoryTaskDetailOpen()) {
+            renderStoryTaskDetail(guiGraphics, virtualMouseX, virtualMouseY,
+                    detailsX, contentY, detailsWidth, contentH, storyStages);
         } else {
-            renderStoryStageTasks(guiGraphics, virtualMouseX, virtualMouseY, x, contentY, width, contentH, storyStages);
+            renderStoryStageTasks(guiGraphics, virtualMouseX, virtualMouseY,
+                    detailsX, contentY, detailsWidth, contentH, storyStages);
         }
     }
 
@@ -950,22 +1011,21 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     private void renderRespawnSummary(GuiGraphics guiGraphics, LocalPlayer player, int x, int y, int width) {
-        boolean infected = ClientCacheManager.isInfected(player.getUUID());
+        boolean infected = PlayerAttributesClientCache.isInfected(player.getUUID());
         float respawnPoint = ClientCacheManager.getRespawnPoint(player.getUUID());
         int deathCost = infected ? 20 : 5;
-        int respawnTimes = (int) (respawnPoint / deathCost);
+        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, deathCost);
         int color = infected ? 0xFFFF6677 : (respawnTimes <= 0 ? 0xFFFF6677 : 0xFF50D890);
         drawText(guiGraphics, infected ? "感染状态: 感染者" : "感染状态: 幸存者", x, y, color);
-        String respawnText = "分裂 " + String.format("%.1f/100", respawnPoint) + "  可重生 " + respawnTimes + " 次";
+        String respawnText = "模板重建余量 " + String.format("%.1f/100", respawnPoint) + "  可重生 " + respawnTimes + " 次";
         if (mc.font.width(respawnText) > width) {
             respawnText = ServerScreenUI_RendererUtils.truncateText(mc.font, respawnText, width - mc.font.width("...")) + "...";
         }
         drawText(guiGraphics, respawnText, x, y + 14, TABLET_MUTED_TEXT_COLOR);
     }
 
-    private void renderStoryStageList(GuiGraphics guiGraphics, float mouseX, float mouseY, int x, int y, int width, int height,
-                                      java.util.Map<Integer, com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> storyStages) {
-        stageClickAreas.clear();
+    private int renderStoryStageList(GuiGraphics guiGraphics, float mouseX, float mouseY, int x, int y, int width, int height,
+                                     java.util.Map<Integer, com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> storyStages) {
         storyStageNavClickAreas.clear();
 
         // 左栏采用梦屿广播的“阶段筛选”样式：窄面板、强调色竖线和紧凑按钮，
@@ -974,8 +1034,6 @@ public class ServerScreenUI_Screen extends Screen {
         if (width < 300) {
             sidebarW = Math.max(112, width / 3);
         }
-        int listX = x + sidebarW + 10;
-        int listW = Math.max(1, width - sidebarW - 10);
         drawSoftRect(guiGraphics, x, y, sidebarW, height, 3, 0xFF18232D, TABLET_CARD_BORDER_COLOR);
         guiGraphics.fill(RenderType.gui(), x, y + 6, x + 3, y + Math.max(6, height - 6), 0xFF4FC3F7);
         drawText(guiGraphics, "任务目录", x + 12, y + 9, TABLET_TEXT_COLOR);
@@ -984,28 +1042,53 @@ public class ServerScreenUI_Screen extends Screen {
 
         java.util.List<Integer> sortedStageIds = new java.util.ArrayList<>(storyStages.keySet());
         java.util.Collections.sort(sortedStageIds);
-        var currentStage = storyStages.values().stream()
-            .filter(java.util.Objects::nonNull)
-            .filter(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::isCurrentStage)
-            .findFirst()
-            .orElse(null);
 
-        int navY = y + 48;
+        int navTop = y + 48;
+        int footerTop = Math.max(navTop, y + height - 74);
+        int navViewportHeight = Math.max(1, footerTop - navTop - 5);
         final int navHeight = 22;
         final int navGap = 5;
-        for (Integer stageKey : sortedStageIds) {
+        int visibleStageCount = Math.max(1, (navViewportHeight + navGap) / (navHeight + navGap));
+        int maxStageOffset = Math.max(0, sortedStageIds.size() - visibleStageCount);
+        storyStageMaxScroll = maxStageOffset;
+        stageScrollOffset = Math.max(0L, Math.min(maxStageOffset, stageScrollOffset));
+        setArea(storyStageListArea, x + 4, navTop, x + sidebarW - 4, footerTop);
+
+        guiGraphics.enableScissor(
+                (int) ((x + 4) * uiScale),
+                (int) (navTop * uiScale),
+                (int) ((x + sidebarW - 4) * uiScale),
+                (int) (footerTop * uiScale));
+        int firstStage = (int) stageScrollOffset;
+        int visibleStages = Math.min(visibleStageCount, sortedStageIds.size() - firstStage);
+        for (int index = 0; index < visibleStages; index++) {
+            Integer stageKey = sortedStageIds.get(firstStage + index);
             var stage = storyStages.get(stageKey);
-            if (stage == null || navY + navHeight > y + height - 78) {
-                break;
+            if (stage == null) {
+                continue;
             }
+            int navY = navTop + index * (navHeight + navGap);
             String stageLabel = getNoticeStageButtonLabel(stage);
-            boolean selected = currentStage != null
-                && java.util.Objects.equals(currentStage.getStageId(), stage.getStageId());
+            if (stage.isCurrentStage()) {
+                stageLabel += " · 当前";
+            }
+            boolean selected = java.util.Objects.equals(selectedStageId, stage.getStageId());
             drawSegmentButton(guiGraphics, x + 8, navY, sidebarW - 16, navHeight,
-                fitText(stageLabel, sidebarW - 28), selected, mouseX, mouseY, 0xFF4FC3F7);
+                    fitText(stageLabel, sidebarW - 28), selected, mouseX, mouseY, 0xFF4FC3F7);
             storyStageNavClickAreas.add(new StageClickArea(
-                x + 8, navY, x + sidebarW - 8, navY + navHeight, stage.getStageId()));
-            navY += navHeight + navGap;
+                    x + 8, navY, x + sidebarW - 8, navY + navHeight, stage.getStageId()));
+        }
+        guiGraphics.disableScissor();
+        if (maxStageOffset > 0) {
+            int trackX = x + sidebarW - 5;
+            int thumbHeight = Math.max(10, navViewportHeight * visibleStageCount / sortedStageIds.size());
+            int travel = Math.max(0, navViewportHeight - thumbHeight);
+            int thumbY = navTop + (maxStageOffset == 0
+                    ? 0 : (int) (travel * stageScrollOffset / maxStageOffset));
+            guiGraphics.fill(RenderType.gui(), trackX, navTop, trackX + 2,
+                    navTop + navViewportHeight, 0x44344555);
+            guiGraphics.fill(RenderType.gui(), trackX, thumbY, trackX + 2,
+                    thumbY + thumbHeight, 0xFF4FC3F7);
         }
 
         int taskCount = storyStages.values().stream()
@@ -1014,125 +1097,20 @@ public class ServerScreenUI_Screen extends Screen {
             .sum();
         int progressLabelY = Math.max(y + 58, y + height - 63);
         drawText(guiGraphics, "推进方式", x + 12, progressLabelY, TABLET_TEXT_COLOR);
-        drawText(guiGraphics, fitText("完成玩家比例共同推进故事", sidebarW - 24), x + 12,
+        drawText(guiGraphics, fitText("每位玩家按自己的经历推进", sidebarW - 24), x + 12,
             progressLabelY + 16, 0xFF78D6A3);
-        drawText(guiGraphics, GuidanceClientCache.isLoaded() ? "线索已并入任务卡" : "线索同步中…",
+        drawText(guiGraphics, "阶段由服主手动切换",
             x + 12, progressLabelY + 32, TABLET_MUTED_TEXT_COLOR);
         String archiveCount = storyStages.size() + " 个阶段 · " + taskCount + " 项任务";
         drawText(guiGraphics, fitText(archiveCount, sidebarW - 24), x + 12, y + height - 17,
             TABLET_MUTED_TEXT_COLOR);
-
-        drawText(guiGraphics, "世界故事任务", listX, y + 1, TABLET_TEXT_COLOR);
-        String stageHint = currentStage == null ? "阶段尚未同步" : "当前 · " + currentStage.getStageName();
-        drawText(guiGraphics, fitText(stageHint, Math.max(24, listW - mc.font.width("世界故事任务") - 18)),
-            listX + Math.max(0, listW - mc.font.width(stageHint)), y + 1, TABLET_MUTED_TEXT_COLOR);
-
-        int gap = 8;
-        int stageTop = y + 19;
-        int bottom = y + height;
-        // 故事阶段列表占满内容区；个人引导不再另起一块，而是在阶段任务卡中显示。
-        int stageHeight = Math.max(56, bottom - stageTop);
-        stageHeight = Math.min(stageHeight, Math.max(0, bottom - stageTop));
-
-        int minCardWidth = 132;
-        int columns = listW >= minCardWidth * 2 + gap ? 2 : 1;
-        int cardW = columns == 2 ? Math.max(minCardWidth, (listW - gap) / 2) : listW;
-        int cardH = columns == 2 ? 66 : 64;
-        int rowsVisible = Math.max(1, (stageHeight + gap) / (cardH + gap));
-        int totalRows = (sortedStageIds.size() + columns - 1) / columns;
-        int maxRowOffset = Math.max(0, totalRows - rowsVisible);
-        stageScrollOffset = Math.max(0L, Math.min(maxRowOffset, stageScrollOffset));
-        int startIndex = Math.min(sortedStageIds.size(), (int) stageScrollOffset * columns);
-        int visible = Math.min(Math.max(0, sortedStageIds.size() - startIndex), rowsVisible * columns);
-
-        stageGridColumns = columns;
-        stageGridVisibleRows = rowsVisible;
-        stageGridCardHeight = cardH;
-        stageGridGap = gap;
-
-        int firstY = stageTop;
-        int lastY = stageTop;
-        for (int i = 0; i < visible; i++) {
-            int stageIndex = startIndex + i;
-            var stage = storyStages.get(sortedStageIds.get(stageIndex));
-            if (stage == null) continue;
-            int row = i / columns;
-            int column = i % columns;
-            int cardX = listX + column * (cardW + gap);
-            int cardY = stageTop + row * (cardH + gap);
-            boolean hovered = mouseX >= cardX && mouseX <= cardX + cardW
-                && mouseY >= cardY && mouseY <= cardY + cardH;
-            renderStoryStageCard(guiGraphics, cardX, cardY, cardW, cardH, stage, hovered,
-                stage.isCurrentStage());
-            stageClickAreas.add(new StageClickArea(cardX, cardY, cardX + cardW, cardY + cardH,
-                stage.getStageId()));
-            lastY = Math.max(lastY, cardY + cardH);
-        }
-
         int[] stageArea = pageRenderer.getStageClickArea();
-        if (stageClickAreas.isEmpty()) {
-            stageArea[0] = stageArea[1] = stageArea[2] = stageArea[3] = 0;
-        } else {
-            stageArea[0] = listX;
-            stageArea[1] = firstY;
-            stageArea[2] = listX + listW;
-            stageArea[3] = lastY;
-        }
-        if (storyStages.isEmpty()) {
-            drawSoftRect(guiGraphics, listX, stageTop, listW, Math.min(70, stageHeight), 2,
-                TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
-            drawCenteredText(guiGraphics, "暂无故事阶段", listX + listW / 2,
-                stageTop + Math.min(36, stageHeight / 2), TABLET_MUTED_TEXT_COLOR);
-        }
-
-    }
-
-    private void renderStoryStageCard(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                      com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData stage,
-                                      boolean hovered, boolean current) {
-        int bg = hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR;
-        drawSoftRect(guiGraphics, x, y, width, height, 2, bg, hovered ? PANEL_BORDER_COLOR : TABLET_CARD_BORDER_COLOR);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + height, PANEL_BORDER_COLOR);
-
-        String name = stage.getStageName();
-        int badgeWidth = current ? mc.font.width("当前") + 12 : 0;
-        int nameWidth = Math.max(24, width - 24 - badgeWidth);
-        if (mc.font.width(name) > nameWidth) {
-            name = ServerScreenUI_RendererUtils.truncateText(mc.font, name,
-                nameWidth - mc.font.width("...")) + "...";
-        }
-        drawText(guiGraphics, name, x + 12, y + 8, TABLET_TEXT_COLOR);
-        if (current) {
-            drawSoftRect(guiGraphics, x + width - badgeWidth - 8, y + 6, badgeWidth, 16,
-                2, 0x333C8F72, 0xFF50D890);
-            drawCenteredText(guiGraphics, "当前", x + width - badgeWidth / 2 - 8, y + 10,
-                0xFF50D890);
-        }
-
-        String desc = stage.getStageDescription();
-        if (mc.font.width(desc) > width - 24) {
-            desc = ServerScreenUI_RendererUtils.truncateText(mc.font, desc, width - 24 - mc.font.width("...")) + "...";
-        }
-        drawText(guiGraphics, desc, x + 12, y + 24, TABLET_MUTED_TEXT_COLOR);
-
-        int total = stage.getTotalTaskCount();
-        int personalResolved = stage.getClientPlayerCompletedTaskCount();
-        int globalPercent = Math.round(Math.max(0.0f, Math.min(1.0f,
-            stage.getGlobalProgressPercentage())) * 100.0f);
-        int progressGap = 8;
-        int progressWidth = Math.min(118, Math.max(24, (width - 24 - progressGap) / 2));
-        int personalX = x + 12 + progressWidth + progressGap;
-        drawText(guiGraphics, "全服 " + globalPercent + "%", x + 12, y + 40, TABLET_MUTED_TEXT_COLOR);
-        drawText(guiGraphics, "我的 " + personalResolved + "/" + total, personalX, y + 40, TABLET_MUTED_TEXT_COLOR);
-        drawProgressBar(guiGraphics, x + 12, y + 51, progressWidth, 4,
-            stage.getGlobalProgressPercentage(), PANEL_BORDER_COLOR);
-        drawProgressBar(guiGraphics, personalX, y + 51, progressWidth, 4,
-            stage.getClientPlayerProgressPercentage(), 0xFF50D890);
+        stageArea[0] = stageArea[1] = stageArea[2] = stageArea[3] = 0;
+        return sidebarW;
     }
 
     private void renderStoryStageTasks(GuiGraphics guiGraphics, float mouseX, float mouseY, int x, int y, int width, int height,
                                        java.util.Map<Integer, com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> storyStages) {
-        storyStageNavClickAreas.clear();
         var selectedStage = storyStages.values().stream()
             .filter(stage -> String.valueOf(stage.getStageId()).equals(selectedStageId))
             .findFirst()
@@ -1142,61 +1120,342 @@ public class ServerScreenUI_Screen extends Screen {
             return;
         }
 
-        int backW = 34;
-        drawSegmentButton(guiGraphics, x, y, backW, 22, "<", false, mouseX, mouseY, PANEL_BORDER_COLOR);
-        int[] backArea = pageRenderer.getBackButtonArea();
-        backArea[0] = x;
-        backArea[1] = y;
-        backArea[2] = x + backW;
-        backArea[3] = y + 22;
+        // 阶段切换只由左侧导航负责；清空旧版返回按钮热区，避免上一帧残留点击。
+        setArea(pageRenderer.getBackButtonArea(), 0, 0, 0, 0);
 
-        String stageProgress = "全服 " + selectedStage.getCompletedTaskCount() + "/" + selectedStage.getTotalTaskCount()
-            + " · 个人 " + selectedStage.getClientPlayerCompletedTaskCount() + "/" + selectedStage.getTotalTaskCount();
-        int stageProgressX = x + width - mc.font.width(stageProgress);
-        drawText(guiGraphics, fitDashboardText(selectedStage.getStageName(),
-            Math.max(24, stageProgressX - (x + 44) - 8)), x + 44, y + 7, TABLET_TEXT_COLOR);
-        drawText(guiGraphics, stageProgress, stageProgressX, y + 7, TABLET_MUTED_TEXT_COLOR);
         java.util.List<StoryTaskData> tasks = selectedStage.getTasks();
         if (tasks == null) tasks = new java.util.ArrayList<>();
         List<GuidanceViewData> guidanceEntries = GuidanceClientCache.getEntries();
 
-        int cardY = y + 34;
-        int gap = 8;
-        int maxTaskOffset = Math.max(0, tasks.size() - VISIBLE_TASKS);
-        taskScrollOffset = Math.max(0L, Math.min(maxTaskOffset, taskScrollOffset));
-        int visible = Math.min(VISIBLE_TASKS, Math.max(0, tasks.size() - (int) taskScrollOffset));
-        int firstY = cardY;
-        int lastY = cardY;
-        for (int i = 0; i < visible; i++) {
-            int taskIndex = i + (int) taskScrollOffset;
-            var task = tasks.get(taskIndex);
-            int currentY = cardY + i * (TASK_CARD_HEIGHT + gap);
-            boolean hovered = mouseX >= x && mouseX <= x + width && mouseY >= currentY && mouseY <= currentY + TASK_CARD_HEIGHT;
-            renderTaskTerminalCard(
-                guiGraphics,
-                x,
-                currentY,
-                width,
-                TASK_CARD_HEIGHT,
-                task,
-                findGuidanceForTask(task, guidanceEntries),
-                hovered);
-            lastY = currentY + TASK_CARD_HEIGHT;
+        int totalTasks = tasks.size();
+        boolean historicalStage = selectedStage.getStageNumber() < getCurrentVisibleStageNumber(storyStages);
+        // 当前主线不再把任务完成数当作阶段推进条件。历史阶段只显示“已结束”，
+        // 当前阶段明确提示由服主手动推进，避免出现会卡住的 0/4、3/4 数字。
+        String stageProgress = totalTasks == 0 && !historicalStage
+                ? ""
+                : historicalStage ? "已结束" : "阶段由服主推进";
+        drawText(guiGraphics, fitDashboardText(selectedStage.getStageName(),
+                Math.max(24, stageProgress.isBlank() ? width : width - mc.font.width(stageProgress) - 16)),
+                x, y + 7, TABLET_TEXT_COLOR);
+        if (!stageProgress.isBlank()) {
+            drawText(guiGraphics, fitDashboardText(stageProgress, Math.max(24, width / 2)),
+                    x + width - mc.font.width(stageProgress), y + 7, TABLET_MUTED_TEXT_COLOR);
         }
 
+        int viewportTop = y + 26;
+        int viewportBottom = Math.max(viewportTop + 1, y + height);
+        setArea(storyContentArea, x, viewportTop, x + width, viewportBottom);
+        String description = selectedStage.getStageDescription();
+        if (description == null || description.isBlank()) {
+            description = "新的剧情会随着公告与 NPC 对话逐步展开。";
+        }
+        int descriptionWidth = Math.max(16, width - 24);
+        int descriptionLineCount = Math.max(1,
+                mc.font.split(Component.literal(description), descriptionWidth).size());
+        boolean hasPersonalChoice = selectedStage.getStageNumber() == 1;
+        // 总结和任务清单共享一个纵向阅读流；内容超出面板时由滚轮浏览，
+        // 不再把任务压缩成两列后在底部留下大片空白。
+        int introHeight = Math.max(52,
+                27 + descriptionLineCount * 11 + (hasPersonalChoice ? 18 : 0));
+        int taskHeaderHeight = 18;
+        int taskListHeight = tasks.isEmpty()
+                ? 76
+                : tasks.size() * (STORY_TASK_CARD_HEIGHT + STORY_TASK_CARD_GAP) - STORY_TASK_CARD_GAP;
+        int contentHeight = introHeight + 8 + taskHeaderHeight + taskListHeight + 8;
+        int viewportHeight = Math.max(1, viewportBottom - viewportTop);
+        storyContentMaxScroll = Math.max(0, contentHeight - viewportHeight);
+        storyContentScrollOffset = Math.max(0L,
+                Math.min(storyContentMaxScroll, storyContentScrollOffset));
+        taskScrollOffset = storyContentScrollOffset;
+
+        guiGraphics.enableScissor(
+                (int) (x * uiScale),
+                (int) (viewportTop * uiScale),
+                (int) ((x + width) * uiScale),
+                (int) (viewportBottom * uiScale));
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0D, -storyContentScrollOffset, 0.0D);
+
+        int introY = viewportTop;
+        drawSoftRect(guiGraphics, x, introY, width, introHeight, 2,
+                0xFF1B2935, TABLET_CARD_BORDER_COLOR);
+        String introTitle = selectedStage.getStageNumber() == 1
+                ? "本阶段总结"
+                : selectedStage.isCurrentStage() ? "本阶段开场" : "阶段介绍";
+        drawText(guiGraphics, introTitle,
+                x + 12, introY + 7, 0xFF78D6A3);
+        drawWrappedText(guiGraphics, description, x + 12, introY + 20,
+                descriptionWidth, TABLET_MUTED_TEXT_COLOR, descriptionLineCount);
+        if (hasPersonalChoice) {
+            LocalPlayer localPlayer = mc.player;
+            PlayerData playerData = localPlayer == null
+                    ? null : ClientCacheManager.getPlayerData(localPlayer.getUUID());
+            String choice = playerData == null
+                    ? "你的选择：同步中…"
+                    : playerData.isZhuiguangMember()
+                        ? "当前组织身份：逐光会成员"
+                        : "当前组织身份：未加入逐光会";
+            drawText(guiGraphics, fitDashboardText(choice, width - 24),
+                    x + 12, introY + introHeight - 15, 0xFFFFC857);
+        }
+
+        int taskHeaderY = introY + introHeight + 8;
+        drawText(guiGraphics, "任务清单", x, taskHeaderY, TABLET_TEXT_COLOR);
+        String taskHint = historicalStage ? "历史记录 · 无需补做" : "点击卡片查看详情与追踪行动";
+        drawText(guiGraphics, fitText(taskHint, width - 4),
+                x + Math.max(0, width - mc.font.width(fitText(taskHint, width - 4))), taskHeaderY,
+                TABLET_MUTED_TEXT_COLOR);
+
+        int cardY = taskHeaderY + taskHeaderHeight;
         if (tasks.isEmpty()) {
-            drawSoftRect(guiGraphics, x, cardY, width, 70, 2,
+            int emptyHeight = Math.max(46, Math.min(76, viewportHeight));
+            drawSoftRect(guiGraphics, x, cardY, width, emptyHeight, 2,
                     TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
-            drawCenteredText(guiGraphics, "当前阶段还没有已发布任务", x + width / 2,
-                    cardY + 28, TABLET_MUTED_TEXT_COLOR);
-            lastY = cardY + 70;
+            drawCenteredText(guiGraphics, "当前阶段暂无已解锁剧情任务",
+                    x + width / 2, cardY + emptyHeight / 2 - 4, TABLET_MUTED_TEXT_COLOR);
+        } else {
+            for (int index = 0; index < tasks.size(); index++) {
+                StoryTaskData task = tasks.get(index);
+                int currentY = cardY + index * (STORY_TASK_CARD_HEIGHT + STORY_TASK_CARD_GAP);
+                int visibleY = currentY - (int) storyContentScrollOffset;
+                boolean hovered = mouseX >= x && mouseX <= x + width
+                        && mouseY >= visibleY && mouseY <= visibleY + STORY_TASK_CARD_HEIGHT
+                        && mouseY >= viewportTop && mouseY <= viewportBottom;
+                GuidanceViewData guidance = findGuidanceForTask(task, guidanceEntries);
+                renderTaskTerminalCard(guiGraphics, x, currentY, width,
+                        STORY_TASK_CARD_HEIGHT, task, guidance, hovered, historicalStage);
+                if (visibleY + STORY_TASK_CARD_HEIGHT >= viewportTop && visibleY <= viewportBottom) {
+                    storyTaskClickAreas.add(new StoryTaskClickArea(
+                            x, Math.max(viewportTop, visibleY), x + width,
+                            Math.min(viewportBottom, visibleY + STORY_TASK_CARD_HEIGHT),
+                            task.getTaskKey()));
+                }
+            }
+        }
+        guiGraphics.pose().popPose();
+        guiGraphics.disableScissor();
+
+        if (storyContentMaxScroll > 0) {
+            int trackX = x + width - 3;
+            int thumbHeight = Math.max(14, viewportHeight * viewportHeight / contentHeight);
+            int travel = Math.max(0, viewportHeight - thumbHeight);
+            int thumbY = viewportTop + (storyContentMaxScroll == 0
+                    ? 0 : (int) (travel * storyContentScrollOffset / storyContentMaxScroll));
+            guiGraphics.fill(RenderType.gui(), trackX, viewportTop, trackX + 2,
+                    viewportBottom, 0x44344555);
+            guiGraphics.fill(RenderType.gui(), trackX, thumbY, trackX + 2,
+                    thumbY + thumbHeight, 0xFF78D6A3);
         }
 
         int[] taskArea = pageRenderer.getTaskClickArea();
-        taskArea[0] = x;
-        taskArea[1] = firstY;
-        taskArea[2] = x + width;
-        taskArea[3] = lastY;
+        setArea(taskArea, 0, 0, 0, 0);
+    }
+
+    /** 绘制一项故事任务的完整详情；详情正文同样支持滚轮。 */
+    private void renderStoryTaskDetail(
+            GuiGraphics guiGraphics,
+            float mouseX,
+            float mouseY,
+            int x,
+            int y,
+            int width,
+            int height,
+            java.util.Map<Integer, com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> storyStages) {
+        var selectedStage = storyStages.values().stream()
+                .filter(stage -> stage != null && String.valueOf(stage.getStageId()).equals(selectedStageId))
+                .findFirst()
+                .orElse(null);
+        if (selectedStage == null) {
+            clearStoryTaskDetail();
+            renderPlaceholderPage(guiGraphics, x, y, width, height, "阶段不存在", "返回故事列表后重新选择");
+            return;
+        }
+        StoryTaskData task = selectedStage.getTasks() == null ? null : selectedStage.getTasks().stream()
+                .filter(candidate -> candidate != null && selectedStoryTaskKey.equals(candidate.getTaskKey()))
+                .findFirst()
+                .orElse(null);
+        if (task == null) {
+            clearStoryTaskDetail();
+            renderStoryStageTasks(guiGraphics, mouseX, mouseY, x, y, width, height, storyStages);
+            return;
+        }
+
+        boolean historicalStage = selectedStage.getStageNumber() < getCurrentVisibleStageNumber(storyStages);
+        boolean backHovered = mouseX >= x && mouseX <= x + 42 && mouseY >= y && mouseY <= y + 22;
+        drawSegmentButton(guiGraphics, x, y, 42, 22, "< 返回", false,
+                mouseX, mouseY, 0xFF4FC3F7);
+        if (backHovered) {
+            drawSoftRect(guiGraphics, x, y, 42, 22, 2,
+                    TABLET_CARD_HOVER_COLOR, 0xFF4FC3F7);
+            drawCenteredText(guiGraphics, "< 返回", x + 21, y + 7, TABLET_TEXT_COLOR);
+        }
+        setArea(storyTaskDetailBackArea, x, y, x + 42, y + 22);
+
+        setArea(storyTaskTrackArea, 0, 0, 0, 0);
+        storyTaskTrackDefinition = "";
+        GuidanceViewData trackable = findGuidanceForTask(task, GuidanceClientCache.getEntries());
+        if (!historicalStage && task.isActionRequired() && trackable != null
+                && trackable.status() == GuidanceEntry.Status.ACTIVE) {
+            storyTaskTrackDefinition = trackable.definitionId();
+            GuidanceViewData selected = GuidanceClientCache.getTrackedEntry();
+            boolean tracked = selected != null && selected.definitionId().equals(storyTaskTrackDefinition);
+            drawSegmentButton(guiGraphics, x + width - 72, y, 72, 22,
+                    tracked ? "正在追踪" : "追踪行动", tracked, mouseX, mouseY, 0xFF78D6A3);
+            setArea(storyTaskTrackArea, x + width - 72, y, x + width, y + 22);
+        }
+        String title = fitDashboardText(task.getTaskName(), Math.max(24, width - 136));
+        drawText(guiGraphics, title, x + 52, y + 3, TABLET_TEXT_COLOR);
+        String status = storyTaskStatusLabel(task, historicalStage);
+        drawText(guiGraphics, fitDashboardText(status, Math.max(24, width - 58)),
+                x + 52, y + 16, storyTaskStateColor(task, historicalStage));
+
+        int panelY = y + 30;
+        int panelHeight = Math.max(48, height - 30);
+        drawSoftRect(guiGraphics, x, panelY, width, panelHeight, 3,
+                0xFF1B2935, TABLET_CARD_BORDER_COLOR);
+        drawText(guiGraphics, "任务详情", x + 12, panelY + 8, 0xFF78D6A3);
+
+        List<String> paragraphs = new ArrayList<>();
+        if (task.getTaskContent() != null && !task.getTaskContent().isBlank()) {
+            paragraphs.add(task.getTaskContent());
+        }
+        GuidanceViewData guidance = findGuidanceForTask(task, GuidanceClientCache.getEntries());
+        if (guidance != null) {
+            if (!guidance.title().isBlank()) {
+                paragraphs.add((historicalStage || task.isArchived() || task.isWaived() ? "历史引导：" : "引导：") + guidance.title());
+            }
+            if (!guidance.content().isBlank()) {
+                paragraphs.add(guidance.content());
+            }
+            if (guidance.hasLocation() && !guidance.locationLabel().isBlank()) {
+                paragraphs.add("目标地点：" + guidance.locationLabel());
+            }
+        }
+        if (task.isPersonalTask()) {
+            paragraphs.add(task.isClientPlayerFinished()
+                    ? "个人状态：亲自完成"
+                    : task.isWaived() ? "个人状态：通过前情接入后续，无需补做"
+                    : historicalStage || task.isArchived() ? "个人状态：未亲自完成，已归档，无需补做"
+                    : "个人状态：进行中");
+        } else if (task.getFinishedPlayerCount() > 0) {
+            paragraphs.add("参与人数：" + task.getFinishedPlayerCount());
+        }
+        if (paragraphs.isEmpty()) {
+            paragraphs.add("这项任务暂时没有更多说明。");
+        }
+
+        int textX = x + 12;
+        int textWidth = Math.max(24, width - 24);
+        int viewportTop = panelY + 25;
+        int viewportBottom = panelY + panelHeight - 10;
+        int lineHeight = mc.font.lineHeight + 2;
+        List<List<FormattedCharSequence>> wrappedParagraphs = new ArrayList<>();
+        int contentHeight = 0;
+        for (String paragraph : paragraphs) {
+            List<FormattedCharSequence> lines = mc.font.split(Component.literal(paragraph), textWidth);
+            wrappedParagraphs.add(lines);
+            contentHeight += Math.max(1, lines.size()) * lineHeight + 7;
+        }
+        int viewportHeight = Math.max(1, viewportBottom - viewportTop);
+        storyTaskDetailMaxScroll = Math.max(0, contentHeight - viewportHeight);
+        storyTaskDetailScrollOffset = Math.max(0L,
+                Math.min(storyTaskDetailMaxScroll, storyTaskDetailScrollOffset));
+        setArea(storyTaskDetailContentArea, textX, viewportTop, x + width - 10, viewportBottom);
+
+        guiGraphics.enableScissor(
+                (int) (textX * uiScale),
+                (int) (viewportTop * uiScale),
+                (int) ((x + width - 10) * uiScale),
+                (int) (viewportBottom * uiScale));
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0D, -storyTaskDetailScrollOffset, 0.0D);
+        int cursorY = viewportTop;
+        for (List<FormattedCharSequence> lines : wrappedParagraphs) {
+            for (FormattedCharSequence line : lines) {
+                guiGraphics.drawString(mc.font, line, textX, cursorY, TABLET_TEXT_COLOR, false);
+                cursorY += lineHeight;
+            }
+            cursorY += 7;
+        }
+        guiGraphics.pose().popPose();
+        guiGraphics.disableScissor();
+        if (storyTaskDetailMaxScroll > 0) {
+            int trackX = x + width - 3;
+            int thumbHeight = Math.max(14, viewportHeight * viewportHeight / contentHeight);
+            int travel = Math.max(0, viewportHeight - thumbHeight);
+            int thumbY = viewportTop + (storyTaskDetailMaxScroll == 0
+                    ? 0 : (int) (travel * storyTaskDetailScrollOffset / storyTaskDetailMaxScroll));
+            guiGraphics.fill(RenderType.gui(), trackX, viewportTop, trackX + 2,
+                    viewportBottom, 0x44344555);
+            guiGraphics.fill(RenderType.gui(), trackX, thumbY, trackX + 2,
+                    thumbY + thumbHeight, 0xFF78D6A3);
+        }
+    }
+
+    private boolean isStoryTaskDetailOpen() {
+        return selectedStoryTaskKey != null && !selectedStoryTaskKey.isBlank();
+    }
+
+    private void clearStoryTaskDetail() {
+        selectedStoryTaskKey = "";
+        storyTaskDetailScrollOffset = 0L;
+        storyTaskDetailMaxScroll = 0;
+        storyTaskClickAreas.clear();
+        setArea(storyTaskDetailBackArea, 0, 0, 0, 0);
+        setArea(storyTaskTrackArea, 0, 0, 0, 0);
+        storyTaskTrackDefinition = "";
+        setArea(storyTaskDetailContentArea, 0, 0, 0, 0);
+    }
+
+    private String storyTaskStatusLabel(StoryTaskData task, boolean historicalStage) {
+        if (task.isFailed()) {
+            return historicalStage || task.isArchived() ? "已结束 · 失败" : "失败";
+        }
+        if (task.isPersonalTask() && task.isClientPlayerFinished()) {
+            return "亲自完成";
+        }
+        if (!task.isPersonalTask() && task.isCompleted()) {
+            return "世界已完成";
+        }
+        if (task.isWaived()) {
+            return "已接入后续 · 无需补做";
+        }
+        if (historicalStage || task.isArchived()) {
+            return "已归档 · 无需补做";
+        }
+        if (task.isPersonalTask() && !task.isTaskState()) {
+            return "个人任务";
+        }
+        return task.isPersonalTask() ? "个人进行中" : "进行中";
+    }
+
+    private int storyTaskStateColor(StoryTaskData task, boolean historicalStage) {
+        if (task.isFailed()) {
+            return 0xFFE05B62;
+        }
+        if (task.isClientPlayerFinished() || task.isCompleted()) {
+            return 0xFF50D890;
+        }
+        if (historicalStage || task.isArchived() || task.isWaived()) {
+            return TABLET_MUTED_TEXT_COLOR;
+        }
+        return 0xFF7AA8C7;
+    }
+
+    private int getCurrentVisibleStageNumber(
+            java.util.Map<Integer, com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> storyStages) {
+        return storyStages.values().stream()
+                .filter(java.util.Objects::nonNull)
+                .filter(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::isCurrentStage)
+                .mapToInt(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::getStageNumber)
+                .filter(number -> number > 0)
+                .max()
+                .orElseGet(() -> storyStages.values().stream()
+                        .filter(java.util.Objects::nonNull)
+                        .mapToInt(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::getStageNumber)
+                        .filter(number -> number > 0)
+                        .max()
+                        .orElse(1));
     }
 
     private void renderTaskTerminalCard(
@@ -1207,55 +1466,34 @@ public class ServerScreenUI_Screen extends Screen {
             int height,
             StoryTaskData task,
             GuidanceViewData guidance,
-            boolean hovered) {
+            boolean hovered,
+            boolean historicalStage) {
         boolean personalTask = task.isPersonalTask();
         boolean playerFinished = task.isClientPlayerFinished();
         boolean worldCompleted = task.isCompleted();
         boolean worldPublished = task.isTaskState();
         boolean failed = task.isFailed();
         int accent = 0xFF7AA8C7;
-        int stateColor = failed
-                ? 0xFFE05B62
-                : playerFinished
-                ? 0xFF50D890
-                : worldCompleted
-                ? 0xFF9BB8C9
-                : accent;
+        int stateColor = storyTaskStateColor(task, historicalStage);
         drawSoftRect(guiGraphics, x, y, width, height, 2,
                 hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR,
                 hovered ? stateColor : TABLET_CARD_BORDER_COLOR);
         guiGraphics.fill(RenderType.gui(), x, y, x + 4, y + height, stateColor);
 
-        // 个人部分与世界部分是两层状态：个人完成后仍可能等待其他玩家，
-        // 世界任务未发布时也要明确告诉玩家它只是尚未解锁，而不是卡死。
-        String state;
-        if (failed) {
-            state = "FAILED";
-        } else if (personalTask && worldCompleted) {
-            state = "世界已推进";
-        } else if (personalTask && playerFinished) {
-            state = "已完成 · 等待全员";
-        } else if (personalTask && !worldPublished) {
-            state = "个人任务";
-        } else if (personalTask) {
-            state = "个人进行中";
-        } else if (playerFinished) {
-            state = "你已完成";
-        } else if (worldCompleted) {
-            state = "世界已完成";
-        } else {
-            state = "进行中";
-        }
+        // 主线目前只保留玩家个人任务；阶段和全服结算由服主手动推进。
+        String state = storyTaskStatusLabel(task, historicalStage);
         drawText(guiGraphics, state, x + 12, y + 8, stateColor);
         int stateWidth = mc.font.width(state);
         int titleX = x + 12 + stateWidth + 12;
         String displayTitle = task.getTaskName();
-        int titleLimit = Math.max(24, width - (titleX - x) - 12);
+        // 右上角留出固定的详情箭头，让玩家知道整张卡片可以点击。
+        int titleLimit = Math.max(24, width - (titleX - x) - 28);
         if (mc.font.width(displayTitle) > titleLimit) {
             displayTitle = ServerScreenUI_RendererUtils.truncateText(
                     mc.font, displayTitle, Math.max(1, titleLimit - mc.font.width("..."))) + "...";
         }
         drawText(guiGraphics, displayTitle, titleX, y + 8, TABLET_TEXT_COLOR);
+        drawText(guiGraphics, "›", x + width - 12, y + 8, hovered ? stateColor : TABLET_MUTED_TEXT_COLOR);
 
         String displayContent = guidance != null && !guidance.content().isBlank()
                 ? guidance.content()
@@ -1267,7 +1505,8 @@ public class ServerScreenUI_Screen extends Screen {
         }
         drawText(guiGraphics, displayContent, x + 12, y + 27, TABLET_MUTED_TEXT_COLOR);
 
-        if (guidance != null && height >= 56) {
+        // 双列卡片当前高度为 52；引导也要在紧凑卡片中显示，不能因为高度阈值被静默丢掉。
+        if (guidance != null && height >= 48) {
             String guidanceText = "⌖ " + guidance.title();
             if (guidance.hasLocation() && !guidance.locationLabel().isBlank()) {
                 guidanceText += " · " + guidance.locationLabel();
@@ -1275,35 +1514,21 @@ public class ServerScreenUI_Screen extends Screen {
             int guidanceColor = guidance.status() == GuidanceEntry.Status.ACTIVE
                     ? 0xFF78D6A3
                     : TABLET_MUTED_TEXT_COLOR;
-            String doneText;
-            if (personalTask) {
-                int expected = task.getPersonalExpectedPlayerCount();
-                if (expected > 0) {
-                    int completed = Math.min(task.getFinishedPlayerCount(), expected);
-                    doneText = "全服 " + completed + "/" + expected;
-                } else {
-                    doneText = "个人待分配";
-                }
-            } else {
-                doneText = task.getFinishedPlayerCount() > 0
-                        ? task.getFinishedPlayerCount() + "人在场"
-                        : "";
-            }
+            // 当前主线不显示全服分母/比例；这里只保留这名玩家自己的状态。
+            String doneText = personalTask && task.isClientPlayerFinished() ? "已完成" : "";
             int doneWidth = doneText.isBlank() ? 0 : mc.font.width(doneText) + 8;
             int guidanceWidth = Math.max(24, width - 24 - doneWidth);
+            int guidanceY = height >= 56 ? y + 44 : y + height - 10;
             drawText(guiGraphics, fitText(guidanceText, guidanceWidth),
-                    x + 12, y + 44, guidanceColor);
+                    x + 12, guidanceY, guidanceColor);
             if (!doneText.isBlank()) {
                 drawText(guiGraphics, doneText, x + width - mc.font.width(doneText) - 12,
-                        y + 44, TABLET_MUTED_TEXT_COLOR);
+                        guidanceY, TABLET_MUTED_TEXT_COLOR);
             }
-        } else if (personalTask || task.getFinishedPlayerCount() > 0) {
+        } else if (!MANUAL_STORY_PROGRESS && (personalTask || task.getFinishedPlayerCount() > 0)) {
             String doneText;
             if (personalTask) {
-                int expected = task.getPersonalExpectedPlayerCount();
-                doneText = expected > 0
-                        ? "全服 " + Math.min(task.getFinishedPlayerCount(), expected) + "/" + expected
-                        : "个人待分配";
+                doneText = task.isClientPlayerFinished() ? "已完成" : "";
             } else {
                 doneText = task.getFinishedPlayerCount() + "人在场";
             }
@@ -1320,7 +1545,7 @@ public class ServerScreenUI_Screen extends Screen {
         if (task == null || entries == null || entries.isEmpty()) {
             return null;
         }
-        List<String> linkedIds = guidanceDefinitionIdsForTask(task.getTaskKey());
+        List<String> linkedIds = task.getGuidanceDefinitionIds();
         return entries.stream()
                 .filter(java.util.Objects::nonNull)
                 .filter(entry -> task.getTaskKey().equals(entry.definitionId())
@@ -1331,30 +1556,6 @@ public class ServerScreenUI_Screen extends Screen {
                                 GuidanceViewData::createdAtEpochMillis).reversed()))
                 .findFirst()
                 .orElse(null);
-    }
-
-    /**
-     * 内置开场任务与个人线索的显示关联。关联只影响客户端呈现，
-     * 世界任务的完成仍由服务端剧情事件写入。
-     */
-    private List<String> guidanceDefinitionIdsForTask(String taskKey) {
-        if ("dreamingfishcore:opening/settle_in_abydos".equals(taskKey)) {
-            return List.of("dreamingfishcore:guidance/opening/travel_to_abydos");
-        }
-        if ("dreamingfishcore:opening/meet_baizhi".equals(taskKey)) {
-            return List.of("dreamingfishcore:guidance/opening/talk_to_baizhi");
-        }
-        if ("dreamingfishcore:opening/choose_zhuiguang_path".equals(taskKey)) {
-            return List.of(
-                    "dreamingfishcore:guidance/opening/contact_zhoucen",
-                    "dreamingfishcore:guidance/opening/choose_membership");
-        }
-        if ("dreamingfishcore:opening/build_zhuiguang_base".equals(taskKey)) {
-            return List.of(
-                    "dreamingfishcore:guidance/opening/build_zhuiguang_base",
-                    "dreamingfishcore:guidance/watch_zhuiguang_foundation");
-        }
-        return List.of();
     }
 
     private void renderNpcMessagePage(
@@ -1394,14 +1595,6 @@ public class ServerScreenUI_Screen extends Screen {
             selectedMessageNpcId = selected.npcId();
             messageThreadScrollOffset = 0L;
             clearNpcMessageDetail();
-            lastReadRequestedNpcId = -1;
-        }
-        if (selected.unreadCount() > 0 && lastReadRequestedNpcId != selected.npcId()) {
-            lastReadRequestedNpcId = selected.npcId();
-            DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageReadRequest(selected.npcId()));
-        } else if (selected.unreadCount() == 0 && lastReadRequestedNpcId == selected.npcId()) {
-            // 服务端已经确认已读；允许同一会话稍后到达的新消息再次触发已读请求。
-            lastReadRequestedNpcId = -1;
         }
 
         int gap = 10;
@@ -1411,8 +1604,12 @@ public class ServerScreenUI_Screen extends Screen {
 
         drawSoftRect(guiGraphics, x, y, listWidth, height, 3, 0xFF18232D, TABLET_CARD_BORDER_COLOR);
         drawText(guiGraphics, "会话", x + 10, y + 9, TABLET_TEXT_COLOR);
-        drawText(guiGraphics, conversations.size() + " 位 NPC", x + listWidth - mc.font.width(conversations.size() + " 位 NPC") - 10,
-                y + 9, TABLET_MUTED_TEXT_COLOR);
+        int totalUnread = conversations.stream().mapToInt(NpcConversationViewData::unreadCount).sum();
+        String conversationSummary = conversations.size() + " 位 NPC"
+                + (totalUnread > 0 ? " · " + totalUnread + " 条未读" : "");
+        drawText(guiGraphics, fitText(conversationSummary, listWidth - 20),
+                x + listWidth - Math.min(mc.font.width(conversationSummary), listWidth - 20) - 10,
+                y + 9, totalUnread > 0 ? NPC_UNREAD_ACCENT_COLOR : TABLET_MUTED_TEXT_COLOR);
 
         int listY = y + 28;
         int conversationCardHeight = 42;
@@ -1427,20 +1624,36 @@ public class ServerScreenUI_Screen extends Screen {
             boolean active = conversation.npcId() == selected.npcId();
             boolean hovered = virtualMouseX >= x + 7 && virtualMouseX <= x + listWidth - 7
                     && virtualMouseY >= cardY && virtualMouseY <= cardY + conversationCardHeight;
-            int accent = conversation.unreadCount() > 0 ? 0xFF8CCEFF : 0xFF60798D;
+            boolean unreadConversation = conversation.unreadCount() > 0;
+            int accent = unreadConversation ? NPC_UNREAD_ACCENT_COLOR : 0xFF60798D;
+            int cardColor = unreadConversation
+                    ? (active ? NPC_UNREAD_CARD_ACTIVE_COLOR
+                            : (hovered ? NPC_UNREAD_CARD_HOVER_COLOR : NPC_UNREAD_CARD_COLOR))
+                    : (active ? 0xFF294052 : (hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR));
             drawSoftRect(guiGraphics, x + 7, cardY, listWidth - 14, conversationCardHeight, 3,
-                    active ? 0xFF294052 : (hovered ? TABLET_CARD_HOVER_COLOR : TABLET_CARD_COLOR),
-                    active || hovered ? accent : TABLET_CARD_BORDER_COLOR);
-            drawText(guiGraphics, fitText(conversation.npcName(), listWidth - 54), x + 15, cardY + 7, TABLET_TEXT_COLOR);
+                    cardColor, unreadConversation || active || hovered ? accent : TABLET_CARD_BORDER_COLOR);
+            if (unreadConversation) {
+                // 整张会话卡片都换成暖色，并保留一条边缘强调线，避免只看见数字角标。
+                guiGraphics.fill(RenderType.gui(), x + 7, cardY + 4, x + 10,
+                        cardY + conversationCardHeight - 4, NPC_UNREAD_ACCENT_COLOR);
+            }
+            String unreadLabel = "未读 " + Math.min(99, conversation.unreadCount());
+            int unreadBadgeWidth = unreadConversation ? getUnreadBadgeWidth(unreadLabel) : 0;
+            int nameMaxWidth = Math.max(24, listWidth - 30 - unreadBadgeWidth);
+            drawText(guiGraphics, fitText(conversation.npcName(), nameMaxWidth), x + 15, cardY + 7,
+                    unreadConversation ? NPC_UNREAD_TEXT_COLOR : TABLET_TEXT_COLOR);
             drawText(guiGraphics, fitText(latestMessagePreview(conversation), listWidth - 30), x + 15, cardY + 24,
-                    TABLET_MUTED_TEXT_COLOR);
-            if (conversation.unreadCount() > 0) {
-                String unread = String.valueOf(Math.min(99, conversation.unreadCount()));
-                drawSoftRect(guiGraphics, x + listWidth - 30, cardY + 7, 17, 14, 7, 0xFF4F9FCC, 0x00000000);
-                drawCenteredText(guiGraphics, unread, x + listWidth - 22, cardY + 10, 0xFFFFFFFF);
+                    unreadConversation ? 0xFFE8D5A5 : TABLET_MUTED_TEXT_COLOR);
+            if (unreadConversation) {
+                drawUnreadBadge(guiGraphics, unreadLabel, x + listWidth - 12, cardY + 5);
             }
             conversationClickAreas.add(new ConversationClickArea(
                     x + 7, cardY, x + listWidth - 7, cardY + conversationCardHeight, conversation.npcId()));
+        }
+        if (maxConversationOffset > 0) {
+            drawVerticalScrollBar(guiGraphics, x + listWidth - 4, listY, height - 34,
+                    conversations.size(), visibleConversations, maxConversationOffset,
+                    conversationScrollOffset);
         }
         setArea(conversationListArea, x, listY, x + listWidth, y + height);
 
@@ -1468,35 +1681,62 @@ public class ServerScreenUI_Screen extends Screen {
         int visibleMessages = Math.max(1, (messagesHeight + messageGap) / (messageCardHeight + messageGap));
         int maxMessageOffset = Math.max(0, selected.messages().size() - visibleMessages);
         messageThreadScrollOffset = Math.max(0L, Math.min(maxMessageOffset, messageThreadScrollOffset));
+        if (maxMessageOffset > 0) {
+            String scrollHint = "滚轮翻看消息";
+            int hintRight = threadX + threadWidth - mc.font.width(relation) - 22;
+            if (hintRight - mc.font.width(scrollHint) > threadX + 12) {
+                drawText(guiGraphics, scrollHint, hintRight - mc.font.width(scrollHint), y + 8,
+                        TABLET_MUTED_TEXT_COLOR);
+            }
+        }
         int endExclusive = selected.messages().size() - (int) messageThreadScrollOffset;
         int startInclusive = Math.max(0, endExclusive - visibleMessages);
         int drawIndex = 0;
         for (int index = startInclusive; index < endExclusive; index++) {
             NpcMessageViewData message = selected.messages().get(index);
             boolean outgoing = message.direction() == NpcMessageRecord.Direction.PLAYER_TO_NPC;
+            boolean unreadMessage = isUnreadIncoming(message);
             int bubbleWidth = Math.max(96, (int) (threadWidth * 0.78f));
             int bubbleX = outgoing ? threadX + threadWidth - bubbleWidth - 10 : threadX + 10;
             int bubbleY = messagesY + drawIndex * (messageCardHeight + messageGap);
-            int accent = outgoing ? 0xFF78D6A3 : 0xFF8CCEFF;
+            int accent = unreadMessage ? NPC_UNREAD_ACCENT_COLOR
+                    : (outgoing ? 0xFF78D6A3 : 0xFF8CCEFF);
             boolean hovered = virtualMouseX >= bubbleX && virtualMouseX <= bubbleX + bubbleWidth
                     && virtualMouseY >= bubbleY && virtualMouseY <= bubbleY + messageCardHeight;
+            int bubbleColor = unreadMessage
+                    ? (hovered ? NPC_UNREAD_CARD_HOVER_COLOR : NPC_UNREAD_CARD_COLOR)
+                    : (hovered ? (outgoing ? 0xFF2B4740 : 0xFF294352)
+                            : (outgoing ? 0xFF243A35 : 0xFF233541));
             drawSoftRect(guiGraphics, bubbleX, bubbleY, bubbleWidth, messageCardHeight, 3,
-                    hovered ? (outgoing ? 0xFF2B4740 : 0xFF294352) : (outgoing ? 0xFF243A35 : 0xFF233541),
-                    hovered ? accent : 0xFF334A59);
+                    bubbleColor, unreadMessage || hovered ? accent : 0xFF334A59);
             guiGraphics.fill(RenderType.gui(), outgoing ? bubbleX + bubbleWidth - 3 : bubbleX, bubbleY + 5,
                     outgoing ? bubbleX + bubbleWidth : bubbleX + 3, bubbleY + messageCardHeight - 5, accent);
             String author = outgoing ? "你" : selected.npcName();
-            drawText(guiGraphics, author, bubbleX + 10, bubbleY + 6, accent);
-            drawText(guiGraphics, formatHistoryDate(message.sentAtEpochMillis()),
-                    bubbleX + bubbleWidth - mc.font.width(formatHistoryDate(message.sentAtEpochMillis())) - 9,
-                    bubbleY + 6, TABLET_MUTED_TEXT_COLOR);
+            String timestamp = formatHistoryDate(message.sentAtEpochMillis());
+            int timestampWidth = mc.font.width(timestamp);
+            int unreadBadgeWidth = unreadMessage ? getUnreadBadgeWidth("未读") : 0;
+            int timestampRight = bubbleX + bubbleWidth - 9;
+            if (unreadMessage) {
+                drawUnreadBadge(guiGraphics, "未读", timestampRight, bubbleY + 5);
+                timestampRight -= unreadBadgeWidth + 5;
+            }
+            int authorMaxWidth = Math.max(24, timestampRight - (bubbleX + 10) - timestampWidth - 8);
+            drawText(guiGraphics, fitText(author, authorMaxWidth), bubbleX + 10, bubbleY + 6, accent);
+            drawText(guiGraphics, timestamp, timestampRight - timestampWidth, bubbleY + 6,
+                    unreadMessage ? 0xFFE8D5A5 : TABLET_MUTED_TEXT_COLOR);
             drawText(guiGraphics, fitText(message.content().replace('\n', ' '), bubbleWidth - 38),
-                    bubbleX + 10, bubbleY + 25, TABLET_TEXT_COLOR);
+                    bubbleX + 10, bubbleY + 25,
+                    unreadMessage ? NPC_UNREAD_TEXT_COLOR : TABLET_TEXT_COLOR);
             drawText(guiGraphics, ">", bubbleX + bubbleWidth - 14, bubbleY + 25,
                     hovered ? accent : TABLET_MUTED_TEXT_COLOR);
             messageClickAreas.add(new MessageClickArea(
                     bubbleX, bubbleY, bubbleX + bubbleWidth, bubbleY + messageCardHeight, message.recordId()));
             drawIndex++;
+        }
+        if (maxMessageOffset > 0) {
+            drawVerticalScrollBar(guiGraphics, threadX + threadWidth - 4, messagesY, messagesHeight,
+                    selected.messages().size(), visibleMessages, maxMessageOffset,
+                    messageThreadScrollOffset);
         }
         setArea(messageThreadArea, threadX, messagesY, threadX + threadWidth, messagesY + messagesHeight);
 
@@ -1548,12 +1788,18 @@ public class ServerScreenUI_Screen extends Screen {
         drawCenteredText(guiGraphics, "< 返回", backX + backWidth / 2, backY + 6, TABLET_TEXT_COLOR);
         setArea(messageDetailBackArea, backX, backY, backX + backWidth, backY + backHeight);
 
-        String subject = message.subject().isBlank() ? "私信详情" : message.subject();
-        drawText(guiGraphics, fitText(subject, Math.max(24, width - backWidth - 42)),
-                backX + backWidth + 8, y + 2, TABLET_TEXT_COLOR);
-
         boolean outgoing = message.direction() == NpcMessageRecord.Direction.PLAYER_TO_NPC;
-        int accent = outgoing ? 0xFF78D6A3 : 0xFF8CCEFF;
+        boolean unreadMessage = isUnreadIncoming(message);
+        int accent = unreadMessage ? NPC_UNREAD_ACCENT_COLOR
+                : (outgoing ? 0xFF78D6A3 : 0xFF8CCEFF);
+        String subject = message.subject().isBlank() ? "私信详情" : message.subject();
+        int detailBadgeWidth = unreadMessage ? getUnreadBadgeWidth("未读") : 0;
+        int subjectMaxWidth = Math.max(24, width - backWidth - 42 - detailBadgeWidth);
+        drawText(guiGraphics, fitText(subject, subjectMaxWidth),
+                backX + backWidth + 8, y + 2, unreadMessage ? NPC_UNREAD_TEXT_COLOR : TABLET_TEXT_COLOR);
+        if (unreadMessage) {
+            drawUnreadBadge(guiGraphics, "未读", x + width - 12, y + 1);
+        }
         String route = outgoing ? "你  →  " + conversation.npcName() : conversation.npcName() + "  →  你";
         drawText(guiGraphics, route, x + 12, y + 25, accent);
         String sentAt = formatHistoryDate(message.sentAtEpochMillis());
@@ -1566,7 +1812,8 @@ public class ServerScreenUI_Screen extends Screen {
         int bodyY = y + 39;
         int bodyHeight = Math.max(38, height - 39 - footerHeight);
         drawSoftRect(guiGraphics, x + 10, bodyY, width - 20, bodyHeight, 3,
-                0xFF182630, TABLET_CARD_BORDER_COLOR);
+                unreadMessage ? NPC_UNREAD_DETAIL_BODY_COLOR : 0xFF182630,
+                unreadMessage ? NPC_UNREAD_BORDER_COLOR : TABLET_CARD_BORDER_COLOR);
         drawText(guiGraphics, "正文", x + 20, bodyY + 7, accent);
 
         int textX = x + 20;
@@ -1670,6 +1917,50 @@ public class ServerScreenUI_Screen extends Screen {
         return prefix + latest.content().replace('\n', ' ');
     }
 
+    /** 只有 NPC 发来的、尚未被服务端确认阅读的消息才算未读。 */
+    private boolean isUnreadIncoming(NpcMessageViewData message) {
+        return message != null
+                && message.direction() == NpcMessageRecord.Direction.NPC_TO_PLAYER
+                && !message.read();
+    }
+
+    private int getUnreadBadgeWidth(String label) {
+        return Math.max(24, mc.font.width(label) + 10);
+    }
+
+    /** 在指定右边界绘制统一的“未读”标签，并返回标签宽度供布局避让。 */
+    private int drawUnreadBadge(GuiGraphics guiGraphics, String label, int rightX, int y) {
+        int badgeWidth = getUnreadBadgeWidth(label);
+        int badgeX = rightX - badgeWidth;
+        drawSoftRect(guiGraphics, badgeX, y, badgeWidth, 15, 4,
+                NPC_UNREAD_BADGE_COLOR, NPC_UNREAD_ACCENT_COLOR);
+        drawCenteredText(guiGraphics, label, badgeX + badgeWidth / 2, y + 3, NPC_UNREAD_TEXT_COLOR);
+        return badgeWidth;
+    }
+
+    /** 绘制统一的细滚动条，给消息/会话列表明确的可滚动反馈。 */
+    private void drawVerticalScrollBar(
+            GuiGraphics guiGraphics,
+            int x,
+            int y,
+            int height,
+            int totalItems,
+            int visibleItems,
+            int maxOffset,
+            long offset) {
+        if (height <= 2 || totalItems <= visibleItems || maxOffset <= 0) {
+            return;
+        }
+        int trackWidth = 2;
+        int thumbHeight = Math.max(12, height * visibleItems / Math.max(1, totalItems));
+        thumbHeight = Math.min(height, thumbHeight);
+        int travel = Math.max(0, height - thumbHeight);
+        int thumbY = y + (int) (travel * Math.max(0L, Math.min(maxOffset, offset)) / maxOffset);
+        guiGraphics.fill(RenderType.gui(), x, y, x + trackWidth, y + height, 0x55344555);
+        guiGraphics.fill(RenderType.gui(), x, thumbY, x + trackWidth, thumbY + thumbHeight,
+                0xFF78D6A3);
+    }
+
     private int drawWrappedText(
             GuiGraphics guiGraphics,
             String text,
@@ -1724,6 +2015,12 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     private record StageClickArea(int x1, int y1, int x2, int y2, String stageId) {
+        private boolean contains(double x, double y) {
+            return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+        }
+    }
+
+    private record StoryTaskClickArea(int x1, int y1, int x2, int y2, String taskKey) {
         private boolean contains(double x, double y) {
             return x >= x1 && x <= x2 && y >= y1 && y <= y2;
         }
@@ -2067,15 +2364,24 @@ public class ServerScreenUI_Screen extends Screen {
             innerX + innerWidth, y + headerHeight, 0x334FC3F7);
 
         int buttonY = y + headerHeight + 8;
+        // “全部阶段”是默认视图，历史公告不会因为阶段推进而消失。
+        if (buttonY + buttonHeight <= y + sidebarHeight - bottomPadding) {
+            boolean selected = selectedNoticeStageId == null || selectedNoticeStageId.isEmpty();
+            drawSegmentButton(guiGraphics, innerX, buttonY, innerWidth, buttonHeight,
+                    "全部阶段", selected, (float) virtualMouseX, (float) virtualMouseY, 0xFF4FC3F7);
+            noticeStageClickAreas.add(new NoticeStageClickArea(
+                    innerX, buttonY, innerX + innerWidth, buttonY + buttonHeight, ""));
+            buttonY += buttonHeight + buttonGap;
+        }
         for (var stage : stages) {
             if (buttonY + buttonHeight > y + sidebarHeight - bottomPadding) {
                 break;
             }
             String stageId = safeNoticeText(stage.getStageId(), "");
             String label = getNoticeStageButtonLabel(stage);
-            int naturalWidth = mc.font.width(label) + 20;
-            int buttonWidth = Math.max(1, Math.min(innerWidth, naturalWidth));
-            int buttonX = innerX + (innerWidth - buttonWidth) / 2;
+            // 阶段卡片统一铺满侧栏，避免中文标题长短造成参差不齐。
+            int buttonWidth = innerWidth;
+            int buttonX = innerX;
             boolean selected = stageId.equals(selectedNoticeStageId);
             drawSegmentButton(guiGraphics, buttonX, buttonY, buttonWidth, buttonHeight,
                 fitNoticeText(label, buttonWidth - 14), selected,
@@ -2106,22 +2412,14 @@ public class ServerScreenUI_Screen extends Screen {
     private void ensureNoticeStageSelection(
             List<com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData> stages) {
         if (selectedNoticeStageId == null || selectedNoticeStageId.isEmpty()) {
-            for (var stage : stages) {
-                if (stage.isCurrentStage()) {
-                    selectedNoticeStageId = safeNoticeText(stage.getStageId(), "");
-                    return;
-                }
-            }
-            // 阶段包尚未标注 current 时，选择已开放列表中的第一项，避免把隐藏阶段混入列表。
-            if (!stages.isEmpty()) {
-                selectedNoticeStageId = safeNoticeText(stages.get(0).getStageId(), "");
-            }
+            // 空字符串是有意的“全部阶段”筛选，不自动跳回当前阶段。
+            selectedNoticeStageId = "";
             return;
         }
         if (!selectedNoticeStageId.isEmpty()
                 && stages.stream().noneMatch(stage -> selectedNoticeStageId.equals(
                     safeNoticeText(stage.getStageId(), "")))) {
-            selectedNoticeStageId = null;
+            selectedNoticeStageId = "";
             ensureNoticeStageSelection(stages);
         }
     }
@@ -3144,8 +3442,9 @@ public class ServerScreenUI_Screen extends Screen {
 
         int level = PlayerLevelManager.getPlayerLevelClient(player);
         float infection = PlayerInfectionManager.getCurrentInfectionClient(player);
-        String status = infection >= 100 ? "感染者" : "幸存者";
-        int statusColor = infection >= 100 ? 0xFFFF6677 : 0xFF50D890;
+        boolean dashboardInfected = PlayerAttributesClientCache.isInfected(player.getUUID());
+        String status = dashboardInfected ? "感染者" : "幸存者";
+        int statusColor = dashboardInfected ? 0xFFFF6677 : 0xFF50D890;
         int metaY = Math.min(y + height - 34, avatarY + avatarSize + 12);
         String levelText = "LV." + level;
         int levelBadgeWidth = Math.max(34, mc.font.width(levelText) + 16);
@@ -3184,6 +3483,9 @@ public class ServerScreenUI_Screen extends Screen {
         if (stage == null) {
             storyState = "故事同步中";
             storyStateColor = TABLET_MUTED_TEXT_COLOR;
+        } else if (MANUAL_STORY_PROGRESS) {
+            storyState = "阶段由服主推进";
+            storyStateColor = TABLET_MUTED_TEXT_COLOR;
         } else {
             int percent = Math.round(Math.max(0.0f, Math.min(1.0f,
                 stage.getGlobalProgressPercentage())) * 100.0f);
@@ -3203,10 +3505,10 @@ public class ServerScreenUI_Screen extends Screen {
             }
         }
 
-        GuidanceViewData latestGuidance = GuidanceClientCache.getEntries().stream()
-            .filter(entry -> entry.status() == GuidanceEntry.Status.ACTIVE)
-            .findFirst()
-            .orElseGet(() -> GuidanceClientCache.getEntries().stream().findFirst().orElse(null));
+        // 故事卡只显示当前阶段仍在进行的引导。历史 RESOLVED 记录不能作为
+        // “最新线索”回退，否则阶段切换后会再次显示“建设逐光会基地”等旧目标。
+        String currentStageId = stage == null ? "" : stage.getStageId();
+        GuidanceViewData latestGuidance = GuidanceClientCache.getTrackedEntry();
         int progressY = y + height - 12;
         int guidanceY = y + (height >= 126 ? 72 : 55);
         if (guidanceY <= progressY - 24) {
@@ -3218,7 +3520,7 @@ public class ServerScreenUI_Screen extends Screen {
                 latestGuidance == null ? TABLET_MUTED_TEXT_COLOR : TABLET_TEXT_COLOR);
         }
 
-        if (stage != null) {
+        if (stage != null && !MANUAL_STORY_PROGRESS) {
             float progress = Math.max(0.0f, Math.min(1.0f, stage.getGlobalProgressPercentage()));
             int percent = Math.round(progress * 100.0f);
             drawText(guiGraphics, "全服进度 " + percent + "%", x + 12, progressY - 13, TABLET_MUTED_TEXT_COLOR);
@@ -3365,11 +3667,12 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     private boolean hasOpenStoryProgress() {
+        // 阶段切换虽然由服主手动执行，当前玩家的待办仍然需要在终端入口
+        // 留下提示；不能因为关闭“全服自动推进”就把个人引导的红点一并隐藏。
         return ClientCacheManager.getStoryStages().values().stream()
             .filter(com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData::isCurrentStage)
-            .findFirst()
-            .map(stage -> stage.getGlobalProgressPercentage() < 1.0f)
-            .orElse(false);
+            .flatMap(stage -> stage.getTasks().stream())
+            .anyMatch(task -> task != null && !task.isClientPlayerFinished());
     }
 
     private void drawDashboardPlayerBar(GuiGraphics guiGraphics, int x, int y, int width, int height) {
@@ -3498,10 +3801,10 @@ public class ServerScreenUI_Screen extends Screen {
         int onlinePlayers = mc.player != null && mc.player.connection != null ?
             mc.player.connection.getOnlinePlayers().size() : 0;
         int maxPlayers = 20;
-        float tps = 20.0f;
+        String tpsText = ServerInformationDisplay.getServerTpsText(mc);
 
         drawTabletServerInfo(guiGraphics, sideMargin, infoY, leftPanelWidth - sideMargin * 2, infoHeight,
-            infoAnimOffsetY, onlinePlayers, maxPlayers, tps);
+            infoAnimOffsetY, onlinePlayers, maxPlayers, tpsText);
     }
 
     /**
@@ -3536,26 +3839,26 @@ public class ServerScreenUI_Screen extends Screen {
      * 绘制平板底部状态条。
      */
     private void drawTabletServerInfo(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                      int offsetY, int onlinePlayers, int maxPlayers, float tps) {
+                                      int offsetY, int onlinePlayers, int maxPlayers, String tpsText) {
         y += offsetY;
         drawSoftRect(guiGraphics, x, y, width, height, 2, 0xFF202B36, TABLET_CARD_BORDER_COLOR);
         drawText(guiGraphics, "ONLINE", x + 8, y + 6, TABLET_MUTED_TEXT_COLOR);
         drawText(guiGraphics, onlinePlayers + "/" + maxPlayers, x + 8, y + 18, TABLET_TEXT_COLOR);
 
-        String tpsText = String.format("TPS %.1f", tps);
-        int tpsWidth = mc.font.width(tpsText);
-        drawText(guiGraphics, tpsText, x + width - tpsWidth - 8, y + 18, TABLET_TEXT_COLOR);
+        String tpsLabel = "TPS " + tpsText;
+        int tpsWidth = mc.font.width(tpsLabel);
+        drawText(guiGraphics, tpsLabel, x + width - tpsWidth - 8, y + 18, TABLET_TEXT_COLOR);
     }
 
     private void drawTabletStatusBar(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                     int onlinePlayers, int maxPlayers, float tps) {
+                                     int onlinePlayers, int maxPlayers, String tpsText) {
         drawSoftRect(guiGraphics, x + 2, y + 7, 4, 4, 2, 0xFF67D391, 0x00000000);
         int onlineLabelX = x + 10;
         drawText(guiGraphics, "在线", onlineLabelX, y + 4, TABLET_MUTED_TEXT_COLOR);
         String onlineText = onlinePlayers + "/" + maxPlayers;
         drawText(guiGraphics, onlineText, onlineLabelX + mc.font.width("在线") + 12, y + 4, TABLET_TEXT_COLOR);
-        String tpsText = String.format("TPS %.1f", tps);
-        drawText(guiGraphics, tpsText, x + width - mc.font.width(tpsText) - 8, y + 4, TABLET_TEXT_COLOR);
+        String tpsLabel = "TPS " + tpsText;
+        drawText(guiGraphics, tpsLabel, x + width - mc.font.width(tpsLabel) - 8, y + 4, TABLET_TEXT_COLOR);
     }
 
     private String formatWorldTime() {
@@ -3693,12 +3996,19 @@ public class ServerScreenUI_Screen extends Screen {
                 clearNpcMessageDetail();
                 return true;
             }
+            if (selectedLeftButtonIndex == 3 && isStoryTaskDetailOpen()) {
+                clearStoryTaskDetail();
+                storyContentScrollOffset = 0L;
+                return true;
+            }
             if (selectedLeftButtonIndex >= 0) {
                 selectedLeftButtonIndex = -1;
                 profileRankManagerOpen = false;
                 selectedStageId = null;
                 taskScrollOffset = 0;
                 stageScrollOffset = 0;
+                storyContentScrollOffset = 0L;
+                clearStoryTaskDetail();
                 return true;
             }
             if (isClosing) return true;  // 如果已经在关闭中，不再响应
@@ -3735,11 +4045,18 @@ public class ServerScreenUI_Screen extends Screen {
                 clearNpcMessageDetail();
                 return true;
             }
+            if (selectedLeftButtonIndex == 3 && isStoryTaskDetailOpen()) {
+                clearStoryTaskDetail();
+                storyContentScrollOffset = 0L;
+                return true;
+            }
             selectedLeftButtonIndex = -1;
             profileRankManagerOpen = false;
             selectedStageId = null;
             taskScrollOffset = 0;
             stageScrollOffset = 0;
+            storyContentScrollOffset = 0L;
+            clearStoryTaskDetail();
             return true;
         }
 
@@ -3899,12 +4216,6 @@ public class ServerScreenUI_Screen extends Screen {
                     selectedMessageNpcId = area.npcId();
                     messageThreadScrollOffset = 0L;
                     clearNpcMessageDetail();
-                    lastReadRequestedNpcId = -1;
-                    NpcConversationViewData conversation = NpcMessageClientCache.getConversation(area.npcId());
-                    if (conversation != null && conversation.unreadCount() > 0) {
-                        lastReadRequestedNpcId = area.npcId();
-                        DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageReadRequest(area.npcId()));
-                    }
                     return true;
                 }
             }
@@ -3917,7 +4228,6 @@ public class ServerScreenUI_Screen extends Screen {
                     if (area.contains(virtualMouseX, virtualMouseY)) {
                         clearNpcMessageDetail();
                         messageThreadScrollOffset = 0L;
-                        lastReadRequestedNpcId = -1;
                         DreamingFishCore_NetworkManager.sendToServer(
                                 new Packet_NpcMessageReplyRequest(area.messageRecordId(), area.replyId()));
                         return true;
@@ -3928,6 +4238,7 @@ public class ServerScreenUI_Screen extends Screen {
             }
             for (MessageClickArea area : messageClickAreas) {
                 if (area.contains(virtualMouseX, virtualMouseY)) {
+                    requestNpcMessageReadIfNeeded(area.messageRecordId());
                     openNpcMessageDetail(area.messageRecordId());
                     return true;
                 }
@@ -3935,7 +4246,6 @@ public class ServerScreenUI_Screen extends Screen {
             for (MessageReplyClickArea area : messageReplyClickAreas) {
                 if (area.contains(virtualMouseX, virtualMouseY)) {
                     messageThreadScrollOffset = 0L;
-                    lastReadRequestedNpcId = -1;
                     DreamingFishCore_NetworkManager.sendToServer(
                         new Packet_NpcMessageReplyRequest(area.messageRecordId(), area.replyId()));
                     return true;
@@ -3954,39 +4264,38 @@ public class ServerScreenUI_Screen extends Screen {
 
         // ==================== 检查任务页面点击 ====================
         if (selectedLeftButtonIndex == 3) {  // 故事/任务页面
-            // 左侧阶段导航与右侧阶段卡片使用同一套详情入口。
+            if (isStoryTaskDetailOpen()) {
+                if (isInside(storyTaskTrackArea, virtualMouseX, virtualMouseY) && !storyTaskTrackDefinition.isBlank()) {
+                    GuidanceClientCache.track(storyTaskTrackDefinition);
+                    return true;
+                }
+                if (isInside(storyTaskDetailBackArea, virtualMouseX, virtualMouseY)) {
+                    clearStoryTaskDetail();
+                    storyContentScrollOffset = 0L;
+                    return true;
+                }
+                // 详情页不响应列表卡片，避免上一帧热区串页。
+                return true;
+            }
+            // 阶段切换只允许点击左侧导航；阶段本身不再以右侧卡片呈现。
             for (StageClickArea area : storyStageNavClickAreas) {
                 if (area.contains(virtualMouseX, virtualMouseY)) {
                     selectedStageId = area.stageId();
                     taskScrollOffset = 0L;
+                    storyContentScrollOffset = 0L;
+                    clearStoryTaskDetail();
                     return true;
                 }
             }
-
-            // 检查返回按钮点击（仅在选中阶段时显示）
-            if (selectedStageId != null) {
-                int[] backButtonArea = pageRenderer.getBackButtonArea();
-                if (virtualMouseX >= backButtonArea[0] && virtualMouseX <= backButtonArea[2] &&
-                    virtualMouseY >= backButtonArea[1] && virtualMouseY <= backButtonArea[3]) {
-                    // 返回阶段列表
-                    selectedStageId = null;
-                    stageScrollOffset = 0;
-                    taskScrollOffset = 0;
+            for (StoryTaskClickArea area : storyTaskClickAreas) {
+                if (area.contains(virtualMouseX, virtualMouseY)) {
+                    selectedStoryTaskKey = area.taskKey();
+                    storyTaskDetailScrollOffset = 0L;
+                    storyTaskDetailMaxScroll = 0;
+                    storyTaskClickAreas.clear();
                     return true;
                 }
             }
-
-            // 世界任务：检查右侧阶段列表点击
-            if (selectedStageId == null) {
-                for (StageClickArea area : stageClickAreas) {
-                    if (area.contains(virtualMouseX, virtualMouseY)) {
-                        selectedStageId = area.stageId();
-                        taskScrollOffset = 0;
-                        return true;
-                    }
-                }
-            }
-
         }
 
         if (selectedLeftButtonIndex == 0 && profileRankManagerOpen) {
@@ -4024,17 +4333,20 @@ public class ServerScreenUI_Screen extends Screen {
                 break;
             case 2: // 梦屿广播
                 clearNoticeDetail();
-                // 每次进入广播时优先定位当前故事阶段，避免新阶段玩家先看到旧阶段内容。
-                selectedNoticeStageId = null;
+                // 广播默认显示所有已经开放阶段的历史，阶段按钮只用于可选筛选。
+                selectedNoticeStageId = "";
                 noticeScrollOffset = 0L;
                 // 请求公告列表
                 DreamingFishCore_NetworkManager.sendToServer(new Packet_NoticeListRequest());
                 break;
             case 3: // 故事进展
                 taskShowServerTasks = true;
+                // 打开页面时由 renderStoryTaskPage 选择当前阶段，直接进入当前剧情任务视图。
                 selectedStageId = null;
                 stageScrollOffset = 0L;
                 taskScrollOffset = 0L;
+                storyContentScrollOffset = 0L;
+                clearStoryTaskDetail();
                 DreamingFishCore_NetworkManager.sendToServer(new Packet_GuidanceSnapshotRequest());
                 break;
             case 4: // 玩家与排行
@@ -4063,7 +4375,6 @@ public class ServerScreenUI_Screen extends Screen {
                 messageThreadScrollOffset = 0L;
                 conversationScrollOffset = 0L;
                 clearNpcMessageDetail();
-                lastReadRequestedNpcId = -1;
                 DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageSnapshotRequest());
                 break;
         }
@@ -4098,46 +4409,30 @@ public class ServerScreenUI_Screen extends Screen {
 
         // 任务列表页面滚动
         if (selectedLeftButtonIndex == 3) {
-            if (taskShowServerTasks && selectedStageId == null) {
-                // 故事任务 - 阶段列表滚动
-                var storyStages = getPlayerVisibleStoryStages(
-                    com.hhy.dreamingfishcore.client.cache.ClientCacheManager.getStoryStages());
-                int totalStages = storyStages.size();
-                int columns = Math.max(1, stageGridColumns);
-                int visibleRows = Math.max(1, stageGridVisibleRows);
-                int totalRows = (totalStages + columns - 1) / columns;
-                int maxRowOffset = Math.max(0, totalRows - visibleRows);
-
-                if (maxRowOffset > 0) {
-                    long newOffset = stageScrollOffset - Math.round(scrollY);
-                    stageScrollOffset = Math.max(0L,
-                        Math.min((long) maxRowOffset, newOffset));
-                    return true;
+            double virtualMouseX = mouseX / uiScale;
+            double virtualMouseY = mouseY / uiScale;
+            if (isStoryTaskDetailOpen()) {
+                if (isInside(storyTaskDetailContentArea, virtualMouseX, virtualMouseY)) {
+                    long scrollStep = Math.max(1L, (long) (mc.font.lineHeight + 2) * 3L);
+                    long newOffset = storyTaskDetailScrollOffset - Math.round(scrollY * scrollStep);
+                    storyTaskDetailScrollOffset = Math.max(0L,
+                            Math.min((long) storyTaskDetailMaxScroll, newOffset));
                 }
-            } else if (taskShowServerTasks && selectedStageId != null) {
-                // 故事任务 - 选中阶段的任务列表滚动
-                var storyStages = getPlayerVisibleStoryStages(
-                    com.hhy.dreamingfishcore.client.cache.ClientCacheManager.getStoryStages());
-                com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData selectedStage = null;
-                for (com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData stage : storyStages.values()) {
-                    if (String.valueOf(stage.getStageId()).equals(selectedStageId)) {
-                        selectedStage = stage;
-                        break;
-                    }
-                }
-
-                if (selectedStage != null) {
-                    java.util.List<com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData> stageTasks = selectedStage.getTasks();
-                    if (stageTasks == null) stageTasks = new java.util.ArrayList<>();
-                    int totalTasks = stageTasks.size();
-                    int maxScrollOffset = Math.max(0, totalTasks - VISIBLE_TASKS);
-
-                    if (maxScrollOffset > 0) {
-                        int newOffset = (int) (taskScrollOffset - scrollY);
-                        taskScrollOffset = Math.max(0, Math.min(maxScrollOffset, newOffset));
-                        return true;
-                    }
-                }
+                return true;
+            }
+            if (isInside(storyStageListArea, virtualMouseX, virtualMouseY)) {
+                // 侧栏每次滚轮移动一个阶段，保证阶段按钮永远整齐对齐。
+                long newOffset = stageScrollOffset - Math.round(scrollY);
+                stageScrollOffset = Math.max(0L, Math.min(storyStageMaxScroll, newOffset));
+                return storyStageMaxScroll > 0;
+            }
+            if (isInside(storyContentArea, virtualMouseX, virtualMouseY)) {
+                long newOffset = storyContentScrollOffset
+                        - Math.round(scrollY * Math.max(8L, (long) mc.font.lineHeight * 2L));
+                storyContentScrollOffset = Math.max(0L,
+                        Math.min((long) storyContentMaxScroll, newOffset));
+                taskScrollOffset = storyContentScrollOffset;
+                return storyContentMaxScroll > 0;
             }
         }
 
@@ -4229,6 +4524,17 @@ public class ServerScreenUI_Screen extends Screen {
         setArea(messageDetailContentArea, 0, 0, 0, 0);
     }
 
+    /** 只有真正点进某条消息详情时才发送已读事实；进入会话总览不会清除未读。 */
+    private void requestNpcMessageReadIfNeeded(String recordId) {
+        NpcConversationViewData conversation =
+                NpcMessageClientCache.getConversation(selectedMessageNpcId);
+        NpcMessageViewData message = findMessageByRecordId(conversation, recordId);
+        if (conversation != null && isUnreadIncoming(message)) {
+            DreamingFishCore_NetworkManager.sendToServer(
+                    new Packet_NpcMessageReadRequest(conversation.npcId()));
+        }
+    }
+
     private boolean isNoticeDetailOpen() {
         return selectedNoticeDetailId >= 0;
     }
@@ -4298,6 +4604,13 @@ public class ServerScreenUI_Screen extends Screen {
      */
     public void setSelectedPageIndex(int index) {
         this.selectedLeftButtonIndex = index;
+        if (index == 3) {
+            selectedStageId = null;
+            taskScrollOffset = 0L;
+            stageScrollOffset = 0L;
+            storyContentScrollOffset = 0L;
+            clearStoryTaskDetail();
+        }
     }
 
     /** 设置公告页的分类标签（0=游戏公告，1=服务器通知）。 */
@@ -4404,7 +4717,7 @@ public class ServerScreenUI_Screen extends Screen {
         }
     }
 
-    // ==================== 感染度/分裂次数信息框方法 ====================
+    // ==================== 感染度/模板重建余量信息框方法 ====================
 
     /**
      * 获取感染度信息框的高度

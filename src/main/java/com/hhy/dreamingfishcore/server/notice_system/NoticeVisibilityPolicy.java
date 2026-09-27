@@ -48,6 +48,30 @@ public final class NoticeVisibilityPolicy {
     }
 
     /**
+     * Returns whether a notice belongs to one of the stages already opened in
+     * the world archive.  This is deliberately a separate overload: automatic
+     * delivery still uses {@link #isVisible(NoticeData, String)} and therefore
+     * never replays an older stage's notice.
+     */
+    public static boolean isVisibleInStages(NoticeData notice, String currentStageId,
+                                             Set<String> visibleStageIds) {
+        if (notice == null) {
+            return false;
+        }
+        if (notice.getCategory() == NoticeCategory.MAINTENANCE) {
+            return true;
+        }
+        String noticeStageId = notice.getStoryStageId();
+        if (noticeStageId.isEmpty()) {
+            return false;
+        }
+        if (visibleStageIds == null) {
+            return isVisible(notice, currentStageId);
+        }
+        return visibleStageIds.contains(noticeStageId);
+    }
+
+    /**
      * Returns whether a notice may be pushed automatically to the player's
      * top-left notification area.  Story notices wait for tutorial completion
      * so the onboarding sequence remains orderly; terminal visibility does not
@@ -67,13 +91,29 @@ public final class NoticeVisibilityPolicy {
 
     /** Filters notices that are currently readable in the terminal. */
     public static List<NoticeData> filterVisible(List<NoticeData> notices,
-                                                 String currentStageId) {
+                                                  String currentStageId) {
         if (notices == null || notices.isEmpty()) {
             return Collections.emptyList();
         }
         List<NoticeData> visible = new ArrayList<>();
         for (NoticeData notice : notices) {
             if (isVisible(notice, currentStageId)) {
+                visible.add(notice);
+            }
+        }
+        return visible;
+    }
+
+    /** Filters notices for a player's already-opened story archive. */
+    public static List<NoticeData> filterVisibleInStages(List<NoticeData> notices,
+                                                          String currentStageId,
+                                                          Set<String> visibleStageIds) {
+        if (notices == null || notices.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<NoticeData> visible = new ArrayList<>();
+        for (NoticeData notice : notices) {
+            if (isVisibleInStages(notice, currentStageId, visibleStageIds)) {
                 visible.add(notice);
             }
         }

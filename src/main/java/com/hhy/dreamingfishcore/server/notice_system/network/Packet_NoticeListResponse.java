@@ -28,6 +28,7 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
     private static final int MAX_CATEGORY_LENGTH = 32;
     private static final int MAX_STAGE_ID_LENGTH = 256;
     private static final int MAX_STORY_DATE_LENGTH = 256;
+    private static final int MAX_NOTICE_KEY_LENGTH = 256;
 
     public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<Packet_NoticeListResponse> TYPE = new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(com.hhy.dreamingfishcore.DreamingFishCore.MODID, "notice_system/packet_notice_list_response"));
     public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Packet_NoticeListResponse> STREAM_CODEC = net.minecraft.network.codec.StreamCodec.of((buf, packet) -> Packet_NoticeListResponse.encode(packet, buf), Packet_NoticeListResponse::decode);
@@ -63,6 +64,8 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
             buf.writeUtf(notice.getCategory().name(), MAX_CATEGORY_LENGTH);
             buf.writeUtf(notice.getStoryStageId(), MAX_STAGE_ID_LENGTH);
             buf.writeUtf(notice.getStoryDate(), MAX_STORY_DATE_LENGTH);
+            // 公告键是剧情入口的稳定标识；客户端缓存也必须拿到它，不能只依赖易变的标题或数字 ID。
+            buf.writeUtf(notice.getNoticeKey(), MAX_NOTICE_KEY_LENGTH);
         }
 
         buf.writeInt(readNoticeIds.size());
@@ -87,9 +90,10 @@ public class Packet_NoticeListResponse implements net.minecraft.network.protocol
             NoticeCategory category = decodeCategory(buf.readUtf(MAX_CATEGORY_LENGTH));
             String storyStageId = buf.readUtf(MAX_STAGE_ID_LENGTH);
             String storyDate = buf.readUtf(MAX_STORY_DATE_LENGTH);
+            String noticeKey = buf.readUtf(MAX_NOTICE_KEY_LENGTH);
             notices.add(new NoticeData(
                     noticeId, title, content, publishTime,
-                    category, storyStageId, storyDate, ""));
+                    category, storyStageId, storyDate, noticeKey));
         }
 
         int readCount = readCount(buf, "已读公告", MAX_READ_NOTICE_COUNT);

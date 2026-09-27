@@ -19,6 +19,7 @@ public class GuidanceEntry {
     private String content = "";
     private String sourceQuote = "";
     private String storyStageId = "";
+    private String storyLineId = "";
     private String locationLabel = "";
     private String dimension = "";
     private boolean hasLocation;
@@ -49,6 +50,7 @@ public class GuidanceEntry {
         entry.content = seed.getContent();
         entry.sourceQuote = sourceQuote;
         entry.storyStageId = seed.getStoryStageId();
+        entry.storyLineId = seed.getStoryLineId();
         entry.locationLabel = seed.getLocationLabel();
         entry.dimension = seed.getDimension();
         entry.hasLocation = seed.hasLocation();
@@ -96,6 +98,45 @@ public class GuidanceEntry {
         return storyStageId == null ? "" : storyStageId;
     }
 
+    public String getStoryLineId() {
+        return storyLineId == null || storyLineId.isBlank() ? getStoryStageId() : storyLineId;
+    }
+
+    public boolean updateProjection(GuidanceSeed seed) {
+        if (getStoryLineId().equals(seed.getStoryLineId()) && getTitle().equals(seed.getTitle())
+                && getContent().equals(seed.getContent()) && getLocationLabel().equals(seed.getLocationLabel())
+                && getDimension().equals(seed.getDimension()) && hasLocation == seed.hasLocation()
+                && x == seed.getX() && y == seed.getY() && z == seed.getZ()) {
+            return false;
+        }
+        storyLineId = seed.getStoryLineId();
+        title = seed.getTitle();
+        content = seed.getContent();
+        locationLabel = seed.getLocationLabel();
+        dimension = seed.getDimension();
+        hasLocation = seed.hasLocation();
+        x = seed.getX();
+        y = seed.getY();
+        z = seed.getZ();
+        return true;
+    }
+
+    public boolean isReplacedBy(GuidanceSeed seed) {
+        return getStatus() == Status.ACTIVE && !getStoryStageId().isBlank()
+                && getStoryStageId().equals(seed.getStoryStageId())
+                && getStoryLineId().equals(seed.getStoryLineId())
+                && !getDefinitionId().equals(seed.getId());
+    }
+
+    public boolean archive(long now) {
+        if (getStatus() != Status.ACTIVE) {
+            return false;
+        }
+        status = Status.ARCHIVED;
+        resolvedAtEpochMillis = now;
+        return true;
+    }
+
     public String getLocationLabel() {
         return locationLabel == null ? "" : locationLabel;
     }
@@ -138,6 +179,22 @@ public class GuidanceEntry {
         }
         status = Status.RESOLVED;
         resolvedAtEpochMillis = now;
+        return true;
+    }
+
+    /**
+     * 重新建立当前剧情步骤的投影。
+     *
+     * <p>引导记录是历史日志，但同一个稳定定义在玩家重置本地开发存档、或服务器
+     * 在“状态已写入、投影尚未写入”时重启后，仍需要再次成为当前待办。阶段脚本只会
+     * 对尚未完成的步骤调用这个方法，因此不会把已经完成的剧情凭空倒退。</p>
+     */
+    public boolean reactivate() {
+        if (getStatus() == Status.ACTIVE) {
+            return false;
+        }
+        status = Status.ACTIVE;
+        resolvedAtEpochMillis = 0L;
         return true;
     }
 }

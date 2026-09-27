@@ -36,17 +36,36 @@ public class PlayerAttributesDataManager {
 
     private static boolean dirty;
     private static boolean loaded;
+    private static boolean writesEnabled;
+    public static boolean areWritesEnabled() { return loaded && writesEnabled; }
 
     public static void loadWorldData(MinecraftServer server) {
         ATTRIBUTES_CACHE.clear();
+        writesEnabled = false;
         try {
             Map<UUID, PlayerAttributesData> loadedData = JsonDataStore.read(
                     WorldDataPaths.resolve(server, "playerattributes", "player_attributes.json"),
                     GSON,
                     ATTRIBUTES_TYPE,
                     ConcurrentHashMap::new);
-            ATTRIBUTES_CACHE.putAll(loadedData);
-            dirty = false;
+            int normalizedCount = 0;
+            for (Map.Entry<UUID, PlayerAttributesData> entry : loadedData.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    continue;
+                }
+                PlayerAttributesData data = entry.getValue();
+                data.getDailyTemplateSupport().validate();
+                if (data.normalizeInfectionState()) {
+                    normalizedCount++;
+                }
+                ATTRIBUTES_CACHE.put(entry.getKey(), data);
+            }
+            writesEnabled = true;
+            dirty = normalizedCount > 0;
+            if (normalizedCount > 0) {
+                DreamingFishCore.LOGGER.info(
+                        "已将 {} 条旧版/不一致感染状态迁移为带等级数据", normalizedCount);
+            }
             DreamingFishCore.LOGGER.info("玩家属性数据加载完成，共 {} 条", ATTRIBUTES_CACHE.size());
         } catch (Exception exception) {
             dirty = false;
@@ -92,6 +111,7 @@ public class PlayerAttributesDataManager {
         PlayerAttributesData newAttributesData = new PlayerAttributesData(playerUUID, player.getScoreboardName(), realLevel);
         ATTRIBUTES_CACHE.put(playerUUID, newAttributesData);
         markDirty();
+        newAttributesData.syncMaxHealthToPlayer(player);
         if (AuthSessionGuard.isAuthenticated(player)) {
             StrengthSyncManager.syncStrengthToClient(player);
         }
@@ -108,12 +128,29 @@ public class PlayerAttributesDataManager {
     }
 
     public static void updatePlayerLevel(ServerPlayer player, int newLevel) {
+        if (player == null) {
+            return;
+        }
+        if (!hasPlayerAttributesData(player)) {
+            initPlayerAttributesData(player, newLevel);
+            return;
+        }
+
         PlayerAttributesData attributesData = getPlayerAttributesData(player.getUUID());
-        attributesData.setLevel(newLevel, player);
+        // 经验、称号或权限更新不应重复触发等级属性同步；只有等级变化才需要重算。
+        boolean levelChanged = attributesData.getLevel() != newLevel;
+        if (levelChanged) {
+            attributesData.setLevel(newLevel, player);
+        }
+        String previousPlayerName = attributesData.getPlayerName();
         attributesData.setPlayerName(player.getScoreboardName());
         ATTRIBUTES_CACHE.put(player.getUUID(), attributesData);
-        markDirty();
-        DreamingFishCore.LOGGER.info("玩家 {} 等级更新为{}，属性数据已标记保存", player.getScoreboardName(), newLevel);
+        if (levelChanged || !player.getScoreboardName().equals(previousPlayerName)) {
+            markDirty();
+        }
+        if (levelChanged) {
+            DreamingFishCore.LOGGER.info("玩家 {} 等级更新为{}，属性数据已标记保存", player.getScoreboardName(), newLevel);
+        }
     }
 
     public static void updatePlayerAttributesData(ServerPlayer player, PlayerAttributesData newData) {
@@ -159,6 +196,7 @@ public class PlayerAttributesDataManager {
     }
 
     public static boolean saveIfDirty(MinecraftServer server) {
+        if (loaded && !writesEnabled) return false;
         if (!loaded || !dirty) {
             return true;
         }
@@ -184,6 +222,7 @@ public class PlayerAttributesDataManager {
         ATTRIBUTES_CACHE.clear();
         dirty = false;
         loaded = false;
+        writesEnabled = false;
     }
 
     private static void ensureLoaded() {

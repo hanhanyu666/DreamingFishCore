@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,7 +24,7 @@ import java.util.List;
 
 /**
  * 基因复苏药剂
- * 使用后解除感染者身份，并将感染值重置为0
+ * 可清零感染值；只可解除一级感染者身份，二级感染者不能使用。
  */
 public class Potion_RestoreUnInfected extends Item {
     private static final int USE_DURATION_TICKS = 60;
@@ -34,12 +35,8 @@ public class Potion_RestoreUnInfected extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        // 灰色：感染后的滋味不好受吧..
-        tooltip.add(Component.literal("§7感染后的滋味不好受吧.."));
-        // 黄色：右键使用
-        tooltip.add(Component.literal("§e右键即可使用"));
-        // 金色：使用后您将解除感染者状态，且感染值清0
-        tooltip.add(Component.literal("§6使用后您将解除感染者状态，且感染值清0"));
+        tooltip.add(Component.literal("§e长按右键使用"));
+        tooltip.add(Component.literal("§6由逐光会牵头制作的解药，至少目前可以治愈感染者……"));
     }
 
     @Override
@@ -64,9 +61,8 @@ public class Potion_RestoreUnInfected extends Item {
             return InteractionResultHolder.fail(stack);
         }
 
-        // 检查是否为感染者
-        if (!attributesData.isInfected()) {
-            serverPlayer.sendSystemMessage(Component.literal("§c你并不是感染者，无需使用此药剂！"));
+        if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
+            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈二级感染者。"));
             return InteractionResultHolder.fail(stack);
         }
 
@@ -92,20 +88,26 @@ public class Potion_RestoreUnInfected extends Item {
             return stack;
         }
 
-        if (!attributesData.isInfected()) {
-            serverPlayer.sendSystemMessage(Component.literal("§c你并不是感染者，无需使用此药剂！"));
+        if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
+            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈二级感染者。"));
             return stack;
         }
 
-        // 解除感染状态
-        attributesData.setInfected(false);
+        // 一级感染者被治愈；非感染者保持非感染者状态。两者都清零感染值。
+        attributesData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
         attributesData.setCurrentInfection(0);
 
         // 保存数据
         PlayerAttributesDataManager.updatePlayerAttributesData(serverPlayer, attributesData);
 
         // 同步到客户端
-        PlayerInfectionClientSync.sendInfectionDataToClient(serverPlayer, 0, false);
+        PlayerInfectionClientSync.sendInfectionDataToClient(
+                serverPlayer, 0, false, PlayerAttributesData.INFECTION_LEVEL_NONE);
+
+        // 事件代表“玩家实际服用了阶段发放的药剂”，而不是服用前的感染等级。
+        // 非感染者也可能需要用药清零感染值；StoryManager 会按当前阶段事实决定
+        // 这条使用事件是否推进剧情，因而在余梦期之外使用药剂不会推进任何剧情。
+        StoryManager.onGeneRevivalPotionUsed(serverPlayer);
 
         // 消耗物品
         if (!serverPlayer.getAbilities().instabuild) {
@@ -113,8 +115,7 @@ public class Potion_RestoreUnInfected extends Item {
         }
         serverPlayer.awardStat(Stats.ITEM_USED.get(this));
 
-        // 发送成功消息
-        serverPlayer.sendSystemMessage(Component.literal("§a§l基因复苏成功！你已不再是感染者。"));
+        serverPlayer.sendSystemMessage(Component.literal("§a基因复苏试剂已生效，感染值已清零。"));
 
         DreamingFishCore.LOGGER.info("玩家 {} 使用基因复苏药剂，感染状态已解除", serverPlayer.getScoreboardName());
 
@@ -129,5 +130,10 @@ public class Potion_RestoreUnInfected extends Item {
     @Override
     public UseAnim getUseAnimation(ItemStack stack) {
         return UseAnim.NONE;
+    }
+
+    static boolean canUseForInfectionLevel(int infectionLevel) {
+        return infectionLevel == PlayerAttributesData.INFECTION_LEVEL_NONE
+                || infectionLevel == PlayerAttributesData.INFECTION_LEVEL_ONE;
     }
 }

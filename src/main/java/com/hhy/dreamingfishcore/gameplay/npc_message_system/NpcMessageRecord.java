@@ -2,6 +2,8 @@ package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /** 某名玩家已经实际收发的一条终端私信。 */
@@ -23,13 +25,26 @@ public class NpcMessageRecord {
     private String replyToRecordId = "";
     private String selectedReplyId = "";
     private GuidanceSeed guidanceSnapshot;
+    /** 投递时固定的回复快照；空列表表示当时没有可用回复。 */
+    private List<NpcReplySnapshot> replySnapshots = new ArrayList<>();
     private String favorabilityEffectId = "";
     private int favorabilityDelta;
 
     public NpcMessageRecord() {
     }
 
-    public static NpcMessageRecord incoming(NpcMessageDefinition definition, String npcName, long now) {
+    /**
+     * 创建带回复快照的入站消息。
+     *
+     * <p>只有当前确实满足好感度/成员条件的回复会进入快照，且数量与客户端展示
+     * 上限一致。</p>
+     */
+    public static NpcMessageRecord incoming(
+            NpcMessageDefinition definition,
+            String npcName,
+            long now,
+            int favorability,
+            boolean zhuiguangMember) {
         NpcMessageRecord record = new NpcMessageRecord();
         record.recordId = UUID.randomUUID().toString();
         record.definitionId = definition.getId();
@@ -41,6 +56,12 @@ public class NpcMessageRecord {
         record.sentAtEpochMillis = now;
         record.read = false;
         record.guidanceSnapshot = GuidanceSeed.copyOf(definition.getGuidance());
+        record.replySnapshots = definition.getReplies().stream()
+                .filter(reply -> reply != null
+                        && reply.isAvailableFor(favorability, zhuiguangMember))
+                .limit(NpcMessageManager.MAX_REPLY_OPTIONS)
+                .map(NpcReplySnapshot::new)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         return record;
     }
 
@@ -115,6 +136,27 @@ public class NpcMessageRecord {
         return guidanceSnapshot;
     }
 
+    /** 返回投递时保存的回复快照。 */
+    public List<NpcReplySnapshot> getReplySnapshots() {
+        return replySnapshots == null
+                ? List.of()
+                : java.util.Collections.unmodifiableList(new ArrayList<>(replySnapshots));
+    }
+
+    public boolean hasReplySnapshot() {
+        return replySnapshots != null;
+    }
+
+    public NpcReplySnapshot getReplySnapshot(String replyId) {
+        if (replyId == null || replyId.isBlank()) {
+            return null;
+        }
+        return getReplySnapshots().stream()
+                .filter(snapshot -> snapshot != null && replyId.equals(snapshot.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
     public String getFavorabilityEffectId() {
         return favorabilityEffectId == null ? "" : favorabilityEffectId;
     }
@@ -139,15 +181,4 @@ public class NpcMessageRecord {
         return true;
     }
 
-    /** 仅供旧版内置私信快照迁移使用；不会改变已读、回复或发送时间。 */
-    boolean replaceText(String subject, String content) {
-        String safeSubject = subject == null ? "" : subject;
-        String safeContent = content == null ? "" : content;
-        if (getSubject().equals(safeSubject) && getContent().equals(safeContent)) {
-            return false;
-        }
-        this.subject = safeSubject;
-        this.content = safeContent;
-        return true;
-    }
 }

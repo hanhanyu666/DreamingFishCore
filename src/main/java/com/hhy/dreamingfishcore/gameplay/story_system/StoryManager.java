@@ -1,25 +1,37 @@
 package com.hhy.dreamingfishcore.gameplay.story_system;
 
+import com.hhy.dreamingfishcore.gameplay.hospital_system.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
+import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory;
+import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgress;
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamPlayerProgress;
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamWorldProgress;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipManager;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeDeliveryService;
-import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
-import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
+import com.hhy.dreamingfishcore.server.notice_system.NoticeCategory;
+import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
+import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.fml.loading.FMLPaths;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -29,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,14 +59,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * 所有会修改静态状态的公开方法使用 {@code synchronized}，确保同一时刻只有一个线程修改数据。</p>
  */
 public final class StoryManager {
-    /** 配置文件结构版本，与世界存档版本是两套独立版本号。 */
+    /** Java 阶段定义的内部版本，仅用于管理命令显示。 */
     private static final int DEFINITION_SCHEMA_VERSION = 1;
-    /** 全局故事定义文件。它属于服务器配置，不属于某个世界。 */
-    private static final Path STORY_DEFINITION_PATH = FMLPaths.CONFIGDIR.get()
-            .resolve(DreamingFishCore.MODID)
-            .resolve("story_stage_data.json");
-    /** 当前世界根目录下 data/dreamingfishcore/story/world_state.json。 */
-    private static final String[] STATE_PATH = {"story", "world_state.json"};
+    /** 当前世界唯一的剧情事实文件；旧版 world_state/task_progress 不再读取。 */
+    private static final String[] STATE_PATH = {"story", "story_state.json"};
 
     /** 故事定义和世界状态共用的 Gson 格式。 */
     public static final Gson GSON = new GsonBuilder()
@@ -69,26 +78,6 @@ public final class StoryManager {
     private static final Map<Integer, StoryTaskData> TASKS_BY_NUMBER = new ConcurrentHashMap<>();
     /** 任务 ID 到所属阶段 ID 的反向索引，保留给后续任务执行器使用。 */
     private static final Map<String, String> TASK_STAGE_IDS = new ConcurrentHashMap<>();
-    /**
-     * 内置开场世界任务与个人引导的关联。
-     *
-     * <p>个人引导本身仍由 GuidanceManager 按玩家保存；这里仅提供故事页和全体完成
-     * 门槛所需的稳定关联，不改变 NPC 对话配置。</p>
-     */
-    private static final Map<String, List<String>> PERSONAL_TASK_GUIDANCE_IDS = Map.of(
-            OpeningStoryDefinitionCatalog.SETTLE_IN_ABYDOS_TASK_ID,
-            List.of("dreamingfishcore:guidance/opening/travel_to_abydos"),
-            OpeningStoryDefinitionCatalog.MEET_BAIZHI_TASK_ID,
-            List.of("dreamingfishcore:guidance/opening/talk_to_baizhi"),
-            OpeningStoryDefinitionCatalog.CHOOSE_ZHUIGUANG_PATH_TASK_ID,
-            // 联系周岑后任务已经分配；最终选择（加入或保持独立）才是完成条件。
-            // 因此两种引导都要进入“全体已分配玩家完成”的门槛。
-            List.of(
-                    "dreamingfishcore:guidance/opening/contact_zhoucen",
-                    "dreamingfishcore:guidance/opening/choose_membership"),
-            OpeningStoryDefinitionCatalog.BUILD_ZHUIGUANG_BASE_TASK_ID,
-            List.of("dreamingfishcore:guidance/opening/build_zhuiguang_base"));
-
     /** 当前服务器世界唯一的一份运行状态。 */
     private static StoryWorldState state = new StoryWorldState();
     /** 是否已经经过服务器世界加载流程。 */
@@ -99,9 +88,355 @@ public final class StoryManager {
     private static boolean writesEnabled;
     /** 当前内存中故事定义的代数；每次成功热重载后递增。 */
     private static long definitionGeneration;
+    private static StoryOperationsCatalog.Document operationsDocument = StoryOperationsCatalog.Document.empty();
+    /** 仅用于把地点观察转换为“进入地点”事实；不写入存档。 */
+    private static final Map<UUID, String> LAST_LOCATIONS = new ConcurrentHashMap<>();
 
     /** 工具类不需要创建对象，所以构造方法私有。 */
+    public static boolean isLoaded() { return loaded; }
+
+    public static synchronized HospitalProgress getHospitalProgress() { ensureLoaded(); return state.getHospital(); }
+
+    public static synchronized int getPersonalCompletionCount(String taskId) {
+        return loaded ? state.getPersonalTaskCompletionCount(taskId) : 0;
+    }
+
     private StoryManager() {
+    }
+
+    /** 返回唯一故事存档中的开场个人状态；阶段脚本不得自行维护副本。 */
+    public static synchronized OpeningStoryProgress getOrCreateOpeningProgress(UUID playerId) {
+        ensureWritable();
+        if (playerId == null) {
+            throw new IllegalArgumentException("玩家 UUID 不能为空");
+        }
+        return state.getOpeningPlayerProgress()
+                .computeIfAbsent(playerId.toString(), ignored -> new OpeningStoryProgress());
+    }
+
+    public static synchronized OpeningStoryProgress findOpeningProgress(UUID playerId) {
+        if (!loaded || playerId == null) {
+            return null;
+        }
+        return state.getOpeningPlayerProgress().get(playerId.toString());
+    }
+
+    /** 返回唯一故事存档中的余梦期个人状态。 */
+    public static synchronized AfterdreamPlayerProgress getOrCreateAfterdreamProgress(UUID playerId) {
+        ensureWritable();
+        if (playerId == null) {
+            throw new IllegalArgumentException("玩家 UUID 不能为空");
+        }
+        return state.getAfterdreamPlayerProgress()
+                .computeIfAbsent(playerId.toString(), ignored -> new AfterdreamPlayerProgress());
+    }
+
+    public static synchronized AfterdreamPlayerProgress findAfterdreamProgress(UUID playerId) {
+        if (!loaded || playerId == null) {
+            return null;
+        }
+        return state.getAfterdreamPlayerProgress().get(playerId.toString());
+    }
+
+    public static synchronized AfterdreamWorldProgress getAfterdreamWorldProgress() {
+        ensureLoaded();
+        return state.getAfterdreamWorldProgress();
+    }
+
+    /** 阶段脚本每次改变事实后调用；只有 StoryManager 会写入世界文件。 */
+    public static synchronized void markDirty() {
+        if (loaded && writesEnabled) {
+            dirty = true;
+        }
+    }
+
+    /* ---------------------------------------------------------------------
+     * 运行时事实入口
+     * ------------------------------------------------------------------ */
+
+    /**
+     * 所有登录事件的唯一剧情入口。阶段脚本不会自己订阅 NeoForge 事件，
+     * 这样一名玩家登录时不会被两套状态机各推进一次。
+     */
+    public static synchronized void onPlayerAuthenticated(ServerPlayer player) {
+        if (player == null || !loaded || !AuthSessionGuard.isAuthenticated(player)) {
+            return;
+        }
+        if (writesEnabled) {
+            deliverRecaps(player);
+            restoreRecapEntry(player);
+            dirty |= state.getOperations().reach(player.getUUID(), currentStageNumber() * 1000);
+        }
+        switch (getCurrentStageIdOrDefault()) {
+            case OpeningStory.STAGE_ID ->
+                    com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                            .onPlayerAuthenticated(player);
+            case AfterdreamStory.STAGE_ID ->
+                    com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                            .onPlayerAuthenticated(player);
+            default -> {
+                // 后续阶段尚未编写脚本。
+            }
+        }
+        // 登录时立即观察当前位置，避免玩家在目标区域内重连后必须离开再回来
+        // 才触发阶段地点事件。
+        try {
+            TaskLocationManager.findLocationAt(player.serverLevel(), player.blockPosition())
+                    .ifPresent(location -> onLocationObserved(player, location));
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("登录时无法观察玩家 {} 的故事地点",
+                    player.getScoreboardName(), exception);
+        }
+        syncStoryProjection(player);
+        syncWorldTaskGuidance(player);
+        HospitalStory.onAuthenticated(player);
+        NoticeDeliveryService.syncVisibleNotices(player);
+    }
+
+    public static synchronized void onPlayerDisconnected(ServerPlayer player) {
+        if (player != null) {
+            LAST_LOCATIONS.remove(player.getUUID());
+            HospitalStory.clearResponse(player.getUUID());
+            if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+                com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                        .onPlayerDisconnected(player);
+            }
+        }
+    }
+
+    /**
+     * NPC 对话界面真正打开时的会话边界。阶段脚本可以用它区分一次新
+     * 对话和服务端为了刷新台词而重新下发的界面。
+     */
+    public static synchronized void onNpcDialogueOpened(ServerPlayer player, int npcId) {
+        if (player == null || !loaded) {
+            return;
+        }
+        if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onNpcDialogueOpened(player, npcId);
+        }
+    }
+
+    /** 在所有公告、私信、引导管理器加载完成后调用一次。 */
+    public static synchronized void onServicesReady(MinecraftServer server) {
+        if (!loaded) {
+            return;
+        }
+        // 引导是当前阶段的投影，不允许上一阶段残留的 ACTIVE 记录继续成为
+        // 玩家 HUD 的目标。历史记录仍保存在引导文件中，只关闭其活动状态。
+        try {
+            GuidanceManager.closeStoryStagesExcept(getCurrentStageIdOrDefault());
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("无法清理上一阶段的活动引导", exception);
+        }
+        if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onStageActivated(getCurrentStageIdOrDefault());
+            HospitalStory.reconcile();
+        }
+        if (server != null) {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                if (AuthSessionGuard.isAuthenticated(player)) {
+                    onPlayerAuthenticated(player);
+                }
+            }
+        }
+    }
+
+    public static synchronized void onNoticeRead(ServerPlayer player, String noticeKey, String title) {
+        if (player == null || !loaded) {
+            return;
+        }
+        if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                    .onNoticeRead(player, noticeKey);
+        } else if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onNoticeRead(player, noticeKey);
+        }
+        HospitalStory.onNoticeRead(player, noticeKey);
+        // 如果玩家在阅读公告前就已经站在目标地点，地点边沿缓存不会再次变化；
+        // 立即重放一次当前位置，避免玩家必须先离开再回来才能继续主线。
+        replayCurrentStoryLocation(player);
+    }
+
+    public static synchronized void onNpcMessageRead(
+            ServerPlayer player, String definitionId, int npcId) {
+        if (player == null || !loaded
+                || !AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            return;
+        }
+        com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                .onNpcMessageRead(player, definitionId, npcId);
+        // 同上：读信本身可能在目标区域内发生，不能把“进入地点”错过。
+        replayCurrentStoryLocation(player);
+    }
+
+    /** 将当前位置作为一次幂等的故事地点事实重新交给当前阶段。 */
+    private static void replayCurrentStoryLocation(ServerPlayer player) {
+        try {
+            TaskLocationManager.findLocationAt(player.serverLevel(), player.blockPosition())
+                    .ifPresent(location -> {
+                        if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+                            OpeningStory.onLocationEntered(player, location);
+                        } else if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+                            AfterdreamStory.onLocationEntered(player, location);
+                        }
+                    });
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("无法重放玩家 {} 的当前故事地点",
+                    player.getScoreboardName(), exception);
+        }
+    }
+
+    public static synchronized void onNpcReply(
+            ServerPlayer player, String definitionId, String replyId) {
+        if (player == null || !loaded
+                || !OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            return;
+        }
+        com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                .onNpcReply(player, definitionId, replyId);
+    }
+
+    /** 每 20 tick 观察一次地点；阶段脚本只收到一次真正的进入事件。 */
+    public static synchronized void onLocationObserved(
+            ServerPlayer player, TaskLocationDefinition location) {
+        if (player == null || !loaded) {
+            return;
+        }
+        applyContinuousLocationEffects(player, location);
+        String locationId = location == null ? "" : location.getId();
+        if (locationId == null || locationId.isBlank()) {
+            LAST_LOCATIONS.remove(player.getUUID());
+            return;
+        }
+        String normalized = locationId.trim();
+        String previous = LAST_LOCATIONS.put(player.getUUID(), normalized);
+        if (normalized.equals(previous)) {
+            return;
+        }
+        if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                    .onLocationEntered(player, location);
+        } else if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onLocationEntered(player, location);
+        }
+    }
+
+    /**
+     * NPC 交互的唯一剧情入口。地点优先从已经由 NPC 管理器校验过的实体位置解析，
+     * 因为玩家点击 NPC 时通常站在建筑边缘，玩家脚下方块不一定仍属于剧情地点。
+     */
+    public static synchronized void onNpcInteraction(
+            ServerPlayer player, int npcId, Entity interactionTarget) {
+        if (player == null || !loaded) {
+            return;
+        }
+        String locationId = "";
+        try {
+            if (interactionTarget != null && interactionTarget.level() == player.level()) {
+                locationId = TaskLocationManager.findLocationAt(
+                        player.serverLevel(), interactionTarget.blockPosition())
+                        .map(TaskLocationDefinition::getId).orElse("");
+            }
+            if (locationId.isBlank()) {
+                locationId = TaskLocationManager.findLocationAt(
+                        player.serverLevel(), player.blockPosition())
+                        .map(TaskLocationDefinition::getId).orElse("");
+            }
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("无法解析玩家 {} 的故事地点，NPC 事件按无地点处理",
+                    player.getScoreboardName(), exception);
+        }
+        if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                    .onNpcInteraction(player, npcId, locationId);
+        } else if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            var hospitalLocation = TaskLocationManager.getLocation(AfterdreamStory.activeMedicalLocationId());
+            if (hospitalLocation.isPresent() && (hospitalLocation.get().contains(player.level().dimension(), player.blockPosition())
+                    || interactionTarget != null && hospitalLocation.get().contains(interactionTarget.level().dimension(), interactionTarget.blockPosition()))) {
+                locationId = AfterdreamStory.activeMedicalLocationId();
+            }
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onNpcInteraction(player, npcId, locationId);
+        }
+    }
+
+    public static synchronized void onGeneRevivalPotionUsed(ServerPlayer player) {
+        if (player != null && AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onGeneRevivalPotionUsed(player);
+        }
+    }
+
+    public static synchronized void onVirusEvolution() {
+        if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onVirusEvolution();
+        }
+    }
+
+    public static synchronized Optional<List<String>> getDialogueOverride(
+            ServerPlayer player, int npcId) {
+        if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            Optional<List<String>> value =
+                    com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                            .getDialogueOverride(player, npcId);
+            if (value.isPresent()) {
+                return value;
+            }
+        }
+        if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            return com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                    .getDialogueOverride(player, npcId);
+        }
+        return Optional.empty();
+    }
+
+    public static synchronized Optional<String> getDialogueRevision(
+            ServerPlayer player, int npcId) {
+        String value = "";
+        if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            value = com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .getDialogueRevision(player, npcId);
+        }
+        if (value.isBlank() && OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+            value = com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
+                    .getDialogueRevision(player, npcId);
+        }
+        return value.isBlank() ? Optional.empty() : Optional.of(value);
+    }
+
+    /**
+     * NPC 私信系统用这个查询决定是否交给配置的 follow-up 机制。
+     * 主线消息的后续节点必须由对应阶段文件决定，普通 NPC 私信仍可使用配置串联。
+     */
+    public static boolean isStoryControlledMessage(String definitionId) {
+        return StoryNpcContentPolicy.isStoryControlledMessage(definitionId);
+    }
+
+    private static void applyContinuousLocationEffects(
+            ServerPlayer player, TaskLocationDefinition location) {
+        if (location == null
+                || !OpeningStory.ZHUIGUANG_LOCATION_ID.equals(location.getId())
+                || !ZhuiguangMembershipManager.isMember(player)) {
+            return;
+        }
+        player.addEffect(new MobEffectInstance(
+                MobEffects.REGENERATION, 60, 0, true, false, true));
+    }
+
+    private static void syncStoryProjection(ServerPlayer player) {
+        try {
+            GuidanceManager.syncToClient(player);
+            TaskDataManager.syncFullTaskData(player);
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("同步玩家 {} 的故事投影失败",
+                    player.getScoreboardName(), exception);
+        }
     }
 
     /**
@@ -113,17 +448,25 @@ public final class StoryManager {
     public static synchronized void loadWorldData(MinecraftServer server) {
         clearWorldCache();
 
-        // 第一步：读取服务器全局配置，并建立阶段、任务索引。
+        // 阶段流程来自 Java，运营配置补充受限的前情草稿和世界任务定义；
+        // 不再读取可执行的 story_stage_data.json，也不做旧定义迁移。
         try {
-            installDefinitions(loadDefinitionDocument());
+            HospitalConfig.reload();
+            DailyTemplateSupportService.configuredItem();
+            operationsDocument = StoryOperationsCatalog.read();
+            StoryDefinitionDocument document = createDefaultDefinitions();
+            validateDefinitionDocument(document);
+            validateOperations(operationsDocument, document);
+            installDefinitions(document);
             definitionGeneration = 1L;
         } catch (Exception exception) {
+            operationsDocument = StoryOperationsCatalog.Document.empty();
             installDefinitions(createDefaultDefinitions());
             loaded = true;
             writesEnabled = false;
             DreamingFishCore.LOGGER.error(
-                    "故事定义加载失败，已使用只读默认定义；修复配置后重启服务器：{}",
-                    STORY_DEFINITION_PATH.toAbsolutePath(), exception);
+                    "故事定义或运营配置加载失败，已使用只读默认定义；请按日志修复后重启服务器",
+                    exception);
             return;
         }
 
@@ -136,17 +479,25 @@ public final class StoryManager {
                     GSON,
                     StoryWorldState.class,
                     StoryWorldState::new);
-            boolean migrated = loadedState.validateAndMigrateLoadedState();
+            // 仅升级同一 story_state 文件的 schema 3/4；旧文件名不参与迁移。
+            boolean upgraded = loadedState.getSchemaVersion() == 3 || loadedState.getSchemaVersion() == 4;
+            loadedState.validateLoadedState();
             if (!STAGES_BY_ID.containsKey(loadedState.getCurrentStageId())) {
                 throw new IllegalStateException(
                         "世界存档当前阶段没有对应定义：" + loadedState.getCurrentStageId());
             }
 
             state = loadedState;
+            for (String taskId : state.getTaskProgressView().keySet()) {
+                if (!TASKS_BY_KEY.containsKey(taskId)) {
+                    throw new IllegalStateException("已发布任务缺少定义，请恢复运营配置：" + taskId);
+                }
+            }
             loaded = true;
             writesEnabled = true;
-            dirty = !fileExisted || migrated || activateDefaultTasks(state.getCurrentStageId());
-            backupLegacyProgressIfPresent(server);
+            dirty = !fileExisted || upgraded;
+            dirty |= activateDefaultTasks(state.getCurrentStageId());
+            evaluateWorldTaskGates();
 
             DreamingFishCore.LOGGER.info(
                     "故事系统加载完成：阶段={}，定义={} 个，已发布任务={} 个，在线活动时间={} ticks",
@@ -163,156 +514,60 @@ public final class StoryManager {
     }
 
     /**
-     * 读取并校验故事定义文件。只有文件缺失时才生成最小默认配置；
-     * 空文件或空对象会进入只读保护，避免覆盖可能因异常中断而损坏的配置。
-     * 非空旧格式会先备份，再明确拒绝启动写入，避免猜错旧数据含义。
+     * 创建当前开服版本的阶段定义。
+     *
+     * <p>这是唯一的定义入口。每个阶段文件负责写清楚自己的任务顺序，
+     * StoryManager 只把它们索引起来供任务/界面查询；运行时绝不从 JSON
+     * 读取可执行的节点、游标或迁移规则。</p>
      */
-    private static StoryDefinitionDocument loadDefinitionDocument() throws Exception {
-        Path path = STORY_DEFINITION_PATH.toAbsolutePath().normalize();
-        Path parent = path.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-
-        if (Files.notExists(path)) {
-            StoryDefinitionDocument defaults = createDefaultDefinitions();
-            writeDefinitionDocument(defaults);
-            return defaults;
-        }
-        if (Files.size(path) == 0L) {
-            throw new IllegalStateException("故事定义文件为空，已拒绝覆盖原文件");
-        }
-
-        JsonElement root = JsonDataStore.read(
-                path,
-                GSON,
-                JsonElement.class,
-                JsonObject::new);
-        if (root != null && root.isJsonObject() && root.getAsJsonObject().size() == 0) {
-            throw new IllegalStateException("故事定义对象为空，已拒绝覆盖原文件");
-        }
-        if (root == null || !root.isJsonObject()) {
-            backupLegacyDefinition(path);
-            throw new IllegalStateException("故事定义根节点必须是对象");
-        }
-
-        JsonObject object = root.getAsJsonObject();
-        if (!object.has("schemaVersion") || !object.has("stages")) {
-            backupLegacyDefinition(path);
-            throw new IllegalStateException(
-                    "检测到旧故事定义格式，原文件已备份；本次重构不静默转换旧格式");
-        }
-
-        StoryDefinitionDocument document = GSON.fromJson(object, StoryDefinitionDocument.class);
-        boolean openingTasksAdded = ensureBuiltInOpeningDefinitions(document);
-        boolean stageShellsAdded = ensureBuiltInStageShells(document);
-        validateDefinitionDocument(document);
-        if (openingTasksAdded || stageShellsAdded) {
-            writeDefinitionDocument(document);
-            DreamingFishCore.LOGGER.info(
-                    "已向故事定义补齐五阶段模型{}",
-                    openingTasksAdded ? "及开场四项任务" : "");
-        }
-        return document;
-    }
-
-    /** 将默认故事定义原子写入配置目录，并保留上一版备份。 */
-    private static void writeDefinitionDocument(StoryDefinitionDocument document) throws Exception {
-        JsonDataStore.writeAtomic(STORY_DEFINITION_PATH, GSON, document);
-    }
-
-    /** 在同目录生成 .legacy-backup，保留无法自动迁移的旧配置。 */
-    private static void backupLegacyDefinition(Path path) throws Exception {
-        Path backup = path.resolveSibling(path.getFileName() + ".legacy-backup");
-        Files.copy(path, backup, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-    }
-
-    /** 备份旧 task_progress.json；旧格式语义不明确，因此不静默导入新世界状态。 */
-    private static void backupLegacyProgressIfPresent(MinecraftServer server) {
-        Path legacy = WorldDataPaths.resolve(server, "story", "task_progress.json");
-        try {
-            if (Files.notExists(legacy) || Files.size(legacy) == 0L) {
-                return;
-            }
-            String content = Files.readString(legacy).trim();
-            if (content.isEmpty() || "{}".equals(content)) {
-                return;
-            }
-            Path backup = legacy.resolveSibling("task_progress.json.legacy-backup");
-            Files.copy(legacy, backup, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-            DreamingFishCore.LOGGER.warn(
-                    "检测到旧故事任务进度，已备份但未迁移：{}", backup);
-        } catch (Exception exception) {
-            DreamingFishCore.LOGGER.error("备份旧故事任务进度失败", exception);
-        }
-    }
-
-    /** 创建五阶段骨架；只有“梦的开始”包含当前已确认的阿拜多斯开场任务。 */
     private static StoryDefinitionDocument createDefaultDefinitions() {
-        StoryStageData dreamBeginning = new StoryStageData(
-                StoryWorldState.DEFAULT_STAGE_ID,
-                1,
-                "梦的开始",
-                OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION);
-        OpeningStoryDefinitionCatalog.createTasks().forEach(dreamBeginning::addTask);
-        List<StoryStageData> stages = new ArrayList<>();
-        stages.add(dreamBeginning);
-        StoryStageCatalog.seeds().stream()
-                .filter(seed -> !seed.id().equals(StoryWorldState.DEFAULT_STAGE_ID))
-                .map(seed -> new StoryStageData(seed.id(), seed.number(), seed.name(), ""))
-                .forEach(stages::add);
-        return new StoryDefinitionDocument(
-                DEFINITION_SCHEMA_VERSION,
-                stages);
+        return createDefaultDefinitions(operationsDocument);
     }
 
-    /** 旧配置只含前两阶段时自动补齐后三个空壳，不植入任何后续文案或任务。 */
-    private static boolean ensureBuiltInStageShells(StoryDefinitionDocument document) {
-        if (document == null || document.stages == null) {
-            return false;
+    private static StoryDefinitionDocument createDefaultDefinitions(StoryOperationsCatalog.Document operations) {
+        List<StoryStageData> stages = List.of(OpeningStory.createStageDefinition(), AfterdreamStory.createStageDefinition());
+        for (StoryOperationsCatalog.WorldTask task : operations.worldTasks()) {
+            StoryStageData stage = stages.stream().filter(value -> value.getStageId().equals(task.stageId()))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException("世界任务阶段尚未实现：" + task.stageId()));
+            stage.addTask(task.definition());
         }
-        Set<String> existing = document.stages.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(StoryStageData::getStageId)
-                .collect(java.util.stream.Collectors.toSet());
-        boolean changed = false;
-        for (StoryStageCatalog.StageSeed seed : StoryStageCatalog.seeds()) {
-            if (existing.add(seed.id())) {
-                StoryStageData stage = new StoryStageData(
-                        seed.id(),
-                        seed.number(),
-                        seed.name(),
-                        seed.id().equals(OpeningStoryDefinitionCatalog.STAGE_ID)
-                                ? OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION
-                                : "");
-                // 若旧配置尚未建立“梦的开始”，补入的骨架也必须带当前确认的
-                // 阿拜多斯开场任务；否则新世界会进入一个没有入口任务的空阶段。
-                if (seed.id().equals(OpeningStoryDefinitionCatalog.STAGE_ID)) {
-                    OpeningStoryDefinitionCatalog.createTasks().forEach(stage::addTask);
-                }
-                document.stages.add(stage);
-                changed = true;
-            }
-        }
-        return changed;
+        return new StoryDefinitionDocument(DEFINITION_SCHEMA_VERSION, stages);
     }
 
-    /** 为已有服务器只补缺失任务；保留服主对阶段和同 ID 任务作出的改写。 */
-    private static boolean ensureBuiltInOpeningDefinitions(StoryDefinitionDocument document) {
-        if (document == null || document.stages == null) {
-            return false;
-        }
-        for (StoryStageData stage : document.stages) {
-            if (stage != null && OpeningStoryDefinitionCatalog.STAGE_ID.equals(stage.getStageId())) {
-                boolean changed = OpeningStoryDefinitionCatalog.ensureTasks(stage);
-                if ("梦屿故事的起点".equals(stage.getStageDescription())) {
-                    stage.setStageDescription(OpeningStoryDefinitionCatalog.STAGE_DESCRIPTION);
-                    changed = true;
+    private static void validateOperations(StoryOperationsCatalog.Document operations, StoryDefinitionDocument definitions) {
+        Map<String, StoryTaskData> tasks = new LinkedHashMap<>();
+        Map<String, Integer> stageNumbers = new LinkedHashMap<>();
+        Map<String, Integer> taskStages = new LinkedHashMap<>();
+        Map<String, String> taskStageIds = new LinkedHashMap<>();
+        definitions.stages.forEach(stage -> {
+            stageNumbers.put(stage.getStageId(), stage.getStageNumber());
+            stage.getTasks().forEach(task -> {
+                tasks.put(task.getTaskKey(), task);
+                taskStages.put(task.getTaskKey(), stage.getStageNumber());
+                taskStageIds.put(task.getTaskKey(), stage.getStageId());
+            });
+        });
+        for (StoryOperationsCatalog.WorldTask task : operations.worldTasks()) {
+            if (task.locationId() != null && !task.locationId().isBlank()
+                    && TaskLocationManager.getLocation(task.locationId()).isEmpty()) {
+                throw new IllegalArgumentException("世界任务地点不存在：" + task.locationId());
+            }
+            for (String prerequisite : task.prerequisiteTasks()) {
+                StoryTaskData required = tasks.get(prerequisite);
+                if (required == null || required.getScope() != StoryTaskData.Scope.PERSONAL
+                        || taskStages.get(prerequisite) > stageNumbers.get(task.stageId())) {
+                    throw new IllegalArgumentException("世界任务的前置个人任务不存在、类型错误或位于未来阶段：" + prerequisite);
                 }
-                return changed;
             }
         }
-        return false;
+        if (loaded) {
+            for (String taskId : state.getTaskProgressView().keySet()) {
+                if (!tasks.containsKey(taskId)
+                        || !java.util.Objects.equals(TASK_STAGE_IDS.get(taskId), taskStageIds.get(taskId))) {
+                    throw new IllegalArgumentException("已发布任务不能删除或更换所属阶段：" + taskId);
+                }
+            }
+        }
     }
 
     /**
@@ -382,7 +637,7 @@ public final class StoryManager {
         }
     }
 
-    /** 发布阶段中 publishedByDefault=true 的任务，返回是否至少发布了一项新任务。 */
+    /** 发布当前阶段中需要显示的共享任务，返回是否至少发布了一项新任务。 */
     private static boolean activateDefaultTasks(String stageId) {
         StoryStageData stage = STAGES_BY_ID.get(stageId);
         if (stage == null || stage.getTasks() == null) {
@@ -390,8 +645,8 @@ public final class StoryManager {
         }
         boolean changed = false;
         for (StoryTaskData task : stage.getTasks()) {
-            // 开场个人任务先由各玩家分别完成；世界任务只有在所有已分配玩家
-            // 完成个人部分后才解锁，因此不能在阶段加载时提前发布。
+            // 内置个人任务按个人状态展示；运营配置的世界任务默认关闭，
+            // 由固定人数门槛或管理员命令发布。
             if (task.isPublishedByDefault()
                     && !isPersonalStoryTask(task.getTaskKey())
                     && state.activateTask(task.getTaskKey())) {
@@ -406,34 +661,32 @@ public final class StoryManager {
         return changed;
     }
 
-    /**
-     * 只校验磁盘上的候选定义，不替换当前正在运行的定义。
-     * 这给管理员提供“先检查、后发布”的安全入口。
-     */
+    /** 校验当前 Java 阶段定义，不读取或写入旧的阶段配置文件。 */
     public static synchronized DefinitionSummary validateDefinitions() {
         ensureLoaded();
-        StoryDefinitionDocument candidate = readDefinitionForReload();
-        validateDefinitionCompatibility(candidate);
-        return createDefinitionSummary(candidate);
+        StoryOperationsCatalog.Document candidate = StoryOperationsCatalog.read();
+        StoryDefinitionDocument document = createDefaultDefinitions(candidate);
+        validateDefinitionDocument(document);
+        validateOperations(candidate, document);
+        return createDefinitionSummary(document);
     }
 
-    /**
-     * 校验并一次性替换故事定义。
-     *
-     * <p>候选文件在本方法中只存在于局部变量里。只有解析、结构校验、ID 唯一性校验以及
-     * 与已经发布任务的兼容性校验全部通过后，才会调用 installDefinitions 修改索引；
-     * 所以半份坏配置不会把服务器切换到半旧半新的状态。</p>
-     */
+    /** 重新安装当前 Java 阶段定义；可编辑文本由 StoryTextCatalog 单独重载。 */
     public static synchronized DefinitionSummary reloadDefinitions() {
         ensureWritable();
-        StoryDefinitionDocument candidate = readDefinitionForReload();
-        validateDefinitionCompatibility(candidate);
-        installDefinitions(candidate);
+        StoryOperationsCatalog.Document candidate = StoryOperationsCatalog.read();
+        StoryDefinitionDocument document = createDefaultDefinitions(candidate);
+        validateDefinitionDocument(document);
+        validateOperations(candidate, document);
+        installDefinitions(document);
+        operationsDocument = candidate;
         definitionGeneration = Math.max(1L, definitionGeneration + 1L);
         if (activateDefaultTasks(state.getCurrentStageId())) {
             dirty = true;
         }
-        return createDefinitionSummary(candidate);
+        evaluateWorldTaskGates();
+        refreshOnlineStoryViews();
+        return createDefinitionSummary(document);
     }
 
     /** 当前成功安装的故事定义代数。 */
@@ -454,40 +707,10 @@ public final class StoryManager {
         WorldHistoryLog.append(state.getActiveTicks(), type, subjectId, actor, details);
     }
 
-    /** 热重载使用的定义文件读取包装，统一把 checked exception 转成管理员可读错误。 */
-    private static StoryDefinitionDocument readDefinitionForReload() {
-        try {
-            return loadDefinitionDocument();
-        } catch (Exception exception) {
-            throw new IllegalStateException("故事定义校验失败：" + exception.getMessage(), exception);
-        }
-    }
-
-    /** 旧任务已经发布后不能在热重载时凭空消失，否则历史进度将失去含义。 */
-    private static void validateDefinitionCompatibility(StoryDefinitionDocument candidate) {
-        Set<String> stageIds = new HashSet<>();
-        Set<String> taskKeys = new HashSet<>();
-        for (StoryStageData stage : candidate.stages) {
-            stageIds.add(stage.getStageId());
-            for (StoryTaskData task : stage.getTasks()) {
-                taskKeys.add(task.getTaskKey());
-            }
-        }
-        if (!stageIds.contains(state.getCurrentStageId())) {
-            throw new IllegalStateException(
-                    "候选故事定义删除了当前世界阶段：" + state.getCurrentStageId());
-        }
-        for (String publishedTaskKey : state.getTaskProgressView().keySet()) {
-            if (!taskKeys.contains(publishedTaskKey)) {
-                throw new IllegalStateException(
-                        "候选故事定义删除了已发布任务：" + publishedTaskKey);
-            }
-        }
-    }
-
     private static DefinitionSummary createDefinitionSummary(StoryDefinitionDocument document) {
         int taskCount = document.stages.stream()
-                .mapToInt(stage -> stage.getTasks().size())
+                .mapToInt(stage -> (int) stage.getTasks().stream()
+                        .count())
                 .sum();
         return new DefinitionSummary(
                 document.schemaVersion,
@@ -497,15 +720,26 @@ public final class StoryManager {
     }
 
     /**
-     * 每个服务器 tick 调用一次。只有至少一名玩家在线时才累计故事活动时间，
-     * 因此长期关服或空服不会让剧情计时自动前进。
+     * 每个服务器 tick 调用一次。余梦期的世界事件先使用世界 gameTime 推进，
+     * 因此“两游戏日后”的阶段事件即使暂时没有玩家在线也不会停住；旧的
+     * 在线活动时间仍只在有玩家在线时累计，继续服务个人剧情记录。
      */
     public static synchronized void tickActiveTime(MinecraftServer server) {
-        if (!loaded || !writesEnabled || server.getPlayerList().getPlayerCount() == 0) {
+        if (!loaded || !writesEnabled || server == null) {
+            return;
+        }
+        if (AfterdreamStory.STAGE_ID.equals(state.getCurrentStageId())) {
+            AfterdreamStory.tickWorldTime(server);
+        }
+        if (server.getPlayerList().getPlayerCount() == 0) {
             return;
         }
         if (state.incrementActiveTicks()) {
             dirty = true;
+        }
+        if (AfterdreamStory.STAGE_ID.equals(state.getCurrentStageId())) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .tickActiveTime(server);
         }
     }
 
@@ -514,17 +748,17 @@ public final class StoryManager {
      * 写入失败会保留 dirty=true，等待下一次自动保存重试。
      */
     public static synchronized boolean saveIfDirty(MinecraftServer server) {
-        if (!loaded || !dirty || !writesEnabled) {
-            return true;
+        boolean saved = true;
+        if (loaded && dirty && writesEnabled) {
+            try {
+                JsonDataStore.writeAtomic(statePath(server), GSON, state);
+                dirty = false;
+            } catch (Exception exception) {
+                DreamingFishCore.LOGGER.error("写入世界故事状态失败，保留 dirty 状态等待下次保存", exception);
+                saved = false;
+            }
         }
-        try {
-            JsonDataStore.writeAtomic(statePath(server), GSON, state);
-            dirty = false;
-            return true;
-        } catch (Exception exception) {
-            DreamingFishCore.LOGGER.error("写入世界故事状态失败，保留 dirty 状态等待下次保存", exception);
-            return false;
-        }
+        return saved;
     }
 
     /** 停服后清理所有静态缓存，避免下次进入另一个世界时继承旧进度。 */
@@ -535,10 +769,16 @@ public final class StoryManager {
         TASKS_BY_NUMBER.clear();
         TASK_STAGE_IDS.clear();
         state = new StoryWorldState();
+        LAST_LOCATIONS.clear();
+        com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                .clearTransientSessions();
         loaded = false;
         dirty = false;
         writesEnabled = false;
         definitionGeneration = 0L;
+        operationsDocument = StoryOperationsCatalog.Document.empty();
+        HospitalConfig.clear();
+        HospitalStory.clearTransient();
     }
 
     /**
@@ -557,8 +797,25 @@ public final class StoryManager {
             throw new IllegalArgumentException("故事阶段不存在：" + stageId);
         }
         String previousStageId = state.getCurrentStageId();
+        if (STAGES_BY_ID.get(stageId).getStageNumber() < currentStageNumber()) {
+            throw new IllegalArgumentException("世界阶段只能向前发布；不能通过切章重放历史任务");
+        }
         if (!state.changeStage(stageId)) {
             return false;
+        }
+        // 阶段切换本身可能发生在玩家已经站在新阶段目标地点时；清掉上一阶段的
+        // 边沿缓存，下一次投影会把当前位置当作一次新的进入事件处理。
+        LAST_LOCATIONS.clear();
+        for (String taskKey : TASKS_BY_KEY.keySet()) {
+            if (isHistoricalTask(taskKey)) {
+                state.getOperations().archive(taskKey);
+            }
+        }
+        dirty = true;
+        try {
+            GuidanceManager.closeStoryStagesExcept(stageId);
+        } catch (RuntimeException exception) {
+            DreamingFishCore.LOGGER.warn("阶段切换后无法关闭旧阶段引导", exception);
         }
         activateDefaultTasks(stageId);
         recordHistory(
@@ -567,7 +824,17 @@ public final class StoryManager {
                 actor,
                 Map.of("previousStageId", previousStageId));
         dirty = true;
+        evaluateWorldTaskGates();
         try {
+            // 阶段脚本是唯一的入口；这里不再经过第二个协调器。
+            onStageActivated(stageId);
+        } catch (RuntimeException exception) {
+            // 阶段状态已经改变；流程效果失败时保留阶段并记录日志，避免回滚世界历史。
+            DreamingFishCore.LOGGER.error(
+                    "故事阶段已切换为 {}，但世界范围剧情节点执行失败", stageId, exception);
+        }
+        try {
+            // 先执行阶段入口，再广播投影，客户端不会短暂看到上一阶段的当前目标。
             TaskDataManager.broadcastFullTaskDataToAllPlayers();
         } catch (RuntimeException exception) {
             // 阶段状态、默认任务和 dirty 已经完成；客户端同步失败不能回滚这次切换。
@@ -581,7 +848,29 @@ public final class StoryManager {
             DreamingFishCore.LOGGER.error(
                     "故事阶段已切换为 {}，但向在线玩家补投阶段公告失败", stageId, exception);
         }
+        onStageActivatedForOnlinePlayers(stageId);
         return true;
+    }
+
+    /** 阶段切换后执行该阶段的世界入口，并为在线玩家建立个人投影。 */
+    private static void onStageActivated(String stageId) {
+        if (AfterdreamStory.STAGE_ID.equals(stageId)) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onStageActivated(stageId);
+            HospitalStory.reconcile();
+        }
+    }
+
+    private static void onStageActivatedForOnlinePlayers(String stageId) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (AuthSessionGuard.isAuthenticated(player)) {
+                onPlayerAuthenticated(player);
+            }
+        }
     }
 
     /** 设置或清除一个全服世界旗标。 */
@@ -650,18 +939,20 @@ public final class StoryManager {
     }
 
     /**
-     * 将配置中已存在的任务发布到世界。发布后它才会进入进度分母和客户端视图。
+     * 将当前阶段已定义的世界任务发布到世界；手动发布可以绕过人数门槛。
      */
     public static synchronized boolean activateTask(String taskKey) {
         ensureWritable();
         if (!TASKS_BY_KEY.containsKey(taskKey)) {
             throw new IllegalArgumentException("故事任务不存在：" + taskKey);
         }
+        requireCurrentWorldTask(taskKey);
         if (!state.activateTask(taskKey)) {
             return false;
         }
         recordHistory(WorldHistoryLog.EventType.TASK_PUBLISHED, taskKey, "system", Map.of());
         dirty = true;
+        refreshOnlineStoryViews();
         return true;
     }
 
@@ -681,6 +972,8 @@ public final class StoryManager {
         if (!TASKS_BY_KEY.containsKey(taskKey)) {
             throw new IllegalArgumentException("故事任务不存在：" + taskKey);
         }
+        requireCurrentWorldTask(taskKey);
+        HospitalStory.validateResolution(taskKey, outcome);
         if (!state.resolveTask(taskKey, outcome, participants)) {
             return false;
         }
@@ -692,6 +985,13 @@ public final class StoryManager {
                 "system",
                 Map.of("participantCount", Integer.toString(participants == null ? 0 : participants.size())));
         dirty = true;
+        for (StoryOperationsCatalog.WorldTask task : operationsDocument.worldTasks()) {
+            if (task.id().equals(taskKey) && outcome == StoryTaskOutcome.SUCCEEDED
+                    && task.successFlag() != null && !task.successFlag().isBlank()) {
+                setWorldFlag(task.successFlag(), true);
+            }
+        }
+        refreshOnlineStoryViews();
         return true;
     }
 
@@ -719,8 +1019,10 @@ public final class StoryManager {
     }
 
     /**
-     * 旧客户端完成包的临时兼容入口。
-     * 它只记录这个玩家的个人兼容状态，不能结算共享任务，也不能切换阶段。
+     * 管理员人工结算故事任务的旧命令入口。
+     *
+     * <p>客户端完成包不会调用此方法；普通主线仍必须由 Java 状态机写入。保留它
+     * 只是让服主可以在确有运营需要时记录一个世界任务参与者。</p>
      */
     public static synchronized boolean playerCompleteTask(
             int taskId, String playerName, UUID playerUUID) {
@@ -731,16 +1033,17 @@ public final class StoryManager {
             return false;
         }
         try {
-            if (!state.recordLegacyPlayerCompletion(
+            if (!state.recordAdminPlayerParticipation(
                     task.getTaskKey(), new StoryWorldState.TaskParticipant(playerUUID, playerName))) {
                 return false;
             }
             dirty = true;
             DreamingFishCore.LOGGER.warn(
-                    "兼容入口记录玩家 {} 完成故事任务 {}；未改变全服任务结果", playerName, task.getTaskKey());
+                    "管理员人工入口记录玩家 {} 参与故事任务 {}；未改变全服任务结果",
+                    playerName, task.getTaskKey());
             return true;
         } catch (IllegalStateException exception) {
-            DreamingFishCore.LOGGER.warn("兼容入口拒绝未发布故事任务：{}", task.getTaskKey());
+            DreamingFishCore.LOGGER.warn("管理员人工入口拒绝未发布故事任务：{}", task.getTaskKey());
             return false;
         }
     }
@@ -748,9 +1051,8 @@ public final class StoryManager {
     /**
      * 用稳定字符串 ID 记录一名玩家完成个人故事任务。
      *
-     * <p>个人进度先单独保存，即使对应世界任务尚未解锁也不会丢失。只有当前服务器中
-     * 所有符合条件的玩家全部完成后，才会在世界层解锁并结算对应任务；这个过程不自动写入
-     * 世界历史，历史内容由运营者手动维护。入口只接受服务端剧情验证后的完成。</p>
+     * <p>个人进度先单独保存，不再参与全服分母、比例或世界任务自动结算。
+     * 阶段和公告由服主手动推进；入口只接受服务端剧情验证后的完成。</p>
      */
     public static synchronized boolean recordPlayerTaskProgress(
             String taskKey, String playerName, UUID playerUUID) {
@@ -767,7 +1069,10 @@ public final class StoryManager {
             DreamingFishCore.LOGGER.warn("拒绝把非个人故事任务当作个人进度记录：{}", taskKey);
             return false;
         }
-        if (OpeningStoryDefinitionCatalog.isMemberOnlyTask(taskKey)
+        if (isHistoricalTask(taskKey) || isTaskWaived(taskKey, playerUUID)) {
+            return false;
+        }
+        if (OpeningStory.isMemberOnlyTask(taskKey)
                 && !ZhuiguangMembershipManager.isMember(playerUUID)) {
             DreamingFishCore.LOGGER.warn(
                     "拒绝为非逐光会成员记录建设任务个人进度：{}", playerName);
@@ -777,40 +1082,25 @@ public final class StoryManager {
         try {
             StoryWorldState.TaskParticipant participant =
                     new StoryWorldState.TaskParticipant(playerUUID, playerName);
-            Set<UUID> expectedPlayers = getExpectedPersonalPlayers(taskKey);
-            expectedPlayers.add(playerUUID);
             StoryWorldState.PersonalCompletionResult result = state.recordPersonalCompletion(
-                    taskKey, participant, expectedPlayers);
+                    taskKey, participant, Set.of());
 
-            // 个人任务全部完成后，才把对应世界任务从“未解锁”推进到 SUCCEEDED。
-            // 这里直接操作世界状态，刻意绕过 activateTask/resolveTask 的历史记录入口。
-            boolean worldAdvanced = false;
-            if (result.allPlayersCompleted()) {
-                state.activateTask(taskKey);
-                StoryWorldState.TaskProgress worldProgress = state.getTaskProgress(taskKey);
-                if (worldProgress != null && !worldProgress.getOutcome().isResolved()) {
-                    List<StoryWorldState.TaskParticipant> completedParticipants =
-                            personalTaskParticipants(taskKey);
-                    worldAdvanced = state.resolveTask(
-                            taskKey, StoryTaskOutcome.SUCCEEDED, completedParticipants);
-                }
-            }
-
-            if (!result.changed() && !worldAdvanced) {
+            // 仅真实的新完成记录参与固定人数门槛；章节切换仍由服主操作。
+            if (!result.changed()) {
                 return false;
             }
             dirty = true;
+            evaluateWorldTaskGates();
             DreamingFishCore.LOGGER.info(
-                    "玩家 {} 完成个人故事任务 {}，{}",
+                    "玩家 {} 完成个人故事任务 {}，已记录个人事实（阶段由服主推进）",
                     playerName,
-                    taskKey,
-                    worldAdvanced ? "全体个人任务已完成，世界任务已推进" : "个人进度已记录");
-            // 个人进度和世界任务状态变化后，所有在线玩家都需要看到最新视图。
+                    taskKey);
+            // 个人记录变化后刷新在线玩家视图；不再据此结算世界任务。
             try {
                 TaskDataManager.broadcastFullTaskDataToAllPlayers();
             } catch (RuntimeException exception) {
                 DreamingFishCore.LOGGER.error(
-                        "个人故事任务 {} 已写入，但向在线玩家广播最新世界进度失败",
+                        "个人故事任务 {} 已写入，但向玩家同步最新任务视图失败",
                         taskKey,
                         exception);
             }
@@ -836,83 +1126,271 @@ public final class StoryManager {
         return progress != null && progress.hasParticipant(playerUUID);
     }
 
-    /** 返回某个故事任务是否有独立的个人部分。 */
-    public static boolean isPersonalStoryTask(String taskKey) {
-        return taskKey != null && PERSONAL_TASK_GUIDANCE_IDS.containsKey(taskKey);
+    /**
+     * 判断数字编号是否属于故事定义。
+     *
+     * <p>任务客户端包仍服务于旧的通用玩家任务，但不能借数字编号把 Java
+     * 主线任务伪造为已完成；主线只能由对应状态机或管理员命令写入。</p>
+     */
+    public static synchronized boolean isStoryTaskNumber(int taskId) {
+        return loaded && taskId > 0 && TASKS_BY_NUMBER.containsKey(taskId);
     }
 
-    /** 返回这项个人任务当前应统计的服务器玩家。建设任务只统计逐光会成员。 */
-    private static Set<UUID> getAssignedPersonalPlayers(String taskKey) {
-        List<String> definitionIds = PERSONAL_TASK_GUIDANCE_IDS.get(taskKey);
-        return definitionIds == null
-                ? Set.of()
-                : GuidanceManager.getPlayerIdsForDefinitions(definitionIds);
+    public static synchronized boolean isTaskWaived(String taskKey, UUID playerId) {
+        return loaded && state.getOperations().isWaived(playerId, taskKey);
+    }
+
+    private static int currentStageNumber() {
+        StoryStageData stage = STAGES_BY_ID.get(state.getCurrentStageId());
+        return stage == null ? 1 : stage.getStageNumber();
+    }
+
+    private static int playerStoryOrder(UUID playerId) {
+        int order = state.getOperations().reachedOrder(playerId);
+        OpeningStoryProgress opening = findOpeningProgress(playerId);
+        if (opening != null) {
+            order = Math.max(order, switch (opening.getStep()) {
+                case NOT_STARTED -> 1000;
+                case TRAVEL_TO_ABYDOS -> 1010;
+                case TALK_TO_BAIZHI -> 1020;
+                case CONTACT_ZHOUCEN -> 1030;
+                case CHOOSE_MEMBERSHIP -> 1040;
+                case BUILD_ZHUIGUANG_BASE, DECLINED_ZHUIGUANG -> 1050;
+            });
+        }
+        AfterdreamPlayerProgress afterdream = findAfterdreamProgress(playerId);
+        if (afterdream != null) {
+            order = Math.max(order, switch (afterdream.getStep()) {
+                case NOT_STARTED, MESSAGE_RECEIVED -> 2000;
+                case MESSAGE_READ -> 2010;
+                case RECEPTION_READY -> 2020;
+                case INTRODUCTION -> 2021;
+                default -> 2030;
+            });
+        }
+        return order;
+    }
+
+    /** 每份已发布正文不可变；再次发布同一 ID 只重试补投。 */
+    public static synchronized boolean publishRecap(String recapId, String actor) {
+        ensureWritable();
+        StoryOperationsCatalog.RecapDraft draft = StoryOperationsCatalog.read().recaps().stream()
+                .filter(value -> value.id().equals(recapId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("前情草稿不存在：" + recapId));
+        StoryCheckpoint checkpoint = StoryCheckpoint.require(draft.checkpointId());
+        StoryStageData targetStage = STAGES_BY_ID.get(checkpoint.stageId());
+        if (targetStage == null) {
+            throw new IllegalArgumentException("接入点所在阶段尚未实现：" + checkpoint.stageId());
+        }
+        boolean changed = state.getOperations().publish(draft.id(), draft.title(), draft.content(),
+                draft.checkpointId(), System.currentTimeMillis());
+        if (changed) {
+            dirty = true;
+            recordHistory(WorldHistoryLog.EventType.RECAP_PUBLISHED, recapId, actor,
+                    Map.of("checkpoint", draft.checkpointId()));
+        }
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null && !saveIfDirty(server)) {
+            throw new IllegalStateException("前情发布尚未保存成功，保留待保存状态；请重试同一发布命令");
+        }
+        onStageActivatedForOnlinePlayers(state.getCurrentStageId());
+        return changed;
+    }
+
+    public static synchronized String describeRecaps() {
+        ensureLoaded();
+        StringBuilder result = new StringBuilder("前情草稿（正文路径：" + StoryOperationsCatalog.path() + "）");
+        for (StoryOperationsCatalog.RecapDraft draft : StoryOperationsCatalog.read().recaps()) {
+            result.append("\n").append(draft.id()).append(" → ").append(draft.checkpointId())
+                    .append(state.getOperations().recaps().containsKey(draft.id()) ? " [已发布，正文已冻结]" : " [未发布]");
+        }
+        result.append("\n可用接入点：");
+        StoryCheckpoint.all().forEach(checkpoint -> result.append("\n").append(checkpoint.id()));
+        return result.toString();
+    }
+
+    private static void deliverRecaps(ServerPlayer player) {
+        List<StoryOperationsState.Recap> published = state.getOperations().recaps().values().stream()
+                .sorted(Comparator.comparingInt(value -> StoryCheckpoint.require(value.checkpointId()).order()))
+                .toList();
+        for (StoryOperationsState.Recap recap : published) {
+            StoryCheckpoint checkpoint = StoryCheckpoint.require(recap.checkpointId());
+            StoryStageData targetStage = STAGES_BY_ID.get(checkpoint.stageId());
+            if (targetStage == null || targetStage.getStageNumber() > currentStageNumber()) {
+                continue;
+            }
+            Set<String> completed = checkpoint.skippedTasks().stream()
+                    .filter(task -> state.hasPersonalTaskCompletion(task, player.getUUID()))
+                    .collect(java.util.stream.Collectors.toSet());
+            if (state.getOperations().deliver(recap.id(), player.getUUID(), playerStoryOrder(player.getUUID()), checkpoint, completed)) {
+                dirty = true;
+                try {
+                    NotificationPushHelper.sendTopLeftNotification(player,
+                            "§6前情总结：" + recap.title() + "\n§7打开终端，在剧情广播中查看。", 6000);
+                } catch (RuntimeException exception) {
+                    DreamingFishCore.LOGGER.warn("前情已发放至档案，弹出提示失败：{}", recap.id(), exception);
+                }
+            }
+        }
+    }
+
+    /** 即使上次在发放后、创建引导前中断，也从同一份接入记录重建。 */
+    private static void restoreRecapEntry(ServerPlayer player) {
+        for (StoryOperationsState.Recap recap : state.getOperations().recaps().values()) {
+            if (!state.getOperations().hasReceived(player.getUUID(), recap.id())) {
+                continue;
+            }
+            StoryCheckpoint checkpoint = StoryCheckpoint.require(recap.checkpointId());
+            if (!checkpoint.stageId().equals(state.getCurrentStageId())) {
+                continue;
+            }
+            if (StoryCheckpoint.OPENING_MEMBERSHIP.equals(checkpoint.id())) {
+                dirty |= getOrCreateOpeningProgress(player.getUUID()).enterMembershipFromRecap(System.currentTimeMillis());
+            } else if (StoryCheckpoint.AFTERDREAM_RECEPTION.equals(checkpoint.id())) {
+                dirty |= getOrCreateAfterdreamProgress(player.getUUID()).enterReceptionFromRecap();
+            }
+            for (String task : checkpoint.skippedTasks()) {
+                StoryTaskData definition = TASKS_BY_KEY.get(task);
+                if (definition != null && isTaskWaived(task, player.getUUID())) {
+                    GuidanceManager.archiveDefinitions(player.getUUID(), definition.getGuidanceDefinitionIds());
+                }
+            }
+        }
+    }
+
+    public static synchronized List<NoticeData> getRecapNotices(UUID playerId) {
+        if (!loaded) {
+            return List.of();
+        }
+        return state.getOperations().recaps().values().stream()
+                .filter(recap -> state.getOperations().hasReceived(playerId, recap.id()))
+                .map(recap -> new NoticeData(recap.noticeId(), "前情总结 · " + recap.title(), recap.content(),
+                        recap.publishedAt(), NoticeCategory.GAME, "", "前情回顾", recap.id()))
+                .toList();
+    }
+
+    public static synchronized Set<Integer> getReadRecapNoticeIds(UUID playerId) {
+        if (!loaded) {
+            return Set.of();
+        }
+        return state.getOperations().recaps().values().stream()
+                .filter(recap -> state.getOperations().hasRead(playerId, recap.id()))
+                .map(StoryOperationsState.Recap::noticeId).collect(java.util.stream.Collectors.toSet());
+    }
+
+    public static synchronized boolean markRecapRead(ServerPlayer player, int noticeId) {
+        if (!loaded || !writesEnabled || player == null || !AuthSessionGuard.isAuthenticated(player)) {
+            return false;
+        }
+        for (StoryOperationsState.Recap recap : state.getOperations().recaps().values()) {
+            if (recap.noticeId() == noticeId && state.getOperations().hasReceived(player.getUUID(), recap.id())) {
+                dirty |= state.getOperations().markRead(player.getUUID(), recap.id());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void requireCurrentWorldTask(String taskKey) {
+        if (isPersonalStoryTask(taskKey) || !state.getCurrentStageId().equals(TASK_STAGE_IDS.get(taskKey))
+                || state.getOperations().isArchived(taskKey)) {
+            throw new IllegalArgumentException("只能发布或结算当前阶段未归档的世界任务：" + taskKey);
+        }
+    }
+
+    /** 人数门槛仅开放世界任务，永远不调用 changeStage。 */
+    private static void evaluateWorldTaskGates() {
+        if (!loaded || !writesEnabled) {
+            return;
+        }
+        boolean changed = false;
+        Map<String, Map<String, String>> completions = state.getPersonalTaskProgressView();
+        for (StoryOperationsCatalog.WorldTask task : operationsDocument.worldTasks()) {
+            if (task.stageId().equals(state.getCurrentStageId())
+                    && !state.getOperations().isArchived(task.id())
+                    && task.gate().isSatisfied(completions) && state.activateTask(task.id())) {
+                dirty = true;
+                changed = true;
+                recordHistory(WorldHistoryLog.EventType.TASK_PUBLISHED, task.id(), "system",
+                        Map.of("reason", "personalCompletionGate", "completedPlayers",
+                                Integer.toString(task.gate().completedPlayers(completions))));
+            }
+        }
+        if (changed) {
+            refreshOnlineStoryViews();
+        }
+    }
+
+    public static synchronized String describeWorldTaskGates() {
+        ensureLoaded();
+        StringBuilder result = new StringBuilder("世界任务门槛（章节仍由服主手动发布）");
+        for (StoryOperationsCatalog.WorldTask task : operationsDocument.worldTasks()) {
+            StoryWorldState.TaskProgress progress = state.getTaskProgress(task.id());
+            result.append("\n").append(task.id()).append("：")
+                    .append(task.gate().completedPlayers(state.getPersonalTaskProgressView()))
+                    .append('/').append(task.requiredPlayers()).append(" 人，")
+                    .append(isHistoricalTask(task.id()) ? "已归档" : progress == null ? "未解锁" : progress.getOutcome());
+        }
+        return result.toString();
+    }
+
+    private static void syncWorldTaskGuidance(ServerPlayer player) {
+        if (!loaded || !writesEnabled || !AuthSessionGuard.isAuthenticated(player)) {
+            return;
+        }
+        for (StoryOperationsCatalog.WorldTask task : operationsDocument.worldTasks()) {
+            if (!task.stageId().equals(state.getCurrentStageId())) {
+                continue;
+            }
+            StoryWorldState.TaskProgress progress = state.getTaskProgress(task.id());
+            if (progress == null || state.getOperations().isArchived(task.id())) {
+                continue;
+            }
+            if (progress.getOutcome().isResolved()) {
+                GuidanceManager.resolve(player.getUUID(), task.id());
+                continue;
+            }
+            GuidanceSeed seed = new GuidanceSeed(task.id(), task.name(), task.content())
+                    .withStoryStage(task.stageId()).withStoryLine(task.id());
+            if (task.locationId() != null && !task.locationId().isBlank()) {
+                TaskLocationManager.getLocation(task.locationId()).ifPresent(location -> seed.withLocation(
+                        location.getName(), location.getDimension(), location.getMin().getX(),
+                        location.getMin().getY(), location.getMin().getZ()));
+            }
+            GuidanceManager.ensureActiveFromStoryEvent(player.getUUID(), seed, task.id(), "公共行动", task.content());
+        }
+        GuidanceManager.syncToClient(player);
+    }
+
+    private static void refreshOnlineStoryViews() {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (AuthSessionGuard.isAuthenticated(player)) {
+                try {
+                    syncWorldTaskGuidance(player);
+                    syncStoryProjection(player);
+                } catch (RuntimeException exception) {
+                    DreamingFishCore.LOGGER.warn("剧情已保存于内存，玩家投影等待下次同步：{}", player.getScoreboardName(), exception);
+                }
+            }
+        }
+    }
+
+    /** 返回某个故事任务是否有独立的个人部分。 */
+    public static boolean isPersonalStoryTask(String taskKey) {
+        StoryTaskData task = taskKey == null ? null : TASKS_BY_KEY.get(taskKey);
+        return task != null && task.getScope() == StoryTaskData.Scope.PERSONAL;
     }
 
     /**
-     * 个人故事任务的全服门槛不再按“收到引导的人”计算，而是按玩家数据中的服务器玩家计算。
-     * 这样一名玩家完成任务只会让比例增加一小段，不会直接把世界任务结算；旧存档中只有引导
-     * 或完成记录、但尚未有玩家基础数据的 UUID 也会保留在统计集合中。
+     * 当前开服版本不计算个人任务的全服分母。个人任务只对当前玩家显示自己的
+     * 完成事实；全服阶段切换由服主显式完成。
      */
     private static Set<UUID> getExpectedPersonalPlayers(String taskKey) {
-        Set<UUID> expected = new LinkedHashSet<>();
-        boolean memberOnly = OpeningStoryDefinitionCatalog.isMemberOnlyTask(taskKey);
-        Map<UUID, PlayerData> playerDataById = Map.of();
-
-        if (PlayerDataManager.isLoaded()) {
-            try {
-                playerDataById = PlayerDataManager.loadAllPlayerDataFromFile();
-                for (Map.Entry<UUID, PlayerData> entry : playerDataById.entrySet()) {
-                    UUID playerId = entry.getKey();
-                    PlayerData data = entry.getValue();
-                    if (playerId != null && (!memberOnly || data != null && data.isZhuiguangMember())) {
-                        expected.add(playerId);
-                    }
-                }
-            } catch (RuntimeException exception) {
-                DreamingFishCore.LOGGER.warn(
-                        "读取服务器玩家列表失败，个人故事任务 {} 暂时使用已知进度统计", taskKey, exception);
-            }
-        }
-
-        // 兼容玩家数据迁移前已经创建的引导与完成记录。
-        for (UUID assignedPlayer : getAssignedPersonalPlayers(taskKey)) {
-            if (!memberOnly || !PlayerDataManager.isLoaded()
-                    || playerDataById.getOrDefault(assignedPlayer, null) == null
-                    || playerDataById.get(assignedPlayer).isZhuiguangMember()) {
-                expected.add(assignedPlayer);
-            }
-        }
-        Map<UUID, PlayerData> knownPlayerData = playerDataById;
-        state.getPersonalTaskCompletions(taskKey).keySet().forEach(playerId -> {
-            try {
-                UUID parsed = UUID.fromString(playerId);
-                PlayerData data = knownPlayerData.get(parsed);
-                if (!memberOnly || !PlayerDataManager.isLoaded()
-                        || data == null || data.isZhuiguangMember()) {
-                    expected.add(parsed);
-                }
-            } catch (IllegalArgumentException ignored) {
-                // 世界状态加载时已经校验过；这里仅防御手动编辑的旧存档。
-            }
-        });
-        return expected;
-    }
-
-    /** 把个人完成记录转换成世界任务结算所需的参与者快照。 */
-    private static List<StoryWorldState.TaskParticipant> personalTaskParticipants(String taskKey) {
-        Map<String, String> completed = state.getPersonalTaskCompletions(taskKey);
-        List<StoryWorldState.TaskParticipant> participants = new ArrayList<>();
-        completed.forEach((playerId, playerName) -> {
-            try {
-                participants.add(new StoryWorldState.TaskParticipant(
-                        UUID.fromString(playerId), playerName));
-            } catch (IllegalArgumentException exception) {
-                DreamingFishCore.LOGGER.warn(
-                        "忽略个人任务 {} 中非法的玩家 UUID {}", taskKey, playerId);
-            }
-        });
-        return participants;
+        return Set.of();
     }
 
     /** 返回按数字编号索引的所有阶段视图，不附带某个玩家的个人完成状态。 */
@@ -921,20 +1399,43 @@ public final class StoryManager {
     }
 
     /**
-     * 为指定玩家生成所有阶段的客户端视图。
+     * 为指定玩家生成已经开放阶段的客户端视图；管理/定义校验传入
+     * {@code null} 时才返回全部阶段。
      *
      * <p>普通世界任务只有在发布后进入视图；带个人部分的任务只有在这名玩家
      * 实际收到对应的剧情引导后才进入故事页，并合并当前玩家的个人完成状态。
      * 这样不会因为配置里预先写了整条任务链，就把尚未经历的剧情提前剧透给玩家。
-     * 管理/兼容查询传入 {@code null} 时仍返回所有任务。</p>
+     * 管理查询传入 {@code null} 时仍返回所有任务。</p>
      */
     public static Map<Integer, StoryStageData> getStagesForPlayer(UUID playerId) {
         ensureLoaded();
         Map<Integer, StoryStageData> result = new LinkedHashMap<>();
+        StoryStageData current = STAGES_BY_ID.get(state.getCurrentStageId());
+        int currentStageNumber = current == null ? Integer.MAX_VALUE : current.getStageNumber();
         STAGES_BY_NUMBER.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
+                .filter(entry -> playerId == null
+                        || entry.getValue() == null
+                        || entry.getValue().getStageNumber() <= currentStageNumber)
                 .forEach(entry -> result.put(entry.getKey(), createStageView(entry.getValue(), playerId)));
         return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * 返回当前阶段及此前已经开放阶段的稳定 ID。
+     * 公告终端只需要这组轻量索引，不必为每个阶段重新生成玩家任务视图。
+     */
+    public static synchronized Set<String> getVisibleStageIds() {
+        ensureLoaded();
+        StoryStageData current = STAGES_BY_ID.get(state.getCurrentStageId());
+        int maximumStageNumber = current == null ? 1 : current.getStageNumber();
+        Set<String> visible = new LinkedHashSet<>();
+        STAGES_BY_NUMBER.values().stream()
+                .filter(stage -> stage != null && stage.getStageNumber() > 0
+                        && stage.getStageNumber() <= maximumStageNumber)
+                .sorted(Comparator.comparingInt(StoryStageData::getStageNumber))
+                .forEach(stage -> visible.add(stage.getStageId()));
+        return Collections.unmodifiableSet(visible);
     }
 
     /** 返回按稳定字符串 ID 索引的阶段视图，主要用于管理命令补全。 */
@@ -949,10 +1450,19 @@ public final class StoryManager {
 
     /** 把静态阶段定义与世界任务状态合并成一份可安全发送的阶段副本。 */
     private static StoryStageData createStageView(StoryStageData definition, UUID playerId) {
+        // 已经结束的阶段是历史档案，但“进入下一阶段”不等于其中每个
+        // 任务都成功。视图必须保留真实的成功/失败/未结算结果，避免把
+        // 维护错误伪装成玩家已经完成。
+        StoryStageData currentDefinition = STAGES_BY_ID.get(state.getCurrentStageId());
+        int currentStageNumber = currentDefinition == null
+                ? definition.getStageNumber()
+                : currentDefinition.getStageNumber();
+        boolean historicalStage = definition.getStageNumber() < currentStageNumber;
         List<StoryTaskData> taskViews = new ArrayList<>();
         for (StoryTaskData task : definition.getTasks()) {
             if (playerId != null
-                    && OpeningStoryDefinitionCatalog.isMemberOnlyTask(task.getTaskKey())
+                    && !historicalStage
+                    && OpeningStory.isMemberOnlyTask(task.getTaskKey())
                     && !ZhuiguangMembershipManager.isMember(playerId)) {
                 continue;
             }
@@ -960,14 +1470,15 @@ public final class StoryManager {
             // 个人任务的定义会随故事阶段一起保存，但分配是逐个玩家发生的。
             // 没有收到对应引导的玩家不能看到这张任务卡；否则新玩家第一次打开
             // 故事页就会同时看到整条开场链。已写入个人完成记录时保留任务，
-            // 以兼容引导存档因迁移/清理而缺失的旧数据。
+            // 即使引导投影暂时缺失，也保留玩家已经发生的事实。
             if (playerId != null
+                    && !historicalStage
                     && personalTask
                     && !isPersonalTaskVisibleToPlayer(task.getTaskKey(), playerId)) {
                 continue;
             }
             StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-            if (progress == null && !personalTask) {
+            if (progress == null && !personalTask && !historicalStage) {
                 continue;
             }
             StoryTaskData view = task.copyForView();
@@ -986,16 +1497,53 @@ public final class StoryManager {
                     personalTask,
                     personalCompleted,
                     personalExpected);
+            // 历史归档表示不再要求执行，不能替玩家补写个人完成或世界成功。
+            AfterdreamStory.updateTaskLocationForView(view);
+            view.setArchived(historicalStage || state.getOperations().isArchived(task.getTaskKey()));
+            view.setWaived(isTaskWaived(task.getTaskKey(), playerId));
             taskViews.add(view);
         }
         StoryStageData view = definition.copyWithTasks(taskViews);
         view.setCurrentStage(definition.getStageId().equals(state.getCurrentStageId()));
-        // 阶段全服比例必须基于完整定义计算，不能因客户端隐藏了尚未分配的个人任务而变化。
-        view.setGlobalProgressPercentage(calculateGlobalStageProgress(definition));
+        // 手动推进模式下活动阶段不根据比例自动切换；历史阶段仍可显示
+        // 已记录的真实比例，但不会因为“阶段已过去”被伪造为 100%。
+        view.setGlobalProgressPercentage(calculateRecordedStageProgress(definition));
         return view;
     }
 
-    /** 以所有符合条件的玩家为分母，计算一个阶段的全服完成比例。 */
+    /**
+     * 只读取已经落盘/进入内存的任务结果，不参与任何自动阶段推进。
+     * 这样手动运营模式仍能在历史页显示真实成功、失败和未结算状态。
+     */
+    private static float calculateRecordedStageProgress(StoryStageData definition) {
+        if (definition == null || definition.getTasks() == null) {
+            return 0.0f;
+        }
+        float progressSum = 0.0f;
+        int trackedTaskCount = 0;
+        for (StoryTaskData task : definition.getTasks()) {
+            if (task == null) {
+                continue;
+            }
+            if (isPersonalStoryTask(task.getTaskKey())) {
+                int expected = getExpectedPersonalPlayers(task.getTaskKey()).size();
+                if (expected <= 0) {
+                    continue;
+                }
+                progressSum += Math.min(1.0f,
+                        (float) state.getPersonalTaskCompletionCount(task.getTaskKey()) / expected);
+            } else {
+                StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
+                if (progress != null && progress.getOutcome().isResolved()) {
+                    progressSum += 1.0f;
+                }
+            }
+            trackedTaskCount++;
+        }
+        return trackedTaskCount == 0 ? 0.0f : progressSum / trackedTaskCount;
+    }
+
+    /** 计算当前阶段已记录的全服进度。 */
     private static float calculateGlobalStageProgress(StoryStageData definition) {
         if (definition == null || definition.getTasks() == null) {
             return 0.0f;
@@ -1031,8 +1579,24 @@ public final class StoryManager {
         if (playerId == null) {
             return true;
         }
-        return getAssignedPersonalPlayers(taskKey).contains(playerId)
-                || state.hasPersonalTaskCompletion(taskKey, playerId);
+        if (HospitalStory.isTask(taskKey)) return HospitalStory.isVisible(taskKey, playerId);
+        String stageId = TASK_STAGE_IDS.get(taskKey);
+        if (OpeningStory.STAGE_ID.equals(stageId)) {
+            return OpeningStory.isTaskVisibleToPlayer(taskKey, playerId);
+        }
+        if (AfterdreamStory.STAGE_ID.equals(stageId)) {
+            return AfterdreamStory.isTaskVisibleToPlayer(taskKey, playerId);
+        }
+        return state.hasPersonalTaskCompletion(taskKey, playerId);
+    }
+
+    /** 当前阶段推进后，所有更早阶段的任务都属于已收束的历史事实。 */
+    private static boolean isHistoricalTask(String taskKey) {
+        String stageId = TASK_STAGE_IDS.get(taskKey);
+        StoryStageData taskStage = stageId == null ? null : STAGES_BY_ID.get(stageId);
+        StoryStageData currentStage = STAGES_BY_ID.get(state.getCurrentStageId());
+        return taskStage != null && currentStage != null
+                && taskStage.getStageNumber() < currentStage.getStageNumber();
     }
 
     public static StoryStageData getStage(int stageNumber) {
@@ -1079,6 +1643,9 @@ public final class StoryManager {
                 personalTask,
                 personalCompleted,
                 personalExpected);
+        AfterdreamStory.updateTaskLocationForView(view);
+        view.setArchived(isHistoricalTask(definition.getTaskKey()) || state.getOperations().isArchived(definition.getTaskKey()));
+        view.setWaived(isTaskWaived(definition.getTaskKey(), playerId));
         return view;
     }
 
@@ -1133,16 +1700,7 @@ public final class StoryManager {
                 .count();
     }
 
-    /** 从阶段配置中筛出已经存在于世界 taskProgress 中的任务。 */
-    private static List<StoryTaskData> getPublishedTasks(StoryStageData stage) {
-        return stage.getTasks().stream()
-                .filter(task -> state.getTaskProgress(task.getTaskKey()) != null)
-                .toList();
-    }
-
-    /**
-     * 返回当前阶段已经进入故事进度的任务：已发布的世界任务，加上可提前显示的个人任务。
-     */
+    /** 返回管理视图可见的任务：已发布的世界任务，加上个人任务。 */
     private static List<StoryTaskData> getTrackedTasks(StoryStageData stage) {
         return stage.getTasks().stream()
                 .filter(task -> isPersonalStoryTask(task.getTaskKey())
@@ -1297,19 +1855,15 @@ public final class StoryManager {
                     task.getTaskId(), task.getTaskKey(), task.getTaskName(),
                     outcome, participantCount, countLabel));
         }
-        ProgressSnapshot progress = getProgress(stage.getStageId(), null);
-        result.append(String.format("全服玩家完成比例: %.1f%%，已结算任务: %d/%d，失败: %d，参与人数: %d 人",
-                progress.globalPlayerRatio() * 100.0f,
-                progress.globalResolved(), progress.publishedTasks(), progress.globalFailed(),
-                getStageUniquePlayerCount(stageNumber)));
+        result.append("阶段推进方式：服主手动；固定人数门槛请查看 worldtask list");
         return result.toString();
     }
 
     /**
-     * 统计某阶段的双进度。
+     * 管理命令和状态页使用的进度快照。
      *
-     * <p>任务数量与当前玩家个人完成数仍保留给旧管理接口；全服比例由所有符合条件
-     * 的玩家完成情况计算，个人任务不会因一名玩家完成就被当成全服已结算。</p>
+     * <p>当前主线由服主手动推进，因此手动模式直接返回空的全服进度快照；个人任务的
+     * 完成事实仍通过 {@link #isPlayerFinishedTask(String, UUID)} 查询。</p>
      */
     public static ProgressSnapshot getProgress(String stageId, UUID playerId) {
         ensureLoaded();
@@ -1397,18 +1951,6 @@ public final class StoryManager {
         return loaded ? state.getCurrentStageId() : StoryWorldState.DEFAULT_STAGE_ID;
     }
 
-    /** 兼容旧调用方：只把状态标记为待保存，不立即写磁盘。 */
-    @Deprecated
-    public static void saveStageData() {
-        ensureLoaded();
-        dirty = true;
-    }
-
-    @Deprecated
-    public static void loadStageData() {
-        throw new IllegalStateException("请通过世界生命周期加载故事系统");
-    }
-
     /** 解析当前世界独有的故事状态存档路径。 */
     private static Path statePath(MinecraftServer server) {
         return WorldDataPaths.resolve(server, STATE_PATH[0], STATE_PATH[1]);
@@ -1440,17 +1982,6 @@ public final class StoryManager {
             int personalResolved,
             int personalFailed,
             float globalPlayerRatio) {
-
-        /** 保留旧的五参数构造方式，供外部兼容调用。 */
-        public ProgressSnapshot(
-                int publishedTasks,
-                int globalResolved,
-                int globalFailed,
-                int personalResolved,
-                int personalFailed) {
-            this(publishedTasks, globalResolved, globalFailed,
-                    personalResolved, personalFailed, -1.0f);
-        }
 
         public float globalRatio() {
             return publishedTasks == 0 ? 0.0f : (float) globalResolved / publishedTasks;
@@ -1496,8 +2027,8 @@ public final class StoryManager {
     }
 
     /**
-     * story_stage_data.json 的根对象。
-     * Gson 通过字段名把 schemaVersion 和 stages 与 JSON 对应起来。
+     * 当前 Java 阶段定义的内存容器。
+     * 它不是用户配置格式，也不会从磁盘反序列化。
      */
     private static final class StoryDefinitionDocument {
         private int schemaVersion;

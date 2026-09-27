@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.client.input;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache.GuidanceClientCache;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.ServerInformationDisplay;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
 import net.minecraft.client.KeyMapping;
@@ -35,19 +36,39 @@ public class KeybindHandler {
             GLFW.GLFW_KEY_G,
             "key.categories.dreamingfishcore");
 
+    public static final KeyMapping GUIDANCE_SCROLL_KEY = new KeyMapping(
+            "key.dreamingfishcore.guidance_scroll", GLFW.GLFW_KEY_LEFT_ALT, "key.categories.dreamingfishcore");
+    public static final KeyMapping GUIDANCE_NEXT_KEY = new KeyMapping(
+            "key.dreamingfishcore.guidance_next", GLFW.GLFW_KEY_RIGHT_BRACKET, "key.categories.dreamingfishcore");
+
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(INFORMATION_UI_KEY);
         event.register(TERMINAL_UI_KEY);
         event.register(FPS_MARKER_KEY);
+        event.register(GUIDANCE_SCROLL_KEY);
+        event.register(GUIDANCE_NEXT_KEY);
     }
 
     // 监听按键事件
     @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
     public static class KeyInputHandler {
         @SubscribeEvent
+        public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player != null && minecraft.screen == null && GUIDANCE_SCROLL_KEY.isDown()
+                    && GuidanceClientCache.getActiveCount() > 1 && event.getScrollDeltaY() != 0) {
+                GuidanceClientCache.cycleTracked(event.getScrollDeltaY() > 0 ? -1 : 1);
+                event.setCanceled(true);
+            }
+        }
+
+        @SubscribeEvent
         public static void onKeyInput(InputEvent.Key event) {
             Minecraft minecraft = Minecraft.getInstance();
+            if (GUIDANCE_NEXT_KEY.consumeClick() && minecraft.player != null && minecraft.screen == null) {
+                GuidanceClientCache.cycleTracked(1);
+            }
             // [已禁用] O 键切换信息面板功能：建筑服不需要，按 O 不再切换、也不再发提示。
             // 如需恢复，去掉下面这段块注释即可。
             /*

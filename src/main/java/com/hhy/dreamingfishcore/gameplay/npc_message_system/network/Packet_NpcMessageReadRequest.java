@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.npc_message_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -32,7 +33,12 @@ public record Packet_NpcMessageReadRequest(int npcId) implements CustomPacketPay
     public static void handle(Packet_NpcMessageReadRequest packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player && packet.npcId > 0) {
-                if (!NpcMessageManager.markConversationRead(player, packet.npcId)) {
+                NpcMessageManager.ReadResult result = NpcMessageManager.markConversationRead(
+                        player, packet.npcId);
+                for (String definitionId : result.definitionIds()) {
+                    StoryManager.onNpcMessageRead(player, definitionId, packet.npcId);
+                }
+                if (!result.changed()) {
                     NpcMessageManager.syncToClient(player);
                 }
             }

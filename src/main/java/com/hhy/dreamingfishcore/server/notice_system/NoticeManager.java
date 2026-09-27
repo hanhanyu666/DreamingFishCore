@@ -102,6 +102,20 @@ public class NoticeManager {
         return visibleNotices;
     }
 
+    /**
+     * Returns notices for the stages already opened in a player's story archive.
+     * The one-argument overload intentionally keeps its legacy current-stage
+     * semantics for callers that do not have a player snapshot.
+     */
+    public static synchronized List<NoticeData> getVisibleNoticesForStages(
+            String currentStageId, java.util.Set<String> visibleStageIds) {
+        List<NoticeData> visibleNotices = new ArrayList<>(
+                NoticeVisibilityPolicy.filterVisibleInStages(
+                        NOTICES, currentStageId, visibleStageIds));
+        visibleNotices.sort(Comparator.comparingLong(NoticeData::getPublishTime).reversed());
+        return visibleNotices;
+    }
+
     public static synchronized NoticeData getLatestNotice() {
         if (NOTICES.isEmpty()) {
             return null;
@@ -138,6 +152,77 @@ public class NoticeManager {
     }
 
     /**
+     * Refreshes a built-in story notice that still carries one of the old
+     * generic sender-only titles. Custom/operator-written titles are left
+     * untouched. This keeps existing local worlds readable after a title-only
+     * 文案 update without introducing a story-state migration path.
+     */
+    public static synchronized boolean updatePlaceholderTitle(NoticeData notice, String title) {
+        if (!configWritable || notice == null || title == null || title.isBlank()) {
+            return false;
+        }
+        String currentTitle = notice.getNoticeTitle();
+        if (!isPlaceholderTitle(currentTitle) || title.equals(currentTitle)) {
+            return false;
+        }
+        notice.setNoticeTitle(title);
+        if (writeNotices(NOTICES)) {
+            DreamingFishCore.LOGGER.info("已更新公告 #{} 的显示标题：{}",
+                    notice.getNoticeId(), title);
+            return true;
+        }
+        notice.setNoticeTitle(currentTitle);
+        return false;
+    }
+
+    /**
+     * Synchronizes a keyed, built-in story notice with its current authored
+     * text while preserving its stable ID, publish time and player read state.
+     */
+    public static synchronized boolean updateStoryNoticeText(
+            NoticeData notice, String title, String content) {
+        if (!configWritable
+                || notice == null
+                || !notice.isGameNotice()
+                || notice.getNoticeKey().isBlank()
+                || title == null
+                || title.isBlank()
+                || content == null
+                || content.isBlank()) {
+            return false;
+        }
+
+        String currentTitle = notice.getNoticeTitle();
+        String currentContent = notice.getNoticeContent();
+        if (title.equals(currentTitle) && content.equals(currentContent)) {
+            return false;
+        }
+
+        notice.setNoticeTitle(title);
+        notice.setNoticeContent(content);
+        if (writeNotices(NOTICES)) {
+            DreamingFishCore.LOGGER.info(
+                    "已同步剧情公告 #{} 的标题与正文：{}",
+                    notice.getNoticeId(), title);
+            return true;
+        }
+
+        notice.setNoticeTitle(currentTitle);
+        notice.setNoticeContent(currentContent);
+        return false;
+    }
+
+    private static boolean isPlaceholderTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return true;
+        }
+        return "【梦屿广播·逐光会】".equals(title.trim())
+                || "【梦屿广播·逐光会研究通告】".equals(title.trim())
+                || "梦屿广播".equals(title.trim())
+                || "服务器公告".equals(title.trim());
+    }
+
+    /**
      * Idempotently appends the built-in opening guide notice and persists the
      * resulting list. The in-memory append is rolled back if persistence
      * fails; this method never emits a player notification.
@@ -147,39 +232,35 @@ public class NoticeManager {
             return false;
         }
 
-        NoticeData desertTown = getNoticeByKey(BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-        String previousDesertTitle = desertTown == null ? "" : desertTown.getNoticeTitle();
-        String previousDesertContent = desertTown == null ? "" : desertTown.getNoticeContent();
-        boolean migratedAbydos = BuiltInNoticeCatalog.migrateAbydosTownName(NOTICES);
         List<NoticeData> additions = BuiltInNoticeCatalog.createMissingOpeningNotices(NOTICES);
-        if (additions.isEmpty() && !migratedAbydos) {
+        if (additions.isEmpty()) {
             return true;
         }
 
         int originalSize = NOTICES.size();
         NOTICES.addAll(additions);
         if (writeNotices(NOTICES)) {
-            if (migratedAbydos) {
-                DreamingFishCore.LOGGER.info("已将内置阿拜多斯安置公告更新为最新文案");
-            }
-            if (!additions.isEmpty()) {
-                DreamingFishCore.LOGGER.info("已补齐内置开场指引公告");
-            }
+            DreamingFishCore.LOGGER.info("已补齐内置开场指引公告");
             return true;
         }
 
         while (NOTICES.size() > originalSize) {
             NOTICES.remove(NOTICES.size() - 1);
         }
-        if (migratedAbydos && desertTown != null) {
-            desertTown.setNoticeTitle(previousDesertTitle);
-            desertTown.setNoticeContent(previousDesertContent);
-        }
         return false;
     }
 
     public static synchronized boolean addNotice(NoticeData notice) {
         if (notice == null || !configWritable) {
+            return false;
+        }
+
+        // 公告键和编号都是稳定身份；拒绝重复写入，避免流程重试或并发管理命令
+        // 产生两条看起来相同的公告。
+        if (notice.getNoticeId() <= 0
+                || getNoticeById(notice.getNoticeId()) != null
+                || (!notice.getNoticeKey().isBlank()
+                && getNoticeByKey(notice.getNoticeKey()) != null)) {
             return false;
         }
 

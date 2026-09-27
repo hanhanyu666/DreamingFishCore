@@ -89,6 +89,10 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
             // 检查复活点数是否足够
             if (currentRespawnPoint < cost) {
                 // 复活点不足，发送失败消息
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c保留物品需要 " + String.format("%.1f", cost)
+                                + " 点模板重建余量，当前只有 "
+                                + String.format("%.1f", currentRespawnPoint) + " 点。"));
                 PendingDeathData.rollbackResolution(player, packet.deathId);
                 sendResponse(player, false, currentRespawnPoint);
                 return;
@@ -126,6 +130,8 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
                 PendingDeathData.rollbackResolution(player, packet.deathId);
                 DreamingFishCore.LOGGER.error("玩家 {} 保留物品结算失败，已取消复活",
                         player.getScoreboardName(), exception);
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c保留物品结算失败，复活点已回滚。请稍后重试，或选择“重生”后返回死亡地点取回物品。"));
                 sendResponse(player, false, currentRespawnPoint);
                 return;
             }

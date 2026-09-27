@@ -54,7 +54,8 @@ public class Packet_NoticeCheckResponse implements net.minecraft.network.protoco
 
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_NoticeCheckResponse msg) {
-        NoticeClientCache.setUnreadHint(msg.hasNewNotice, msg.latestNoticeId);
+        NoticeClientCache.setUnreadHint(
+                msg.hasNewNotice, msg.latestNoticeId, msg.latestNoticeTitle);
         if (msg.hasNewNotice) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) {

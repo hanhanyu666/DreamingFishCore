@@ -15,6 +15,8 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add("key.dreamingfishcore.open_screen_o", "打开信息面板");
         add("key.dreamingfishcore.open_terminal_u", "打开服务器终端");
         add("key.dreamingfishcore.fps_marker", "FPS 标点");
+        add("key.dreamingfishcore.guidance_scroll", "按住并滚动以切换剧情追踪");
+        add("key.dreamingfishcore.guidance_next", "追踪下一项剧情行动");
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "梦鱼蓝图");
         add(DreamingFishCore_Items.GUITAR.get(), "吉他");
@@ -29,6 +31,8 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get(), "专业急救包");
         add(DreamingFishCore_Items.REVIVAL_CHARM.get(), "复活护符");
         add(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get(), "基因复苏药剂");
+        add(DreamingFishCore_Items.PROTECTIVE_MASK.get(), "防护面具");
+        add("item.dreamingfishcore.protective_mask.tooltip", "由逐光会牵头制作的防护面具，至少目前可以阻止感染者的传染……");
         add("item.dreamingfishcore.siege_zombie_spawn_egg", "丧尸刷怪蛋");
         add("entity.dreamingfishcore.siege_zombie", "丧尸");
     }

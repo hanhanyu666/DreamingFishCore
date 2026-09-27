@@ -131,7 +131,8 @@ public class PlayerDataManager {
 
         PLAYER_DATA_CACHE.put(playerUUID, playerData);
         markDirty();
-        PlayerAttributesDataManager.initPlayerAttributesData(serverPlayer, level);
+        // 只在属性档案中的等级确实变化时同步等级生命；普通经验/称号更新不能重置玩家当前血量。
+        PlayerAttributesDataManager.updatePlayerLevel(serverPlayer, level);
 
         DreamingFishCore.LOGGER.info("玩家 {} 数据更新成功（Rank={}, Title={}, Level={}, Exp={}）",
                 serverPlayer.getScoreboardName(),

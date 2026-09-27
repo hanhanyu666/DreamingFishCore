@@ -1,48 +1,42 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.event;
 
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
-
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
+import com.hhy.dreamingfishcore.item.items.ProtectiveMaskItem;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.GameType;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 感染值事件处理
- * 处理玩家生命值变化、被丧尸击败等事件导致的感染值变化
+ * 处理玩家实际受伤和附近感染者传播导致的感染值变化。
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class InfectionEventHandler {
 
-    private static final int INFECTION_MAX = 100;
-    private static final int HEALTH_CHECK_INTERVAL = 20; // 1秒检查一次生命值变化
-    private static final int PROXIMITY_CHECK_INTERVAL = 600; // 30秒检查一次附近感染者（每分钟加2点，每次检查加1点）
+    private static final int PROXIMITY_CHECK_INTERVAL = 400; // 20秒检查一次附近感染者（每次检查加1点）
     private static final double PROXIMITY_RADIUS = 32.0; // 检测范围：32格
-
-    // 记录玩家上次检查时的生命值
-    private static final Map<UUID, Float> LAST_HEALTH = new ConcurrentHashMap<>();
 
     // 记录玩家在感染者附近的检查次数（用于每分钟提示一次）
     private static final Map<UUID, Integer> NEARBY_INFECTED_CHECK_COUNT = new ConcurrentHashMap<>();
 
     /**
-     * 玩家tick事件 - 每秒检查生命值变化，净损失时增加感染值
+     * 玩家 tick 事件只负责定时检查附近感染者。
+     *
+     * <p>感染值不再通过比较前后两次血量来推断，避免登录、重生、最大生命属性刷新
+     * 或其他系统校正血量时被误判为受伤。实际受伤由 {@link LivingDamageEvent.Post}
+     * 处理。</p>
      */
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
@@ -56,7 +50,7 @@ public class InfectionEventHandler {
             return;
         }
 
-        if (player.tickCount % HEALTH_CHECK_INTERVAL != 0) {
+        if (player.tickCount % PROXIMITY_CHECK_INTERVAL != 0) {
             return;
         }
 
@@ -66,58 +60,44 @@ public class InfectionEventHandler {
             return;
         }
 
-        // 如果已经是感染者，不再增加感染值
-        if (attributesData.isInfected()) {
-            LAST_HEALTH.put(playerUUID, player.getHealth());
+        // 检查附近是否有感染者，如果有则增加感染值；每20秒检查一次。
+        checkNearbyInfectedPlayers(player, attributesData);
+    }
+
+    /**
+     * 只在实体实际损失生命值后增加感染值。
+     * LivingDamageEvent.Post 的 newDamage 是经过护甲、抗性和吸收结算后真正扣除的血量，
+     * 不会把登录、退出、重生或最大生命值同步误认为伤害。
+     */
+    @SubscribeEvent
+    public static void onPlayerDamaged(LivingDamageEvent.Post event) {
+        if (event.getEntity().level().isClientSide()
+                || !(event.getEntity() instanceof ServerPlayer player)
+                || !AuthSessionGuard.isAuthenticated(player)
+                || player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
             return;
         }
 
-        float currentHealth = player.getHealth();
-        Float lastHealth = LAST_HEALTH.get(playerUUID);
-
-        if (lastHealth != null && currentHealth < lastHealth) {
-            // 生命值净减少，增加感染值
-            float healthLoss = lastHealth - currentHealth;
-            float infectionIncrease = healthLoss / 5.0F;
-
-            if (infectionIncrease > 0) {
-                float currentInfection = attributesData.getCurrentInfection();
-                float newInfection = Math.min(currentInfection + infectionIncrease, INFECTION_MAX);
-
-                if (Math.abs(newInfection - currentInfection) > 0.01F) {
-                    attributesData.setCurrentInfection(newInfection);
-                    PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
-
-                    // 调试日志
-                    DreamingFishCore.LOGGER.info("感染值增加: 玩家{}, 生命损失:{}, 增加感染:{}, {}->{}",
-                            player.getScoreboardName(), String.format("%.1f", healthLoss),
-                            String.format("%.2f", infectionIncrease), String.format("%.2f", currentInfection), String.format("%.2f", newInfection));
-
-                    // 感染值达到100时转换为感染者
-                    if (newInfection >= INFECTION_MAX && !attributesData.isInfected()) {
-                        attributesData.setInfected(true);
-                        PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
-                        player.displayClientMessage(
-                                Component.literal("§4§l你已经完全感染，变成了感染者！"),
-                                true
-                        );
-                    }
-
-                    PlayerInfectionClientSync.sendInfectionDataToClient(
-                            player,
-                            newInfection,
-                            attributesData.isInfected()
-                    );
-                }
-            }
+        float healthLoss = event.getNewDamage();
+        if (!(healthLoss > 0.0F) || Float.isNaN(healthLoss) || Float.isInfinite(healthLoss)) {
+            return;
         }
-        // 更新记录的生命值
-        LAST_HEALTH.put(playerUUID, currentHealth);
 
-        // 检查附近是否有感染者，如果有则增加感染值
-        // 每30秒检查一次，每次加1点，每分钟共2点
-        if (player.tickCount % PROXIMITY_CHECK_INTERVAL == 0) {
-            checkNearbyInfectedPlayers(player, attributesData);
+        PlayerAttributesData attributesData = PlayerAttributesDataManager
+                .getPlayerAttributesData(player.getUUID());
+        if (attributesData == null || attributesData.isInfected()) {
+            return;
+        }
+
+        float currentInfection = attributesData.getCurrentInfection();
+        float infectionIncrease = healthLoss / 5.0F;
+        PlayerInfectionManager.addInfection(player, infectionIncrease);
+        float newInfection = attributesData.getCurrentInfection();
+        if (Math.abs(newInfection - currentInfection) > 0.01F) {
+            DreamingFishCore.LOGGER.info("感染值增加: 玩家{}, 实际生命损失:{}, 增加感染:{}, {}->{}",
+                    player.getScoreboardName(), String.format("%.1f", healthLoss),
+                    String.format("%.2f", infectionIncrease), String.format("%.2f", currentInfection),
+                    String.format("%.2f", newInfection));
         }
     }
 
@@ -132,14 +112,10 @@ public class InfectionEventHandler {
             return;
         }
 
-        // 如果感染值已满，不再增加
-        if (attributesData.getCurrentInfection() >= INFECTION_MAX) {
-            return;
-        }
-
         // 获取所有在线玩家
         var serverPlayers = player.server.getPlayerList().getPlayers();
         boolean hasNearbyInfected = false;
+        boolean protectedByMask = ProtectiveMaskItem.isEquipped(player);
 
         for (ServerPlayer otherPlayer : serverPlayers) {
             // 跳过自己
@@ -158,6 +134,16 @@ public class InfectionEventHandler {
                 continue;
             }
 
+            // 防护面具只阻断一级感染者的近距离传播；二级感染者仍然可以传播，
+            // 因此不能在发现面具后直接结束整次扫描。
+            // 拿到一件面具不等于全服已经进入面具阶段；只有首件面具实际发放后
+            // 写入的世界事实才开启传播拦截。这样管理员提前测试/掉落的面具不会
+            // 悄悄改变第一阶段的感染规则。
+            if (PlayerInfectionManager.isPostMaskEraEnabled()
+                    && isBlockedByProtectiveMask(otherAttributes, protectedByMask)) {
+                continue;
+            }
+
             // 检查距离
             double distance = player.position().distanceTo(otherPlayer.position());
             if (distance <= PROXIMITY_RADIUS) {
@@ -169,11 +155,10 @@ public class InfectionEventHandler {
         // 如果附近有感染者，增加1点感染值
         if (hasNearbyInfected) {
             float currentInfection = attributesData.getCurrentInfection();
-            float newInfection = Math.min(currentInfection + 1.0F, INFECTION_MAX);
+            PlayerInfectionManager.addInfection(player, 1.0F);
+            float newInfection = attributesData.getCurrentInfection();
 
             if (newInfection > currentInfection) {
-                attributesData.setCurrentInfection(newInfection);
-                PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
 
                 // 增加检查计数
                 UUID playerUUID = player.getUUID();
@@ -188,24 +173,10 @@ public class InfectionEventHandler {
                     );
                 }
 
-                // 发送提示消息（仅在第一次或达到阈值时）
-                if (newInfection >= INFECTION_MAX) {
-                    player.displayClientMessage(
-                            Component.literal("§c你已经完全感染，变成了感染者！"),
-                            true
-                    );
-                    // 转换为感染者
-                    attributesData.setInfected(true);
-                    PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
-                    // 清除计数
+                // addInfection 已经完成阈值转换和同步；达到阈值后清除附近提示计数。
+                if (attributesData.isInfected()) {
                     NEARBY_INFECTED_CHECK_COUNT.remove(playerUUID);
                 }
-
-                PlayerInfectionClientSync.sendInfectionDataToClient(
-                        player,
-                        newInfection,
-                        attributesData.isInfected()
-                );
             }
         } else {
             // 附近没有感染者，清除计数
@@ -214,104 +185,14 @@ public class InfectionEventHandler {
     }
 
     /**
-     * 玩家被丧尸击败事件
-     * 随机增加感染值，感染值达到100时玩家变成感染者
+     * 面具传播策略的单一入口：只拦截一级感染者，绝不把二级感染者误判为安全来源。
+     * 保持为无实体依赖的纯判定，方便在服务端扫描前进行测试。
      */
-    @SubscribeEvent
-    public static void onPlayerKilledByZombie(LivingDeathEvent event) {
-        // 只处理服务端玩家
-        if (event.getEntity().level().isClientSide()) {
-            return;
-        }
-        if (!(event.getEntity() instanceof ServerPlayer player)
-                || !AuthSessionGuard.isAuthenticated(player)) {
-            return;
-        }
-
-        // 检查伤害来源是否是实体
-        if (event.getSource().getEntity() == null) {
-            return;
-        }
-
-        // 检查是否是丧尸类生物
-        boolean isZombieKiller = isZombie(event.getSource().getEntity());
-
-        if (!isZombieKiller) {
-            return;
-        }
-
-        // 获取玩家属性数据
-        PlayerAttributesData attributesData = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
-        if (attributesData == null) {
-            return;
-        }
-
-        // 如果已经是感染者，不再增加感染值
-        if (attributesData.isInfected()) {
-            return;
-        }
-
-        // 随机增加感染值
-        Random random = new Random();
-        float infectionIncrease = 1 + random.nextInt(9);
-
-        float currentInfection = attributesData.getCurrentInfection();
-        float newInfection = Math.min(currentInfection + infectionIncrease, INFECTION_MAX);
-
-        attributesData.setCurrentInfection(newInfection);
-        PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
-
-        // 发送消息给玩家
-        player.displayClientMessage(
-                Component.literal("§c你被丧尸击败了！感染值增加了 " + String.format("%.1f", infectionIncrease) + "（当前：" + String.format("%.1f", newInfection) + "/" + INFECTION_MAX + "）"),
-                true
-        );
-
-        // 检查是否达到100，转换为感染者
-        if (newInfection >= INFECTION_MAX) {
-            attributesData.setInfected(true);
-            PlayerAttributesDataManager.updatePlayerAttributesData(player, attributesData);
-
-            // 发送转换消息
-            player.displayClientMessage(
-                    Component.literal("§4§l你已经完全感染，变成了感染者！"),
-                    true
-            );
-
-//            DreamingFishCore.LOGGER.info("玩家 {} 已转变为感染者", player.getScoreboardName());
-        }
-
-        PlayerInfectionClientSync.sendInfectionDataToClient(
-                player,
-                newInfection,
-                attributesData.isInfected()
-        );
+    static boolean isBlockedByProtectiveMask(PlayerAttributesData sourceAttributes,
+                                              boolean protectedByMask) {
+        return protectedByMask
+                && sourceAttributes != null
+                && sourceAttributes.isLevelOneInfected();
     }
 
-    /**
-     * 判断实体是否是丧尸类
-     */
-    private static boolean isZombie(net.minecraft.world.entity.Entity entity) {
-        if (entity == null) {
-            return false;
-        }
-
-//        // 检查是否是原版丧尸
-        if (entity.getType() == EntityType.ZOMBIE) {
-            return true;
-        }
-        // 检查是否是溺尸
-        if (entity.getType() == EntityType.DROWNED) {
-            return true;
-        }
-        // 检查是否是尸壳
-        if (entity.getType() == EntityType.HUSK) {
-            return true;
-        }
-        // 检查是否是僵尸村民
-        if (entity.getType() == EntityType.ZOMBIE_VILLAGER) {
-            return true;
-        }
-        return false;
-    }
 }

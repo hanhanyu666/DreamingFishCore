@@ -34,8 +34,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 1.0.4 接入新的数据驱动剧情流程与任务状态同步契约，旧客户端应在握手时明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.18.0";
+    // 数据驱动剧情/任务状态、感染 infectionLevel 与服务器状态 TPS 的同步契约均已变更，
+    // 旧客户端必须在握手阶段明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.23.0";
 
     private DreamingFishCore_NetworkManager() {
     }

@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.npc_message_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -38,9 +39,14 @@ public record Packet_NpcMessageReplyRequest(String messageRecordId, String reply
 
     public static void handle(Packet_NpcMessageReplyRequest packet, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (context.player() instanceof ServerPlayer player
-                    && !NpcMessageManager.reply(player, packet.messageRecordId, packet.replyId)) {
-                NpcMessageManager.syncToClient(player);
+            if (context.player() instanceof ServerPlayer player) {
+                NpcMessageManager.ReplyResult result = NpcMessageManager.reply(
+                        player, packet.messageRecordId, packet.replyId);
+                if (result.accepted()) {
+                    StoryManager.onNpcReply(player, result.definitionId(), result.replyId());
+                } else {
+                    NpcMessageManager.syncToClient(player);
+                }
             }
         });
     }

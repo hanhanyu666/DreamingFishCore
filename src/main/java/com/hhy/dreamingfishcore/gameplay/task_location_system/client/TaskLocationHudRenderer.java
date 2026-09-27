@@ -1,19 +1,13 @@
 package com.hhy.dreamingfishcore.gameplay.task_location_system.client;
 
-import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /** Compact bottom-right task-location mode label. */
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class TaskLocationHudRenderer {
     private static final int RIGHT_MARGIN = 2;
     private static final int BOTTOM_MARGIN = 4;
@@ -40,9 +34,23 @@ public final class TaskLocationHudRenderer {
     private TaskLocationHudRenderer() {
     }
 
-    @SubscribeEvent
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-        Minecraft minecraft = Minecraft.getInstance();
+    public static void invalidateLayoutCache() {
+        cachedSnapshot = null;
+        cachedFont = null;
+        cachedPanelMaxWidth = -1;
+        cachedLayout = null;
+    }
+
+    public static boolean shouldRenderHud(Minecraft minecraft) {
+        return minecraft.player != null && minecraft.level != null
+                && !minecraft.options.hideGui
+                && !minecraft.getDebugOverlay().showDebugScreen()
+                && minecraft.screen == null
+                && TaskLocationClientState.get() != null;
+    }
+
+    /** Draws into the shared managed HUD pass. */
+    public static void renderBatched(GuiGraphics graphics, Minecraft minecraft) {
         if (minecraft.player == null || minecraft.level == null
                 || minecraft.options.hideGui
                 || minecraft.getDebugOverlay().showDebugScreen()
@@ -55,8 +63,7 @@ public final class TaskLocationHudRenderer {
             return;
         }
 
-        GuiGraphics graphics = event.getGuiGraphics();
-        graphics.drawManaged(() -> render(graphics, minecraft, snapshot));
+        render(graphics, minecraft, snapshot);
     }
 
     private static void render(GuiGraphics graphics, Minecraft minecraft,

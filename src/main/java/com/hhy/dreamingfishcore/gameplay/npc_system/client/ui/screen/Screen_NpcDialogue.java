@@ -34,6 +34,8 @@ public class Screen_NpcDialogue extends Screen {
     private static final String TEXT_LOCKED = "未解锁";
     private static final String TEXT_EMPTY_DIALOGUE = "对方暂时没有继续开口。";
     private static final String TEXT_CLOSE_HINT = "ESC 离开";
+    /** 每页展示八行，长对白自动翻页，不再被静默截断。 */
+    private static final int DIALOGUE_LINES_PER_PAGE = 8;
 
     private static final int COLOR_PANEL = 0xDC090B0E;
     private static final int COLOR_PANEL_BORDER = 0x7A9B7B43;
@@ -69,6 +71,7 @@ public class Screen_NpcDialogue extends Screen {
     private int actionX;
     private int actionWidth;
     private int dialogueIndex;
+    private int dialoguePage;
     private boolean showingAbout;
     private long openTime;
 
@@ -91,21 +94,27 @@ public class Screen_NpcDialogue extends Screen {
         virtualHeight = virtualSize.virtualHeight;
 
         panelX = 12;
-        panelHeight = Math.max(98, Math.min(110, virtualHeight / 3 - 8));
-        panelY = virtualHeight - panelHeight - 10;
         panelWidth = virtualWidth - panelX * 2;
 
         modelCenterX = panelX + 42;
-        modelFootY = panelY + panelHeight - 7;
         dialogueX = panelX + 84;
         actionWidth = 166;
         actionX = panelX + panelWidth - actionWidth - 10;
         dialogueWidth = Math.max(190, actionX - dialogueX - 14);
+
+        // 只有超过四行的对白才增加面板高度；短对白保持紧凑，长对白仍由分页承载。
+        int maxPanelHeight = Math.max(98, Math.min(150, virtualHeight - 20));
+        int lineCount = MC.font.getSplitter().splitLines(layoutText(), dialogueWidth, Style.EMPTY).size();
+        int visibleLines = Math.min(DIALOGUE_LINES_PER_PAGE, Math.max(1, lineCount));
+        int desiredPanelHeight = 98 + Math.max(0, visibleLines - 4) * 12;
+        panelHeight = Math.min(maxPanelHeight, desiredPanelHeight);
+        panelY = virtualHeight - panelHeight - 10;
+        modelFootY = panelY + panelHeight - 7;
     }
 
     private void rebuildTextActions() {
         textActionAreas.clear();
-        List<TextAction> actions = List.of(
+        List<TextAction> actions = new java.util.ArrayList<>(List.of(
                 new TextAction(BUTTON_DIALOGUE, ScreenAction.DIALOGUE, true),
                 new TextAction(showingAbout ? BUTTON_BACK_TO_DIALOGUE : BUTTON_ABOUT,
                         ScreenAction.ABOUT, true),
@@ -113,7 +122,15 @@ public class Screen_NpcDialogue extends Screen {
                         isActionAvailable(NpcInteractionType.FOLLOW)),
                 new TextAction(BUTTON_SET_HOME, ScreenAction.SET_HOME,
                         isActionAvailable(NpcInteractionType.SET_HOME))
-        );
+        ));
+        if (isActionAvailable(NpcInteractionType.HOSPITAL_REVIEW)) {
+            actions.set(2, new TextAction("正式复查", ScreenAction.HOSPITAL_REVIEW, true));
+        }
+        if (data.getNpcId() == com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy.MEDICAL_STAFF_ID) {
+            actions.set(2, new TextAction("提交并维护", ScreenAction.DAILY_TEMPLATE_SUPPORT,
+                    isActionAvailable(NpcInteractionType.DAILY_TEMPLATE_SUPPORT)));
+            actions.remove(3);
+        }
 
         int columns = 2;
         int gap = 6;
@@ -240,20 +257,19 @@ public class Screen_NpcDialogue extends Screen {
                     ? "随着你们逐渐的认识，你对这个人的了解会变多。"
                     : data.getNpcIntroduction();
             UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
-                    Math.min(48, panelHeight - 48), 1, COLOR_ACCENT);
+                    Math.min(DIALOGUE_LINES_PER_PAGE * 12 + 2, panelHeight - 48),
+                    1, COLOR_ACCENT);
             drawTypewriterWrapped(guiGraphics, introduction, dialogueX, panelY + 31,
-                    dialogueWidth, COLOR_TEXT, 4);
+                    dialogueWidth, COLOR_TEXT, dialoguePage);
             return;
         }
 
-        List<String> dialogues = data.getDialogues();
-        String dialogue = dialogues.isEmpty()
-                ? TEXT_EMPTY_DIALOGUE
-                : dialogues.get(Math.min(dialogueIndex, dialogues.size() - 1));
+        String dialogue = currentDialogue();
         UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
-                Math.min(48, panelHeight - 48), 1, COLOR_ACCENT);
+                Math.min(DIALOGUE_LINES_PER_PAGE * 12 + 2, panelHeight - 48),
+                1, COLOR_ACCENT);
         drawTypewriterWrapped(guiGraphics, dialogue, dialogueX, panelY + 31,
-                dialogueWidth, COLOR_TEXT, 4);
+                dialogueWidth, COLOR_TEXT, dialoguePage);
     }
 
     private void renderActionColumn(GuiGraphics guiGraphics, float mouseX, float mouseY) {
@@ -285,28 +301,77 @@ public class Screen_NpcDialogue extends Screen {
     }
 
     private void renderFooter(GuiGraphics guiGraphics) {
+        String currentText = showingAbout ? currentIntroduction() : currentDialogue();
+        int pageCount = pageCount(currentText);
+        if (pageCount > 1) {
+            String pageHint = "第 " + (dialoguePage + 1) + "/" + pageCount + " 页 · 点击交谈继续";
+            guiGraphics.drawString(MC.font, pageHint, dialogueX,
+                    panelY + panelHeight - 15, COLOR_MUTED, false);
+        }
         int hintWidth = MC.font.width(TEXT_CLOSE_HINT);
         guiGraphics.drawString(MC.font, TEXT_CLOSE_HINT,
                 panelX + panelWidth - hintWidth - 12, panelY + panelHeight - 15,
                 COLOR_MUTED, false);
     }
 
-    private void drawWrapped(GuiGraphics guiGraphics, String text, int x, int y,
-                             int width, int color, int maxLines) {
-        var lines = MC.font.getSplitter().splitLines(text, width, Style.EMPTY);
-        int count = Math.min(maxLines, lines.size());
-        for (int index = 0; index < count; index++) {
-            guiGraphics.drawString(MC.font, lines.get(index).getString(), x,
-                    y + index * 12, color, false);
+    private void drawTypewriterWrapped(GuiGraphics guiGraphics, String text, int x, int y,
+                                       int width, int color, int page) {
+        String safeText = text == null ? "" : text;
+        var lines = MC.font.getSplitter().splitLines(safeText, width, Style.EMPTY);
+        int start = Math.max(0, page) * DIALOGUE_LINES_PER_PAGE;
+        int end = Math.min(start + DIALOGUE_LINES_PER_PAGE, lines.size());
+        int remainingCharacters = elapsedCharacters();
+        for (int index = start; index < end; index++) {
+            String line = lines.get(index).getString();
+            int visibleLength = Math.min(line.length(), remainingCharacters);
+            if (visibleLength > 0) {
+                guiGraphics.drawString(MC.font, line.substring(0, visibleLength), x,
+                        y + (index - start) * 12, color, false);
+            }
+            remainingCharacters -= line.length() + 1;
+            if (remainingCharacters <= 0) {
+                break;
+            }
         }
     }
 
-    private void drawTypewriterWrapped(GuiGraphics guiGraphics, String text, int x, int y,
-                                       int width, int color, int maxLines) {
-        int visibleCharacters = Math.min(text.length(),
-                (int) ((System.currentTimeMillis() - openTime) / 18L));
-        drawWrapped(guiGraphics, text.substring(0, visibleCharacters),
-                x, y, width, color, maxLines);
+    private String currentDialogue() {
+        List<String> dialogues = data.getDialogues();
+        return dialogues.isEmpty()
+                ? TEXT_EMPTY_DIALOGUE
+                : dialogues.get(Math.min(dialogueIndex, dialogues.size() - 1));
+    }
+
+    private String currentIntroduction() {
+        return data.getNpcIntroduction().isBlank()
+                ? "随着你们逐渐的认识，你对这个人的了解会变多。"
+                : data.getNpcIntroduction();
+    }
+
+    private String layoutText() {
+        return showingAbout ? currentIntroduction() : currentDialogue();
+    }
+
+    private int pageCount(String text) {
+        String safeText = text == null ? "" : text;
+        int lineCount = MC.font.getSplitter().splitLines(safeText, dialogueWidth, Style.EMPTY).size();
+        return Math.max(1, (lineCount + DIALOGUE_LINES_PER_PAGE - 1) / DIALOGUE_LINES_PER_PAGE);
+    }
+
+    private int elapsedCharacters() {
+        return Math.max(0, (int) ((System.currentTimeMillis() - openTime) / 18L));
+    }
+
+    private int currentPageCharacterCount(String text) {
+        String safeText = text == null ? "" : text;
+        var lines = MC.font.getSplitter().splitLines(safeText, dialogueWidth, Style.EMPTY);
+        int start = Math.max(0, dialoguePage) * DIALOGUE_LINES_PER_PAGE;
+        int end = Math.min(start + DIALOGUE_LINES_PER_PAGE, lines.size());
+        int count = 0;
+        for (int index = start; index < end; index++) {
+            count += lines.get(index).getString().length() + 1;
+        }
+        return Math.max(1, count);
     }
 
     private String fitText(String text, int maxWidth) {
@@ -351,11 +416,26 @@ public class Screen_NpcDialogue extends Screen {
                     if (area.enabled) {
                         if (area.type == ScreenAction.ABOUT) {
                             showingAbout = !showingAbout;
+                            dialoguePage = 0;
                             openTime = System.currentTimeMillis();
                             return true;
                         }
                         if (area.type == ScreenAction.DIALOGUE) {
                             showingAbout = false;
+                            String dialogue = currentDialogue();
+                            if (elapsedCharacters() < currentPageCharacterCount(dialogue)) {
+                                // 第一次点击只结束打字动画，避免玩家还没读完就跳页。
+                                openTime = System.currentTimeMillis()
+                                        - (long) currentPageCharacterCount(dialogue) * 18L;
+                                return true;
+                            }
+                            int pages = pageCount(dialogue);
+                            if (dialoguePage + 1 < pages) {
+                                dialoguePage++;
+                                openTime = System.currentTimeMillis();
+                                return true;
+                            }
+                            dialoguePage = 0;
                             dialogueIndex++;
                             openTime = System.currentTimeMillis();
                         }
@@ -379,7 +459,9 @@ public class Screen_NpcDialogue extends Screen {
         DIALOGUE(NpcInteractionType.DIALOGUE),
         ABOUT(null),
         FOLLOW(NpcInteractionType.FOLLOW),
-        SET_HOME(NpcInteractionType.SET_HOME);
+        SET_HOME(NpcInteractionType.SET_HOME),
+        HOSPITAL_REVIEW(NpcInteractionType.HOSPITAL_REVIEW),
+        DAILY_TEMPLATE_SUPPORT(NpcInteractionType.DAILY_TEMPLATE_SUPPORT);
 
         private final NpcInteractionType interactionType;
 

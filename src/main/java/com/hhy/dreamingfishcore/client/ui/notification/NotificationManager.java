@@ -47,22 +47,36 @@ public final class NotificationManager {
             channel.active.add(new ActiveNotification(notification, System.currentTimeMillis()));
         }
         channel.snapshotDirty = true;
+        channel.fastEmpty = false;
     }
 
-    public static synchronized List<ActiveNotification> getActive(NotificationPosition position) {
+    public static List<ActiveNotification> getActive(NotificationPosition position) {
         Channel channel = CHANNELS.get(position);
-        long now = System.currentTimeMillis();
-        removeExpired(channel, now);
+        // All normal HUD frames hit empty notification channels. Avoid taking
+        // the manager monitor, reading the clock, and allocating an iterator
+        // on that overwhelmingly common path.
+        if (channel.fastEmpty) {
+            return List.of();
+        }
 
-        if (channel.active.isEmpty() && !channel.pending.isEmpty()) {
-            channel.active.add(new ActiveNotification(channel.pending.removeFirst(), now));
-            channel.snapshotDirty = true;
+        synchronized (NotificationManager.class) {
+            if (channel.fastEmpty) {
+                return List.of();
+            }
+            long now = System.currentTimeMillis();
+            removeExpired(channel, now);
+
+            if (channel.active.isEmpty() && !channel.pending.isEmpty()) {
+                channel.active.add(new ActiveNotification(channel.pending.removeFirst(), now));
+                channel.snapshotDirty = true;
+            }
+            if (channel.snapshotDirty) {
+                channel.snapshot = List.copyOf(channel.active);
+                channel.snapshotDirty = false;
+            }
+            channel.fastEmpty = channel.active.isEmpty() && channel.pending.isEmpty();
+            return channel.snapshot;
         }
-        if (channel.snapshotDirty) {
-            channel.snapshot = List.copyOf(channel.active);
-            channel.snapshotDirty = false;
-        }
-        return channel.snapshot;
     }
 
     public static synchronized void removeContaining(NotificationPosition position, String text) {
@@ -75,6 +89,7 @@ public final class NotificationManager {
         changed |= channel.pending.removeIf(notification -> notification.message().getString().contains(text));
         if (changed) {
             channel.snapshotDirty = true;
+            channel.fastEmpty = channel.active.isEmpty() && channel.pending.isEmpty();
         }
     }
 
@@ -83,6 +98,7 @@ public final class NotificationManager {
         channel.active.clear();
         channel.pending.clear();
         channel.snapshotDirty = true;
+        channel.fastEmpty = true;
     }
 
     public static synchronized void clearAll() {
@@ -104,6 +120,7 @@ public final class NotificationManager {
         changed |= channel.pending.removeIf(notification -> replaceKey.equals(notification.replaceKey()));
         if (changed) {
             channel.snapshotDirty = true;
+            channel.fastEmpty = channel.active.isEmpty() && channel.pending.isEmpty();
         }
     }
 
@@ -123,6 +140,7 @@ public final class NotificationManager {
         private final ArrayDeque<Notification> pending = new ArrayDeque<>();
         private List<ActiveNotification> snapshot = List.of();
         private boolean snapshotDirty = true;
+        private volatile boolean fastEmpty = true;
     }
 
     public record ActiveNotification(Notification notification, long startedAtMs) {

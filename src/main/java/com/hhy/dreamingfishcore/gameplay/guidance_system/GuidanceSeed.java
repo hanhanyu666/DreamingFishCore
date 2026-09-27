@@ -11,6 +11,7 @@ public class GuidanceSeed {
     private String title = "";
     private String content = "";
     private String storyStageId = "";
+    private String storyLineId = "";
     private String locationLabel = "";
     private String dimension = "";
     private boolean hasLocation;
@@ -32,7 +33,8 @@ public class GuidanceSeed {
             return null;
         }
         GuidanceSeed copy = new GuidanceSeed(source.getId(), source.getTitle(), source.getContent())
-                .withStoryStage(source.getStoryStageId());
+                .withStoryStage(source.getStoryStageId())
+                .withStoryLine(source.getStoryLineId());
         if (source.hasLocation()) {
             copy.withLocation(
                     source.getLocationLabel(),
@@ -58,6 +60,15 @@ public class GuidanceSeed {
 
     public String getStoryStageId() {
         return storyStageId == null ? "" : storyStageId;
+    }
+
+    public String getStoryLineId() {
+        return storyLineId == null || storyLineId.isBlank() ? getStoryStageId() : storyLineId;
+    }
+
+    public GuidanceSeed withStoryLine(String storyLineId) {
+        this.storyLineId = storyLineId;
+        return this;
     }
 
     public String getLocationLabel() {

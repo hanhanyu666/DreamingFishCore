@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache;
 
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceEntry;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceViewData;
+import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSelection;
 
 import java.util.List;
 
@@ -9,6 +10,7 @@ import java.util.List;
 public final class GuidanceClientCache {
     private static List<GuidanceViewData> entries = List.of();
     private static boolean loaded;
+    private static final GuidanceSelection selection = new GuidanceSelection();
 
     private GuidanceClientCache() {
     }
@@ -16,11 +18,17 @@ public final class GuidanceClientCache {
     public static synchronized void set(List<GuidanceViewData> snapshot) {
         entries = snapshot == null ? List.of() : List.copyOf(snapshot);
         loaded = true;
+        selection.update(entries);
     }
 
     public static synchronized List<GuidanceViewData> getEntries() {
         return entries;
     }
+
+    public static synchronized List<GuidanceViewData> getActiveEntries() { return selection.active(); }
+    public static synchronized GuidanceViewData getTrackedEntry() { return selection.selected(); }
+    public static synchronized boolean track(String definitionId) { return selection.select(definitionId); }
+    public static synchronized void cycleTracked(int direction) { selection.cycle(direction); }
 
     public static synchronized int getActiveCount() {
         return (int) entries.stream()
@@ -35,5 +43,6 @@ public final class GuidanceClientCache {
     public static synchronized void clear() {
         entries = List.of();
         loaded = false;
+        selection.clear();
     }
 }

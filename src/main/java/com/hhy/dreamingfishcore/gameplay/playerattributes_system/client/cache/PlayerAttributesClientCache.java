@@ -16,6 +16,8 @@ public final class PlayerAttributesClientCache {
     private static final Map<UUID, PlayerAttributesData> ATTRIBUTES = new ConcurrentHashMap<>();
     private static final Map<UUID, Float> RESPAWN_POINTS = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> INFECTED = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> INFECTION_LEVELS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> INFECTION_MAXIMUMS = new ConcurrentHashMap<>();
 
     private PlayerAttributesClientCache() {
     }
@@ -48,6 +50,29 @@ public final class PlayerAttributesClientCache {
 
     public static void setInfected(UUID uuid, boolean infected) {
         INFECTED.put(uuid, infected);
+        if (!infected) {
+            INFECTION_LEVELS.put(uuid, 0);
+        } else {
+            INFECTION_LEVELS.putIfAbsent(uuid, 1);
+        }
+    }
+
+    public static int getInfectionLevel(UUID uuid) {
+        return INFECTION_LEVELS.getOrDefault(uuid, isInfected(uuid) ? 1 : 0);
+    }
+
+    public static void setInfectionLevel(UUID uuid, int level) {
+        int normalized = Math.max(0, Math.min(level, 2));
+        INFECTION_LEVELS.put(uuid, normalized);
+        INFECTED.put(uuid, normalized > 0);
+    }
+
+    public static int getInfectionMaximum(UUID uuid) {
+        return INFECTION_MAXIMUMS.getOrDefault(uuid, 100);
+    }
+
+    public static void setInfectionMaximum(UUID uuid, int maximum) {
+        INFECTION_MAXIMUMS.put(uuid, maximum >= 200 ? 200 : 100);
     }
 
     public static float getNormalRespawnCost(UUID uuid) {
@@ -67,11 +92,15 @@ public final class PlayerAttributesClientCache {
         ATTRIBUTES.remove(uuid);
         RESPAWN_POINTS.remove(uuid);
         INFECTED.remove(uuid);
+        INFECTION_LEVELS.remove(uuid);
+        INFECTION_MAXIMUMS.remove(uuid);
     }
 
     public static void clear() {
         ATTRIBUTES.clear();
         RESPAWN_POINTS.clear();
         INFECTED.clear();
+        INFECTION_LEVELS.clear();
+        INFECTION_MAXIMUMS.clear();
     }
 }

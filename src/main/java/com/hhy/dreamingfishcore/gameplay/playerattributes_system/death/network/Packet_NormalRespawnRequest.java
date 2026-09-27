@@ -74,13 +74,29 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
                         player.getScoreboardName(), packet.deathId);
                 if (DeathEventHandler.hasDeathState(player)) {
                     DeathEventHandler.restoreDeathState(player);
+                    sendStaleRequestMessage(player);
+                    return;
                 }
+                if (player.isDeadOrDying()) {
+                    // 处于死亡状态却没有任何待处理记录：这次死亡早在更前面的请求里结算完了
+                    // （例如结算成功后客户端在复活途中掉线），或者死亡时缺少属性档案。
+                    // 不能再收一次费用，但必须放行，否则玩家会永久卡在死亡界面。
+                    DreamingFishCore.LOGGER.warn("玩家 {} 没有待处理死亡记录但仍处于死亡状态，直接放行原版复活",
+                            player.getScoreboardName());
+                    PlayerAttributesData current =
+                            PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
+                    sendResponse(player, true, current == null ? 0.0F : current.getRespawnPoint());
+                    return;
+                }
+                sendStaleRequestMessage(player);
                 return;
             }
 
             PlayerAttributesData data = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
             if (data == null) {
                 PendingDeathData.rollbackResolution(player, packet.deathId);
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c读不到你的属性数据，复活已取消。请重新登录后再试。"));
                 sendResponse(player, false, 0.0F);
                 return;
             }
@@ -90,12 +106,16 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             boolean isInfected = data.isInfected();
 
             // 计算正常复活消耗
-            float cost = DeathEventHandler.getNormalCost(isInfected);
+            float cost = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(currentRespawnPoint, DeathEventHandler.getNormalCost(isInfected));
 
             // 检查复活点数是否足够
-            if (currentRespawnPoint < cost) {
+            if (!com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(currentRespawnPoint)) {
                 // 复活点不足，发送失败消息
                 PendingDeathData.rollbackResolution(player, packet.deathId);
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c模板重建余量已耗尽（当前 "
+                                + String.format("%.1f", currentRespawnPoint)
+                                + "），需要等待其他居民救援。"));
                 sendResponse(player, false, currentRespawnPoint);
                 return;
             }
@@ -129,6 +149,8 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
                 PendingDeathData.rollbackResolution(player, packet.deathId);
                 DreamingFishCore.LOGGER.error("玩家 {} 正常复活结算失败，已回滚复活点",
                         player.getScoreboardName(), exception);
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§c复活结算出现异常，复活点已回滚。请稍后重试。"));
                 sendResponse(player, false, currentRespawnPoint);
                 return;
             }
@@ -139,6 +161,12 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             DreamingFishCore.LOGGER.info("玩家 {} 正常复活，消耗 {} 复活点（剩余: {}，尸体锁定={}）",
                     player.getScoreboardName(), cost, data.getRespawnPoint(), packet.lockCorpse);
         });
+    }
+
+    /** 请求携带的 deathId 已经不再对应任何待选择死亡时的统一提示。 */
+    private static void sendStaleRequestMessage(ServerPlayer player) {
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "§c这次复活请求已经失效（可能已结算或被新的死亡取代），请按刷新后的界面重新选择。"));
     }
 
     /**

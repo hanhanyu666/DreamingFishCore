@@ -65,83 +65,13 @@ class BuiltInNoticeCatalogTest {
     }
 
     @Test
-    void migratesOnlyTheUnmodifiedDesertTownCopyToAbydos() {
-        NoticeData legacy = new NoticeData(
-                7,
-                BuiltInNoticeCatalog.LEGACY_DESERT_TOWN_TITLE,
-                BuiltInNoticeCatalog.LEGACY_DESERT_TOWN_CONTENT,
-                1L,
-                NoticeCategory.GAME,
-                BuiltInNoticeCatalog.OPENING_STAGE_ID,
-                BuiltInNoticeCatalog.OPENING_STORY_DATE,
-                BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-
-        assertTrue(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(legacy)));
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_TITLE, legacy.getNoticeTitle());
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_CONTENT, legacy.getNoticeContent());
-        assertFalse(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(legacy)));
-
-        NoticeData customized = new NoticeData(
-                8, "自定义标题", "自定义正文", 2L,
-                NoticeCategory.GAME,
-                BuiltInNoticeCatalog.OPENING_STAGE_ID,
-                BuiltInNoticeCatalog.OPENING_STORY_DATE,
-                BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-        assertFalse(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(customized)));
-        assertEquals("自定义标题", customized.getNoticeTitle());
-        assertEquals("自定义正文", customized.getNoticeContent());
+    void existingPublishedTextAndIdentityRemainUnchanged() {
+        NoticeData published = new NoticeData(7, "已发布的旧标题", "玩家实际读过的正文", 123L,
+                NoticeCategory.GAME, BuiltInNoticeCatalog.OPENING_STAGE_ID,
+                BuiltInNoticeCatalog.OPENING_STORY_DATE, BuiltInNoticeCatalog.DESERT_TOWN_KEY);
+        assertTrue(BuiltInNoticeCatalog.createMissingOpeningNotices(List.of(published)).isEmpty());
+        assertEquals(7, published.getNoticeId());
+        assertEquals("已发布的旧标题", published.getNoticeTitle());
+        assertEquals("玩家实际读过的正文", published.getNoticeContent());
     }
-
-    @Test
-    void fillsCoordinatesInThePreviousUnmodifiedAbydosNotice() {
-        NoticeData previous = new NoticeData(
-                9,
-                BuiltInNoticeCatalog.ABYDOS_TOWN_TITLE,
-                BuiltInNoticeCatalog.PREVIOUS_ABYDOS_TOWN_CONTENT,
-                3L,
-                NoticeCategory.GAME,
-                BuiltInNoticeCatalog.OPENING_STAGE_ID,
-                BuiltInNoticeCatalog.OPENING_STORY_DATE,
-                BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-
-        assertTrue(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_TITLE, previous.getNoticeTitle());
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_CONTENT, previous.getNoticeContent());
-        assertFalse(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-    }
-
-    @Test
-    void addsNewShoreCommunityToThePreviousUnmodifiedOpeningNotice() {
-        NoticeData previous = new NoticeData(
-                10,
-                BuiltInNoticeCatalog.ABYDOS_TOWN_TITLE,
-                BuiltInNoticeCatalog.PREVIOUS_ABYDOS_TOWN_CONTENT_WITHOUT_NEW_SHORE,
-                4L,
-                NoticeCategory.GAME,
-                BuiltInNoticeCatalog.OPENING_STAGE_ID,
-                BuiltInNoticeCatalog.OPENING_STORY_DATE,
-                BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-
-        assertTrue(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_CONTENT, previous.getNoticeContent());
-        assertFalse(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-    }
-
-    @Test
-    void migratesThePreviouslyPublishedFullOpeningNoticeToTheOfficialNotice() {
-        NoticeData previous = new NoticeData(
-                11,
-                BuiltInNoticeCatalog.ABYDOS_TOWN_TITLE,
-                BuiltInNoticeCatalog.LEGACY_ABYDOS_TOWN_CONTENT,
-                5L,
-                NoticeCategory.GAME,
-                BuiltInNoticeCatalog.OPENING_STAGE_ID,
-                BuiltInNoticeCatalog.OPENING_STORY_DATE,
-                BuiltInNoticeCatalog.DESERT_TOWN_KEY);
-
-        assertTrue(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-        assertEquals(BuiltInNoticeCatalog.ABYDOS_TOWN_CONTENT, previous.getNoticeContent());
-        assertFalse(BuiltInNoticeCatalog.migrateAbydosTownName(List.of(previous)));
-    }
-
 }

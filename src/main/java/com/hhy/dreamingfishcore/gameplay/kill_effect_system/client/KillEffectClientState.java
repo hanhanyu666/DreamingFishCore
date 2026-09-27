@@ -50,7 +50,7 @@ public final class KillEffectClientState {
     private static final float MAX_HEIGHT = 32.0F;
     private static final double WORLD_COORDINATE_LIMIT = 30_000_000.0D;
     private static final float SOUND_VOLUME = 0.72F;
-    private static final float SOUND_PITCH = 1.55F;
+    private static final float SOUND_PITCH = 0.72F;
 
     /** Insertion order is also the eviction order; replacing an id moves it to the newest end. */
     private static final LinkedHashMap<Integer, Snapshot> ACTIVE = new LinkedHashMap<>();
@@ -302,11 +302,13 @@ public final class KillEffectClientState {
                 COLLAPSE_CUE_PLAYED.remove(snapshot.entityId());
                 LAST_POSITIONS.remove(snapshot.entityId());
                 iterator.remove();
-            } else if (elapsed >= snapshot.durationTicks() * 0.68F
+            } else if (elapsed >= snapshot.durationTicks() * BlackHoleGeometry.RELEASE_PROGRESS
                     && COLLAPSE_CUE_PLAYED.add(snapshot.entityId())) {
                 Vec3 cuePosition = LAST_POSITIONS.getOrDefault(snapshot.entityId(), snapshot.position());
-                level.playLocalSound(cuePosition.x, cuePosition.y + snapshot.height() * 0.42F, cuePosition.z,
-                        SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.20F, 1.85F, false);
+                level.playLocalSound(cuePosition.x, snapshot.y(), cuePosition.z,
+                        SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.30F, 0.68F, false);
+                level.playLocalSound(cuePosition.x, snapshot.y(), cuePosition.z,
+                        SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.22F, 0.54F, false);
             }
         }
     }

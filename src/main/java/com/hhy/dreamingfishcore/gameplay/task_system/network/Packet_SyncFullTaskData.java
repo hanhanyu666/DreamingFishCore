@@ -93,9 +93,16 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                     buf.writeBoolean(task.isPersonalTask());
                     buf.writeBoolean(task.isCompleted());
                     buf.writeBoolean(task.isFailed());
+                    buf.writeBoolean(task.isArchived());
+                    buf.writeBoolean(task.isWaived());
                     buf.writeBoolean(task.isClientPlayerFinished());
                     buf.writeVarInt(task.getFinishedPlayerCount());
                     buf.writeVarInt(task.getPersonalExpectedPlayerCount());
+                    List<String> guidanceIds = task.getGuidanceDefinitionIds();
+                    buf.writeVarInt(guidanceIds.size());
+                    for (String guidanceId : guidanceIds) {
+                        buf.writeUtf(guidanceId);
+                    }
                 }
             }
         }
@@ -160,6 +167,8 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                 boolean personalTask = buf.readBoolean();
                 boolean isCompleted = buf.readBoolean();
                 boolean isFailed = buf.readBoolean();
+                boolean archived = buf.readBoolean();
+                boolean waived = buf.readBoolean();
                 boolean isPlayerFinished = buf.readBoolean();
 
                 StoryTaskData task = new StoryTaskData(
@@ -168,9 +177,17 @@ public class Packet_SyncFullTaskData implements net.minecraft.network.protocol.c
                 task.setPersonalTask(personalTask);
                 task.setCompleted(isCompleted);
                 task.setFailed(isFailed);
+                task.setArchived(archived);
+                task.setWaived(waived);
                 task.setClientPlayerFinished(isPlayerFinished);
                 task.setFinishedPlayerCount(buf.readVarInt());
                 task.setPersonalExpectedPlayerCount(buf.readVarInt());
+                int guidanceCount = buf.readVarInt();
+                List<String> guidanceIds = new ArrayList<>();
+                for (int k = 0; k < guidanceCount; k++) {
+                    guidanceIds.add(buf.readUtf());
+                }
+                task.setGuidanceDefinitionIds(guidanceIds);
 
                 tasks.add(task);
             }

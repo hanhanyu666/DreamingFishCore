@@ -131,22 +131,6 @@ class StoryWorldStateTest {
     }
 
     @Test
-    void legacyClientCompletionDoesNotResolveSharedTask() {
-        StoryWorldState state = new StoryWorldState();
-        String taskKey = "dreamingfishcore:legacy_test";
-
-        state.activateTask(taskKey);
-        assertTrue(state.recordLegacyPlayerCompletion(
-                taskKey, new StoryWorldState.TaskParticipant(PLAYER_ID, "Tester")));
-
-        StoryWorldState.TaskProgress progress = state.getTaskProgress(taskKey);
-        assertEquals(StoryTaskOutcome.ACTIVE, progress.getOutcome());
-        assertTrue(progress.hasParticipant(PLAYER_ID));
-        assertFalse(state.recordLegacyPlayerCompletion(
-                taskKey, new StoryWorldState.TaskParticipant(PLAYER_ID, "Tester")));
-    }
-
-    @Test
     void personalCompletionWaitsForEveryExpectedPlayerWithoutChangingWorldState() {
         StoryWorldState state = new StoryWorldState();
         String taskKey = "dreamingfishcore:personal_story_test";
@@ -160,7 +144,6 @@ class StoryWorldStateTest {
 
         assertTrue(first.changed());
         assertFalse(first.allPlayersCompleted());
-        assertFalse(first.resolvedNow());
         assertEquals(1, state.getPersonalTaskCompletionCount(taskKey));
         assertTrue(state.getTaskProgressView().isEmpty());
 
@@ -170,7 +153,6 @@ class StoryWorldStateTest {
                 expectedPlayers);
         assertTrue(second.changed());
         assertTrue(second.allPlayersCompleted());
-        assertTrue(second.resolvedNow());
         assertEquals(2, state.getPersonalTaskCompletionCount(taskKey));
         // 故事层负责在门槛达到后发布/结算世界任务；数据层不越权写入共享结果。
         assertTrue(state.getTaskProgressView().isEmpty());
@@ -251,14 +233,12 @@ class StoryWorldStateTest {
     }
 
     @Test
-    void legacyAfterdreamKeepsItsStableMeaningWhenANewFirstStageIsInserted() {
+    void rejectsOldStoryStateSchemaWithoutMigration() {
         StoryWorldState oldState = GSON.fromJson(
                 "{\"schemaVersion\":1,\"currentStageId\":\"afterdream\"}",
                 StoryWorldState.class);
 
-        assertTrue(oldState.validateAndMigrateLoadedState());
-        assertEquals(StoryWorldState.CURRENT_SCHEMA_VERSION, oldState.getSchemaVersion());
-        assertEquals("dreamingfishcore:afterdream", oldState.getCurrentStageId());
+        assertThrows(IllegalStateException.class, oldState::validateLoadedState);
     }
 
     @Test

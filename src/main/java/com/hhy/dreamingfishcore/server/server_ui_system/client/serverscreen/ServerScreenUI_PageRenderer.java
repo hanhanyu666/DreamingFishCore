@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
@@ -40,6 +41,8 @@ public class ServerScreenUI_PageRenderer {
 
     private static final String NOTICE_UI_TITLE = "📢 梦屿广播";
     private static final String NO_NOTICE_TEXT = "暂无公告";
+    /** 故事阶段暂由服主手动推进；旧渲染器也不得显示自动全服进度。 */
+    private static final boolean MANUAL_STORY_PROGRESS = true;
 
     private final ServerScreenUI_Screen screen;
     private final Minecraft mc;
@@ -103,7 +106,9 @@ public class ServerScreenUI_PageRenderer {
         if (maxCourage <= 0) maxCourage = 100;
         float couragePercent = courage / maxCourage;
 
-        float infectionPercent = (float) PlayerInfectionManager.getCurrentInfectionClient(player) / 100.0f;
+        float infection = PlayerInfectionManager.getCurrentInfectionClient(player);
+        int infectionMaximum = PlayerInfectionManager.getInfectionMaximumClient(player);
+        float infectionPercent = infection / infectionMaximum;
 
         String[] icons = {"❤", "🍖", "💪", "⚡", "☣"};
         int[] colors = {BAR_HEALTH_COLOR, BAR_FOOD_COLOR, BAR_STRENGTH_COLOR, BAR_COURAGE_COLOR, BAR_INFECTION_COLOR};
@@ -113,7 +118,7 @@ public class ServerScreenUI_PageRenderer {
                 String.format("%d/20", player.getFoodData().getFoodLevel()),
                 String.format("%d/%d", strength, maxStrength),
                 String.format("%.0f/%.0f", courage, maxCourage),
-                String.format("%.1f/100", PlayerInfectionManager.getCurrentInfectionClient(player))
+                String.format("%.1f/%d", infection, infectionMaximum)
         };
 
         int boxMargin = 5;
@@ -346,9 +351,9 @@ public class ServerScreenUI_PageRenderer {
         int boxHeight = innerMargin * 2 + lineHeight * 6 + 5 * 3;
 
         UUID playerUUID = player.getUUID();
-        boolean isInfected = ClientCacheManager.isInfected(playerUUID);
+        boolean isInfected = PlayerAttributesClientCache.isInfected(playerUUID);
         float respawnPoint = ClientCacheManager.getRespawnPoint(playerUUID);
-        int respawnTimes = (int) (respawnPoint / (isInfected ? 20 : 5));
+        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, isInfected ? 20 : 5);
 
         int bgColor, borderColor;
 
@@ -404,18 +409,18 @@ public class ServerScreenUI_PageRenderer {
 
         int deathCost = isInfected ? 20 : 5;
         String costText = isInfected ?
-                String.format("§7作为感染者您每次死亡需要扣除 §c%d §7点分裂次数", deathCost) :
-                String.format("§7作为幸存者您每次死亡需要扣除 §a%d §7点分裂次数", deathCost);
+                String.format("§7作为感染者您每次标准重建最多消耗 §c%d §7点模板重建余量", deathCost) :
+                String.format("§7作为幸存者您每次标准重建最多消耗 §a%d §7点模板重建余量", deathCost);
         guiGraphics.drawString(mc.font, costText, contentX, contentY + currentLineY, 0xFFFFFF);
         currentLineY += lineHeight + 3;
 
         String respawnText;
         if (respawnTimes <= 0) {
-            respawnText = String.format("§c§l警告：分裂次数不足（§b%.1f§7/100），不足以复活一次", respawnPoint);
+            respawnText = String.format("§c§l警告：模板重建余量已耗尽（§b%.1f§7/100），请在死亡前办理维护", respawnPoint);
         } else if (respawnTimes < 5) {
-            respawnText = String.format("§e§l警告：您还可以重生 §c%d §7次（剩余分裂次数：§b%.1f§7/100）", respawnTimes, respawnPoint);
+            respawnText = String.format("§e§l警告：您还可以重生 §c%d §7次（剩余模板重建余量：§b%.1f§7/100）", respawnTimes, respawnPoint);
         } else {
-            respawnText = String.format("§7您还可以重生 §e%d §7次（剩余分裂次数：§b%.1f§7/100）", respawnTimes, respawnPoint);
+            respawnText = String.format("§7您还可以重生 §e%d §7次（剩余模板重建余量：§b%.1f§7/100）", respawnTimes, respawnPoint);
         }
         guiGraphics.drawString(mc.font, respawnText, contentX, contentY + currentLineY, 0xFFFFFF);
     }
@@ -811,22 +816,29 @@ public class ServerScreenUI_PageRenderer {
         // 进度信息行（进度条上方）
         int progressInfoY = descY + 6;
 
-        // 左侧：全服玩家完成比例；个人任务不能因为一名玩家完成就直接算作全服完成。
-        String playerProgressText = String.format(
-            "全服完成比例: %.0f%%", Math.max(0.0f, Math.min(1.0f, globalProgress)) * 100.0f);
-        guiGraphics.drawString(mc.font, playerProgressText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
+        if (MANUAL_STORY_PROGRESS) {
+            String manualText = "阶段由服主推进 · 任务按剧情逐步解锁";
+            guiGraphics.drawString(mc.font, manualText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
+        } else {
+            // 左侧：全服玩家完成比例；个人任务不能因为一名玩家完成就直接算作全服完成。
+            String playerProgressText = String.format(
+                "全服完成比例: %.0f%%", Math.max(0.0f, Math.min(1.0f, globalProgress)) * 100.0f);
+            guiGraphics.drawString(mc.font, playerProgressText, x + innerMargin, progressInfoY, 0xFFAAAAAA);
 
-        String serverProgressText = String.format("已结算任务: %d/%d · 失败 %d", globalResolved, totalCount, failedCount);
-        int serverTextWidth = mc.font.width(serverProgressText);
-        guiGraphics.drawString(mc.font, serverProgressText, x + width - innerMargin - serverTextWidth, progressInfoY, 0xFFAAAAAA);
+            String serverProgressText = String.format("已结算任务: %d/%d · 失败 %d", globalResolved, totalCount, failedCount);
+            int serverTextWidth = mc.font.width(serverProgressText);
+            guiGraphics.drawString(mc.font, serverProgressText, x + width - innerMargin - serverTextWidth, progressInfoY, 0xFFAAAAAA);
+        }
 
         int barY = progressInfoY + mc.font.lineHeight + 5;
         int barHeight = 4;
         int barWidth = width - innerMargin * 2;
-        drawProgressBar(guiGraphics, x + innerMargin, barY, barWidth, barHeight, globalProgress, 0xFFFFD700);
-        drawProgressBar(guiGraphics, x + innerMargin, barY + 7, barWidth, barHeight, personalProgress, 0xFF50D890);
+        if (!MANUAL_STORY_PROGRESS) {
+            drawProgressBar(guiGraphics, x + innerMargin, barY, barWidth, barHeight, globalProgress, 0xFFFFD700);
+            drawProgressBar(guiGraphics, x + innerMargin, barY + 7, barWidth, barHeight, personalProgress, 0xFF50D890);
+        }
 
-        int hintY = barY + barHeight + 13;
+        int hintY = MANUAL_STORY_PROGRESS ? barY + 8 : barY + barHeight + 13;
         String hintText = "当鱼友们齐心协力揭开当前的谜团，通往下一阶段的道路自会显现，故事的结局将由你们的每一个选择而改变...";
         guiGraphics.drawString(mc.font, hintText, x + innerMargin, hintY, 0xFFFFD700);
     }

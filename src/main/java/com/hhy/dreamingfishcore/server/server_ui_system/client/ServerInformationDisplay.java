@@ -3,6 +3,10 @@ package com.hhy.dreamingfishcore.server.server_ui_system.client;
 import com.google.common.collect.Ordering;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.render.GuiQuadBatchRenderer;
+import com.hhy.dreamingfishcore.client.ui.render.PlayerFaceBatchRenderer;
+import com.hhy.dreamingfishcore.client.ui.render.RetainedGuiBuffers;
+import com.hhy.dreamingfishcore.client.ui.render.RetainedPlayerFace;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_OnlinePlayerCountRequest;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
@@ -14,12 +18,11 @@ import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.PlayerFaceRenderer;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
@@ -31,8 +34,8 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
-import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
@@ -42,6 +45,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import org.joml.Matrix4f;
 
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
@@ -75,7 +79,7 @@ public class ServerInformationDisplay {
     private static final int COMPACT_INFO_AVATAR_SIZE = 9;
     private static final int COMPACT_INFO_AVATAR_SPACING = 3;
     private static final int COMPACT_INFO_RADIUS = 4;
-    private static final int DEFAULT_TPS = 20;
+    private static final float MAX_TPS = 10_000.0F;
     private static final int BOX_PADDING = 8;              // 框内边距
     private static final int BOX_SPACING = 3;              // 框之间间距
     private static final int RIGHT_OFFSET = 2;             // 右侧偏移
@@ -98,21 +102,26 @@ public class ServerInformationDisplay {
     // 客户端缓存数据（从网络包获取）
     public static int ONLINE_PLAYERS = 0;
 
-    private static long LAST_PLAYER_LIST_UPDATE = 0;       // 玩家列表最后刷新时间
-    private static final long UPDATE_INTERVAL = 5000;      // 5秒刷新一次
+    private static long LAST_SERVER_STATUS_UPDATE = 0;     // 服务器状态最后刷新时间
+    // NeoForge 的 TPS 统计基于最近 100 个 tick；低频复用在线人数请求，
+    // 每次刷新只产生一个很小的请求/响应，不在渲染帧或服务端逐 tick 运行。
+    private static final long UPDATE_INTERVAL = 5_000L;
 
     // 性能优化：缓存RGB颜色值
     private static int CACHED_DYNAMIC_COLOR = 0xFFDDAA55;
     private static long LAST_COLOR_UPDATE = 0;
     private static final long COLOR_UPDATE_INTERVAL = 100; // 100ms更新一次颜色
-    private static float CACHED_CLIENT_TPS = DEFAULT_TPS;
+    /** Latest server-authoritative sample, or NaN until a sample is received. */
+    private static float CACHED_SERVER_TPS = Float.NaN;
     private static long LAST_TPS_UPDATE = Long.MIN_VALUE;
-    private static final long TPS_CACHE_INTERVAL = 250L;
+    // 留出一次网络刷新延迟，避免 5 秒轮询周期内短暂显示为未知。
+    private static final long TPS_STALE_INTERVAL = UPDATE_INTERVAL * 2L;
     private static String CACHED_GAME_TIME = UNKNOWN_TIME_TEXT;
     private static long LAST_GAME_TIME_UPDATE = Long.MIN_VALUE;
     private static final long GAME_TIME_CACHE_INTERVAL = 1000L;
     private static float LAST_FORMATTED_TPS = Float.NaN;
-    private static String CACHED_TPS_TEXT = TPS_ICON + "20.0";
+    private static String CACHED_TPS_TEXT = TPS_ICON + "--";
+    private static String CACHED_TPS_VALUE_TEXT = "--";
     private static int CACHED_ONLINE_PLAYER_COUNT = Integer.MIN_VALUE;
     private static String CACHED_ONLINE_TEXT = ONLINE_ICON + "0";
     private static Font CACHED_COMPACT_FONT;
@@ -124,10 +133,23 @@ public class ServerInformationDisplay {
     private static String CACHED_COMPACT_LEVEL_TEXT;
     private static String CACHED_COMPACT_RANK_TEXT;
     private static CompactTextLayout CACHED_COMPACT_LAYOUT;
+    private static int CACHED_LEVEL_TEXT_LEVEL = Integer.MIN_VALUE;
+    private static long CACHED_LEVEL_TEXT_CURRENT_EXP = Long.MIN_VALUE;
+    private static long CACHED_LEVEL_TEXT_NEXT_EXP = Long.MIN_VALUE;
+    private static String CACHED_LEVEL_TEXT_VALUE = "";
     private static List<MobEffectInstance> CACHED_ORDERED_EFFECTS = List.of();
     private static long LAST_EFFECT_ORDER_UPDATE = Long.MIN_VALUE;
-    private static int CACHED_EFFECT_SIGNATURE;
     private static final long EFFECT_ORDER_CACHE_INTERVAL = 250L;
+    private static MobEffectInstance[] effectBatchInstances = new MobEffectInstance[8];
+    private static IClientMobEffectExtensions[] effectBatchRenderers = new IClientMobEffectExtensions[8];
+    private static int[] effectBatchX = new int[8];
+    private static int[] effectBatchY = new int[8];
+    private static float[] effectBatchAlpha = new float[8];
+    private static boolean[] effectBatchCustomHandled = new boolean[8];
+    private static TextureAtlasSprite cachedEffectBackground;
+    private static TextureAtlasSprite cachedAmbientEffectBackground;
+    private static CompactRenderCache compactRenderCache;
+    private static volatile boolean compactRenderCacheDirty = true;
 
     // 获取当前玩家UUID
     public static UUID getCurrentPlayerUUID() {
@@ -135,15 +157,11 @@ public class ServerInformationDisplay {
         return mc.player != null ? mc.player.getUUID() : null;
     }
 
-    // 注册Tick事件
-    static {
-        // 只注册客户端Tick事件
-        NeoForge.EVENT_BUS.addListener(ServerInformationDisplay::onClientTick);
-    }
-
     @SubscribeEvent
     public static void onClientLoginToServer(ClientPlayerNetworkEvent.LoggingIn event) {
-        Minecraft mc = Minecraft.getInstance();
+        resetTpsCache();
+        LAST_SERVER_STATUS_UPDATE = 0L;
+        compactRenderCacheDirty = true;
 
         // 单人游戏和多人游戏默认显示右上角信息面板，保留O键手动开关
         SHOW_UI = true;
@@ -155,6 +173,25 @@ public class ServerInformationDisplay {
         // }
     }
 
+    /** Rebuild retained font/panel geometry after client resources change. */
+    public static void invalidateCompactRenderCache() {
+        compactRenderCacheDirty = true;
+        CACHED_COMPACT_FONT = null;
+        CACHED_COMPACT_LAYOUT = null;
+        cachedEffectBackground = null;
+        cachedAmbientEffectBackground = null;
+    }
+
+    @SubscribeEvent
+    public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        resetTpsCache();
+        LAST_SERVER_STATUS_UPDATE = 0L;
+        compactRenderCacheDirty = true;
+        CACHED_LEVEL_TEXT_LEVEL = Integer.MIN_VALUE;
+        CACHED_LEVEL_TEXT_CURRENT_EXP = Long.MIN_VALUE;
+        CACHED_LEVEL_TEXT_NEXT_EXP = Long.MIN_VALUE;
+    }
+
     //客户端Tick，触发网络请求 =====================
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
@@ -164,9 +201,9 @@ public class ServerInformationDisplay {
         long currentTime = System.currentTimeMillis();
 
         //请求在线玩家数
-        if (currentTime - LAST_PLAYER_LIST_UPDATE > UPDATE_INTERVAL) {
+        if (currentTime - LAST_SERVER_STATUS_UPDATE > UPDATE_INTERVAL) {
             DreamingFishCore_NetworkManager.sendToServer(new Packet_OnlinePlayerCountRequest());
-            LAST_PLAYER_LIST_UPDATE = currentTime;
+            LAST_SERVER_STATUS_UPDATE = currentTime;
         }
 
     }
@@ -182,54 +219,42 @@ public class ServerInformationDisplay {
         Font font = mc.font;
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
-
         int playerLevel = PlayerLevelManager.getPlayerLevelClient(mc.player);
+        List<com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.ActiveNotification>
+                systemMessages = SystemMessageDisplay.getActiveMessages();
 
-        // The GUI event is unmanaged by vanilla/NeoForge. Keep the complete top HUD
-        // (including system notifications) in one managed batch so every small fill
-        // does not submit the whole buffer separately.
-        guiGraphics.drawManaged(() -> {
-            PoseStack poseStack = guiGraphics.pose();
-            poseStack.pushPose();
-
-            int[] systemMessageAnchor;
-            if (USE_LEGACY_INFO_BOXES) {
-                // ========== 第一部分：左上角服务器信息（三个小框） ==========
+        if (USE_LEGACY_INFO_BOXES) {
+            // Legacy mode is kept as a compatibility fallback and still uses
+            // the ordinary managed GUI buffer.
+            guiGraphics.drawManaged(() -> {
+                PoseStack poseStack = guiGraphics.pose();
+                poseStack.pushPose();
                 List<InfoBox> leftBoxes = new ArrayList<>();
-                leftBoxes.add(new InfoBox(
-                    Component.literal("§7" + SERVER_NAME_DREAMING + SERVER_NAME_FISH),
-                    0xFF666666,
-                    0xDD151520
-                ));
-                leftBoxes.add(new InfoBox(
-                    Component.literal("§7" + ONLINE_PLAYERS + ONLINE_SUFFIX),
-                    0xFF666666,
-                    0xDD151520
-                ));
-                leftBoxes.add(new InfoBox(
-                    Component.literal("§7" + getGameTimeString(mc)),
-                    0xFF666666,
-                    0xDD151520
-                ));
-
+                leftBoxes.add(new InfoBox(Component.literal("§7" + SERVER_NAME_DREAMING + SERVER_NAME_FISH),
+                        0xFF666666, 0xDD151520));
+                leftBoxes.add(new InfoBox(Component.literal("§7" + ONLINE_PLAYERS + ONLINE_SUFFIX),
+                        0xFF666666, 0xDD151520));
+                leftBoxes.add(new InfoBox(Component.literal("§7" + getGameTimeString(mc)),
+                        0xFF666666, 0xDD151520));
                 renderLeftBoxes(guiGraphics, font, leftBoxes);
-
                 Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
-                String rankId = playerRank.getRankName();
-                String titleName = PlayerTitleManager.getPlayerTitleClient(mc.player).getTitleName();
-                systemMessageAnchor = renderPlayerInfo(guiGraphics, font, screenWidth, screenHeight, mc, rankId, titleName, playerLevel);
-            } else {
-                Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
-                systemMessageAnchor = renderCompactTopInfo(guiGraphics, font, screenWidth,
-                        screenHeight, mc, playerLevel, playerRank);
-            }
+                int[] anchor = renderPlayerInfo(guiGraphics, font, screenWidth, screenHeight, mc,
+                        playerRank.getRankName(),
+                        PlayerTitleManager.getPlayerTitleClient(mc.player).getTitleName(), playerLevel);
+                SystemMessageDisplay.renderSystemMessages(guiGraphics, font, screenWidth,
+                        anchor[0], anchor[1], systemMessages);
+                poseStack.popPose();
+            });
+            return;
+        }
 
-            // ========== 第三部分：系统消息显示（玩家信息框下方）==========
-            SystemMessageDisplay.renderSystemMessages(guiGraphics, font, screenWidth,
-                    systemMessageAnchor[0], systemMessageAnchor[1]);
-
-            poseStack.popPose();
-        });
+        Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
+        TopInfoAnchor anchor = renderCompactTopInfo(
+                guiGraphics, font, screenWidth, mc, playerLevel, playerRank);
+        if (!systemMessages.isEmpty()) {
+            guiGraphics.drawManaged(() -> SystemMessageDisplay.renderSystemMessages(
+                    guiGraphics, font, screenWidth, anchor.y(), anchor.heightOffset(), systemMessages));
+        }
     }
 
     @SubscribeEvent
@@ -250,37 +275,66 @@ public class ServerInformationDisplay {
                 && !mc.getDebugOverlay().showDebugScreen();
     }
 
-    private static int[] renderCompactTopInfo(GuiGraphics guiGraphics, Font font, int screenWidth,
-                                               int screenHeight, Minecraft mc,
-                                               int playerLevel, Rank playerRank) {
+    private static TopInfoAnchor renderCompactTopInfo(GuiGraphics guiGraphics, Font font, int screenWidth,
+                                                      Minecraft mc,
+                                                      int playerLevel, Rank playerRank) {
         String serverDreamingText = SERVER_NAME_DREAMING;
         String serverFishText = SERVER_NAME_FISH;
         String onlineText = getOnlineText();
         String timeText = getGameTimeString(mc);
         String tpsText = getClientTpsText(mc);
-        String playerIdText = mc.player.getName().getString();
+        String playerIdText = mc.player.getGameProfile().getName();
         Title title = PlayerTitleManager.getPlayerTitleClient(mc.player);
         String titleName = title.getTitleName();
         int titleColor = 0xFF000000 | title.getColor();
         long currentExp = PlayerLevelManager.getPlayerExperienceClient(mc.player);
         long nextLevelExp = PlayerLevelManager.getExperienceNeededForNextLevelClient(mc.player);
-        String levelText = LEVEL_PREFIX + playerLevel + EXP_OPEN + currentExp + EXP_SEPARATOR + nextLevelExp + EXP_CLOSE;
+        String levelText = getCachedLevelText(playerLevel, currentExp, nextLevelExp);
         String rankText = playerRank.getRankName();
         int rankColor = playerRank.getRankColor();
+        ResourceLocation playerSkin = mc.player.getSkin().texture();
+
+        CompactRenderCache cache = getOrBuildCompactRenderCache(
+                guiGraphics, font, screenWidth,
+                serverDreamingText, serverFishText, onlineText, timeText, tpsText,
+                playerIdText, titleName, levelText, rankText, titleColor, rankColor,
+                playerSkin);
+        CompactRenderLayout layout = cache.layout();
+
+        // No ordinary GUI geometry is produced by the compact path anymore.
+        // Draw its retained panel/text buffers directly at the display rate.
+        guiGraphics.flush();
+        cache.buffers().draw();
+
+        cache.avatar().draw();
+        renderCompactEffects(guiGraphics, mc, layout.infoLeftEdge());
+        return new TopInfoAnchor(layout.anchorY(), layout.anchorHeightOffset());
+    }
+
+    private static CompactRenderCache getOrBuildCompactRenderCache(
+            GuiGraphics guiGraphics, Font font, int screenWidth,
+            String serverDreamingText, String serverFishText,
+            String onlineText, String timeText, String tpsText,
+            String playerIdText, String titleName, String levelText, String rankText,
+            int titleColor, int rankColor, ResourceLocation playerSkin) {
+        Matrix4f currentPose = guiGraphics.pose().last().pose();
+        CompactRenderCache current = compactRenderCache;
+        if (!compactRenderCacheDirty && current != null
+                && current.matches(font, screenWidth, currentPose,
+                onlineText, timeText, tpsText, playerIdText,
+                titleName, levelText, rankText, titleColor, rankColor, playerSkin)) {
+            return current;
+        }
 
         CompactTextLayout textLayout = getCompactTextLayout(font, onlineText, timeText, tpsText,
                 playerIdText, titleName, levelText, rankText);
-
-        int firstLineWidth = textLayout.firstLineWidth();
-        int secondLineTextWidth = textLayout.secondLineTextWidth();
-        int thirdLineTextWidth = textLayout.thirdLineTextWidth();
         int padding = INFO_BOX_TEXT_PADDING;
         int scaledAvatarWidth = textLayout.scaledAvatarWidth();
         int scaledAvatarSpacing = textLayout.scaledAvatarSpacing();
-        int serverBoxWidth = (int) (firstLineWidth * INFO_TEXT_SCALE) + padding * 2;
+        int serverBoxWidth = (int) (textLayout.firstLineWidth() * INFO_TEXT_SCALE) + padding * 2;
         int playerBoxWidth = scaledAvatarWidth + scaledAvatarSpacing
-                + (int) (secondLineTextWidth * INFO_TEXT_SCALE) + padding * 2;
-        int levelBoxWidth = (int) (thirdLineTextWidth * INFO_TEXT_SCALE) + padding * 2;
+                + (int) (textLayout.secondLineTextWidth() * INFO_TEXT_SCALE) + padding * 2;
+        int levelBoxWidth = (int) (textLayout.thirdLineTextWidth() * INFO_TEXT_SCALE) + padding * 2;
         int scaledTextHeight = textLayout.scaledTextHeight();
         int avatarHeight = textLayout.avatarHeight();
         int boxHeight = BOX_HEIGHT;
@@ -294,187 +348,322 @@ public class ServerInformationDisplay {
         int playerLineY = playerBoxY + (boxHeight - scaledTextHeight) / 2;
         int levelLineY = levelBoxY + (boxHeight - scaledTextHeight) / 2;
         int avatarY = playerBoxY + (boxHeight - avatarHeight) / 2;
+        int infoLeftEdge = Math.min(serverBoxX, Math.min(playerBoxX, levelBoxX));
+        int totalHeight = boxHeight * 3 + COMPACT_INFO_LINE_SPACING * 2;
 
-        drawVanillaEffectPanel(guiGraphics, serverBoxX, serverBoxY, serverBoxWidth, boxHeight);
-        drawVanillaEffectPanel(guiGraphics, playerBoxX, playerBoxY, playerBoxWidth, boxHeight);
-        drawVanillaEffectPanel(guiGraphics, levelBoxX, levelBoxY, levelBoxWidth, boxHeight);
+        Matrix4f basePose = new Matrix4f(currentPose);
+        RetainedGuiBuffers replacement;
+        try (RetainedGuiBuffers.Capture capture = new RetainedGuiBuffers.Capture()) {
+            captureVanillaEffectPanel(capture, basePose,
+                    serverBoxX, serverBoxY, serverBoxWidth, boxHeight);
+            captureVanillaEffectPanel(capture, basePose,
+                    playerBoxX, playerBoxY, playerBoxWidth, boxHeight);
+            captureVanillaEffectPanel(capture, basePose,
+                    levelBoxX, levelBoxY, levelBoxWidth, boxHeight);
 
-        PoseStack poseStack = guiGraphics.pose();
-        poseStack.pushPose();
-        poseStack.translate(serverBoxX + padding, serverLineY, 0);
-        poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
-        int currentX = 0;
-        currentX = drawCompactPart(guiGraphics, font, serverDreamingText, currentX, COMPACT_INFO_DREAMING,
-                textLayout.serverDreamingWidth());
-        currentX = drawCompactPart(guiGraphics, font, serverFishText, currentX, COMPACT_INFO_FISH,
-                textLayout.serverFishWidth());
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
-                textLayout.separatorWidth());
-        currentX = drawCompactPart(guiGraphics, font, onlineText, currentX, COMPACT_INFO_ONLINE,
-                textLayout.onlineWidth());
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
-                textLayout.separatorWidth());
-        currentX = drawCompactPart(guiGraphics, font, timeText, currentX, COMPACT_INFO_MUTED,
-                textLayout.timeWidth());
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
-                textLayout.separatorWidth());
-        drawCompactPart(guiGraphics, font, tpsText, currentX, COMPACT_INFO_LEVEL,
-                textLayout.tpsWidth());
-        poseStack.popPose();
+            Matrix4f serverTextPose = new Matrix4f(basePose)
+                    .translate(serverBoxX + padding, serverLineY, 0.0F)
+                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
+            int currentX = 0;
+            currentX = captureCompactPart(capture, font, serverDreamingText, currentX,
+                    COMPACT_INFO_DREAMING, textLayout.serverDreamingWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, serverFishText, currentX,
+                    COMPACT_INFO_FISH, textLayout.serverFishWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
+                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, onlineText, currentX,
+                    COMPACT_INFO_ONLINE, textLayout.onlineWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
+                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, timeText, currentX,
+                    COMPACT_INFO_MUTED, textLayout.timeWidth(), serverTextPose);
+            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
+                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
+            captureCompactPart(capture, font, tpsText, currentX,
+                    COMPACT_INFO_LEVEL, textLayout.tpsWidth(), serverTextPose);
 
-        PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
-        if (playerInfo != null) {
-            // PlayerFaceRenderer uses an immediate texture blit. Submit the panel
-            // mesh first so the avatar remains above its background as before.
-            guiGraphics.flush();
-            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), playerBoxX + padding, avatarY, avatarHeight);
+            Matrix4f playerTextPose = new Matrix4f(basePose)
+                    .translate(playerBoxX + padding + scaledAvatarWidth + scaledAvatarSpacing,
+                            playerLineY, 0.0F)
+                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
+            currentX = 0;
+            currentX = captureCompactPart(capture, font, playerIdText, currentX,
+                    COMPACT_INFO_TEXT, textLayout.playerWidth(), playerTextPose);
+            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
+                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), playerTextPose);
+            currentX = captureCompactPart(capture, font, titleName, currentX,
+                    titleColor, textLayout.titleWidth(), playerTextPose);
+            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
+                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), playerTextPose);
+            captureCompactPart(capture, font, rankText, currentX,
+                    0xFF000000 | (rankColor & 0x00FFFFFF), textLayout.rankWidth(), playerTextPose);
+
+            Matrix4f levelTextPose = new Matrix4f(basePose)
+                    .translate(levelBoxX + padding, levelLineY, 0.0F)
+                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
+            captureCompactPart(capture, font, levelText, 0,
+                    COMPACT_INFO_LEVEL, textLayout.levelWidth(), levelTextPose);
+            replacement = capture.upload();
         }
 
-        poseStack.pushPose();
-        poseStack.translate(playerBoxX + padding + scaledAvatarWidth + scaledAvatarSpacing, playerLineY, 0);
-        poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
-        currentX = 0;
-        currentX = drawCompactPart(guiGraphics, font, playerIdText, currentX, COMPACT_INFO_TEXT,
-                textLayout.playerWidth());
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
-                textLayout.separatorWidth());
-        currentX = drawCompactPart(guiGraphics, font, titleName, currentX, titleColor,
-                textLayout.titleWidth());
-        currentX = drawCompactPart(guiGraphics, font, TOP_INFO_SEPARATOR, currentX, COMPACT_INFO_MUTED,
-                textLayout.separatorWidth());
-        drawCompactPart(guiGraphics, font, rankText, currentX, 0xFF000000 | (rankColor & 0x00FFFFFF),
-                textLayout.rankWidth());
-        poseStack.popPose();
+        CompactRenderLayout layout = new CompactRenderLayout(
+                playerBoxX + padding, avatarY, avatarHeight,
+                infoLeftEdge, serverBoxY, totalHeight + COMPACT_INFO_MESSAGE_GAP);
+        RetainedPlayerFace replacementAvatar;
+        try {
+            replacementAvatar = RetainedPlayerFace.create(playerSkin, basePose,
+                    layout.avatarX(), layout.avatarY(), layout.avatarHeight());
+        } catch (Throwable throwable) {
+            replacement.close();
+            throw throwable;
+        }
+        CompactRenderCache rebuilt = new CompactRenderCache(
+                font, screenWidth, onlineText, timeText, tpsText,
+                playerIdText, titleName, levelText, rankText,
+                titleColor, rankColor, playerSkin, basePose, layout,
+                replacement, replacementAvatar);
+        if (current != null) {
+            current.buffers().close();
+            current.avatar().close();
+        }
+        compactRenderCache = rebuilt;
+        compactRenderCacheDirty = false;
+        return rebuilt;
+    }
 
-        poseStack.pushPose();
-        poseStack.translate(levelBoxX + padding, levelLineY, 0);
-        poseStack.scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0f);
-        drawCompactPart(guiGraphics, font, levelText, 0, COMPACT_INFO_LEVEL,
-                textLayout.levelWidth());
-        poseStack.popPose();
+    private static void captureVanillaEffectPanel(RetainedGuiBuffers.Capture capture, Matrix4f pose,
+                                                  int x, int y, int width, int height) {
+        UiPanelRenderer.roundedRectTo(capture, pose,
+                x, y, width, height, 2, COMPACT_INFO_OUTLINE);
+        UiPanelRenderer.roundedRectTo(capture, pose,
+                x + 1, y + 1, width - 2, height - 2, 1, COMPACT_INFO_BG);
+    }
 
-        int infoLeftEdge = Math.min(serverBoxX, Math.min(playerBoxX, levelBoxX));
-        renderCompactEffects(guiGraphics, mc, infoLeftEdge);
+    private static int captureCompactPart(RetainedGuiBuffers.Capture capture, Font font,
+                                          String text, int x, int color, int measuredWidth,
+                                          Matrix4f pose) {
+        font.drawInBatch(text, x, 0.0F, color, false, pose, capture,
+                Font.DisplayMode.NORMAL, 0, 15728880);
+        return x + measuredWidth;
+    }
 
-        int totalHeight = boxHeight * 3 + COMPACT_INFO_LINE_SPACING * 2;
-        return new int[]{serverBoxY, totalHeight + COMPACT_INFO_MESSAGE_GAP};
+    private static String getCachedLevelText(int level, long currentExp, long nextLevelExp) {
+        if (level != CACHED_LEVEL_TEXT_LEVEL
+                || currentExp != CACHED_LEVEL_TEXT_CURRENT_EXP
+                || nextLevelExp != CACHED_LEVEL_TEXT_NEXT_EXP) {
+            CACHED_LEVEL_TEXT_LEVEL = level;
+            CACHED_LEVEL_TEXT_CURRENT_EXP = currentExp;
+            CACHED_LEVEL_TEXT_NEXT_EXP = nextLevelExp;
+            CACHED_LEVEL_TEXT_VALUE = LEVEL_PREFIX + level + EXP_OPEN + currentExp
+                    + EXP_SEPARATOR + nextLevelExp + EXP_CLOSE;
+        }
+        return CACHED_LEVEL_TEXT_VALUE;
     }
 
     private static void renderCompactEffects(GuiGraphics guiGraphics, Minecraft mc, int infoLeftEdge) {
         int beneficialIndex = 0;
         int harmfulIndex = 0;
-        boolean renderedAny = false;
-
+        int count = 0;
         for (MobEffectInstance effect : getOrderedEffects(mc)) {
-            var renderer = net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions.of(effect);
+            IClientMobEffectExtensions renderer = IClientMobEffectExtensions.of(effect);
             if (!renderer.isVisibleInGui(effect) || !effect.showIcon()) {
                 continue;
             }
-
-            if (!renderedAny) {
-                // Effect icons are immediate texture blits. Submit the panel/text
-                // mesh once, only when there is an icon that actually needs drawing.
-                guiGraphics.flush();
-                RenderSystem.enableBlend();
-                renderedAny = true;
-            }
-
             boolean beneficial = effect.getEffect().value().isBeneficial();
             int column = beneficial ? beneficialIndex++ : harmfulIndex++;
             int x = infoLeftEdge - COMPACT_EFFECT_INFO_GAP - COMPACT_EFFECT_SIZE
                     - column * (COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
             int y = TOP_OFFSET + (beneficial ? 0 : COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
-            renderCompactEffect(guiGraphics, mc, effect, renderer, x, y);
+            ensureEffectBatchCapacity(count + 1);
+            effectBatchInstances[count] = effect;
+            effectBatchRenderers[count] = renderer;
+            effectBatchX[count] = x;
+            effectBatchY[count] = y;
+            effectBatchAlpha[count] = effectAlpha(effect);
+            effectBatchCustomHandled[count] = false;
+            count++;
+        }
+        if (count == 0) {
+            return;
         }
 
-        if (renderedAny) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        // The retained information panel was submitted by the caller. The
+        // remaining effect backgrounds and icons each use one atlas batch.
+        Matrix4f pose = guiGraphics.pose().last().pose();
+
+        BufferBuilder backgrounds = GuiQuadBatchRenderer.begin();
+        ResourceLocation backgroundAtlas = null;
+        for (int index = 0; index < count; index++) {
+            MobEffectInstance effect = effectBatchInstances[index];
+            TextureAtlasSprite background = getEffectBackground(mc, effect.isAmbient());
+            if (backgroundAtlas == null) {
+                backgroundAtlas = background.atlasLocation();
+            }
+            GuiQuadBatchRenderer.addSprite(backgrounds, pose, background,
+                    effectBatchX[index], effectBatchY[index],
+                    COMPACT_EFFECT_SIZE, COMPACT_EFFECT_SIZE, 1.0F);
+        }
+        GuiQuadBatchRenderer.draw(backgrounds, backgroundAtlas);
+
+        // Preserve third-party custom effect renderers. They are uncommon and
+        // may perform arbitrary immediate work, while all default icons below
+        // remain in one atlas submission.
+        RenderSystem.enableBlend();
+        try {
+            for (int index = 0; index < count; index++) {
+                IClientMobEffectExtensions renderer = effectBatchRenderers[index];
+                if (renderer == IClientMobEffectExtensions.DEFAULT) {
+                    continue;
+                }
+                guiGraphics.pose().pushPose();
+                guiGraphics.pose().translate(effectBatchX[index], effectBatchY[index], 0.0F);
+                guiGraphics.pose().scale(COMPACT_EFFECT_SCALE, COMPACT_EFFECT_SCALE, 1.0F);
+                effectBatchCustomHandled[index] = renderer.renderGuiIcon(
+                        effectBatchInstances[index], mc.gui, guiGraphics,
+                        0, 0, 0, effectBatchAlpha[index]);
+                guiGraphics.pose().popPose();
+            }
+        } finally {
+            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             RenderSystem.disableBlend();
         }
+
+        BufferBuilder icons = GuiQuadBatchRenderer.begin();
+        ResourceLocation iconAtlas = null;
+        for (int index = 0; index < count; index++) {
+            if (effectBatchCustomHandled[index]) {
+                continue;
+            }
+            TextureAtlasSprite icon = mc.getMobEffectTextures()
+                    .get(effectBatchInstances[index].getEffect());
+            if (iconAtlas == null) {
+                iconAtlas = icon.atlasLocation();
+            }
+            GuiQuadBatchRenderer.addSprite(icons, pose, icon,
+                    effectBatchX[index] + 3.0F * COMPACT_EFFECT_SCALE,
+                    effectBatchY[index] + 3.0F * COMPACT_EFFECT_SCALE,
+                    18.0F * COMPACT_EFFECT_SCALE,
+                    18.0F * COMPACT_EFFECT_SCALE,
+                    effectBatchAlpha[index]);
+        }
+        if (iconAtlas != null) {
+            GuiQuadBatchRenderer.draw(icons, iconAtlas);
+        } else {
+            // Finish the empty builder so Tesselator's shared storage is ready
+            // for the next immediate batch.
+            icons.build();
+        }
     }
 
-    private static void renderCompactEffect(GuiGraphics guiGraphics, Minecraft mc, MobEffectInstance effect,
-                                            net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions renderer,
-                                            int x, int y) {
-        float alpha = 1.0F;
-        if (!effect.isAmbient() && effect.endsWithin(200)) {
-            int duration = effect.getDuration();
-            int pulseStep = 10 - duration / 20;
-            alpha = Mth.clamp(duration / 10.0F / 5.0F * 0.5F, 0.0F, 0.5F)
-                    + Mth.cos(duration * (float) Math.PI / 5.0F)
-                    * Mth.clamp(pulseStep / 10.0F * 0.25F, 0.0F, 0.25F);
+    private static float effectAlpha(MobEffectInstance effect) {
+        if (effect.isAmbient() || !effect.endsWithin(200)) {
+            return 1.0F;
         }
-
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(x, y, 0.0F);
-        guiGraphics.pose().scale(COMPACT_EFFECT_SCALE, COMPACT_EFFECT_SCALE, 1.0F);
-        guiGraphics.blitSprite(effect.isAmbient() ? EFFECT_BACKGROUND_AMBIENT_SPRITE : EFFECT_BACKGROUND_SPRITE,
-                0, 0, 24, 24);
-
-        if (!renderer.renderGuiIcon(effect, mc.gui, guiGraphics, 0, 0, 0, alpha)) {
-            TextureAtlasSprite texture = mc.getMobEffectTextures().get(effect.getEffect());
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-            guiGraphics.blit(3, 3, 0, 18, 18, texture);
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        }
-        guiGraphics.pose().popPose();
+        int duration = effect.getDuration();
+        int pulseStep = 10 - duration / 20;
+        return Mth.clamp(duration / 10.0F / 5.0F * 0.5F, 0.0F, 0.5F)
+                + Mth.cos(duration * (float) Math.PI / 5.0F)
+                * Mth.clamp(pulseStep / 10.0F * 0.25F, 0.0F, 0.25F);
     }
 
-    private static int drawCompactPart(GuiGraphics guiGraphics, Font font, String text, int x, int color,
-                                       int measuredWidth) {
-        guiGraphics.drawString(font, text, x, 0, color, false);
-        return x + measuredWidth;
+    private static TextureAtlasSprite getEffectBackground(Minecraft minecraft, boolean ambient) {
+        if (ambient) {
+            if (cachedAmbientEffectBackground == null) {
+                cachedAmbientEffectBackground = minecraft.getGuiSprites()
+                        .getSprite(EFFECT_BACKGROUND_AMBIENT_SPRITE);
+            }
+            return cachedAmbientEffectBackground;
+        }
+        if (cachedEffectBackground == null) {
+            cachedEffectBackground = minecraft.getGuiSprites().getSprite(EFFECT_BACKGROUND_SPRITE);
+        }
+        return cachedEffectBackground;
     }
 
-    private static float getClientTps(Minecraft mc) {
-        long currentTime = System.currentTimeMillis();
-        if (LAST_TPS_UPDATE != Long.MIN_VALUE
-                && currentTime - LAST_TPS_UPDATE < TPS_CACHE_INTERVAL) {
-            return CACHED_CLIENT_TPS;
+    private static void ensureEffectBatchCapacity(int required) {
+        if (required <= effectBatchInstances.length) {
+            return;
         }
-
-        if (mc.getSingleplayerServer() == null) {
-            CACHED_CLIENT_TPS = DEFAULT_TPS;
-            LAST_TPS_UPDATE = currentTime;
-            return CACHED_CLIENT_TPS;
-        }
-
-        long[] tickTimes = mc.getSingleplayerServer().getTickTimesNanos();
-        if (tickTimes == null || tickTimes.length == 0) {
-            CACHED_CLIENT_TPS = DEFAULT_TPS;
-            LAST_TPS_UPDATE = currentTime;
-            return CACHED_CLIENT_TPS;
-        }
-
-        long totalTickTime = 0L;
-        for (long tickTime : tickTimes) {
-            totalTickTime += tickTime;
-        }
-
-        double averageTickMs = totalTickTime / (double) tickTimes.length / 1_000_000.0D;
-        if (averageTickMs <= 0.0D) {
-            CACHED_CLIENT_TPS = DEFAULT_TPS;
-            LAST_TPS_UPDATE = currentTime;
-            return CACHED_CLIENT_TPS;
-        }
-
-        CACHED_CLIENT_TPS = (float) Math.min(DEFAULT_TPS, 1000.0D / averageTickMs);
-        LAST_TPS_UPDATE = currentTime;
-        return CACHED_CLIENT_TPS;
+        int capacity = Math.max(required, effectBatchInstances.length * 2);
+        effectBatchInstances = java.util.Arrays.copyOf(effectBatchInstances, capacity);
+        effectBatchRenderers = java.util.Arrays.copyOf(effectBatchRenderers, capacity);
+        effectBatchX = java.util.Arrays.copyOf(effectBatchX, capacity);
+        effectBatchY = java.util.Arrays.copyOf(effectBatchY, capacity);
+        effectBatchAlpha = java.util.Arrays.copyOf(effectBatchAlpha, capacity);
+        effectBatchCustomHandled = java.util.Arrays.copyOf(effectBatchCustomHandled, capacity);
     }
 
     /**
-     * TPS changes at most once per cache interval.  Formatting it once per HUD
-     * frame used to allocate a formatter-backed string even though the visible
-     * value stayed the same for hundreds of frames.
+     * Receives the server-authoritative sample used by all connected clients.
+     * Packet handlers call this on the client thread.
      */
-    private static String getClientTpsText(Minecraft mc) {
+    public static void updateServerTps(float tps) {
+        if (!Float.isFinite(tps)) {
+            return;
+        }
+
+        CACHED_SERVER_TPS = Mth.clamp(tps, 0.0F, MAX_TPS);
+        LAST_TPS_UPDATE = System.currentTimeMillis();
+    }
+
+    /**
+     * Returns the latest server-authoritative TPS sample.  Both integrated and
+     * remote servers use the same response packet, so the render path never
+     * re-calculates tick timings or falls back to a hard-coded 20 TPS value.
+     */
+    public static float getClientTps(Minecraft mc) {
+        if (mc == null || mc.player == null) {
+            return Float.NaN;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        if (Float.isFinite(CACHED_SERVER_TPS)
+                && LAST_TPS_UPDATE != Long.MIN_VALUE
+                && currentTime - LAST_TPS_UPDATE <= TPS_STALE_INTERVAL) {
+            return CACHED_SERVER_TPS;
+        }
+
+        return Float.NaN;
+    }
+
+    /**
+     * Format the cached sample only when its value changes.  Rendering reuses
+     * the resulting immutable strings instead of allocating once per frame.
+     */
+    public static String getClientTpsText(Minecraft mc) {
+        updateTpsTextCache(mc);
+        return CACHED_TPS_TEXT;
+    }
+
+    /** Numeric text shared by the compact HUD and the terminal status bars. */
+    public static String getServerTpsText(Minecraft mc) {
+        updateTpsTextCache(mc);
+        return CACHED_TPS_VALUE_TEXT;
+    }
+
+    private static void updateTpsTextCache(Minecraft mc) {
         float tps = getClientTps(mc);
         if (Float.compare(tps, LAST_FORMATTED_TPS) != 0) {
-            CACHED_TPS_TEXT = TPS_ICON + String.format(Locale.ROOT, "%.1f", tps);
+            CACHED_TPS_VALUE_TEXT = formatTps(tps);
+            CACHED_TPS_TEXT = TPS_ICON + CACHED_TPS_VALUE_TEXT;
             LAST_FORMATTED_TPS = tps;
         }
-        return CACHED_TPS_TEXT;
+    }
+
+    private static String formatTps(float tps) {
+        return Float.isFinite(tps)
+                ? String.format(Locale.ROOT, "%.1f", tps)
+                : "--";
+    }
+
+    private static void resetTpsCache() {
+        CACHED_SERVER_TPS = Float.NaN;
+        LAST_TPS_UPDATE = Long.MIN_VALUE;
+        LAST_FORMATTED_TPS = Float.NaN;
+        CACHED_TPS_TEXT = TPS_ICON + "--";
+        CACHED_TPS_VALUE_TEXT = "--";
+        CACHED_COMPACT_TPS_TEXT = null;
+        CACHED_COMPACT_LAYOUT = null;
     }
 
     private static String getOnlineText() {
@@ -552,20 +741,17 @@ public class ServerInformationDisplay {
 
     private static List<MobEffectInstance> getOrderedEffects(Minecraft mc) {
         Collection<MobEffectInstance> activeEffects = mc.player.getActiveEffects();
-        int signature = activeEffects.size();
-        for (MobEffectInstance effect : activeEffects) {
-            // The client mutates effect instances in place, so include the instance
-            // identity and amplifier when detecting a structural/order change.
-            signature = 31 * signature + System.identityHashCode(effect);
-            signature = 31 * signature + System.identityHashCode(effect.getEffect().value());
-            signature = 31 * signature + effect.getAmplifier();
-            signature = 31 * signature + (effect.isAmbient() ? 1 : 0);
-            signature = 31 * signature + (effect.showIcon() ? 1 : 0);
+        if (activeEffects.isEmpty()) {
+            if (!CACHED_ORDERED_EFFECTS.isEmpty()) {
+                CACHED_ORDERED_EFFECTS = List.of();
+                LAST_EFFECT_ORDER_UPDATE = Long.MIN_VALUE;
+            }
+            return CACHED_ORDERED_EFFECTS;
         }
 
         long now = System.currentTimeMillis();
-        if (LAST_EFFECT_ORDER_UPDATE != Long.MIN_VALUE
-                && signature == CACHED_EFFECT_SIGNATURE
+        if (activeEffects.size() == CACHED_ORDERED_EFFECTS.size()
+                && LAST_EFFECT_ORDER_UPDATE != Long.MIN_VALUE
                 && now - LAST_EFFECT_ORDER_UPDATE < EFFECT_ORDER_CACHE_INTERVAL) {
             return CACHED_ORDERED_EFFECTS;
         }
@@ -573,7 +759,6 @@ public class ServerInformationDisplay {
         CACHED_ORDERED_EFFECTS = List.copyOf(Ordering.<MobEffectInstance>natural()
                 .reverse()
                 .sortedCopy(activeEffects));
-        CACHED_EFFECT_SIGNATURE = signature;
         LAST_EFFECT_ORDER_UPDATE = now;
         return CACHED_ORDERED_EFFECTS;
     }
@@ -662,12 +847,10 @@ public class ServerInformationDisplay {
         int avatarX = boxX + padding;
         int avatarY = boxY + padding;
 
-        PlayerInfo playerInfo = mc.player.connection.getPlayerInfo(mc.player.getUUID());
-        if (playerInfo != null) {
-            // 渲染头像（覆盖前两行）
-            guiGraphics.flush();
-            PlayerFaceRenderer.draw(guiGraphics, playerInfo.getSkin(), avatarX, avatarY, avatarSize);
-        }
+        // 渲染头像（覆盖前两行）
+        guiGraphics.flush();
+        PlayerFaceBatchRenderer.drawOne(guiGraphics, mc.player.getSkin().texture(),
+                avatarX, avatarY, avatarSize, 1.0F);
 
         // ========== 右侧内容区域 ==========
         int contentX = avatarX + avatarSize + avatarSpacing;
@@ -749,11 +932,6 @@ public class ServerInformationDisplay {
         UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, radius, color);
     }
 
-    private static void drawVanillaEffectPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, 2, COMPACT_INFO_OUTLINE);
-        UiPanelRenderer.roundedRect(guiGraphics, x + 1, y + 1, width - 2, height - 2, 1, COMPACT_INFO_BG);
-    }
-
     private static void drawRoundedBorder(GuiGraphics guiGraphics, int x, int y, int width, int height, int radius, int color) {
         UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, radius, color);
     }
@@ -826,6 +1004,42 @@ public class ServerInformationDisplay {
                                      int serverFishWidth, int separatorWidth, int onlineWidth,
                                      int timeWidth, int tpsWidth, int playerWidth,
                                      int titleWidth, int rankWidth, int levelWidth) {
+    }
+
+    private record TopInfoAnchor(int y, int heightOffset) {
+    }
+
+    private record CompactRenderLayout(int avatarX, int avatarY, int avatarHeight,
+                                       int infoLeftEdge, int anchorY, int anchorHeightOffset) {
+    }
+
+    private record CompactRenderCache(Font font, int screenWidth,
+                                      String onlineText, String timeText, String tpsText,
+                                      String playerText, String titleText, String levelText,
+                                      String rankText, int titleColor, int rankColor,
+                                      ResourceLocation playerSkin, Matrix4f pose,
+                                      CompactRenderLayout layout, RetainedGuiBuffers buffers,
+                                      RetainedPlayerFace avatar) {
+        private boolean matches(Font currentFont, int currentScreenWidth, Matrix4f currentPose,
+                                String currentOnlineText, String currentTimeText,
+                                String currentTpsText, String currentPlayerText,
+                                String currentTitleText, String currentLevelText,
+                                String currentRankText, int currentTitleColor,
+                                int currentRankColor, ResourceLocation currentPlayerSkin) {
+            return font == currentFont
+                    && screenWidth == currentScreenWidth
+                    && titleColor == currentTitleColor
+                    && rankColor == currentRankColor
+                    && pose.equals(currentPose)
+                    && Objects.equals(playerSkin, currentPlayerSkin)
+                    && Objects.equals(onlineText, currentOnlineText)
+                    && Objects.equals(timeText, currentTimeText)
+                    && Objects.equals(tpsText, currentTpsText)
+                    && Objects.equals(playerText, currentPlayerText)
+                    && Objects.equals(titleText, currentTitleText)
+                    && Objects.equals(levelText, currentLevelText)
+                    && Objects.equals(rankText, currentRankText);
+        }
     }
 
     /**
@@ -906,6 +1120,6 @@ public class ServerInformationDisplay {
     }
 
     public static void refreshData() {
-        LAST_PLAYER_LIST_UPDATE = 0;
+        LAST_SERVER_STATUS_UPDATE = 0;
     }
 }

@@ -39,6 +39,105 @@
       "showName": true
     }
   },
+  "102": {
+    "npcId": 102,
+    "npcName": "江晚",
+    "npcIntroduction": "",
+    "npcGender": "",
+    "npcFeamale": null,
+    "npcProfession": "",
+    "storyStageId": 2,
+    "dialogues": [],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 2000000000,
+      "WARNING_RULES": 2000000000,
+      "VIEW_BACKPACK": 2000000000,
+      "ASSIGN_TASK": 2000000000,
+      "GIFT_ITEM": 2000000000,
+      "DIALOGUE": 0,
+      "SET_HOME": 2000000000
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    },
+    "appearance": {
+      "skin": "dreamingfishcore:textures/entity/npc/jiangwan.png",
+      "model": "slim",
+      "showName": true
+    }
+  },
+  "103": {
+    "npcId": 103,
+    "npcName": "梁朔",
+    "npcIntroduction": "",
+    "npcGender": "",
+    "npcFeamale": null,
+    "npcProfession": "",
+    "storyStageId": 1,
+    "dialogues": [],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 2000000000,
+      "WARNING_RULES": 2000000000,
+      "VIEW_BACKPACK": 2000000000,
+      "ASSIGN_TASK": 2000000000,
+      "GIFT_ITEM": 2000000000,
+      "DIALOGUE": 0,
+      "SET_HOME": 2000000000
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    },
+    "appearance": {
+      "skin": "dreamingfishcore:textures/entity/npc/liangshuo.png",
+      "model": "slim",
+      "showName": true
+    }
+  },
+  "104": {
+    "npcId": 104,
+    "npcName": "尉迟南",
+    "npcIntroduction": "",
+    "npcGender": "",
+    "npcFeamale": null,
+    "npcProfession": "",
+    "storyStageId": 1,
+    "dialogues": [],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 2000000000,
+      "WARNING_RULES": 2000000000,
+      "VIEW_BACKPACK": 2000000000,
+      "ASSIGN_TASK": 2000000000,
+      "GIFT_ITEM": 2000000000,
+      "DIALOGUE": 0,
+      "SET_HOME": 2000000000
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    },
+    "appearance": {
+      "skin": "dreamingfishcore:textures/entity/npc/weichinan.png",
+      "model": "slim",
+      "showName": true
+    }
+  },
   "105": {
     "npcId": 105,
     "npcName": "周岑",
@@ -69,6 +168,42 @@
       "entityBlacklist": [],
       "itemWhitelist": [],
       "itemBlacklist": []
+    }
+  },
+  "106": {
+    "npcId": 106,
+    "npcName": "医疗工作人员",
+    "npcIntroduction": "负责阿拜多斯临时医疗点及医院的物资登记与模板维护。公共医疗服务向所有居民开放。",
+    "npcGender": "",
+    "npcFeamale": null,
+    "npcProfession": "模板维护与医疗物资登记",
+    "storyStageId": 2,
+    "dialogues": [
+      "我负责模板维护。先了解所需物资，再选择提交；普通交谈不会扣除东西。",
+      "模板维护对所有居民开放。无论是否加入逐光会，都可以来这里了解自己的余量。"
+    ],
+    "actionFavorabilityRequirements": {
+      "FOLLOW": 2000000000,
+      "WARNING_RULES": 2000000000,
+      "VIEW_BACKPACK": 2000000000,
+      "ASSIGN_TASK": 2000000000,
+      "GIFT_ITEM": 2000000000,
+      "DIALOGUE": 0,
+      "SET_HOME": 2000000000
+    },
+    "currentThought": null,
+    "warningRules": {
+      "playerWhitelist": [],
+      "playerBlacklist": [],
+      "entityWhitelist": [],
+      "entityBlacklist": [],
+      "itemWhitelist": [],
+      "itemBlacklist": []
+    },
+    "appearance": {
+      "skin": "minecraft:textures/entity/player/slim/alex.png",
+      "model": "slim",
+      "showName": true
     }
   }
 }

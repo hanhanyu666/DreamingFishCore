@@ -15,9 +15,33 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import net.neoforged.neoforge.registries.DeferredHolder;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.item.crafting.Ingredient;
 
 public class DreamingFishCore_Items {
+
+    // ArmorMaterial 在 1.21.1 仍是注册表对象；面具使用零护甲值，避免把“防感染”意外变成额外
+    // 的战斗护甲，同时保留原版头部装备、右键穿戴和玩家装备渲染行为。
+    public static final DeferredRegister<ArmorMaterial> ARMOR_MATERIALS =
+            DeferredRegister.create(Registries.ARMOR_MATERIAL, DreamingFishCore.MODID);
+
+    public static final DeferredHolder<ArmorMaterial, ArmorMaterial> PROTECTIVE_MASK_MATERIAL =
+            ARMOR_MATERIALS.register("protective_mask", () -> new ArmorMaterial(
+                    zeroDefenseValues(),
+                    0,
+                    SoundEvents.ARMOR_EQUIP_GENERIC,
+                    () -> Ingredient.EMPTY,
+                    List.of(new ArmorMaterial.Layer(
+                            ResourceLocation.fromNamespaceAndPath(DreamingFishCore.MODID, "protective_mask"))),
+                    0.0F,
+                    0.0F
+            ));
 
     // 创建物品的 DeferredRegister
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(BuiltInRegistries.ITEM, DreamingFishCore.MODID);
@@ -123,7 +147,23 @@ public class DreamingFishCore_Items {
                     .rarity(Rarity.EPIC)  // 史诗品质
             ));
 
+    // 防护面具：可佩戴在头部；防护效果由感染系统根据佩戴状态判定。
+    public static final DeferredHolder<Item, ProtectiveMaskItem> PROTECTIVE_MASK = ITEMS.register("protective_mask",
+            () -> new ProtectiveMaskItem(PROTECTIVE_MASK_MATERIAL, new Item.Properties()
+                    .stacksTo(1)
+                    .rarity(Rarity.EPIC)  // 史诗品质
+            ));
+
+    private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
+        EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);
+        for (ArmorItem.Type type : ArmorItem.Type.values()) {
+            values.put(type, 0);
+        }
+        return values;
+    }
+
     public static void register(IEventBus eventBus) {
+        ARMOR_MATERIALS.register(eventBus);
         ITEMS.register(eventBus); // 注册物品
     }
 }

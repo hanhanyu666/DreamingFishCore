@@ -1,112 +1,52 @@
-# 《灯还亮着》当前上线内容
+# 《灯还亮着》当前开场内容
 
-状态：第一阶段“梦的开始”当前投放快照。运行时以 `config/dreamingfishcore/` 中的配置和
-JAR 内 `defaults` 资源为准；本文件只记录本轮实际保留的内容，不是后续阶段的文案草稿。
+这是第一阶段“梦的开始”的内容摘要。真实顺序只看
+`OpeningStory.java`，真实状态只看 `StoryManager` 的统一故事存档。
 
-## 内容白名单
+## 保留内容
 
-| 类型 | 稳定 ID | 当前状态 |
+| 类型 | 稳定 ID/编号 | 作用 |
 | --- | --- | --- |
-| 故事阶段 | `dreamingfishcore:dream_beginning` | 手动发布的第一阶段 |
-| NPC | `101` 白芷 | 保留 |
-| NPC | `105` 周岑 | 保留 |
-| 公告 | `opening.desert_town` | 唯一内置开场公告 |
+| 故事阶段 | `dreamingfishcore:dream_beginning` | 服主手动发布的第一阶段 |
+| NPC | `101` 白芷 | 阿拜多斯医疗志愿者 |
+| NPC | `105` 周岑 | 逐光会筹备负责人 |
+| 公告 | `opening.desert_town` | 阿拜多斯临时安置公告 |
+| 地点 | `dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3` | 阿拜多斯稳定地点 |
 
-除白芷和周岑外的 NPC、广播稿和临时联络员文案不属于当前上线内容。旧玩家已经收取的
-白芷/周岑私信记录仍按玩家存档保留；新的流程不会再引用已删除 NPC 的消息或台词。
+## 唯一链路
 
-## 唯一开场公告
+```text
+阅读阿拜多斯公告
+  → 进入阿拜多斯
+  → 与白芷交谈
+  → 查看并回复周岑联络消息
+  → 阅读周岑介绍
+       ├─ 加入逐光会 → 写入成员身份、发一次补给、创建建设引导
+       └─ 保持独立   → 写入个人选择
+```
 
-**标题：** 阿拜多斯 · 临时安置通知<br>
-**公告 key：** `opening.desert_town`<br>
-**故事日期：** 危机第1日
+选择不会自动改变全服阶段，也不会因为客户端任务按钮或 NPC 普通闲聊跳步。
 
-> 各位抵达者：
->
-> 请尽快前往登记处（坐标 X:9890，Y:151，Z:1771 附近）完成登记。现场已备有照明、床位及首批补给物资。
->
-> 医院即日起接收伤员，受伤者请优先前往。
->
-> 登记仅用于统计需求，不作为准入审查。来自外缘带的居民可保留原有预登记信息，我们正在逐条核对。
->
-> 有意参与救援、建设或公共事务者，请留意终端私信。是否参与，自愿决定。
->
-> 此前在建筑服中完成的建筑已统一安置于新岸社区（坐标 X:10580，Z:1200 附近），可作为各位抵达后的住所。
->
-> 特此通知。
->
-> 阿拜多斯安置点管理处
+## 运行事实
 
-玩家只有在服务端确认公告已读后，才会进入新的阿拜多斯流程节点。
+```text
+<世界>/data/dreamingfishcore/story/story_state.json
+```
 
-## 白芷（NPC 101）
+`openingPlayerProgress` 中每个 UUID 对应一个 `OpeningStoryProgress`。补给只有在实际
+加入并成功发放后才设置 `starterSupplyGranted`，登录重试不会重复发放。
 
-### 档案与面对面对话
+## 可编辑文案
 
-白芷是感染科医生，目前在阿拜多斯学校进行医疗志愿。默认面对面对话只保留以下六句：
+```text
+config/dreamingfishcore/story_text.json
+config/dreamingfishcore/npc_messages.json
+config/dreamingfishcore/npc_data.json
+```
 
-- “伤员先报名字，再报伤情。名字不知道就问，问不到再写身份待确认。”
-- “现在能做的检查很有限。哪里不舒服就告诉我，别一个人硬撑。”
-- “镇上最近在筹建一个组织，叫人类逐光联合会。医院、维修队和搜救的人，想先把彼此连起来。”
-- “基地还只是个开头，仓库、救援交接点和能让人过夜的地方，都要一点点搭起来。”
-- “加入不是交出自己的生活。愿意的人一起建设，不加入也能在阿拜多斯生活、看病和做交易。”
-- “周岑负责登记和具体安排。先听他把条件讲完，再按自己的想法决定。”
+这些文件提供句子、私信和 NPC 身份；它们不能定义流程节点、奖励或状态跳转。
 
-### 当前私信定义
+## 不属于当前开场
 
-以下消息均属于白芷/阿拜多斯内容，具体正文以 `npc_messages.json` 为准：
-
-- `dreamingfishcore:baizhi/first_stage_protocol`：到达后的一次性观察说明；
-- `dreamingfishcore:opening/baizhi/abydos_arrival`：玩家进入阿拜多斯后的到达消息；
-- `dreamingfishcore:opening/baizhi/triage_request`、`supply_list`、`patient_first`、`infection_answer`：医疗协作消息；
-- `dreamingfishcore:opening/baizhi/observation_room`、`after_rescue`：后续可由服主手动投放的阿拜多斯消息；
-- `dreamingfishcore:opening/baizhi/familiar_note`、`trusted_note`：保留的个人关系消息；
-- `dreamingfishcore:opening/baizhi/zhuiguang_contact`：既有玩家私信历史保留，新阿拜多斯流程不再依赖它。
-
-## 周岑（NPC 105）
-
-### 档案与面对面对话
-
-周岑是人类逐光联合会筹备处的临时负责人，负责登记、物资安排和基地建设协调。默认
-面对面对话保留三句：
-
-- “基地还在图纸和脚手架之间。砖、木料和肯搭把手的人，缺一不可。”
-- “愿意加入，我们会给你工作和补给；暂时不加入，也不会影响你在阿拜多斯生活。”
-- “危机越乱，越不能替别人作决定。先把条件讲清楚。”
-
-### 当前私信定义
-
-- `dreamingfishcore:opening/zhoucen/contact_channel`：白芷当面介绍后的联络消息；
-- `dreamingfishcore:opening/zhoucen/introduction`：说明逐光会、基地和成员选择；
-- `dreamingfishcore:opening/zhoucen/member_welcome`：加入后的登记确认；
-- `dreamingfishcore:opening/zhoucen/independent_ack`：保持独立身份后的确认。
-
-玩家只能从周岑消息提供的预设回复中选择。加入逐光会是该玩家自己的组织身份变化，
-不会切换全服故事阶段。
-
-## 阿拜多斯环境文本
-
-以下四类环境记录保留为阿拜多斯的世界背景素材，不绑定已删除 NPC：
-
-1. 未完成的联合会议便签：记录医院、能源、警备、物流、重生管理和居民代表的待办；
-2. 联络站第一本登记册：保留身份待确认者的原始记录；
-3. 设备内侧的维修字条：记录医院冷库和地下水泵的供电优先级；
-4. 白芷的纸质观察卡：记录姓名、记忆、疼痛表达和前后变化。
-
-这些素材不会自动生成任务或判断线索结论。后续是否投放由服主在新的内容包中明确配置。
-
-## 当前流程入口
-
-阿拜多斯开场的唯一运行定义是 `story_flows.json` 中的
-`dreamingfishcore:flow/opening_abydos`：
-
-`阅读公告 → 进入阿拜多斯 → 与白芷交谈 → 回复周岑联络 → 阅读介绍 → 加入或保持独立`。
-
-流程节点、效果、游标和一次性记录由 `StoryFlowEngine` 统一处理；本文件不再描述旧的
-`opening_story_system` 执行器，也不保留旧地点名称作为逻辑入口。
-
-## 暂不投放
-
-- 所有非白芷、非周岑 NPC 的运行时内容；
-- 余梦期及之后阶段的主线、线索、随机本剧情和随记本接入；
-- 自动阶段切换。五个阶段始终由服主手动发布。
+基地贡献统计、随机本线索、调查板、社区投票、复杂阶段任务和自动阶段切换都属于未来
+设计。旧 Flow 文件和旧进度文件不会被当前代码读取，也没有在线迁移器。

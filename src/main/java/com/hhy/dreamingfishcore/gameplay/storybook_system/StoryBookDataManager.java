@@ -60,8 +60,22 @@ public class StoryBookDataManager {
     // 待保存的玩家数据队列
     private static final Set<UUID> DIRTY_PLAYERS = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+    private static final int MAX_FRAGMENT_ENTRIES = 16_384;
+    private static final int MAX_PLAYER_RECORDS = 16_384;
+    private static final int MAX_PLAYER_FRAGMENT_ENTRIES = 16_384;
+    private static final int MAX_FRAGMENT_TITLE_LENGTH = 512;
+    private static final int MAX_FRAGMENT_CONTENT_LENGTH = 32_768;
+    private static final int MAX_FRAGMENT_META_LENGTH = 256;
+    /** 网络包和玩家排序请求共用的硬上限，避免客户端 VarInt 放大主线程工作量。 */
+    public static final int MAX_NETWORK_ORDER_ENTRIES = 16_384;
+    public static final int MAX_NETWORK_BOOK_ENTRIES = 16_384;
+    public static final int MAX_NETWORK_TEXT_LENGTH = 32_768;
+
     private static boolean loaded;
+    /** 片段定义只有在整份文件成功解析和校验后才允许覆盖。 */
     private static boolean fragmentConfigWritable;
+    /** 玩家世界档案与片段定义分开保护；档案读取失败时绝不覆盖原档。 */
+    private static boolean playerDataWritable;
 
     public static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -84,10 +98,12 @@ public class StoryBookDataManager {
     /**
      * 加载片段配置数据
      */
-    public static void loadFragmentData() {
+    public static synchronized void loadFragmentData() {
         FRAGMENT_CACHE.clear();
         STAGE_INDEX.clear();
         CHAPTER_INDEX.clear();
+        // 每次重载都从只读保护开始；不能沿用上一个世界/上一次成功加载的状态。
+        fragmentConfigWritable = false;
 
         if (Files.notExists(FRAGMENT_DATA_PATH) && !saveDefaultFragmentConfig()) {
             return;
@@ -105,20 +121,26 @@ public class StoryBookDataManager {
                     GSON,
                     FRAGMENT_LIST_TYPE,
                     ArrayList::new);
-            if (fragmentList != null) {
-                for (FragmentData fragment : fragmentList) {
-                    if (fragment == null) {
-                        continue;
-                    }
-                    FRAGMENT_CACHE.put(fragment.getId(), fragment);
-                    // 构建阶段索引
-                    STAGE_INDEX.computeIfAbsent(fragment.getStageId(), k -> new ArrayList<>()).add(fragment);
-                    // 构建章节索引
-                    CHAPTER_INDEX.computeIfAbsent(fragment.getChapterId(), k -> new ArrayList<>()).add(fragment);
-                }
+            validateFragmentList(fragmentList);
+
+            // 先在临时索引中完整构建，最后一次性提交，避免半份坏配置留在运行缓存。
+            Map<Integer, FragmentData> fragments = new LinkedHashMap<>();
+            Map<Integer, List<FragmentData>> stages = new LinkedHashMap<>();
+            Map<Integer, List<FragmentData>> chapters = new LinkedHashMap<>();
+            for (FragmentData fragment : fragmentList) {
+                fragments.put(fragment.getId(), fragment);
+                stages.computeIfAbsent(fragment.getStageId(), k -> new ArrayList<>()).add(fragment);
+                chapters.computeIfAbsent(fragment.getChapterId(), k -> new ArrayList<>()).add(fragment);
             }
+
+            FRAGMENT_CACHE.putAll(fragments);
+            STAGE_INDEX.putAll(stages);
+            CHAPTER_INDEX.putAll(chapters);
             fragmentConfigWritable = true;
         } catch (Exception exception) {
+            FRAGMENT_CACHE.clear();
+            STAGE_INDEX.clear();
+            CHAPTER_INDEX.clear();
             fragmentConfigWritable = false;
             DreamingFishCore.LOGGER.error(
                     "片段配置及备份读取失败，拒绝覆盖原文件：{}",
@@ -133,7 +155,7 @@ public class StoryBookDataManager {
     /**
      * 保存片段配置数据
      */
-    public static boolean saveFragmentData() {
+    public static synchronized boolean saveFragmentData() {
         if (!fragmentConfigWritable) {
             DreamingFishCore.LOGGER.error("片段配置未安全加载，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
             return false;
@@ -159,7 +181,8 @@ public class StoryBookDataManager {
 
         try {
             JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);
-            fragmentConfigWritable = true;
+            // 这里只负责创建缺失模板；是否可写由后续完整读取+校验决定。
+            fragmentConfigWritable = false;
             DreamingFishCore.LOGGER.info("默认片段配置已保存");
             return true;
         } catch (Exception exception) {
@@ -174,25 +197,38 @@ public class StoryBookDataManager {
     /**
      * 加载当前世界的玩家随记本数据。片段定义仍从全局配置加载。
      */
-    public static void loadWorldData(MinecraftServer server) {
+    public static synchronized void loadWorldData(MinecraftServer server) {
+        // 世界切换/重复启动时不能残留上一个世界的片段、索引或可写状态。
+        clearWorldCache();
         loadFragmentData();
-        PLAYER_DATA_CACHE.clear();
-        DIRTY_PLAYERS.clear();
+
+        if (server == null) {
+            loaded = true;
+            playerDataWritable = false;
+            DreamingFishCore.LOGGER.error("无法加载随记本玩家数据：服务器实例为空，进入只读保护");
+            return;
+        }
+
         try {
-            Map<String, StoryBookData> dataMap = JsonDataStore.read(
-                    playerDataPath(server), GSON, PLAYER_DATA_TYPE, HashMap::new);
-            for (Map.Entry<String, StoryBookData> entry : dataMap.entrySet()) {
-                try {
-                    UUID uuid = UUID.fromString(entry.getKey());
-                    if (entry.getValue() != null) {
-                        PLAYER_DATA_CACHE.put(uuid, entry.getValue());
-                    }
-                } catch (IllegalArgumentException exception) {
-                    DreamingFishCore.LOGGER.warn("跳过无效的玩家 UUID：{}", entry.getKey());
-                }
+            Path playerPath = playerDataPath(server);
+            if (Files.exists(playerPath) && Files.size(playerPath) == 0L) {
+                throw new IllegalStateException(
+                        "随记本玩家数据文件为空，已拒绝覆盖原文件：" + playerPath);
             }
+            Map<String, StoryBookData> dataMap = JsonDataStore.read(
+                    playerPath, GSON, PLAYER_DATA_TYPE, HashMap::new);
+            Map<UUID, StoryBookData> loadedPlayers = new LinkedHashMap<>();
+            validatePlayerDataMap(dataMap);
+            for (Map.Entry<String, StoryBookData> entry : dataMap.entrySet()) {
+                UUID uuid = UUID.fromString(entry.getKey());
+                loadedPlayers.put(uuid, entry.getValue());
+            }
+            PLAYER_DATA_CACHE.putAll(loadedPlayers);
+            playerDataWritable = true;
             DreamingFishCore.LOGGER.info("随记本玩家数据加载完成，共 {} 个玩家", PLAYER_DATA_CACHE.size());
         } catch (Exception exception) {
+            PLAYER_DATA_CACHE.clear();
+            playerDataWritable = false;
             DreamingFishCore.LOGGER.error("读取世界随记本数据失败，本次会话不会覆盖损坏文件", exception);
         } finally {
             loaded = true;
@@ -202,9 +238,17 @@ public class StoryBookDataManager {
     /**
      * 只在玩家随记本数据发生变化时保存。
      */
-    public static boolean saveIfDirty(MinecraftServer server) {
+    public static synchronized boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || DIRTY_PLAYERS.isEmpty()) {
             return true;
+        }
+        if (!playerDataWritable) {
+            DreamingFishCore.LOGGER.error("随记本玩家数据未安全加载，拒绝覆盖原文件");
+            return false;
+        }
+        if (server == null) {
+            DreamingFishCore.LOGGER.error("无法保存随记本玩家数据：服务器实例为空");
+            return false;
         }
 
         Map<String, StoryBookData> dataMap = new HashMap<>();
@@ -225,10 +269,92 @@ public class StoryBookDataManager {
     /**
      * 服务器关闭后释放世界级静态缓存，避免下一次开服串档。
      */
-    public static void clearWorldCache() {
+    public static synchronized void clearWorldCache() {
+        FRAGMENT_CACHE.clear();
+        STAGE_INDEX.clear();
+        CHAPTER_INDEX.clear();
         PLAYER_DATA_CACHE.clear();
         DIRTY_PLAYERS.clear();
         loaded = false;
+        fragmentConfigWritable = false;
+        playerDataWritable = false;
+    }
+
+    private static void validateFragmentList(List<FragmentData> fragments) {
+        if (fragments == null) {
+            throw new IllegalStateException("片段配置根节点不是数组");
+        }
+        if (fragments.size() > MAX_FRAGMENT_ENTRIES) {
+            throw new IllegalStateException("片段配置条目超过上限：" + MAX_FRAGMENT_ENTRIES);
+        }
+        Set<Integer> ids = new HashSet<>();
+        for (FragmentData fragment : fragments) {
+            if (fragment == null) {
+                throw new IllegalStateException("片段配置包含空条目");
+            }
+            if (fragment.getId() <= 0 || !ids.add(fragment.getId())) {
+                throw new IllegalStateException("片段 ID 非法或重复：" + fragment.getId());
+            }
+            // 1.20.1 的内置片段使用 chapterId=0 作为历史展示分组；继续允许读取，
+            // 但仍拒绝负数，避免升级后把原本可用的配置误判为损坏并锁成只读。
+            if (fragment.getStageId() <= 0 || fragment.getChapterId() < 0) {
+                throw new IllegalStateException("片段阶段 ID 必须为正数且章节 ID 不能为负数：" + fragment.getId());
+            }
+            requireLength(fragment.getAuthorName(), MAX_FRAGMENT_META_LENGTH, "authorName", fragment.getId());
+            requireLength(fragment.getTime(), MAX_FRAGMENT_META_LENGTH, "time", fragment.getId());
+            requireLength(fragment.getTitle(), MAX_FRAGMENT_TITLE_LENGTH, "title", fragment.getId());
+            requireLength(fragment.getContent(), MAX_FRAGMENT_CONTENT_LENGTH, "content", fragment.getId());
+        }
+    }
+
+    private static void validatePlayerDataMap(Map<String, StoryBookData> dataMap) {
+        if (dataMap == null) {
+            throw new IllegalStateException("随记本玩家数据根节点不是对象");
+        }
+        if (dataMap.size() > MAX_PLAYER_RECORDS) {
+            throw new IllegalStateException("随记本玩家记录超过上限：" + MAX_PLAYER_RECORDS);
+        }
+        for (Map.Entry<String, StoryBookData> entry : dataMap.entrySet()) {
+            if (entry.getKey() == null) {
+                throw new IllegalStateException("随记本玩家 UUID 为空");
+            }
+            UUID.fromString(entry.getKey());
+            StoryBookData data = entry.getValue();
+            if (data == null) {
+                throw new IllegalStateException("随记本玩家记录为空：" + entry.getKey());
+            }
+            if (data.getFragmentPageUseCount() < 0
+                    || data.getUnlockedFragmentIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getReadFragmentIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getUnlockedChapterIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getObtainedOrder().size() > MAX_PLAYER_FRAGMENT_ENTRIES) {
+                throw new IllegalStateException("随记本玩家集合超过上限：" + entry.getKey());
+            }
+            validatePositiveIds(data.getUnlockedFragmentIds(), "已解锁片段", entry.getKey());
+            validatePositiveIds(data.getReadFragmentIds(), "已读片段", entry.getKey());
+            validatePositiveIds(data.getUnlockedChapterIds(), "已解锁章节", entry.getKey());
+            Set<Integer> ordered = new HashSet<>();
+            for (Integer id : data.getObtainedOrder()) {
+                if (id == null || id <= 0 || !ordered.add(id)) {
+                    throw new IllegalStateException("随记本排序列表含非法/重复片段：" + entry.getKey());
+                }
+            }
+        }
+    }
+
+    private static void validatePositiveIds(Set<Integer> ids, String label, String playerId) {
+        for (Integer id : ids) {
+            if (id == null || id <= 0) {
+                throw new IllegalStateException(label + "含非法 ID：" + playerId);
+            }
+        }
+    }
+
+    private static void requireLength(String value, int maxLength, String field, int fragmentId) {
+        if (value == null || value.length() > maxLength) {
+            throw new IllegalStateException(
+                    "片段 " + fragmentId + " 的 " + field + " 为空或过长（上限 " + maxLength + "）");
+        }
     }
 
     private static Path playerDataPath(MinecraftServer server) {
@@ -296,6 +422,9 @@ public class StoryBookDataManager {
      */
     public static StoryBookData getPlayerStoryBook(UUID playerUuid) {
         ensureLoaded();
+        if (playerUuid == null) {
+            throw new IllegalArgumentException("玩家 UUID 不能为空");
+        }
         return PLAYER_DATA_CACHE.computeIfAbsent(playerUuid, ignored -> new StoryBookData());
     }
 
@@ -435,13 +564,28 @@ public class StoryBookDataManager {
     }
 
     public static void updateFragmentOrderForPlayer(UUID playerUuid, List<Integer> orderedFragmentIds) {
-        if (orderedFragmentIds == null) {
+        if (playerUuid == null || orderedFragmentIds == null
+                || orderedFragmentIds.size() > MAX_NETWORK_ORDER_ENTRIES) {
             return;
         }
 
         StoryBookData storyBook = getPlayerStoryBook(playerUuid);
+        Set<Integer> unlocked = storyBook.getUnlockedFragmentIds();
+        Set<Integer> seen = new HashSet<>();
+        for (Integer fragmentId : orderedFragmentIds) {
+            // The client may omit an entry while sorting a stale view, but it
+            // must never introduce an unknown/duplicate ID into the world
+            // state.  StoryBookData will append any owned IDs that were omitted.
+            if (fragmentId == null || fragmentId <= 0
+                    || !unlocked.contains(fragmentId) || !seen.add(fragmentId)) {
+                return;
+            }
+        }
+        List<Integer> before = storyBook.getSortedFragmentIds();
         storyBook.setObtainedOrder(orderedFragmentIds);
-        markPlayerDirty(playerUuid);
+        if (!before.equals(storyBook.getSortedFragmentIds())) {
+            markPlayerDirty(playerUuid);
+        }
     }
 
     public static boolean useFragmentPage(ServerPlayer player) {
@@ -472,7 +616,6 @@ public class StoryBookDataManager {
 
         if (firstUse) {
             startPlayerJourney(playerUuid);
-            unlockChapterForPlayer(playerUuid, 0);
             grantJourneyStartedAdvancement(player);
             player.sendSystemMessage(Component.literal("§6已解锁成就：§e远旅开端"));
         }
@@ -484,6 +627,10 @@ public class StoryBookDataManager {
             unlockFragmentForPlayer(playerUuid, fragmentIdToDisplay);
             FragmentData fragmentData = getFragment(fragmentIdToDisplay);
             if (fragmentData != null) {
+                // The fragment definition owns its chapter.  Do not use a
+                // synthetic chapter 0: StoryBookData intentionally rejects
+                // non-positive chapter IDs, and the first real page should
+                // unlock the chapter it actually belongs to.
                 unlockChapterForPlayer(playerUuid, fragmentData.getChapterId());
                 player.sendSystemMessage(Component.literal("§a你拼出了新的内容：§f" + fragmentData.getTitle()));
             }

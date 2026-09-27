@@ -60,7 +60,7 @@ gameplay/story_system/
 └─ command/                   # 故事状态与服主阶段发布命令
 ```
 
-`story_stage_data.json` 只描述阶段和任务定义，世界存档中的 `story/world_state.json` 只记录已经发生的状态。客户端任务包只包含当前玩家所需视图，不同步其他玩家UUID；旧客户端完成入口只能写兼容个人记录，不能结束全服任务或切换故事阶段。
+`OpeningStory.java` 和 `AfterdreamStory.java` 分别描述当前阶段流程，`story_text.json` 只承载可编辑文案，世界存档中的 `story/story_state.json` 记录已经发生的统一故事事实。客户端任务包只包含当前玩家所需视图，不同步其他玩家 UUID；客户端完成入口不能结束全服任务或切换故事阶段。
 
 ## Manager 与缓存
 

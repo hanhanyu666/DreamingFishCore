@@ -1,5 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.story_system;
 
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamPlayerProgress;
+import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamWorldProgress;
+import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgress;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -19,8 +23,8 @@ import java.util.regex.Pattern;
  * 而不是某个玩家临时打开的界面状态。</p>
  */
 public final class StoryWorldState {
-    /** 存档结构版本；版本变化时由 validateAndMigrateLoadedState 负责迁移或拒绝。 */
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    /** 当前统一剧情状态版本；支持当前 story_state 的 schema 3/4 原地升级。 */
+    public static final int CURRENT_SCHEMA_VERSION = 5;
     /** 新世界没有其他进度时使用的第一阶段。 */
     public static final String DEFAULT_STAGE_ID = StoryStageCatalog.DREAM_BEGINNING_ID;
 
@@ -52,28 +56,31 @@ public final class StoryWorldState {
      * key 是任务稳定 ID，value 是已经完成该任务个人部分的玩家。
      *
      * <p>个人完成和世界任务结算是两条独立记录：个人任务可以在世界任务尚未解锁时
-     * 先保存；只有上层故事规则确认所有应参与玩家都完成后，才会写入 taskProgress。</p>
+     * 先保存；上层按指定数量的真实完成者解锁共同任务，再单独验证世界结果。</p>
      */
     private Map<String, Map<String, String>> personalTaskProgress = new LinkedHashMap<>();
+
+    /**
+     * 每个阶段的个人事实也属于同一个故事存档。
+     *
+     * <p>阶段 Java 文件只描述流程，不再各自读写隐藏的 progress 文件；这些字段
+     * 是 StoryManager 唯一状态文件中唯一的阶段事实来源。</p>
+     */
+    private Map<String, OpeningStoryProgress> openingPlayerProgress = new LinkedHashMap<>();
+    private Map<String, AfterdreamPlayerProgress> afterdreamPlayerProgress = new LinkedHashMap<>();
+    private AfterdreamWorldProgress afterdreamWorldProgress = new AfterdreamWorldProgress();
+    private StoryOperationsState operations = new StoryOperationsState();
+    private com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalProgress hospital = new com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalProgress();
 
     /** Gson 反序列化存档时需要无参构造方法。 */
     public StoryWorldState() {
     }
 
-    /**
-     * 校验从 JSON 读取的状态，并迁移重构前短暂存在的 schema 1。
-     *
-     * @return 是否发生了需要重新保存的迁移或容器修复
-     * @throws IllegalStateException 存档版本未来版本或数据内容非法时抛出
-     */
-    boolean validateAndMigrateLoadedState() {
-        boolean migrated = false;
-        if (schemaVersion == 1) {
-            if (currentStageId != null && !currentStageId.contains(":")) {
-                currentStageId = "dreamingfishcore:" + currentStageId;
-            }
+    /** 严格校验剧情状态；为 schema 3/4 增补运营与医院记录，其他旧结构不猜测迁移。 */
+    boolean validateState() {
+        // 升级统一状态 v3/v4：新增运营或医院记录，所有旧事实原样保留。
+        if (schemaVersion == 3 || schemaVersion == 4) {
             schemaVersion = CURRENT_SCHEMA_VERSION;
-            migrated = true;
         }
         if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalStateException("不支持的世界故事状态版本：" + schemaVersion);
@@ -88,8 +95,7 @@ public final class StoryWorldState {
         }
 
         if (worldFlags == null) {
-            worldFlags = new LinkedHashSet<>();
-            migrated = true;
+            throw new IllegalStateException("世界旗标集合不能为空");
         }
         if (worldFlags.size() > MAX_WORLD_FLAGS) {
             throw new IllegalStateException("世界旗标数量超过限制：" + worldFlags.size());
@@ -99,26 +105,22 @@ public final class StoryWorldState {
         }
         if (!(worldFlags instanceof LinkedHashSet<?>)) {
             worldFlags = new LinkedHashSet<>(worldFlags);
-            migrated = true;
         }
 
         if (operationRound == null) {
-            operationRound = new OperationRound();
-            migrated = true;
+            throw new IllegalStateException("运营轮次不能为空");
         }
         operationRound.validate(activeTicks);
 
         if (endingId == null) {
-            endingId = "";
-            migrated = true;
+            throw new IllegalStateException("结局字段不能为空");
         }
         if (!endingId.isEmpty()) {
             requireValidId(endingId, "终章状态");
         }
 
         if (taskProgress == null) {
-            taskProgress = new LinkedHashMap<>();
-            migrated = true;
+            throw new IllegalStateException("任务状态集合不能为空");
         }
         if (taskProgress.size() > MAX_TASK_STATES) {
             throw new IllegalStateException("故事任务状态数量超过限制：" + taskProgress.size());
@@ -132,12 +134,10 @@ public final class StoryWorldState {
         }
         if (!(taskProgress instanceof LinkedHashMap<?, ?>)) {
             taskProgress = new LinkedHashMap<>(taskProgress);
-            migrated = true;
         }
 
         if (personalTaskProgress == null) {
-            personalTaskProgress = new LinkedHashMap<>();
-            migrated = true;
+            throw new IllegalStateException("个人任务状态集合不能为空");
         }
         if (personalTaskProgress.size() > MAX_TASK_STATES) {
             throw new IllegalStateException("个人故事任务状态数量超过限制：" + personalTaskProgress.size());
@@ -165,19 +165,62 @@ public final class StoryWorldState {
             }
             if (!(players instanceof LinkedHashMap<?, ?>)) {
                 entry.setValue(new LinkedHashMap<>(players));
-                migrated = true;
             }
         }
         if (!(personalTaskProgress instanceof LinkedHashMap<?, ?>)) {
             personalTaskProgress = new LinkedHashMap<>(personalTaskProgress);
-            migrated = true;
         }
-        return migrated;
+
+        validatePlayerProgressMap(openingPlayerProgress, "开场阶段");
+        if (!(openingPlayerProgress instanceof LinkedHashMap<?, ?>)) {
+            openingPlayerProgress = new LinkedHashMap<>(openingPlayerProgress);
+        }
+        for (OpeningStoryProgress progress : openingPlayerProgress.values()) {
+            progress.validateState();
+        }
+        validatePlayerProgressMap(afterdreamPlayerProgress, "余梦期");
+        if (!(afterdreamPlayerProgress instanceof LinkedHashMap<?, ?>)) {
+            afterdreamPlayerProgress = new LinkedHashMap<>(afterdreamPlayerProgress);
+        }
+        for (AfterdreamPlayerProgress progress : afterdreamPlayerProgress.values()) {
+            progress.validateState(activeTicks);
+        }
+        if (afterdreamWorldProgress == null) {
+            throw new IllegalStateException("余梦期世界状态不能为空");
+        }
+        afterdreamWorldProgress.validateState(activeTicks);
+        if (operations == null) {
+            throw new IllegalStateException("剧情运营状态不能为空");
+        }
+        operations.validate();
+        if (hospital == null) throw new IllegalStateException("医院世界记录不能为空");
+        hospital.validate();
+        return true;
     }
 
-    /** 测试和工具使用的公开校验入口。服务器加载时使用上面的迁移版本。 */
+    private static void validatePlayerProgressMap(
+            Map<String, ?> progressMap, String stageName) {
+        if (progressMap == null) {
+            throw new IllegalStateException(stageName + "玩家状态集合不能为空");
+        }
+        if (progressMap.size() > MAX_PERSONAL_TASK_PLAYERS) {
+            throw new IllegalStateException(stageName + "玩家状态数量超过限制：" + progressMap.size());
+        }
+        for (Map.Entry<String, ?> entry : progressMap.entrySet()) {
+            try {
+                UUID.fromString(entry.getKey());
+            } catch (Exception exception) {
+                throw new IllegalStateException(stageName + "玩家 UUID 非法：" + entry.getKey(), exception);
+            }
+            if (entry.getValue() == null) {
+                throw new IllegalStateException(stageName + "玩家状态不能为空：" + entry.getKey());
+            }
+        }
+    }
+
+    /** 测试和工具使用的公开校验入口。 */
     public void validateLoadedState() {
-        validateAndMigrateLoadedState();
+        validateState();
     }
 
     /** 让在线活动时间前进一 tick；由 StoryManager 在服务器 tick 中调用。 */
@@ -291,12 +334,8 @@ public final class StoryWorldState {
         return true;
     }
 
-    /**
-     * 旧客户端完成包的兼容入口。
-     *
-     * <p>它只增加某个玩家的个人记录，不改变全服任务的 ACTIVE/SUCCEEDED/FAILED 状态。</p>
-     */
-    boolean recordLegacyPlayerCompletion(String taskKey, TaskParticipant participant) {
+    /** 管理员人工记录一个任务参与者，不改变任务的结算结果。 */
+    boolean recordAdminPlayerParticipation(String taskKey, TaskParticipant participant) {
         requireValidId(taskKey, "故事任务");
         TaskProgress progress = taskProgress.get(taskKey);
         if (progress == null) {
@@ -351,15 +390,6 @@ public final class StoryWorldState {
         return new PersonalCompletionResult(changed, allPlayersCompleted);
     }
 
-    /** 兼容旧调用方：没有额外参与者时，当前玩家构成完整门槛。 */
-    PersonalCompletionResult recordPersonalCompletion(
-            String taskKey, TaskParticipant participant) {
-        return recordPersonalCompletion(
-                taskKey,
-                participant,
-                participant == null ? null : Set.of(participant.playerId()));
-    }
-
     /** 将参与者对象转换为 UUID 字符串到名称的 Map，并去除重复玩家。 */
     private static Map<String, String> collectParticipants(Iterable<TaskParticipant> participants) {
         Map<String, String> result = new LinkedHashMap<>();
@@ -400,7 +430,7 @@ public final class StoryWorldState {
         return players != null && playerId != null && players.containsKey(playerId.toString());
     }
 
-    /** 返回个人任务完成者的副本，供世界任务达到门槛时生成全服参与者快照。 */
+    /** 返回真实个人任务完成者的副本；人数门槛不据此推测世界任务参与者。 */
     Map<String, String> getPersonalTaskCompletions(String taskKey) {
         Map<String, String> players = personalTaskProgress.get(taskKey);
         if (players == null) {
@@ -424,6 +454,12 @@ public final class StoryWorldState {
 
     public int getSchemaVersion() {
         return schemaVersion;
+    }
+
+    public com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalProgress getHospital() { return hospital; }
+
+    public StoryOperationsState getOperations() {
+        return operations;
     }
 
     public String getCurrentStageId() {
@@ -452,6 +488,30 @@ public final class StoryWorldState {
 
     public String getEndingId() {
         return endingId;
+    }
+
+    public Map<String, OpeningStoryProgress> getOpeningPlayerProgress() {
+        return openingPlayerProgress;
+    }
+
+    public Map<String, AfterdreamPlayerProgress> getAfterdreamPlayerProgress() {
+        return afterdreamPlayerProgress;
+    }
+
+    public AfterdreamWorldProgress getAfterdreamWorldProgress() {
+        return afterdreamWorldProgress;
+    }
+
+    public void setOpeningPlayerProgress(Map<String, OpeningStoryProgress> progress) {
+        openingPlayerProgress = progress == null ? new LinkedHashMap<>() : progress;
+    }
+
+    public void setAfterdreamPlayerProgress(Map<String, AfterdreamPlayerProgress> progress) {
+        afterdreamPlayerProgress = progress == null ? new LinkedHashMap<>() : progress;
+    }
+
+    public void setAfterdreamWorldProgress(AfterdreamWorldProgress progress) {
+        afterdreamWorldProgress = progress == null ? new AfterdreamWorldProgress() : progress;
     }
 
     /** 统一校验阶段、任务、旗标和运营内容使用的稳定 ID。 */
@@ -483,10 +543,6 @@ public final class StoryWorldState {
 
     /** 个人完成对“全体完成”门槛造成的变化。 */
     public record PersonalCompletionResult(boolean changed, boolean allPlayersCompleted) {
-        /** 保留旧命名，避免旧调用方把“门槛达到”误解为单人直接结算。 */
-        public boolean resolvedNow() {
-            return allPlayersCompleted;
-        }
     }
 
     /** 一个任务的永久运行结果和参与者名单。 */
@@ -603,8 +659,7 @@ public final class StoryWorldState {
                 throw new IllegalStateException("等待世界回应的运营轮次必须包含来源");
             }
             if (status == OperationRoundStatus.PUBLISHED && contentId.isEmpty()) {
-                // schema 1 没有保存内容包 ID，这里用来源 ID 生成一个兼容值。
-                contentId = sourceId.isEmpty() ? "dreamingfishcore:legacy_round" : sourceId;
+                throw new IllegalStateException("已发布的运营轮次必须包含内容 ID");
             }
             if (changedAtActiveTick < 0L || changedAtActiveTick > activeTicks) {
                 throw new IllegalStateException("运营轮次变更时间超出在线活动时间范围");

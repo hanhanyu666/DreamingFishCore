@@ -127,6 +127,38 @@ public final class NoticeDeliveryService {
         }
     }
 
+    /**
+     * 向所有已认证在线玩家投递一条明确标记为“全服广播”的公告。
+     *
+     * <p>剧情公告有时必须覆盖尚未完成新手教程的玩家；这条入口不复用教程门槛，
+     * 但仍保留已投递幂等记录和终端提醒同步。</p>
+     */
+    public static void publishToAllOnlinePlayers(NoticeData notice) {
+        if (notice == null) {
+            return;
+        }
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(player)) {
+                continue;
+            }
+            try {
+                if (!PlayerNoticeDataManager.hasDeliveredNotice(
+                        player.getUUID(), notice.getNoticeId())) {
+                    deliver(player, notice);
+                }
+            } catch (RuntimeException exception) {
+                DreamingFishCore.LOGGER.error(
+                        "向玩家 {} 投递全服公告 #{} 失败",
+                        player.getScoreboardName(), notice.getNoticeId(), exception);
+            }
+            syncVisibleNotices(player);
+        }
+    }
+
     /** Returns the notices readable by this player in the current world state. */
     public static List<NoticeData> getVisibleNotices(ServerPlayer player) {
         if (player == null || !AuthSessionGuard.isAuthenticated(player)) {
@@ -134,7 +166,14 @@ public final class NoticeDeliveryService {
         }
 
         StoryManager.Snapshot snapshot = StoryManager.getSnapshot();
-        return NoticeManager.getVisibleNotices(snapshot.currentStageId());
+        // 终端是玩家的故事档案，应保留当前阶段及此前已经开放阶段的公告；
+        // 自动弹窗仍走 selectPending 的“当前阶段”规则，不会因此重复补投旧公告。
+        Set<String> visibleStageIds = StoryManager.getVisibleStageIds();
+        List<NoticeData> notices = new java.util.ArrayList<>(
+                NoticeManager.getVisibleNoticesForStages(snapshot.currentStageId(), visibleStageIds));
+        notices.addAll(StoryManager.getRecapNotices(player.getUUID()));
+        notices.sort(java.util.Comparator.comparingLong(NoticeData::getPublishTime).reversed());
+        return notices;
     }
 
     /**
@@ -149,6 +188,7 @@ public final class NoticeDeliveryService {
             List<NoticeData> notices = getVisibleNotices(player);
             Set<Integer> allReadNoticeIds = PlayerNoticeDataManager.getReadNoticeIds(player.getUUID());
             Set<Integer> readNoticeIds = new HashSet<>();
+            readNoticeIds.addAll(StoryManager.getReadRecapNoticeIds(player.getUUID()));
             for (NoticeData notice : notices) {
                 if (notice != null && allReadNoticeIds.contains(notice.getNoticeId())) {
                     readNoticeIds.add(notice.getNoticeId());
@@ -169,7 +209,9 @@ public final class NoticeDeliveryService {
         }
 
         StoryManager.Snapshot snapshot = StoryManager.getSnapshot();
-        return NoticeVisibilityPolicy.isVisible(notice, snapshot.currentStageId());
+        Set<String> visibleStageIds = StoryManager.getVisibleStageIds();
+        return NoticeVisibilityPolicy.isVisibleInStages(
+                notice, snapshot.currentStageId(), visibleStageIds);
     }
 
     /** Returns whether a notice may be pushed automatically right now. */

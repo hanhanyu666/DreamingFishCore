@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookEntryViewData;
+import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen.Screen_StoryBookCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -28,13 +29,17 @@ public class Packet_OpenStoryBookGUI implements net.minecraft.network.protocol.c
     }
 
     public static void encode(Packet_OpenStoryBookGUI packet, FriendlyByteBuf buf) {
+        if (packet == null || packet.entries == null
+                || packet.entries.size() > StoryBookDataManager.MAX_NETWORK_BOOK_ENTRIES) {
+            throw new IllegalArgumentException("随记本条目超过网络上限");
+        }
         buf.writeVarInt(packet.entries.size());
         for (StoryBookEntryViewData entry : packet.entries) {
             buf.writeVarInt(entry.getFragmentId());
             buf.writeVarInt(entry.getStageId());
             buf.writeVarInt(entry.getChapterId());
-            buf.writeUtf(entry.getTitle(), Short.MAX_VALUE);
-            buf.writeUtf(entry.getContent(), Short.MAX_VALUE);
+            buf.writeUtf(entry.getTitle(), StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH);
+            buf.writeUtf(entry.getContent(), StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH);
             buf.writeUtf(entry.getTime(), 256);
             buf.writeUtf(entry.getAuthorName(), 256);
             buf.writeBoolean(entry.isRead());
@@ -43,14 +48,17 @@ public class Packet_OpenStoryBookGUI implements net.minecraft.network.protocol.c
 
     public static Packet_OpenStoryBookGUI decode(FriendlyByteBuf buf) {
         int size = buf.readVarInt();
+        if (size < 0 || size > StoryBookDataManager.MAX_NETWORK_BOOK_ENTRIES) {
+            throw new IllegalArgumentException("随记本条目数量非法：" + size);
+        }
         List<StoryBookEntryViewData> entries = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             entries.add(new StoryBookEntryViewData(
                     buf.readVarInt(),
                     buf.readVarInt(),
                     buf.readVarInt(),
-                    buf.readUtf(Short.MAX_VALUE),
-                    buf.readUtf(Short.MAX_VALUE),
+                    buf.readUtf(StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH),
+                    buf.readUtf(StoryBookDataManager.MAX_NETWORK_TEXT_LENGTH),
                     buf.readUtf(256),
                     buf.readUtf(256),
                     buf.readBoolean()

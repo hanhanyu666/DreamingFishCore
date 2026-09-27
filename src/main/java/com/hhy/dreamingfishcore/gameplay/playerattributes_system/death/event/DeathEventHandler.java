@@ -80,17 +80,18 @@ public class DeathEventHandler {
 
         // 计算消耗
         int respawnCost = isInfected ? RESPAWN_COST_INFECTED : RESPAWN_COST_NOT_INFECTED;
-        boolean awaitingChoice = currentRespawnPoint >= respawnCost;
+        boolean awaitingChoice = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(currentRespawnPoint);
         UUID corpseId = DeathCorpseManager.configureCapture(serverPlayer, awaitingChoice);
 
-        // 检查复活点数是否足够（严格小于消耗时才封禁）
-        if (currentRespawnPoint < respawnCost) {
+        // 余量大于零就可以完成最后一次标准重建；耗尽之后的下一次死亡才停止重建。
+        if (!awaitingChoice) {
             PendingDeathData.DeathLocation corpseLocation =
                     DeathCorpseManager.getPlannedCorpseLocation(serverPlayer);
             String banReason = buildRespawnExhaustedReason(corpseLocation);
 
             // 复活玩家（不扣除点数），避免重连时显示死亡界面
-            float maxHealth = (float) deathPlayerAttributesData.getMaxHealth();
+            deathPlayerAttributesData.syncMaxHealthToPlayer(serverPlayer);
+            float maxHealth = serverPlayer.getMaxHealth();
             serverPlayer.setHealth(maxHealth);
             serverPlayer.deathTime = 0;
 
@@ -260,7 +261,7 @@ public class DeathEventHandler {
             case "minecraft:the_end" -> "末地";
             default -> corpseLocation.dimension();
         };
-        return "§c很不幸，您的复活点数耗尽...请等待一名幸存者来拯救你"
+        return "§c您的模板重建余量已耗尽，请等待其他居民协助救援"
                 + "\n§7尸体位置：" + dimension
                 + " X:" + position.getX()
                 + " Y:" + position.getY()

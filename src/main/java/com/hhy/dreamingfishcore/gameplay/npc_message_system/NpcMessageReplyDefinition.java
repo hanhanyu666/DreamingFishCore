@@ -1,6 +1,5 @@
 package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
-import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipAction;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipRequirement;
 
 /** NPC 消息中由作者提供的有限回复选项。 */
@@ -12,7 +11,6 @@ public class NpcMessageReplyDefinition {
     private int favorabilityDelta;
     private String followUpMessageId = "";
     private ZhuiguangMembershipRequirement membershipRequirement = ZhuiguangMembershipRequirement.ANY;
-    private ZhuiguangMembershipAction membershipAction = ZhuiguangMembershipAction.NONE;
 
     public NpcMessageReplyDefinition() {
     }
@@ -54,10 +52,6 @@ public class NpcMessageReplyDefinition {
                 : membershipRequirement;
     }
 
-    public ZhuiguangMembershipAction getMembershipAction() {
-        return membershipAction == null ? ZhuiguangMembershipAction.NONE : membershipAction;
-    }
-
     public boolean isAvailableAt(int favorability) {
         return favorability >= minimumFavorability && favorability <= maximumFavorability;
     }
@@ -79,8 +73,4 @@ public class NpcMessageReplyDefinition {
         return this;
     }
 
-    public NpcMessageReplyDefinition withMembershipAction(ZhuiguangMembershipAction action) {
-        this.membershipAction = action == null ? ZhuiguangMembershipAction.NONE : action;
-        return this;
-    }
 }

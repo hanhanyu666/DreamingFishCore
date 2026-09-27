@@ -2,217 +2,6 @@
   "schemaVersion": 1,
   "messages": [
     {
-      "id": "dreamingfishcore:opening/baizhi/triage_request",
-      "npcId": 101,
-      "subject": "医院需要一处接收区",
-      "content": "我是白芷，梦屿中央医院感染科。联络站如果准备接收转移人员，请把普通伤员区、物资区和疑似感染观察区分开。伤员先报名字，再报伤情；不知道姓名就写“身份待确认”，不要写“无名者”。没有专业设备也没关系，稳定照明、干净的水和不会塌的床已经能救人。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [
-        {
-          "id": "need_list",
-          "text": "把最缺的物资分类发给我。",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 2,
-          "followUpMessageId": "dreamingfishcore:opening/baizhi/supply_list",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        },
-        {
-          "id": "patient_first",
-          "text": "我先把伤员安全带回来。",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 3,
-          "followUpMessageId": "dreamingfishcore:opening/baizhi/patient_first",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        },
-        {
-          "id": "ask_infected",
-          "text": "疑似感染的人也送过去吗？",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 1,
-          "followUpMessageId": "dreamingfishcore:opening/baizhi/infection_answer",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        }
-      ],
-      "guidance": {
-        "id": "dreamingfishcore:guidance/opening/prepare_triage_area",
-        "title": "准备伤员接收与分流区域",
-        "content": "在联络站准备普通伤员区、物资区和独立观察区，保证照明、清洁水源、床位和可通行空间。",
-        "storyStageId": "dreamingfishcore:afterdream",
-        "locationLabel": "玩家联络站医疗区",
-        "dimension": "minecraft:overworld",
-        "hasLocation": false,
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/supply_list",
-      "npcId": 101,
-      "subject": "按用途准备",
-      "content": "按用途分就好：清洁与包扎、照明与供电、饮水与基础食物、保暖与床位、隔离防护、能够密封保存的样本容器。具体物品可以替代，不要为了凑一张漂亮清单耽误接应。",
-      "trigger": "FOLLOW_UP",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/patient_first",
-      "npcId": 101,
-      "subject": "先让人抵达",
-      "content": "谢谢。路上不要为了抢救一箱物资让不能移动的人单独留下。如果必须取舍，记下丢失物资的位置，我们之后还能找；人的情况可能没有第二次机会。",
-      "trigger": "FOLLOW_UP",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/infection_answer",
-      "npcId": 101,
-      "subject": "送到观察区，不要混送",
-      "content": "送，但不要与普通伤员混在一起，也不要直接接触体液。提前通知我们，走独立入口。只要对方仍能沟通，就先说明接下来会发生什么；隔离是必要措施，不是处决。",
-      "trigger": "FOLLOW_UP",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/observation_room",
-      "npcId": 101,
-      "subject": "第一间观察室",
-      "content": "出现了一例需要进一步确认的异常感染反应。请把观察区做成真正能待人的地方：独立出入口、可清洁表面、稳定照明、沟通窗口和基本生活空间。门需要关，但患者仍应该看见人，也应该能够表达疼痛、恐惧和拒绝。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [
-        {
-          "id": "humane",
-          "text": "我会把防护和沟通窗口都做好。",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 3,
-          "followUpMessageId": "",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        },
-        {
-          "id": "strict",
-          "text": "先确保不会有人误入，再考虑舒适。",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 1,
-          "followUpMessageId": "",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        }
-      ],
-      "guidance": {
-        "id": "dreamingfishcore:guidance/opening/build_observation_room",
-        "title": "完善感染观察室",
-        "content": "准备独立出入口、缓冲区、稳定照明、可清洁空间、基本床位和安全沟通窗口。完成状态由服务端或服主确认。",
-        "storyStageId": "dreamingfishcore:afterdream",
-        "locationLabel": "医院或联络站观察区",
-        "dimension": "minecraft:overworld",
-        "hasLocation": false,
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/after_rescue",
-      "npcId": 101,
-      "subject": "名单我收到了",
-      "content": "转移名单我收到了。我已经把“身份待确认”和“昏迷无法回答”分开记录，也保留了获救者自己补充姓名的位置。谢谢你们没有把他们只写成数字。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/familiar_note",
-      "npcId": 101,
-      "subject": "纸质时间线",
-      "content": "电子记录这两天丢过几次时间戳，我在纸上另外做了患者时间线。不是因为我怀疑谁，只是一次检测只能说明一个时间点。你如果参与观察，请把患者自己说过的话和当时状态一起记下。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": 100,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [
-        {
-          "id": "keep_context",
-          "text": "我会把原话和观察条件一起保存。",
-          "minimumFavorability": 100,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 3,
-          "followUpMessageId": "",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        }
-      ],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/trusted_note",
-      "npcId": 101,
-      "subject": "请帮我检查盲点",
-      "content": "我有时担心自己太想保护眼前这个人，会低估其他人承担的风险。你不必总同意我。如果发现我的判断前后不一致，请直接指出来；但也请帮我确认，我们没有因为害怕就把某个人从记录里删掉。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 0,
-      "minimumFavorability": 600,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
-      "id": "dreamingfishcore:baizhi/first_stage_protocol",
-      "npcId": 101,
-      "subject": "这几天的观察",
-      "content": "我是白芷，很高兴认识你，我现在在阿拜多斯的学校做医疗志愿，你可以随时来找我。\n\n危机刚刚爆发，根据我最近的观察，目前大家的自愈能力尚未完全消失，但是应该有所下降，光靠进食似乎无法完全恢复自身的健康，需要额外的药品进行辅助。当然了，感染程度以及重生机制都会随着时间流逝缓慢恢复，这一切实在是太突然了，我还需要更多的观察，请多加小心。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 100,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [],
-      "guidance": null
-    },
-    {
       "id": "dreamingfishcore:opening/baizhi/abydos_arrival",
       "npcId": 101,
       "subject": "到学校来找我",
@@ -224,54 +13,7 @@
       "maximumFavorability": 1000,
       "membershipRequirement": "ANY",
       "replies": [],
-      "guidance": {
-        "id": "dreamingfishcore:guidance/opening/talk_to_baizhi",
-        "title": "去学校找白芷",
-        "content": "白芷在阿拜多斯的学校做医疗志愿。找到她并当面交谈。",
-        "storyStageId": "dreamingfishcore:dream_beginning",
-        "locationLabel": "",
-        "dimension": "minecraft:overworld",
-        "hasLocation": false,
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
-    },
-    {
-      "id": "dreamingfishcore:opening/baizhi/zhuiguang_contact",
-      "npcId": 101,
-      "subject": "周岑的联络方式",
-      "content": "刚才提到的逐光会，周岑负责登记和筹备。我已经把你的联络请求转给他了；在这里回一句，他会把具体安排讲清楚。是否加入，你听完以后自己决定。",
-      "trigger": "MANUAL",
-      "once": true,
-      "priority": 210,
-      "minimumFavorability": -1000,
-      "maximumFavorability": 1000,
-      "membershipRequirement": "ANY",
-      "replies": [
-        {
-          "id": "contact_zhoucen",
-          "text": "好，帮我联系周岑。",
-          "minimumFavorability": -1000,
-          "maximumFavorability": 1000,
-          "favorabilityDelta": 1,
-          "followUpMessageId": "dreamingfishcore:opening/zhoucen/contact_channel",
-          "membershipRequirement": "ANY",
-          "membershipAction": "NONE"
-        }
-      ],
-      "guidance": {
-        "id": "dreamingfishcore:guidance/opening/contact_zhoucen",
-        "title": "联系周岑",
-        "content": "白芷已经当面说明了逐光会的大致情况。回复她的联络消息，接通周岑，听完具体安排后再决定是否加入。",
-        "storyStageId": "dreamingfishcore:dream_beginning",
-        "locationLabel": "",
-        "dimension": "minecraft:overworld",
-        "hasLocation": false,
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
+      "guidance": null
     },
     {
       "id": "dreamingfishcore:opening/zhoucen/contact_channel",
@@ -291,9 +33,8 @@
           "minimumFavorability": -1000,
           "maximumFavorability": 1000,
           "favorabilityDelta": 1,
-          "followUpMessageId": "dreamingfishcore:opening/zhoucen/introduction",
-          "membershipRequirement": "NON_MEMBER",
-          "membershipAction": "NONE"
+          "followUpMessageId": "",
+          "membershipRequirement": "NON_MEMBER"
         }
       ],
       "guidance": null
@@ -316,9 +57,8 @@
           "minimumFavorability": -1000,
           "maximumFavorability": 1000,
           "favorabilityDelta": 3,
-          "followUpMessageId": "dreamingfishcore:opening/zhoucen/member_welcome",
-          "membershipRequirement": "NON_MEMBER",
-          "membershipAction": "JOIN"
+          "followUpMessageId": "",
+          "membershipRequirement": "NON_MEMBER"
         },
         {
           "id": "remain_independent",
@@ -326,23 +66,11 @@
           "minimumFavorability": -1000,
           "maximumFavorability": 1000,
           "favorabilityDelta": 0,
-          "followUpMessageId": "dreamingfishcore:opening/zhoucen/independent_ack",
-          "membershipRequirement": "NON_MEMBER",
-          "membershipAction": "NONE"
+          "followUpMessageId": "",
+          "membershipRequirement": "NON_MEMBER"
         }
       ],
-      "guidance": {
-        "id": "dreamingfishcore:guidance/opening/choose_membership",
-        "title": "决定是否加入逐光会",
-        "content": "阅读周岑发来的介绍，然后使用消息下方的预设选项作出决定。",
-        "storyStageId": "dreamingfishcore:dream_beginning",
-        "locationLabel": "",
-        "dimension": "minecraft:overworld",
-        "hasLocation": false,
-        "x": 0,
-        "y": 0,
-        "z": 0
-      }
+      "guidance": null
     },
     {
       "id": "dreamingfishcore:opening/zhoucen/member_welcome",
@@ -369,6 +97,20 @@
       "minimumFavorability": -1000,
       "maximumFavorability": 1000,
       "membershipRequirement": "NON_MEMBER",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:afterdream/baizhi/public_treatment",
+      "npcId": 101,
+      "subject": "",
+      "content": "你看到逐光会的公告了吧？\n\n在你前往医疗接待点之前，我想先告诉你，逐光会为什么会在这个时候成立。\n\n梦屿是一片真实建立起来的乌托邦。\n\n这里的住房、医疗、教育、能源和重生技术，并不是只为少数人准备的东西。普通人可以在这里生活、学习、工作，经营商店、种植农田、建造自己的房子，也可以只是安稳地过日子。\n\n很多人来到梦屿，是因为这里一直在尝试证明：人类不依靠互相压榨，也可以建立一个让普通人有尊严生活的文明。\n\n我就是在梦屿长大的。我的父母不是什么大人物，但我仍然有机会接受教育，最后成为一名医生。对我来说，梦屿不是宣传里的理想，它是我真正生活过的地方。\n\n灾难爆发后，医院、能源、重生管理、科研、救援和社区警备都受到了影响。原本分别负责公共事务的机构，只能先组成临时的联合指挥机制，这就是人类逐光联合会，大家平时叫它逐光会。\n\n逐光会不是为了取代梦屿，也不是为了替所有人决定该怎么生活。它成立的原因很简单：在最混乱的时候，把医院、药品、物资、救援和感染检测联系起来，先把人救下来，也尽量不让那些还没有完成登记、暂时无法撤离的人被放弃。\n\n这次医疗接待由我的老师江晚负责。危机发生前，她正在梦屿中央医院参与感染医学病例评审；现在，她被编入逐光会医疗组，负责阿拜多斯的治疗标准、药品管理和用药记录。\n\n她会把已经确认的事实，和目前还没有答案的事情分开告诉你。你到医疗接待点后，先听她把情况说明白，再决定是否接受治疗。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 300,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
       "replies": [],
       "guidance": null
     }

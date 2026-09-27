@@ -6,7 +6,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 
 /**
- * 独立的在线玩家数响应包（仅返回数量，轻量无依赖）
+ * 低频服务器状态响应包（在线人数 + NeoForge 口径的 TPS）。
  */
 public class Packet_OnlinePlayerCountResponse implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
 
@@ -17,28 +17,44 @@ public class Packet_OnlinePlayerCountResponse implements net.minecraft.network.p
     public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
         return TYPE;
     }
-    private final int playerCount; // 仅存储在线玩家数量
+    private final int playerCount;
+    private final float tps;
 
-    // 构造方法：接收服务端传的玩家数
+    /**
+     * 保留旧构造方法，方便其他调用方构造仅包含人数的本地消息。
+     * 网络协议的新消息始终由双参数构造方法创建。
+     */
     public Packet_OnlinePlayerCountResponse(int playerCount) {
-        this.playerCount = playerCount;
+        this(playerCount, Float.NaN);
     }
 
-    // 编码：写入玩家数量（仅一个int，高效）
+    public Packet_OnlinePlayerCountResponse(int playerCount, float tps) {
+        this.playerCount = playerCount;
+        this.tps = tps;
+    }
+
+    public float tps() {
+        return tps;
+    }
+
+    // 编码：人数和 TPS 都是定长基础类型，避免额外对象分配。
     public static void encode(Packet_OnlinePlayerCountResponse msg, FriendlyByteBuf buf) {
         buf.writeInt(msg.playerCount);
+        buf.writeFloat(msg.tps);
     }
 
-    // 解码：读取玩家数量
+    // 解码：读取人数和 TPS
     public static Packet_OnlinePlayerCountResponse decode(FriendlyByteBuf buf) {
         int count = buf.readInt();
-        return new Packet_OnlinePlayerCountResponse(count);
+        float tps = buf.readFloat();
+        return new Packet_OnlinePlayerCountResponse(count, tps);
     }
 
-    // 客户端处理逻辑：直接更新UI的在线玩家数
+    // 客户端处理逻辑：一次更新共享的服务器状态缓存
     public static void handle(Packet_OnlinePlayerCountResponse msg, IPayloadContext context) {
         context.enqueueWork(() -> {
             ServerInformationDisplay.ONLINE_PLAYERS = msg.playerCount;
+            ServerInformationDisplay.updateServerTps(msg.tps);
         });
     }
 }

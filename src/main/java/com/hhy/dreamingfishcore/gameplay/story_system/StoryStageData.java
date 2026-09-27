@@ -24,7 +24,7 @@ public class StoryStageData {
     /** 稳定字符串 ID，适合保存到存档和被脚本引用。 */
     @SerializedName("id")
     private String stageId;
-    /** 便于排序和兼容旧代码的正整数编号。 */
+    /** 便于排序和管理命令显示的正整数编号。 */
     @SerializedName("number")
     private int stageNumber;
     /** 玩家可见名称。 */
@@ -217,14 +217,6 @@ public class StoryStageData {
     public float getClientPlayerProgressPercentage() {
         int total = getTotalTaskCount();
         return total == 0 ? 0.0f : (float) getClientPlayerCompletedTaskCount() / total;
-    }
-
-    /**
-     * 旧界面的兼容方法。新代码应该明确选择全服进度或个人进度。
-     */
-    @Deprecated
-    public float getProgressPercentage() {
-        return getClientPlayerProgressPercentage();
     }
 
     /**

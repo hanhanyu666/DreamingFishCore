@@ -2,10 +2,12 @@ package com.hhy.dreamingfishcore.gameplay.story_system;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.util.ArrayList;
+import java.util.List;
 /**
  * 一个故事任务的“定义数据”和“客户端显示数据”。
  *
- * <p>前半部分字段来自 {@code story_stage_data.json}，描述任务叫什么、显示什么内容。
+ * <p>阶段 Java 文件描述任务流程；任务文案来自内容目录。
  * 后半部分的 {@code transient} 字段由服务端运行状态临时填充，只用于发给客户端显示。
  * {@code transient} 的含义是：Gson 保存配置时不会把这些运行状态写回任务定义文件。</p>
  *
@@ -13,6 +15,8 @@ import com.google.gson.annotations.SerializedName;
  * {@link StoryWorldState.TaskProgress} 中。这样修改任务文案不会覆盖世界已经发生过的历史。</p>
  */
 public class StoryTaskData {
+    public enum Scope { PERSONAL, WORLD }
+    private Scope scope;
     /** 稳定字符串 ID，例如 dreamingfishcore:medical_station_defense。 */
     @SerializedName("id")
     private String taskKey;
@@ -33,6 +37,8 @@ public class StoryTaskData {
     private boolean publishedByDefault;
     /** 可选的任务地点 ID；空字符串表示该任务不依赖固定地点。 */
     private String locationId = "";
+    /** 这项个人任务由哪些引导触发/显示；关联由阶段文件就地声明。 */
+    private List<String> guidanceDefinitionIds = new ArrayList<>();
 
     // 以下字段只是某一次查询生成的“视图”，不属于配置文件，也不直接持久化。
     private transient boolean published;
@@ -42,6 +48,9 @@ public class StoryTaskData {
     private transient boolean completed;
     /** 单独记录失败，供客户端把任务显示为红色。 */
     private transient boolean failed;
+    /** 已退出当前行动范围，不改变成功、失败或个人完成事实。 */
+    private transient boolean archived;
+    private transient boolean waived;
     /** 接收这份视图的玩家是否取得了该任务的个人记录。 */
     private transient boolean clientPlayerFinished;
     /** 普通世界任务为结算时参与人数；个人任务为已完成个人部分的人数。 */
@@ -73,11 +82,15 @@ public class StoryTaskData {
     StoryTaskData copyForView() {
         StoryTaskData copy = new StoryTaskData(taskKey, taskId, taskName, taskContent, startTime, endTime);
         copy.publishedByDefault = publishedByDefault;
+        copy.scope = scope;
         copy.locationId = locationId;
+        copy.guidanceDefinitionIds = new ArrayList<>(guidanceDefinitionIds);
         copy.published = published;
         copy.personalTask = personalTask;
         copy.completed = completed;
         copy.failed = failed;
+        copy.archived = archived;
+        copy.waived = waived;
         copy.clientPlayerFinished = clientPlayerFinished;
         copy.finishedPlayerCount = finishedPlayerCount;
         copy.personalExpectedPlayerCount = personalExpectedPlayerCount;
@@ -103,6 +116,12 @@ public class StoryTaskData {
             locationId = "";
         } else if (!locationId.isBlank()) {
             StoryWorldState.requireValidId(locationId, "任务地点");
+        }
+        if (guidanceDefinitionIds == null) {
+            guidanceDefinitionIds = new ArrayList<>();
+        }
+        for (String guidanceId : guidanceDefinitionIds) {
+            StoryWorldState.requireValidId(guidanceId, "任务引导");
         }
     }
 
@@ -141,6 +160,19 @@ public class StoryTaskData {
 
     public String getTaskKey() {
         return taskKey;
+    }
+
+    public Scope getScope() {
+        return scope == null ? (getGuidanceDefinitionIds().isEmpty() ? Scope.WORLD : Scope.PERSONAL) : scope;
+    }
+
+    public void setScope(Scope scope) { this.scope = scope; }
+    public boolean isArchived() { return archived; }
+    public void setArchived(boolean archived) { this.archived = archived; }
+    public boolean isWaived() { return waived; }
+    public void setWaived(boolean waived) { this.waived = waived; }
+    public boolean isActionRequired() {
+        return !archived && !waived && (personalTask ? !clientPlayerFinished : published && !completed);
     }
 
     public void setTaskKey(String taskKey) {
@@ -201,6 +233,15 @@ public class StoryTaskData {
 
     public void setLocationId(String locationId) {
         this.locationId = locationId == null ? "" : locationId;
+    }
+
+    public List<String> getGuidanceDefinitionIds() {
+        return guidanceDefinitionIds == null ? List.of() : List.copyOf(guidanceDefinitionIds);
+    }
+
+    public void setGuidanceDefinitionIds(List<String> guidanceDefinitionIds) {
+        this.guidanceDefinitionIds = guidanceDefinitionIds == null
+                ? new ArrayList<>() : new ArrayList<>(guidanceDefinitionIds);
     }
 
     public boolean isTaskState() {

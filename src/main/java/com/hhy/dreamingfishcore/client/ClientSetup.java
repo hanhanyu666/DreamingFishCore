@@ -4,6 +4,12 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.item.client.model.CustomRendererBakedModel;
 import com.hhy.dreamingfishcore.gameplay.npc_system.client.StoryNpcRenderer;
 import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud.CustomHotbarGUI;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud.CustomStatueGUI;
+import com.hhy.dreamingfishcore.client.ui.notification.NotificationRenderer;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.client.TaskLocationHudRenderer;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.client.TaskLocationReminderHudRenderer;
+import com.hhy.dreamingfishcore.server.server_ui_system.client.ServerInformationDisplay;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntities;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.client.SiegeZombieRenderer;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.DeathCorpseEntities;
@@ -11,8 +17,10 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.corpse.cl
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -30,6 +38,18 @@ public class ClientSetup {
     }
 
     @SubscribeEvent
+    public static void registerHudCacheReloadListener(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((ResourceManagerReloadListener) resourceManager -> {
+            CustomHotbarGUI.invalidateItemRenderCache();
+            CustomStatueGUI.invalidateHudIconCache();
+            ServerInformationDisplay.invalidateCompactRenderCache();
+            NotificationRenderer.invalidateLayoutCaches();
+            TaskLocationHudRenderer.invalidateLayoutCache();
+            TaskLocationReminderHudRenderer.invalidateLayoutCache();
+        });
+    }
+
+    @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(StoryNpcEntities.STORY_NPC.get(), StoryNpcRenderer::new);
         event.registerEntityRenderer(DeathCorpseEntities.DEATH_CORPSE.get(), DeathCorpseRenderer::new);
@@ -39,6 +59,7 @@ public class ClientSetup {
     // 修改模型烘焙结果
     @SubscribeEvent
     public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
+        CustomHotbarGUI.invalidateItemRenderCache();
         LOGGER.info("[Blueprint] ModifyBakingResult event fired!");
 
         try {

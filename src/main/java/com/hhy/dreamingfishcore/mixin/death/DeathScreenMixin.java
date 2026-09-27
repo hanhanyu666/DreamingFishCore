@@ -166,8 +166,8 @@ public abstract class DeathScreenMixin extends Screen {
         dreamingFishCore$normalRespawnButton = new CustomButton(
                 centerX - buttonWidth / 2, startY,
                 buttonWidth, buttonHeight,
-                Component.literal("重生  -" + String.format("%.1f", data.normalCost())),
-                false, data.normalCost(), data.respawnPoint(),
+                Component.literal("重生  -" + String.format("%.1f", com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(data.respawnPoint(), data.normalCost()))),
+                false, com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(data.respawnPoint(), data.normalCost()), data.respawnPoint(),
                 btn -> dreamingFishCore$sendNormalRespawn()
         );
         dreamingFishCore$keepInventoryButton = new CustomButton(
@@ -196,7 +196,7 @@ public abstract class DeathScreenMixin extends Screen {
         this.addRenderableWidget(dreamingFishCore$keepInventoryButton);
         this.addRenderableWidget(dreamingFishCore$titleScreenButton);
 
-        dreamingFishCore$normalRespawnButton.active = data.respawnPoint() >= data.normalCost();
+        dreamingFishCore$normalRespawnButton.active = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(data.respawnPoint());
         dreamingFishCore$keepInventoryButton.active = data.respawnPoint() >= data.keepInventoryCost();
     }
 
@@ -444,7 +444,7 @@ public abstract class DeathScreenMixin extends Screen {
         int barHeight = 7;
         float currentPoints = data.respawnPoint();
         int hoveredAction = dreamingFishCore$getHoveredDeathAction(mouseX, mouseY);
-        float previewCost = hoveredAction == 1 ? data.normalCost() : hoveredAction == 2 ? data.keepInventoryCost() : 0.0f;
+        float previewCost = hoveredAction == 1 ? com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(currentPoints, data.normalCost()) : hoveredAction == 2 ? data.keepInventoryCost() : 0.0f;
         float previewPoints = Math.max(0.0f, currentPoints - previewCost);
         float currentProgress = Math.max(0.0f, Math.min(1.0f, currentPoints / 100.0f));
         float previewProgress = Math.max(0.0f, Math.min(1.0f, previewPoints / 100.0f));
@@ -492,7 +492,7 @@ public abstract class DeathScreenMixin extends Screen {
                 dreamingFishCore$withAlpha(0xFF000000, (int) (contentAlpha * 0.35f)));
 
         float timesSource = previewingCost ? previewPoints : currentPoints;
-        int respawnTimes = data.normalCost() > 0.0f ? Math.max(0, (int) Math.floor(timesSource / data.normalCost())) : 0;
+        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(timesSource, data.normalCost());
         String timesText = dreamingFishCore$getRespawnPreviewHint(hoveredAction, currentPoints, previewCost, respawnTimes, data.isInfected());
         guiGraphics.drawString(this.font, timesText, x, barY + 15,
                 dreamingFishCore$withAlpha(0xFF9E9892, contentAlpha), false);
@@ -529,7 +529,7 @@ public abstract class DeathScreenMixin extends Screen {
             case 1 -> "重生扣除  " + String.format("%.1f", previewCost);
             case 2 -> "保留扣除  " + String.format("%.1f", previewCost);
             case 3 -> "返回标题";
-            default -> "剩余死亡点数";
+            default -> "模板重建余量";
         };
     }
 
@@ -548,7 +548,7 @@ public abstract class DeathScreenMixin extends Screen {
                     + "  /  之后可复活 " + respawnTimes + " 次" + corpseAccess;
         }
         if (hoveredAction == 3) {
-            return "返回标题不会消耗死亡点数";
+            return "返回标题不会消耗模板重建余量";
         }
         return "预计剩余复活次数  " + respawnTimes;
     }
@@ -562,9 +562,9 @@ public abstract class DeathScreenMixin extends Screen {
         }
 
         String actionText = hoveredAction == 1
-                ? "花费少量点数直接重生，您会丢失所有的物品"
-                : "保留物品栏重生，您会保留身上所有的东西，但是会消耗更多重生点数";
-        String warningText = "点数耗尽后，您将无法重生，需要等待其余玩家拯救您";
+                ? "消耗模板重建余量恢复身体，物品留在死亡地点的尸体中"
+                : "足额消耗更多模板重建余量，同时保留随身物品";
+        String warningText = "最后一次标准重建可将余量扣至零；耗尽后的下一次死亡需要他人救援";
 
         int buttonX = dreamingFishCore$deathButtonX(virtualW);
         int maxWidth = Math.max(210, Math.min(390, buttonX - 36));

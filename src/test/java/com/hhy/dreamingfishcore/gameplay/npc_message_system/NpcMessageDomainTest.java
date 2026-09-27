@@ -1,7 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationData;
-import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipAction;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipRequirement;
 import org.junit.jupiter.api.Test;
 
@@ -45,10 +44,39 @@ class NpcMessageDomainTest {
                 "test",
                 "content",
                 NpcMessageDefinition.DeliveryTrigger.MANUAL);
-        NpcMessageRecord record = NpcMessageRecord.incoming(definition, "NPC", 10L);
+        NpcMessageRecord record = NpcMessageRecord.incoming(
+                definition, "NPC", 10L, 0, false);
 
         assertTrue(record.markReplied("first"));
         assertFalse(record.markReplied("second"));
+    }
+
+    @Test
+    void incomingMessageCapturesOnlyRepliesAvailableAtDeliveryTime() {
+        NpcMessageReplyDefinition available = new NpcMessageReplyDefinition(
+                "available", "当时可以选择", 5, "dreamingfishcore:follow_up")
+                .requiringFavorability(10, 100);
+        NpcMessageReplyDefinition hidden = new NpcMessageReplyDefinition(
+                "hidden", "当时不可选择", 99, "")
+                .requiringFavorability(200, 300);
+        NpcMessageDefinition definition = new NpcMessageDefinition(
+                "dreamingfishcore:test/snapshot",
+                1,
+                "test",
+                "content",
+                NpcMessageDefinition.DeliveryTrigger.MANUAL)
+                .withReplies(java.util.List.of(available, hidden));
+
+        NpcMessageRecord record = NpcMessageRecord.incoming(
+                definition, "NPC", 10L, 50, false);
+
+        assertTrue(record.hasReplySnapshot());
+        assertEquals(1, record.getReplySnapshots().size());
+        NpcReplySnapshot snapshot = record.getReplySnapshot("available");
+        assertEquals("当时可以选择", snapshot.getText());
+        assertEquals(5, snapshot.getFavorabilityDelta());
+        assertEquals("dreamingfishcore:follow_up", snapshot.getFollowUpMessageId());
+        org.junit.jupiter.api.Assertions.assertNull(record.getReplySnapshot("hidden"));
     }
 
     @Test
@@ -66,15 +94,13 @@ class NpcMessageDomainTest {
                 "加入逐光会",
                 0,
                 "")
-                .requiringMembership(ZhuiguangMembershipRequirement.NON_MEMBER)
-                .withMembershipAction(ZhuiguangMembershipAction.JOIN);
+                .requiringMembership(ZhuiguangMembershipRequirement.NON_MEMBER);
 
         assertFalse(memberMessage.isAvailableFor(99, true));
         assertFalse(memberMessage.isAvailableFor(100, false));
         assertTrue(memberMessage.isAvailableFor(100, true));
         assertTrue(joinReply.isAvailableFor(0, false));
         assertFalse(joinReply.isAvailableFor(0, true));
-        assertEquals(ZhuiguangMembershipAction.JOIN, joinReply.getMembershipAction());
     }
 
     @Test

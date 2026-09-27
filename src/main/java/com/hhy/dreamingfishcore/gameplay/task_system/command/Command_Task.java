@@ -98,7 +98,7 @@ public class Command_Task {
     // 执行创建服务器任务
     private static int executeCreateServerTask(CommandContext<CommandSourceStack> context) {
         context.getSource().sendFailure(
-                net.minecraft.network.chat.Component.literal("服务器任务已改为故事阶段系统，请通过配置文件 config/dreamingfishcore/story_stage_data.json 来管理任务")
+                net.minecraft.network.chat.Component.literal("服务器任务由对应阶段 Java 文件定义，请使用 /dreamingfish story stage set 切换阶段")
         );
         return 0;
     }

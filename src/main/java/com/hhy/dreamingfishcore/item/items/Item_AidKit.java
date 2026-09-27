@@ -5,7 +5,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -105,7 +104,7 @@ public class Item_AidKit extends Item {
             playerData.putBoolean(USING_KEY, false);
             playerData.putInt(DURABILITY_TICK_KEY, 0);
             playerData.remove(START_TIME_KEY);
-            player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            // 治疗减速自然到期，不能删除其他系统的缓慢效果。
         }
     }
 

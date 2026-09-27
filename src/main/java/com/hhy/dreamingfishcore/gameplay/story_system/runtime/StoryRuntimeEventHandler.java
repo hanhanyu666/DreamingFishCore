@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.story_system.runtime;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
@@ -22,14 +23,14 @@ public final class StoryRuntimeEventHandler {
     public static void onPlayerAuthenticated(PlayerAuthenticatedEvent event) {
         ServerPlayer player = event.getPlayer();
         if (AuthSessionGuard.isAuthenticated(player)) {
-            StoryFlowEngine.onPlayerAuthenticated(player);
+            StoryManager.onPlayerAuthenticated(player);
         }
     }
 
     @SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            StoryFlowEngine.onPlayerDisconnected(player);
+            StoryManager.onPlayerDisconnected(player);
         }
     }
 
@@ -43,6 +44,6 @@ public final class StoryRuntimeEventHandler {
         }
         TaskLocationDefinition location = TaskLocationManager.findLocationAt(
                 player.serverLevel(), player.blockPosition()).orElse(null);
-        StoryFlowEngine.onPlayerLocationTick(player, location);
+        StoryManager.onLocationObserved(player, location);
     }
 }

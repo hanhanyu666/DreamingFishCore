@@ -1,59 +1,44 @@
 package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
-import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
-import com.hhy.dreamingfishcore.gameplay.story_system.OpeningStoryDefinitionCatalog;
-import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipAction;
+import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BuiltInNpcMessageCatalogTest {
     @Test
-    void openingCatalogAddsEveryNpcMessageOnlyOnce() {
-        List<NpcMessageDefinition> existing = new ArrayList<>();
+    void returnsOnlyMessagesWhitelistedByTheCurrentStory() {
         List<NpcMessageDefinition> additions =
-                BuiltInNpcMessageCatalog.createMissingMessages(existing);
+                BuiltInNpcMessageCatalog.createMissingMessages(List.of());
 
-        assertEquals(15, additions.size());
-        assertEquals(0, countMessagesForNpc(additions, 1));
-        assertEquals(0, countMessagesForNpc(additions, 100));
-        assertEquals(11, countMessagesForNpc(additions, 101));
+        // 当前开服切片只有五条开场主线私信和一条余梦期私信；旧协议、
+        // 旧分支和身份壳 NPC 的历史内容不会重新进入内容包。
+        assertEquals(6, additions.size());
+        assertEquals(2, countMessagesForNpc(additions, 101));
+        assertEquals(4, countMessagesForNpc(additions, 105));
         assertEquals(0, countMessagesForNpc(additions, 102));
         assertEquals(0, countMessagesForNpc(additions, 103));
         assertEquals(0, countMessagesForNpc(additions, 104));
-        assertEquals(4, countMessagesForNpc(additions, 105));
-
-        NpcMessageDefinition baizhi = findById(
-                additions, BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID);
-        assertEquals(101, baizhi.getNpcId());
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID,
-                baizhi.getId());
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_SUBJECT,
-                baizhi.getSubject());
-        assertFalse(baizhi.getContent().contains("第一阶段"));
-        assertTrue(baizhi.getContent().contains("阿拜多斯的学校"));
-
-        assertTrue(additions.stream().noneMatch(definition -> definition.getNpcId() == 103));
+        assertTrue(additions.stream().noneMatch(definition ->
+                "dreamingfishcore:baizhi/first_stage_protocol".equals(definition.getId())));
 
         NpcMessageDefinition introduction = findById(
-                additions, OpeningStoryDefinitionCatalog.ZHOUCEN_INTRODUCTION_MESSAGE_ID);
-        assertEquals("人类逐光联合会", introduction.getSubject());
+                additions, OpeningStory.ZHOUCEN_INTRODUCTION_MESSAGE_ID);
         assertEquals(2, introduction.getReplies().size());
-        assertEquals(ZhuiguangMembershipAction.JOIN,
-                introduction.getReplies().stream()
-                        .filter(reply -> OpeningStoryDefinitionCatalog.JOIN_ZHUIGUANG_REPLY_ID
-                                .equals(reply.getId()))
-                        .findFirst()
-                        .orElseThrow()
-                        .getMembershipAction());
+        assertTrue(introduction.getReplies().stream()
+                .anyMatch(reply -> OpeningStory.JOIN_ZHUIGUANG_REPLY_ID
+                        .equals(reply.getId())));
+        assertTrue(introduction.getReplies().stream()
+                .allMatch(reply -> reply.getFollowUpMessageId().isBlank()),
+                "开场分支的后续消息必须由 Java 状态机选择");
 
-        existing.addAll(additions);
-        assertTrue(BuiltInNpcMessageCatalog.createMissingMessages(existing).isEmpty());
+        List<NpcMessageDefinition> secondPass =
+                BuiltInNpcMessageCatalog.createMissingMessages(new ArrayList<>(additions));
+        assertTrue(secondPass.isEmpty());
     }
 
     private static long countMessagesForNpc(
@@ -69,60 +54,5 @@ class BuiltInNpcMessageCatalogTest {
                 .filter(definition -> id.equals(definition.getId()))
                 .findFirst()
                 .orElseThrow();
-    }
-
-    @Test
-    void legacyBaizhiCopyMigratesWithoutOverwritingCustomizedText() {
-        NpcMessageDefinition legacy = new NpcMessageDefinition(
-                BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID,
-                101,
-                BuiltInNpcMessageCatalog.LEGACY_BAIZHI_PROTOCOL_SUBJECT,
-                BuiltInNpcMessageCatalog.LEGACY_BAIZHI_PROTOCOL_CONTENT,
-                NpcMessageDefinition.DeliveryTrigger.MANUAL);
-
-        assertTrue(BuiltInNpcMessageCatalog.migrateBaizhiObservationsCopy(List.of(legacy)));
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_SUBJECT, legacy.getSubject());
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_CONTENT, legacy.getContent());
-        assertFalse(BuiltInNpcMessageCatalog.migrateBaizhiObservationsCopy(List.of(legacy)));
-
-        NpcMessageDefinition previousVersion = new NpcMessageDefinition(
-                BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID,
-                101,
-                BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_SUBJECT,
-                BuiltInNpcMessageCatalog.PREVIOUS_BAIZHI_OBSERVATIONS_CONTENT,
-                NpcMessageDefinition.DeliveryTrigger.MANUAL);
-        assertTrue(BuiltInNpcMessageCatalog.migrateBaizhiObservationsCopy(
-                List.of(previousVersion)));
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_CONTENT,
-                previousVersion.getContent());
-
-        NpcMessageDefinition customized = new NpcMessageDefinition(
-                BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID,
-                101,
-                "服主自定义标题",
-                "服主自定义正文",
-                NpcMessageDefinition.DeliveryTrigger.MANUAL);
-        assertFalse(BuiltInNpcMessageCatalog.migrateBaizhiObservationsCopy(List.of(customized)));
-        assertEquals("服主自定义标题", customized.getSubject());
-        assertEquals("服主自定义正文", customized.getContent());
-    }
-
-    @Test
-    void deliveredLegacyBaizhiCopyMigratesWithoutResettingReadState() {
-        NpcMessageDefinition legacy = new NpcMessageDefinition(
-                BuiltInNpcMessageCatalog.BAIZHI_FIRST_STAGE_PROTOCOL_ID,
-                101,
-                BuiltInNpcMessageCatalog.LEGACY_BAIZHI_PROTOCOL_SUBJECT,
-                BuiltInNpcMessageCatalog.LEGACY_BAIZHI_PROTOCOL_CONTENT,
-                NpcMessageDefinition.DeliveryTrigger.MANUAL);
-        NpcMessageRecord record = NpcMessageRecord.incoming(legacy, "白芷", 42L);
-        record.markRead();
-
-        assertTrue(BuiltInNpcMessageCatalog.migrateDeliveredBaizhiObservations(List.of(record)));
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_SUBJECT, record.getSubject());
-        assertEquals(BuiltInNpcMessageCatalog.BAIZHI_OBSERVATIONS_CONTENT, record.getContent());
-        assertTrue(record.isRead());
-        assertEquals(42L, record.getSentAtEpochMillis());
-        assertFalse(BuiltInNpcMessageCatalog.migrateDeliveredBaizhiObservations(List.of(record)));
     }
 }

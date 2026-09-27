@@ -61,12 +61,13 @@ public class AidKitEventHandler {
             // 重置状态
             playerData.putInt(aidKit.getDurabilityTickKey(), 0);
             playerData.remove(aidKit.getStartTimeKey());
-            player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
             return;
         }
 
-        // 添加缓慢效果（表示正在治疗）
-        if (!player.hasEffect(MobEffects.MOVEMENT_SLOWDOWN)) {
+        // 提前续期，避免减速到期后重加引起 FOV 抽动；保留其他来源的效果。
+        MobEffectInstance slowness = player.getEffect(MobEffects.MOVEMENT_SLOWDOWN);
+        if (slowness == null || (slowness.getAmplifier() == 0
+                && !slowness.isInfiniteDuration() && slowness.getDuration() <= 20)) {
             player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, false, false));
         }
 
@@ -145,7 +146,7 @@ public class AidKitEventHandler {
     private static void clearAllAidKitStates(ServerPlayer player) {
         if (player == null) return;
 
-        player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+        // 治疗减速最多 40 tick 后自然到期，不能删除恐惧、感染或药水的缓慢。
 
         // 移除所有包含特定前缀的键
         CompoundTag playerData = player.getPersistentData();

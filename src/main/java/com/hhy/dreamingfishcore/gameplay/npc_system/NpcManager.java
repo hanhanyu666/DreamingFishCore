@@ -1,5 +1,8 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system;
 
+import com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalStory;
+import com.hhy.dreamingfishcore.gameplay.hospital_system.DailyTemplateSupportService;
+import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -7,7 +10,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_OpenNpcDialogueGUI;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
-import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryFlowEngine;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class NpcManager {
     public static final String ENTITY_NPC_ID_TAG = "DreamingFishCoreNpcId";
     static final String DIALOGUE_FAVORABILITY_EFFECT_ID = "interaction:dialogue:first";
+    private static final int MINIMAL_SHELL_ACTION_REQUIREMENT = 2_000_000_000;
     private static final boolean GIFT_INTERACTIONS_ENABLED = false;
     private static final double MAX_INTERACTION_DISTANCE_SQR = 8.0D * 8.0D;
     private static final Path NPC_DATA_PATH = FMLPaths.CONFIGDIR.get()
@@ -69,17 +73,22 @@ public class NpcManager {
                     NPC_MAP_TYPE,
                     ConcurrentHashMap::new);
             npcCache = new ConcurrentHashMap<>();
-            loaded.forEach((id, npc) -> {
-                if (id != null && npc != null && id == npc.getNpcId()
-                        && StoryNpcContentPolicy.isRetained(id)) {
+            boolean repaired = false;
+            for (Map.Entry<Integer, NpcData> entry : loaded.entrySet()) {
+                Integer id = entry.getKey();
+                NpcData npc = entry.getValue();
+                if (id != null && npc != null && id == npc.getNpcId() && id > 0) {
+                    // Historical/custom NPC profiles are data, not disposable
+                    // content.  Runtime content policy only controls which
+                    // profile is used by the current story; it must never
+                    // erase the operator's archive during startup.
                     npcCache.put(id, npc);
+                } else {
+                    repaired = true;
                 }
-            });
-            configWritable = true;
-            if (npcCache.isEmpty()) {
-                DreamingFishCore.LOGGER.info("NPC 配置中没有保留角色，将写入白芷和周岑的最小内容集");
             }
-            if (npcCache.size() != loaded.size() || ensureBuiltInOpeningNpcs()) {
+            configWritable = true;
+            if (repaired || ensureBuiltInOpeningNpcs()) {
                 save();
             }
             DreamingFishCore.LOGGER.info("NPC数据加载完成，共 {} 个NPC", npcCache.size());
@@ -117,13 +126,27 @@ public class NpcManager {
     }
 
     public static boolean openNpcDialogue(ServerPlayer player, int npcId) {
-        return openNpcDialogue(player, npcId, -1);
+        return openNpcDialogue(player, npcId, -1, true);
     }
 
     public static boolean openNpcDialogue(ServerPlayer player, int npcId, int entityId) {
+        return openNpcDialogue(player, npcId, entityId, true);
+    }
+
+    /**
+     * 打开一次新的 NPC 对话会话。剧情脚本需要区分“玩家重新打开 NPC”和
+     * “服务端因状态变化刷新当前界面”，所以刷新入口明确传 false，避免把
+     * 同一段江晚接待误算成下一次对话。
+     */
+    private static boolean openNpcDialogue(
+            ServerPlayer player, int npcId, int entityId, boolean newConversation) {
         Optional<NpcData> npc = getNpc(npcId);
         if (npc.isEmpty()) {
             return false;
+        }
+        if (newConversation) {
+            HospitalStory.clearResponse(player.getUUID());
+            StoryManager.onNpcDialogueOpened(player, npcId);
         }
         DreamingFishCore_NetworkManager.sendToClient(new Packet_OpenNpcDialogueGUI(createViewData(player, npc.get(), entityId)), player);
         if (!NpcMessageManager.deliverInteractionMessage(player, npcId)) {
@@ -134,6 +157,7 @@ public class NpcManager {
     }
 
     public static void handleInteraction(ServerPlayer player, int npcId, int entityId, NpcInteractionType interactionType) {
+        if (player == null || !AuthSessionGuard.isAuthenticated(player) || !player.isAlive()) return;
         if (!isValidInteractionTarget(player, npcId, entityId)) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c你距离该 NPC 太远，或 NPC 已经失效。"));
             DreamingFishCore.LOGGER.warn("拒绝玩家 {} 的无效 NPC 交互请求：npcId={}, entityId={}",
@@ -147,6 +171,23 @@ public class NpcManager {
         }
 
         NpcData npc = optionalNpc.get();
+        if (interactionType == NpcInteractionType.HOSPITAL_REVIEW || interactionType == NpcInteractionType.DAILY_TEMPLATE_SUPPORT) {
+            try {
+                if (interactionType == NpcInteractionType.HOSPITAL_REVIEW) {
+                    if (!HospitalStory.canReview(player, npcId)) throw new IllegalStateException("当前 NPC 无法办理正式复查");
+                    HospitalStory.review(player);
+                } else {
+                    if (!DailyTemplateSupportService.isAvailable(player, npcId)) throw new IllegalStateException("当前 NPC 无法办理每日模板维护");
+                    HospitalStory.setServiceResponse(player, npcId, DailyTemplateSupportService.claim(player));
+                }
+            } catch (RuntimeException exception) {
+                HospitalStory.setServiceResponse(player, npcId, exception.getMessage() == null
+                        ? "本次办理暂未完成，请稍后再试。" : exception.getMessage());
+                DreamingFishCore.LOGGER.warn("医院服务未完成：{} / {}", player.getScoreboardName(), exception.getMessage());
+            }
+            openNpcDialogue(player, npcId, entityId, false);
+            return;
+        }
         // 赠礼功能尚未开放。服务端也必须拒绝，不能只依赖客户端隐藏按钮。
         if (interactionType == NpcInteractionType.GIFT_ITEM && !GIFT_INTERACTIONS_ENABLED) {
             return;
@@ -154,11 +195,15 @@ public class NpcManager {
 
         int requiredFavorability = npc.getActionFavorabilityRequirements().getOrDefault(interactionType.name(), 0);
         if (!NpcRelationManager.canUseAction(npcId, player.getUUID(), interactionType, requiredFavorability)) {
-            openNpcDialogue(player, npcId, entityId);
+            openNpcDialogue(player, npcId, entityId, false);
             return;
         }
 
         if (interactionType == NpcInteractionType.DIALOGUE) {
+            if (HospitalStory.clearResponse(player.getUUID())) {
+                openNpcDialogue(player, npcId, entityId, false);
+                return;
+            }
             // 每名玩家与每个 NPC 的首次交谈只奖励一次。effectId 会随关系数据持久化，
             // 因此反复点击、重新打开界面、重连或重启服务器都不能重复获得好感度。
             NpcRelationManager.applyFavorabilityEffect(
@@ -166,9 +211,22 @@ public class NpcManager {
                     player.getUUID(),
                     DIALOGUE_FAVORABILITY_EFFECT_ID,
                     1);
-            // 白芷剧情在玩家点击“交谈”后推进；这里不重新打开界面，
-            // 让客户端保留当前台词索引，不会每次点击都跳回第一句。
-            StoryFlowEngine.onNpcInteraction(player, npcId);
+            // 普通 NPC 对话由客户端本地翻页；余梦期江晚的检查流程需要服务端
+            // 在每个阶段节点切换后重新下发台词，才能让“正在检查……”、检查结果
+            // 和“请服用试剂”真正出现在下一次交谈中。结果节点执行奖励后也要刷新，
+            // 否则客户端会停留在上一段台词，看起来像流程没有继续。
+            String beforeDialogueRevision = StoryManager.getDialogueRevision(player, npcId)
+                    .orElse("");
+            Entity interactionTarget = entityId < 0
+                    ? null
+                    : player.serverLevel().getEntity(entityId);
+            StoryManager.onNpcInteraction(player, npcId, interactionTarget);
+            String afterDialogueRevision = StoryManager.getDialogueRevision(player, npcId)
+                    .orElse("");
+            if (!beforeDialogueRevision.equals(afterDialogueRevision)) {
+                openNpcDialogue(player, npcId, entityId, false);
+                return;
+            }
         } else if (interactionType == NpcInteractionType.GIFT_ITEM) {
             handleGift(player, npc);
         }
@@ -177,7 +235,7 @@ public class NpcManager {
             NpcMessageManager.syncToClient(player);
             return;
         }
-        openNpcDialogue(player, npcId, entityId);
+        openNpcDialogue(player, npcId, entityId, false);
     }
 
     /** reload 后把新配置重新写入所有当前已加载的专用 NPC，并由实体数据自动同步给客户端。 */
@@ -186,11 +244,6 @@ public class NpcManager {
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity loadedEntity : level.getEntities().getAll()) {
                 if (loadedEntity instanceof StoryNpcEntity entity) {
-                    if (!StoryNpcContentPolicy.isRetained(entity.getNpcId())) {
-                        // /npc reload 也立即清理已经加载的旧角色，不必等待下一次实体 tick。
-                        entity.discard();
-                        continue;
-                    }
                     Optional<NpcData> npc = getNpc(entity.getNpcId());
                     if (npc.isPresent()) {
                         entity.applyNpcData(npc.get());
@@ -237,8 +290,12 @@ public class NpcManager {
                 npc.getNpcGender(),
                 npc.getNpcProfession(),
                 npc.getStoryStageId(),
-                StoryFlowEngine.getDialogueOverride(player, npc.getNpcId())
-                        .orElseGet(npc::getDialogues),
+                HospitalStory.serviceResponse(player, npc.getNpcId()).orElseGet(() ->
+                        npc.getNpcId() == StoryNpcContentPolicy.MEDICAL_STAFF_ID
+                                ? List.of(DailyTemplateSupportService.description(player))
+                                : StoryManager.getDialogueOverride(player, npc.getNpcId())
+                                .orElseGet(() -> StoryNpcContentPolicy.isIdentityShell(npc.getNpcId())
+                                        ? List.of() : npc.getDialogues())),
                 thought == null ? "" : thought.getThoughtText(),
                 thought == null ? "" : thought.getWantedItemId(),
                 relation.getFavorability(),
@@ -266,6 +323,14 @@ public class NpcManager {
     private static List<String> getAvailableActionNames(ServerPlayer player, NpcData npc) {
         List<String> actions = new ArrayList<>();
         for (NpcInteractionType type : NpcInteractionType.values()) {
+            if (type == NpcInteractionType.HOSPITAL_REVIEW) {
+                if (HospitalStory.canReview(player, npc.getNpcId())) actions.add(type.name());
+                continue;
+            }
+            if (type == NpcInteractionType.DAILY_TEMPLATE_SUPPORT) {
+                if (DailyTemplateSupportService.isAvailable(player, npc.getNpcId())) actions.add(type.name());
+                continue;
+            }
             if (type == NpcInteractionType.GIFT_ITEM && !GIFT_INTERACTIONS_ENABLED) {
                 continue;
             }
@@ -280,8 +345,9 @@ public class NpcManager {
     /**
      * 为开场内容补齐约定的临时 NPC 槽位。
      *
-     * <p>生产服可能已经有自己的 npc_data.json，因此只使用 putIfAbsent，
-     * 不会覆盖服主编辑过的同编号人物。</p>
+     * <p>生产服可能已经有自己的 npc_data.json；所有内置人物都只使用
+     * putIfAbsent，不会覆盖服主编辑过的同编号人物。身份壳只决定当前剧情未提供
+     * 流程对白时的运行时显示，不会清空持久化档案。</p>
      */
     private static boolean ensureBuiltInOpeningNpcs() {
         Map<Integer, NpcData> builtInNpcs = BuiltInNpcProfileCatalog.loadProfiles();
@@ -289,6 +355,8 @@ public class NpcManager {
             boolean changed = false;
             for (NpcData npc : builtInNpcs.values()) {
                 if (npc != null && StoryNpcContentPolicy.isRetained(npc.getNpcId())) {
+                    // Only fill a missing built-in profile.  A server owner's
+                    // existing profile is never rewritten by a content reload.
                     changed |= putOpeningNpc(npc);
                 }
             }
@@ -313,6 +381,21 @@ public class NpcManager {
                 "负责组织人类逐光联合会筹备、人员登记与基地建设的临时负责人。",
                 "逐光会筹备处负责人",
                 "先把要做的事和能给出的保障写清楚，再让别人决定要不要加入。"));
+        changed |= putOpeningNpc(createMinimalShellNpc(
+                StoryNpcContentPolicy.JIANGWAN_ID,
+                "江晚",
+                2,
+                "dreamingfishcore:textures/entity/npc/jiangwan.png"));
+        changed |= putOpeningNpc(createMinimalShellNpc(
+                StoryNpcContentPolicy.LIANGSHUO_ID,
+                "梁朔",
+                1,
+                "dreamingfishcore:textures/entity/npc/liangshuo.png"));
+        changed |= putOpeningNpc(createMinimalShellNpc(
+                StoryNpcContentPolicy.WEICHINAN_ID,
+                "尉迟南",
+                1,
+                "dreamingfishcore:textures/entity/npc/weichinan.png"));
         return changed;
     }
 
@@ -332,8 +415,42 @@ public class NpcManager {
             String openingDialogue) {
         NpcData npc = new NpcData(npcId, name, introduction, "未知", profession);
         npc.setStoryStageId(1);
-        npc.setDialogues(new ArrayList<>(List.of(openingDialogue)));
+        npc.setDialogues(openingDialogue == null || openingDialogue.isBlank()
+                ? new ArrayList<>() : new ArrayList<>(List.of(openingDialogue)));
         return npc;
+    }
+
+    /**
+     * 仅在默认资源也无法读取、且该 NPC 完全缺失时建立可渲染身份壳。
+     * 已有服主档案永远由 putOpeningNpc 保留，不会被这里清空。动作权限保持关闭
+     * （除 DIALOGUE 外），避免回退壳因缺字段而意外开放玩法。
+     */
+    private static NpcData createMinimalShellNpc(
+            int npcId, String name, int storyStageId, String skin) {
+        NpcData npc = new NpcData(npcId, name, "", "", "");
+        npc.setStoryStageId(storyStageId);
+        npc.setDialogues(new ArrayList<>());
+        npc.setActionFavorabilityRequirements(minimalShellActionRequirements());
+        npc.setCurrentThought(null);
+        npc.setWarningRules(new NpcWarningRuleData());
+        NpcAppearanceData appearance = new NpcAppearanceData();
+        appearance.setSkin(skin);
+        appearance.setModel("slim");
+        appearance.setShowName(true);
+        npc.setAppearance(appearance);
+        return npc;
+    }
+
+    private static Map<String, Integer> minimalShellActionRequirements() {
+        Map<String, Integer> requirements = new HashMap<>();
+        requirements.put("FOLLOW", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        requirements.put("WARNING_RULES", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        requirements.put("VIEW_BACKPACK", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        requirements.put("ASSIGN_TASK", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        requirements.put("GIFT_ITEM", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        requirements.put("DIALOGUE", 0);
+        requirements.put("SET_HOME", MINIMAL_SHELL_ACTION_REQUIREMENT);
+        return requirements;
     }
 
 }

@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttribute
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -60,6 +61,12 @@ public class PlayerCourageManager {
     //消息冷却时间
     private static final Map<UUID, Integer> COURAGE_MSG_COOLDOWN = new ConcurrentHashMap<>();
     private static final int MSG_COOLDOWN_TICKS = 1200;
+    /**
+     * 按一级信标的节奏维持勇气效果：每 80 tick 刷新一次，效果持续 220 tick。
+     * 较长的重叠时间可避免效果到期后重新添加，同时不再每秒刷新属性。
+     */
+    private static final int COURAGE_EFFECT_REFRESH_INTERVAL_TICKS = 80;
+    private static final int COURAGE_EFFECT_DURATION_TICKS = 220;
 
 
     //初始化敌对生物集合
@@ -151,10 +158,8 @@ public class PlayerCourageManager {
 
         // 勇气值低于20%：施加虚弱I + 缓慢I
         if (courageRatio < 0.2F) {
-            MobEffectInstance weaknessEffect = new MobEffectInstance(MobEffects.WEAKNESS, 40, 0, false, true);
-            MobEffectInstance slownessEffect = new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, true);
-            serverPlayer.addEffect(weaknessEffect);
-            serverPlayer.addEffect(slownessEffect);
+            maintainCourageEffect(serverPlayer, MobEffects.WEAKNESS);
+            maintainCourageEffect(serverPlayer, MobEffects.MOVEMENT_SLOWDOWN);
 
             if (canShowMsg) {
                 serverPlayer.displayClientMessage(
@@ -167,8 +172,7 @@ public class PlayerCourageManager {
         }
         // 勇气值高于一定值：施加力量I
         else if (courageRatio >= 0.85F) {
-            MobEffectInstance strengthEffect = new MobEffectInstance(MobEffects.DAMAGE_BOOST, 40, 0, false, true);
-            serverPlayer.addEffect(strengthEffect);
+            maintainCourageEffect(serverPlayer, MobEffects.DAMAGE_BOOST);
 
             if (canShowMsg) {
                 serverPlayer.displayClientMessage(
@@ -267,6 +271,26 @@ public class PlayerCourageManager {
         }
     }
 
+    /** 按原版信标的刷新间隔和效果参数维持勇气效果。 */
+    private static void maintainCourageEffect(ServerPlayer player,
+                                               Holder<net.minecraft.world.effect.MobEffect> effect) {
+        MobEffectInstance existing = player.getEffect(effect);
+        if (existing != null) {
+            // 不覆盖其他模组/药水提供的更高等级效果。
+            if (existing.getAmplifier() != 0
+                    || player.tickCount % COURAGE_EFFECT_REFRESH_INTERVAL_TICKS != 0) {
+                return;
+            }
+        }
+        player.addEffect(new MobEffectInstance(
+                effect,
+                COURAGE_EFFECT_DURATION_TICKS,
+                0,
+                true,
+                true,
+                true));
+    }
+
     @SubscribeEvent
     //监听玩家短时间内是否击杀多只生物，是，增加勇气值
     //同时监听玩家死亡，扣除附近玩家的勇气值
@@ -284,13 +308,9 @@ public class PlayerCourageManager {
         }
 
         // 2. 处理击杀怪物事件：击杀者增加勇气值
-        if (event.getSource().getEntity() == null) {
-            return;
-        }
-        LivingEntity killerEntity = (LivingEntity) event.getSource().getEntity(); // 击杀者
-
-        //过滤条件：击杀者是存活的ServerPlayer + 非创造模式
-        if (!(killerEntity instanceof ServerPlayer serverPlayer)
+        // DamageSource 的致因实体不保证是生物；机械动力列车等实体同样可能造成击杀。
+        // 直接匹配 ServerPlayer，既保留玩家及玩家投射物击杀，也安全忽略机械/环境伤害。
+        if (!(event.getSource().getEntity() instanceof ServerPlayer serverPlayer)
                 || !serverPlayer.isAlive()
                 || !AuthSessionGuard.isAuthenticated(serverPlayer)) {
             return;

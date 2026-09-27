@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.server.notice_system.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryFlowEngine;
+import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeDeliveryService;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeManager;
@@ -52,6 +52,12 @@ public class Packet_MarkNoticeReadRequest implements net.minecraft.network.proto
             return;
         }
 
+        if (msg.noticeId < 0) {
+            if (StoryManager.markRecapRead(serverPlayer, msg.noticeId)) {
+                NoticeDeliveryService.syncVisibleNotices(serverPlayer);
+            }
+            return;
+        }
         NoticeData notice = NoticeManager.getNoticeById(msg.noticeId);
         if (notice == null) {
             DreamingFishCore.LOGGER.warn(
@@ -67,9 +73,12 @@ public class Packet_MarkNoticeReadRequest implements net.minecraft.network.proto
             return;
         }
 
-        PlayerNoticeDataManager.markAsRead(serverPlayer.getUUID(), msg.noticeId);
-        StoryFlowEngine.onNoticeRead(
-                serverPlayer, notice.getNoticeKey(), notice.getNoticeTitle());
+        boolean newlyRead = PlayerNoticeDataManager.markAsRead(
+                serverPlayer.getUUID(), msg.noticeId);
+        if (newlyRead || com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalStory.INFO_NOTICE.equals(notice.getNoticeKey())) {
+            StoryManager.onNoticeRead(
+                    serverPlayer, notice.getNoticeKey(), notice.getNoticeTitle());
+        }
         // 立即刷新 HUD 提醒卡，避免玩家关闭终端后仍看到已读公告提示。
         NoticeDeliveryService.syncVisibleNotices(serverPlayer);
         DreamingFishCore.LOGGER.debug("玩家 {} 标记公告 {} 为已读", serverPlayer.getName().getString(), msg.noticeId);

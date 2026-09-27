@@ -7,5 +7,7 @@ public enum NpcInteractionType {
     SET_HOME,
     VIEW_BACKPACK,
     ASSIGN_TASK,
-    WARNING_RULES
+    WARNING_RULES,
+    HOSPITAL_REVIEW,
+    DAILY_TEMPLATE_SUPPORT
 }

@@ -20,9 +20,12 @@ public class NpcRelationManager {
 
     private static boolean dirty;
     private static boolean loaded;
+    private static boolean writesEnabled;
 
     public static void loadWorldData(MinecraftServer server) {
         RELATION_CACHE.clear();
+        dirty = false;
+        writesEnabled = false;
         try {
             Map<String, NpcRelationData> loadedData = JsonDataStore.read(
                     WorldDataPaths.resolve(server, "npc", "relations.json"),
@@ -31,11 +34,14 @@ public class NpcRelationManager {
                     ConcurrentHashMap::new);
             loadedData.forEach(NpcRelationManager::putIfValid);
             RELATION_CACHE.values().forEach(NpcRelationData::refreshRelationType);
-            // 被删除 NPC 的关系记录不再进入运行时；下一次保存会把本地存档一并收口。
+            // Invalid rows are ignored in memory, but historical relations for
+            // NPCs no longer driven by the current story remain intact on disk.
             dirty = RELATION_CACHE.size() != loadedData.size();
+            writesEnabled = true;
             DreamingFishCore.LOGGER.info("NPC关系数据加载完成，共 {} 条", RELATION_CACHE.size());
         } catch (Exception exception) {
             dirty = false;
+            writesEnabled = false;
             DreamingFishCore.LOGGER.error("读取世界 NPC 关系数据失败，本次会话不会覆盖损坏文件", exception);
         } finally {
             loaded = true;
@@ -52,13 +58,18 @@ public class NpcRelationManager {
         NpcRelationData created = new NpcRelationData(npcId, playerUUID);
         NpcRelationData raced = RELATION_CACHE.putIfAbsent(key, created);
         if (raced == null) {
-            dirty = true;
+            if (writesEnabled) {
+                dirty = true;
+            }
             return created;
         }
         return raced;
     }
 
     public static void addFavorability(int npcId, UUID playerUUID, int amount) {
+        if (!writesEnabled) {
+            return;
+        }
         NpcRelationData relation = getRelation(npcId, playerUUID);
         relation.addFavorability(amount);
         dirty = true;
@@ -69,6 +80,9 @@ public class NpcRelationManager {
             UUID playerUUID,
             String effectId,
             int amount) {
+        if (!writesEnabled) {
+            return false;
+        }
         NpcRelationData relation = getRelation(npcId, playerUUID);
         if (!relation.applyFavorabilityEffect(effectId, amount)) {
             return false;
@@ -87,12 +101,19 @@ public class NpcRelationManager {
      */
     public static void save() {
         ensureLoaded();
+        if (!writesEnabled) {
+            return;
+        }
         dirty = true;
     }
 
     public static boolean saveIfDirty(MinecraftServer server) {
         if (!loaded || !dirty) {
             return true;
+        }
+        if (!writesEnabled) {
+            DreamingFishCore.LOGGER.error("NPC关系数据处于只读保护，拒绝覆盖损坏文件");
+            return false;
         }
         try {
             JsonDataStore.writeAtomic(
@@ -111,6 +132,7 @@ public class NpcRelationManager {
         RELATION_CACHE.clear();
         dirty = false;
         loaded = false;
+        writesEnabled = false;
     }
 
     private static String makeKey(int npcId, UUID playerUUID) {
@@ -120,7 +142,6 @@ public class NpcRelationManager {
     private static void putIfValid(String key, NpcRelationData relation) {
         if (key == null || relation == null || relation.getNpcId() <= 0
                 || relation.getTargetPlayerUUID() == null
-                || !StoryNpcContentPolicy.isRetained(relation.getNpcId())
                 || !key.equals(makeKey(relation.getNpcId(), relation.getTargetPlayerUUID()))) {
             return;
         }

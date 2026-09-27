@@ -1,0 +1,17 @@
+{
+  "vertex": "dreamingfishcore:black_hole_lens",
+  "fragment": "dreamingfishcore:black_hole_lens",
+  "samplers": [{"name": "SceneSampler"}, {"name": "DepthSampler"}],
+  "uniforms": [
+    {"name": "Viewport", "type": "float", "count": 2, "values": [1, 1]},
+    {"name": "LensCount", "type": "int", "count": 1, "values": [0]},
+    {"name": "Hole0", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Hole1", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Hole2", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Hole3", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Shape0", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Shape1", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Shape2", "type": "float", "count": 4, "values": [0, 0, 0, 0]},
+    {"name": "Shape3", "type": "float", "count": 4, "values": [0, 0, 0, 0]}
+  ]
+}

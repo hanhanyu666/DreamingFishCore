@@ -1,69 +1,71 @@
-# “梦的开始”上线投放说明
+# “梦的开始”运行指南
 
-本说明对应阿拜多斯开场的 `story_flows.json` schema 2 实现。开场已经完全迁移到
-`StoryFlowEngine`；公告、地点、NPC 实体交互、NPC 预设回复和认证模块只提交事实事件，
-由流程节点统一推进玩家游标和效果。这里不发布余梦期及后续阶段内容。
+第一阶段的唯一流程代码是
+`src/main/java/com/hhy/dreamingfishcore/gameplay/opening_story_system/OpeningStory.java`。
+`StoryManager` 负责接收外部事件和保存状态；阶段文件不读写自己的进度文件。
 
-## 当前保留内容
-
-- NPC 运行时只保留 `101` 白芷和 `105` 周岑。
-- 公告只保留 `opening.desert_town`（“阿拜多斯 · 临时安置通知”）。
-- 白芷、周岑的阿拜多斯文案，以及玩家与他们的私信历史继续保留。
-- 随记本仍是独立收藏系统，本轮没有接入故事流程。
-
-## 开场流程
-
-1. 玩家完成登录认证后，流程从自己的 `read_abydos_notice` 游标开始；全服阶段不会因玩家行为自动变化。
-2. 玩家真正读完阿拜多斯公告后，`NOTICE_READ` 节点创建“前往阿拜多斯”引导。
-3. 玩家进入稳定地点 ID
-   `dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3` 后，`LOCATION_ENTERED` 节点发送白芷到达消息，
-   完成前往引导、记录“抵达阿拜多斯”个人任务，并创建“去学校找白芷”引导。
-4. 玩家与白芷实体交谈后，`NPC_INTERACTION` 节点发送周岑联络消息，完成会面任务并创建联络引导。
-5. 玩家回复周岑的联络消息，再阅读介绍消息；选择加入或保持独立是每名玩家自己的组织身份分支。
-6. 加入分支记录选择、发放一次性补给并创建基地建设引导；独立分支只记录选择，不承担成员建设任务。
-
-每个节点都按玩家流程游标匹配。一次性效果会写入效果日志，重连、重复点击、重复进入地点和服务器重启
-都不会重复发放物品或重复发送同一条开场消息。修复型节点可以声明 `once: false`，用于登录时补齐尚未
-落下的建设引导。
-
-## 阶段规则
-
-阶段顺序固定为：梦的开始 → 余梦期 → 管制期 → 疑光期 → 破晓期。阶段只能由服主手动发布，故事流程节点
-不会自动切换阶段。后四阶段本轮只有空壳定义。
-
-## 运行文件
-
-- `config/dreamingfishcore/story_stage_data.json`：阶段和任务定义。
-- `config/dreamingfishcore/story_flows.json`：事实事件、节点条件、效果和流程台词。
-- `config/dreamingfishcore/npc_data.json`：白芷、周岑档案和面对面对话。
-- `config/dreamingfishcore/npc_messages.json`：白芷/周岑私信、预设回复和后续消息。
-- `config/dreamingfishcore/notices.json`：阿拜多斯公告。
-- 世界数据 `data/dreamingfishcore/story/flow_player_progress.json`：每名玩家的流程游标、完成节点、一次性效果日志和旗标。
-
-流程进度与全服阶段状态分开保存；玩家加入逐光会不会改变全服阶段。
-
-## 服主检查与热重载
+## 状态链
 
 ```text
-/npc reload
-/npc list
-/npc messages list
-/dreamingfish story status
-/dreamingfish story content validate
-/dreamingfish story content reload <contentId>
+NOT_STARTED
+  → TRAVEL_TO_ABYDOS
+  → TALK_TO_BAIZHI
+  → CONTACT_ZHOUCEN
+  → CHOOSE_MEMBERSHIP
+       ├─ BUILD_ZHUIGUANG_BASE
+       └─ DECLINED_ZHUIGUANG
 ```
 
-阶段仍由服主手动发布，例如：
+状态事实保存在唯一文件：
 
 ```text
-/dreamingfish story stage set dreamingfishcore:dream_beginning
-/dreamingfish story stage set dreamingfishcore:afterdream
+<世界>/data/dreamingfishcore/story/story_state.json
 ```
 
-流程配置必须使用 schema 2。校验失败时会使用只读内置阿拜多斯流程，拒绝覆盖损坏的配置和玩家流程存档；
-本版本不读取旧的开场专用进度文件，也不把地点显示名称当作事实或自动映射。
+其中 `openingPlayerProgress` 保存每名玩家的第一阶段状态和一次性补给标记。
 
-## 扩展节点
+## 玩家流程
 
-以后新增公告、线索、随机本或更多 NPC 内容时，在 `story_flows.json` 增加节点和效果即可。模块代码只需
-在边界处发出新的 `StoryEvent`，不再把一条剧情拆散写进公告、地点、NPC 和登录模块的互相调用中。
+1. 读 `opening.desert_town` 公告。
+2. 进入阿拜多斯稳定地点
+   `dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3`。
+3. 在地点内与白芷交谈，收到周岑联络消息。
+4. 查看并回复周岑联络消息，阅读周岑介绍。
+5. 选择加入逐光会或保持独立。
+
+加入选择会先写入会员身份，再发放一次 starter supply；独立选择不发成员补给。所有
+入口都在服务端检查阶段、玩家身份和地点，客户端不能提交“已完成”来跳过步骤。
+
+## 代码入口
+
+| 事实 | `StoryManager` 入口 | 阶段处理 |
+| --- | --- | --- |
+| 公告已读 | `onNoticeRead` | `OpeningStory.onNoticeRead` |
+| 地点进入 | `onLocationObserved` | `OpeningStory.onLocationEntered` |
+| 白芷/周岑交互 | `onNpcInteraction` | `OpeningStory.onNpcInteraction` |
+| 周岑预设回复 | `onNpcReply` | `OpeningStory.onNpcReply` |
+| 登录重连 | `onPlayerAuthenticated` | `OpeningStory.onPlayerAuthenticated` |
+
+NPC 私信和公告系统只负责实际投递/记录；它们不能自行推进状态。引导和故事任务是状态
+的显示投影，登录时可以重建投影，但不会凭空前进或重复发奖。
+
+## 文案位置
+
+对白、引导标题/正文和通知在：
+
+```text
+config/dreamingfishcore/story_text.json
+```
+
+私信正文和回复在 `config/dreamingfishcore/npc_messages.json`，NPC 身份和普通闲聊在
+`npc_data.json`。这些配置只能改文字或关系条件，不能改变 Java 顺序和奖励。
+
+## 第一阶段结束
+
+第一阶段不会因某名玩家的选择自动切换全服阶段。服主切换到
+`dreamingfishcore:afterdream` 后，建设基地任务统一作为历史收束，旧阶段入口不再响应。
+
+## 当前不实现
+
+基地贡献、随机线索、调查板、社区投票和自动阶段切换都不属于当前简易版。不要恢复旧
+`story_flows.json` 或增加旧游标迁移代码。

@@ -2,7 +2,10 @@ package com.hhy.dreamingfishcore.gameplay.npc_message_system;
 
 import java.util.List;
 
-/** 客户端只读消息视图；可用回复由服务端按当前好感度筛选。 */
+/**
+ * 客户端只读消息视图。回复按钮始终来自投递时保存的快照；没有快照的历史记录
+ * 仍可阅读，但不会重新获得交互按钮。
+ */
 public record NpcMessageViewData(
         String recordId,
         String definitionId,

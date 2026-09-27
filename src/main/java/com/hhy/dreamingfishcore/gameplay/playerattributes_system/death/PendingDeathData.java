@@ -22,6 +22,16 @@ public final class PendingDeathData {
     private static final String STATE_RESOLVING = "resolving";
     private static final int SCHEMA_VERSION = 3;
 
+    /**
+     * 已结算但尚未定位到的尸体。
+     *
+     * <p>尸体所在区块未加载时，复活结算可能找不到实体；死亡记录随后会被完成并清除。
+     * 一旦丢掉尸体引用，尸体实体会带着 {@code Resolved=false} 永久停在“等待复活结算”，
+     * 玩家再也无法领取。这里独立保存“这次死亡已经结算、这具尸体还等着被恢复为可取回”
+     * 的意图，供 {@code DeathCorpseManager} 重试定位和尸体加载后自愈使用。</p>
+     */
+    private static final String SETTLED_CORPSE_KEY = "DreamingFishCore_SettledCorpse";
+
     private static final String LEGACY_PENDING = "DreamingFishCore_DeathPending";
     private static final String LEGACY_RESPAWN_POINT = "DreamingFishCore_DeathRespawnPoint";
     private static final String LEGACY_NORMAL_COST = "DreamingFishCore_DeathNormalCost";
@@ -124,6 +134,37 @@ public final class PendingDeathData {
             return;
         }
         writeCorpseLocation(record, location, dangerRelocated);
+    }
+
+    /**
+     * 当服务器已经载入尸体实体、但玩家记录中的 UUID 过期时修复引用。
+     *
+     * <p>这里只接受当前仍处于待结算状态的记录，避免把已经完成的死亡记录重新挂回玩家身上。</p>
+     */
+    public static boolean repairCorpseReference(ServerPlayer player,
+                                                UUID corpseId,
+                                                DeathLocation location,
+                                                boolean dangerRelocated,
+                                                boolean hadItems) {
+        if (player == null || corpseId == null) {
+            return false;
+        }
+        CompoundTag record = getRecord(player);
+        if (record == null) {
+            return false;
+        }
+        String state = record.getString("State");
+        if (!STATE_PENDING.equals(state) && !STATE_RESOLVING.equals(state)) {
+            return false;
+        }
+
+        record.putUUID("CorpseId", corpseId);
+        record.putBoolean("CorpseCreated", true);
+        record.putBoolean("CorpseHadItems", hadItems);
+        if (location != null) {
+            writeCorpseLocation(record, location, dangerRelocated);
+        }
+        return true;
     }
 
     public static boolean wasCorpseCreated(ServerPlayer player) {
@@ -239,6 +280,36 @@ public final class PendingDeathData {
         return requireRecord(player).getBoolean("CorpseDangerRelocated");
     }
 
+    /**
+     * 记录“这次死亡已经结算、尸体还没被定位到”。
+     *
+     * <p>必须在死亡记录被清除之后依然存在，否则找不到尸体的那次结算会永久丢失尸体引用。</p>
+     */
+    public static void markSettledCorpse(ServerPlayer player,
+                                         UUID corpseId,
+                                         boolean locked,
+                                         DeathLocation location) {
+        if (player == null || corpseId == null) {
+            return;
+        }
+        SettledCorpse.write(player.getPersistentData(), new SettledCorpse(
+                corpseId,
+                locked,
+                location == null ? "" : location.dimension(),
+                location == null ? 0.0D : location.x(),
+                location == null ? 0.0D : location.y(),
+                location == null ? 0.0D : location.z()));
+    }
+
+    public static java.util.Optional<SettledCorpse> getSettledCorpse(ServerPlayer player) {
+        return player == null ? java.util.Optional.empty() : SettledCorpse.read(player.getPersistentData());
+    }
+
+    /** 只在标记仍指向同一具尸体时清除，避免误删随后发生的另一次结算。 */
+    public static boolean clearSettledCorpse(ServerPlayer player, UUID corpseId) {
+        return player != null && SettledCorpse.clear(player.getPersistentData(), corpseId);
+    }
+
     public static Component getDeathMessage(ServerPlayer player) {
         String json = requireRecord(player).getString("DeathMessage");
         if (!json.isBlank()) {
@@ -322,5 +393,56 @@ public final class PendingDeathData {
     }
 
     public record DeathLocation(String dimension, double x, double y, double z) {
+    }
+
+    /**
+     * 一次已经结算、但当时没能定位到实体的尸体。
+     *
+     * <p>{@code locked} 保留玩家在死亡界面上选择的尸体拾取权限，避免延迟结算时丢掉选择；
+     * 位置用于重试期间重新请求区块加载。</p>
+     */
+    public record SettledCorpse(UUID corpseId,
+                                boolean locked,
+                                String dimension,
+                                double x,
+                                double y,
+                                double z) {
+
+        static void write(CompoundTag persistentData, SettledCorpse settled) {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("CorpseId", settled.corpseId());
+            tag.putBoolean("Locked", settled.locked());
+            tag.putString("Dimension", settled.dimension() == null ? "" : settled.dimension());
+            tag.putDouble("X", settled.x());
+            tag.putDouble("Y", settled.y());
+            tag.putDouble("Z", settled.z());
+            persistentData.put(SETTLED_CORPSE_KEY, tag);
+        }
+
+        static java.util.Optional<SettledCorpse> read(CompoundTag persistentData) {
+            if (persistentData == null || !persistentData.contains(SETTLED_CORPSE_KEY, Tag.TAG_COMPOUND)) {
+                return java.util.Optional.empty();
+            }
+            CompoundTag tag = persistentData.getCompound(SETTLED_CORPSE_KEY);
+            if (!tag.hasUUID("CorpseId")) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(new SettledCorpse(
+                    tag.getUUID("CorpseId"),
+                    tag.getBoolean("Locked"),
+                    tag.getString("Dimension"),
+                    tag.getDouble("X"),
+                    tag.getDouble("Y"),
+                    tag.getDouble("Z")));
+        }
+
+        static boolean clear(CompoundTag persistentData, UUID corpseId) {
+            java.util.Optional<SettledCorpse> settled = read(persistentData);
+            if (settled.isEmpty() || (corpseId != null && !settled.get().corpseId().equals(corpseId))) {
+                return false;
+            }
+            persistentData.remove(SETTLED_CORPSE_KEY);
+            return true;
+        }
     }
 }

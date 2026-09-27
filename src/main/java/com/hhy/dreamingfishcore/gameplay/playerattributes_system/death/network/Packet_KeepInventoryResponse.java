@@ -79,9 +79,10 @@ public class Packet_KeepInventoryResponse implements net.minecraft.network.proto
             mc.player.respawn();
             mc.setScreen(null);
         } else {
-            // 失败：显示错误消息
+            // 服务端会另外发送具体原因（复活点不足、尸体未加载、物品栏放不下）；
+            // 这里不能只报“复活点不足”，否则玩家会误以为物品已经丢失。
             mc.player.displayClientMessage(
-                    Component.literal("§c复活点不足！"),
+                    Component.literal("§c保留物品结算未完成，请按提示重试或选择“重生”。"),
                     true
             );
         }

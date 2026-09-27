@@ -24,6 +24,11 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
     }
 
     public static void encode(Packet_UpdateStoryBookOrder packet, FriendlyByteBuf buf) {
+        if (packet == null || packet.orderedFragmentIds == null
+                || packet.orderedFragmentIds.size()
+                > StoryBookDataManager.MAX_NETWORK_ORDER_ENTRIES) {
+            throw new IllegalArgumentException("随记本排序条目超过上限");
+        }
         buf.writeVarInt(packet.orderedFragmentIds.size());
         for (Integer fragmentId : packet.orderedFragmentIds) {
             buf.writeVarInt(fragmentId);
@@ -32,6 +37,9 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
 
     public static Packet_UpdateStoryBookOrder decode(FriendlyByteBuf buf) {
         int size = buf.readVarInt();
+        if (size < 0 || size > StoryBookDataManager.MAX_NETWORK_ORDER_ENTRIES) {
+            throw new IllegalArgumentException("随记本排序条目数量非法：" + size);
+        }
         List<Integer> orderedIds = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             orderedIds.add(buf.readVarInt());
