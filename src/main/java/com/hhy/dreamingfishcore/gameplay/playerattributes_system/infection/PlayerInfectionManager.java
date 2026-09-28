@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.effect.DreamingFishCore_Effects;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
@@ -9,7 +10,6 @@ import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
@@ -32,6 +32,8 @@ public class PlayerInfectionManager {
 
     private static final int INFECTION_CHECK_INTERVAL = 40;
     private static final float INFECTION_EPSILON = 0.01F;
+    /** 「感染」效果的持续时间；检查间隔是 40 tick，取同样长度即可无缝隙覆盖。 */
+    private static final int INFECTION_EFFECT_DURATION_TICKS = 40;
     /** 面具阶段新晋一级感染者可以接受治疗的完整游戏日。 */
     public static final long NEW_LEVEL_ONE_TREATMENT_WINDOW_TICKS = 24_000L;
 
@@ -72,24 +74,14 @@ public class PlayerInfectionManager {
         int msgShownLevel = INFECTION_MSG_SHOWN.getOrDefault(playerUUID, 0);
 
         if (infectionRatio >= 1.0F) {
-            MobEffectInstance slownessEffect = new MobEffectInstance(
-                    MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, true);
-            MobEffectInstance weaknessEffect = new MobEffectInstance(
-                    MobEffects.WEAKNESS, 40, 0, false, true);
-            serverPlayer.addEffect(slownessEffect);
-            serverPlayer.addEffect(weaknessEffect);
+            applyInfectionDebuff(serverPlayer);
 
             if (msgShownLevel < 3) {
                 sendInfectionStateMessage(serverPlayer, attributesData);
                 INFECTION_MSG_SHOWN.put(playerUUID, 3);
             }
         } else if (infectionRatio >= 0.8F) {
-            MobEffectInstance slownessEffect = new MobEffectInstance(
-                    MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, true);
-            MobEffectInstance weaknessEffect = new MobEffectInstance(
-                    MobEffects.WEAKNESS, 40, 0, false, true);
-            serverPlayer.addEffect(slownessEffect);
-            serverPlayer.addEffect(weaknessEffect);
+            applyInfectionDebuff(serverPlayer);
 
             if (msgShownLevel < 2) {
                 serverPlayer.displayClientMessage(
@@ -471,6 +463,18 @@ public class PlayerInfectionManager {
                 data.isInfected(),
                 data.getInfectionLevel(),
                 getInfectionMaximum(player, data));
+    }
+
+    /**
+     * 感染值过高时的负面状态：施加模组自有的「感染」。
+     *
+     * <p>它内部同时施加移速 -15% 与攻击力 -4（与原版缓慢 I + 虚弱 I 完全等价），
+     * 但 HUD 上显示为「感染」，玩家能立刻知道惩罚来自感染而不是某个药水。</p>
+     */
+    private static void applyInfectionDebuff(ServerPlayer player) {
+        player.addEffect(new MobEffectInstance(
+                DreamingFishCore_Effects.INFECTION,
+                INFECTION_EFFECT_DURATION_TICKS, 0, false, true));
     }
 
     private static void sendInfectionStateMessage(ServerPlayer player, PlayerAttributesData data) {

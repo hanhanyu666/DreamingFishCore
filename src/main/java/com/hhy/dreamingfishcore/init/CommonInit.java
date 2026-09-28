@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.init;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueDropConfig;
 import com.hhy.dreamingfishcore.gameplay.kill_effect_system.KillEffectConfig;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcManager;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
@@ -34,6 +35,7 @@ public final class CommonInit {
         NpcManager.init();
         NpcMessageManager.init();
         LimbDamageConfig.init();
+        ClueDropConfig.init();
         KillEffectConfig.init();
         ZombieSpeciesConfig.init();
     }

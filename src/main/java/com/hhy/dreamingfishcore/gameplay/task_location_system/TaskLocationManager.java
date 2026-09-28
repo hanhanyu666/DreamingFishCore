@@ -8,6 +8,7 @@ import com.hhy.dreamingfishcore.server.notice_system.NotificationPushHelper;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -362,6 +363,52 @@ public final class TaskLocationManager {
                 session.first, session.second, session.mode);
         upsert(definition);
         SELECTIONS.remove(player.getUUID());
+        return definition;
+    }
+
+    /**
+     * 用**显式 ID** 安装或更新一个地点。
+     *
+     * <p>剧情代码按固定 ID 引用地点（阿拜多斯区间、逐光会医疗接待区域），而
+     * {@link #beginSelection} 生成的 ID 是随机的，永远命中不了这些硬编码引用；因此需要
+     * 一个能指定 ID 的写入口。校验、重叠检查与写盘路径与 {@link #confirmSelection} 完全一致，
+     * 同 ID 重复调用即为“移动／改范围”。</p>
+     *
+     * <p><b>同名地点会被替换</b>：服主可能已经用选区命令建过一个同名地点（随机 ID）。地点名称
+     * 必须唯一，两个同名条目会让整份配置在下次加载时校验失败、地点系统整场退出可写状态，所以这里
+     * 直接移除同名旧条目再写入。写入失败时连同旧条目一起回滚。</p>
+     */
+    public static synchronized TaskLocationDefinition installLocationWithFixedId(
+            String locationId, String displayName, ResourceKey<Level> dimension,
+            BlockPos first, BlockPos second, TaskLocationMode mode) {
+        ensureWritable();
+        TaskLocationDefinition.requireValidId(locationId, "任务地点");
+        TaskLocationDefinition definition = new TaskLocationDefinition(
+                locationId, requireLocationName(displayName), dimension, first, second, mode);
+        // 先完成校验，避免在改动内存后才发现定义本身非法。
+        definition.validate();
+
+        String normalizedName = normalizeLocationName(definition.getName());
+        TaskLocationDefinition sameName = LOCATIONS.values().stream()
+                .filter(location -> !location.getId().equals(locationId)
+                        && normalizeLocationName(location.getName()).equals(normalizedName))
+                .findFirst()
+                .orElse(null);
+        if (sameName != null) {
+            LOCATIONS.remove(sameName.getId());
+        }
+
+        try {
+            upsert(definition);
+        } catch (RuntimeException exception) {
+            if (sameName != null) {
+                LOCATIONS.put(sameName.getId(), sameName);
+            }
+            throw exception;
+        }
+        if (sameName != null) {
+            BuildableTerritoryPolicy.clearAll();
+        }
         return definition;
     }
 

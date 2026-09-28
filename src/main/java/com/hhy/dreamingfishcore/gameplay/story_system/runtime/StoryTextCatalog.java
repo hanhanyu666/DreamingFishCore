@@ -112,6 +112,29 @@ public final class StoryTextCatalog {
     public static final String AFTERDREAM_TASK_MASK_NAME = "afterdream.task.mask.name";
     public static final String AFTERDREAM_TASK_MASK_CONTENT = "afterdream.task.mask.content";
 
+    // ===== 二次/重症感染的三次早期逆转疗程 =====
+    public static final String AFTERDREAM_COURSE_GUIDANCE_TITLE = "afterdream.course.guidance.title";
+    public static final String AFTERDREAM_COURSE_GUIDANCE_CONTENT = "afterdream.course.guidance.content";
+    public static final String AFTERDREAM_COURSE_GUIDANCE_QUOTE = "afterdream.course.guidance.quote";
+    public static final String AFTERDREAM_COURSE_WAITING = "afterdream.course.waiting";
+    public static final String AFTERDREAM_COURSE_DOSE_DONE = "afterdream.course.dose_done";
+    public static final String AFTERDREAM_COURSE_COMPLETED_NOTIFICATION = "afterdream.course.completed_notification";
+
+    // ===== 终检后的第 3 / 7 天随访（白芷） =====
+    public static final String AFTERDREAM_FOLLOWUP_GUIDANCE_TITLE = "afterdream.followup.guidance.title";
+    public static final String AFTERDREAM_FOLLOWUP_GUIDANCE_CONTENT = "afterdream.followup.guidance.content";
+    public static final String AFTERDREAM_FOLLOWUP_GUIDANCE_QUOTE = "afterdream.followup.guidance.quote";
+    public static final String AFTERDREAM_FOLLOWUP_REVIEW_DONE = "afterdream.followup.review_done";
+
+    // ===== 疗程与随访对白 =====
+    public static final String AFTERDREAM_JIANGWAN_COURSE_START = "afterdream.jiangwan.dialogue.course_start";
+    public static final String AFTERDREAM_JIANGWAN_COURSE_WAITING = "afterdream.jiangwan.dialogue.course_waiting";
+    public static final String AFTERDREAM_JIANGWAN_COURSE_DOSE = "afterdream.jiangwan.dialogue.course_dose";
+    public static final String AFTERDREAM_JIANGWAN_COURSE_FINAL = "afterdream.jiangwan.dialogue.course_final";
+    public static final String AFTERDREAM_JIANGWAN_LEVEL_TWO_COURSE = "afterdream.jiangwan.dialogue.level_two_course";
+    public static final String AFTERDREAM_BAIZHI_FOLLOWUP_THIRD_DAY = "afterdream.baizhi.dialogue.followup_third_day";
+    public static final String AFTERDREAM_BAIZHI_FOLLOWUP_SEVENTH_DAY = "afterdream.baizhi.dialogue.followup_seventh_day";
+
     private static final String DEFAULT_RESOURCE = "/dreamingfishcore/defaults/story_text.json";
     private static final int CURRENT_SCHEMA_VERSION = 1;
     private static final Gson GSON = new GsonBuilder()
@@ -149,13 +172,22 @@ public final class StoryTextCatalog {
             AFTERDREAM_TASK_MESSAGE_NAME, AFTERDREAM_TASK_MESSAGE_CONTENT,
             AFTERDREAM_TASK_RECEPTION_NAME, AFTERDREAM_TASK_RECEPTION_CONTENT,
             AFTERDREAM_TASK_REVIEW_NAME, AFTERDREAM_TASK_REVIEW_CONTENT,
-            AFTERDREAM_TASK_MASK_NAME, AFTERDREAM_TASK_MASK_CONTENT);
+            AFTERDREAM_TASK_MASK_NAME, AFTERDREAM_TASK_MASK_CONTENT,
+            AFTERDREAM_COURSE_GUIDANCE_TITLE, AFTERDREAM_COURSE_GUIDANCE_CONTENT,
+            AFTERDREAM_COURSE_GUIDANCE_QUOTE, AFTERDREAM_COURSE_WAITING,
+            AFTERDREAM_COURSE_DOSE_DONE, AFTERDREAM_COURSE_COMPLETED_NOTIFICATION,
+            AFTERDREAM_FOLLOWUP_GUIDANCE_TITLE, AFTERDREAM_FOLLOWUP_GUIDANCE_CONTENT,
+            AFTERDREAM_FOLLOWUP_GUIDANCE_QUOTE, AFTERDREAM_FOLLOWUP_REVIEW_DONE);
     private static final Set<String> REQUIRED_DIALOGUE_KEYS = Set.of(
             OPENING_BAIZHI_TALK, OPENING_BAIZHI_CONTACT, OPENING_BAIZHI_CHOOSE,
             AFTERDREAM_JIANGWAN_COMMON, AFTERDREAM_JIANGWAN_CHECKING,
             AFTERDREAM_JIANGWAN_LEVEL_ONE, AFTERDREAM_JIANGWAN_NONINFECTED,
             AFTERDREAM_JIANGWAN_LEVEL_TWO, AFTERDREAM_JIANGWAN_AWAITING,
-            AFTERDREAM_JIANGWAN_COMPLETED, AFTERDREAM_JIANGWAN_MASK);
+            AFTERDREAM_JIANGWAN_COMPLETED, AFTERDREAM_JIANGWAN_MASK,
+            AFTERDREAM_JIANGWAN_COURSE_START, AFTERDREAM_JIANGWAN_COURSE_WAITING,
+            AFTERDREAM_JIANGWAN_COURSE_DOSE, AFTERDREAM_JIANGWAN_COURSE_FINAL,
+            AFTERDREAM_JIANGWAN_LEVEL_TWO_COURSE,
+            AFTERDREAM_BAIZHI_FOLLOWUP_THIRD_DAY, AFTERDREAM_BAIZHI_FOLLOWUP_SEVENTH_DAY);
 
     private static final Map<String, String> TEXTS = new LinkedHashMap<>();
     private static final Map<String, List<String>> DIALOGUES = new LinkedHashMap<>();
@@ -173,10 +205,11 @@ public final class StoryTextCatalog {
         try {
             Document document = existed ? read(path) : bundled();
             boolean addedHospitalText = addMissingHospitalText(document);
+            boolean addedCourseText = addMissingAfterdreamCourseText(document);
             validate(document);
             install(document);
             writable = true;
-            if (!existed || addedHospitalText) {
+            if (!existed || addedHospitalText || addedCourseText) {
                 JsonDataStore.writeAtomic(path, GSON, document);
             }
             loaded = true;
@@ -336,6 +369,46 @@ public final class StoryTextCatalog {
             }
         }
         return changed;
+    }
+
+    /**
+     * 给已经存在于服务器上的旧配置补上疗程与随访新增的文案键。
+     *
+     * <p>只补内置文案里存在、而服主配置里完全没有的键；玩家或服主已经改写过的条目
+     * 不会被覆盖，漏改的情况也不会被静默替换。</p>
+     */
+    private static boolean addMissingAfterdreamCourseText(Document document) {
+        if (document == null) {
+            return false;
+        }
+        Document bundledDocument = bundled();
+        boolean changed = false;
+        if (document.texts != null && bundledDocument.texts != null) {
+            for (var entry : bundledDocument.texts.entrySet()) {
+                if (isCourseOrFollowUpKey(entry.getKey()) && !document.texts.containsKey(entry.getKey())) {
+                    document.texts.put(entry.getKey(), entry.getValue());
+                    changed = true;
+                }
+            }
+        }
+        if (document.dialogues != null && bundledDocument.dialogues != null) {
+            for (var entry : bundledDocument.dialogues.entrySet()) {
+                if (isCourseOrFollowUpKey(entry.getKey()) && !document.dialogues.containsKey(entry.getKey())) {
+                    document.dialogues.put(entry.getKey(), entry.getValue());
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static boolean isCourseOrFollowUpKey(String key) {
+        return key != null
+                && (key.startsWith("afterdream.course.")
+                || key.startsWith("afterdream.followup.")
+                || key.startsWith("afterdream.jiangwan.dialogue.course")
+                || key.startsWith("afterdream.jiangwan.dialogue.level_two_course")
+                || key.startsWith("afterdream.baizhi.dialogue.followup"));
     }
 
     private static Path configPath() {

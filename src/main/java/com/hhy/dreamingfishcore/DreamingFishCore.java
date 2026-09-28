@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_CreativeTabs;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import com.hhy.dreamingfishcore.loot.DreamingFishCore_LootModifiers;
+import com.hhy.dreamingfishcore.effect.DreamingFishCore_Effects;
 import com.hhy.dreamingfishcore.init.CommonInit;
 import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntities;
@@ -29,6 +30,8 @@ public class DreamingFishCore {
         DreamingFishCore_NetworkManager.register(modEventBus);
         // 注册创造物品栏
         DreamingFishCore_CreativeTabs.CREATIVE_TABS.register(modEventBus);
+        // 注册状态效果（感染 / 害怕 / 勇气）
+        DreamingFishCore_Effects.register(modEventBus);
         DreamingFishCore_LootModifiers.register(modEventBus);
         StoryNpcEntities.register(modEventBus);
         SiegeZombieEntities.register(modEventBus);

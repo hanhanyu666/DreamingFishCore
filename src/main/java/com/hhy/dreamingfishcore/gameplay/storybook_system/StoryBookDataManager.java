@@ -104,6 +104,7 @@ public class StoryBookDataManager {
         CHAPTER_INDEX.clear();
         // 每次重载都从只读保护开始；不能沿用上一个世界/上一次成功加载的状态。
         fragmentConfigWritable = false;
+        BuiltInFragmentCatalog.load();
 
         if (Files.notExists(FRAGMENT_DATA_PATH) && !saveDefaultFragmentConfig()) {
             return;
@@ -122,6 +123,17 @@ public class StoryBookDataManager {
                     FRAGMENT_LIST_TYPE,
                     ArrayList::new);
             validateFragmentList(fragmentList);
+
+            // 2.3.3 之前默认写入的是空数组（“开服前暂不投放随机线索”）。
+            // 配置文件完整读取并校验通过后，才把内置线索补进去，避免覆盖玩家或服主
+            // 已经编辑过的内容，也避免半份坏配置被内置文案顶掉。
+            if (fragmentList.isEmpty() && BuiltInFragmentCatalog.isAvailable()) {
+                List<FragmentData> builtInFragments = BuiltInFragmentCatalog.fragments();
+                validateFragmentList(builtInFragments);
+                JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, builtInFragments);
+                fragmentList = builtInFragments;
+                DreamingFishCore.LOGGER.info("线索配置为空，已写入内置线索 {} 条", builtInFragments.size());
+            }
 
             // 先在临时索引中完整构建，最后一次性提交，避免半份坏配置留在运行缓存。
             Map<Integer, FragmentData> fragments = new LinkedHashMap<>();
@@ -176,8 +188,10 @@ public class StoryBookDataManager {
      * 保存默认片段配置
      */
     private static boolean saveDefaultFragmentConfig() {
-        // 开服前暂不投放随机线索。保留空配置，后续可直接加入正式片段。
-        List<FragmentData> defaultFragments = new ArrayList<>();
+        // 首次开服写入随模组分发的内置线索；内置资源不可用时退回空配置，
+        // 保持与历史版本一致的行为，不会因为文案资源损坏导致开服失败。
+        BuiltInFragmentCatalog.load();
+        List<FragmentData> defaultFragments = BuiltInFragmentCatalog.fragments();
 
         try {
             JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);

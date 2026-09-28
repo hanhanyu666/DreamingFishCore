@@ -35,5 +35,8 @@ public class EnUsLanguageProvider extends LanguageProvider {
         add("item.dreamingfishcore.protective_mask.tooltip", "A protective mask produced under the Zhuiguang Society's direction. For now, it can prevent infection from spreading...");
         add("item.dreamingfishcore.siege_zombie_spawn_egg", "Zombie Spawn Egg");
         add("entity.dreamingfishcore.siege_zombie", "Zombie");
+        add("effect.dreamingfishcore.infection", "Infection");
+        add("effect.dreamingfishcore.fear", "Fear");
+        add("effect.dreamingfishcore.courage", "Courage");
     }
 }

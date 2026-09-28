@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
+import com.hhy.dreamingfishcore.effect.DreamingFishCore_Effects;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
@@ -10,7 +11,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
@@ -156,10 +156,9 @@ public class PlayerCourageManager {
         }
         float courageRatio = (float) attributesData.getCurrentCourage() / (float) maxCourage;
 
-        // 勇气值低于20%：施加虚弱I + 缓慢I
+        // 勇气值低于20%：施加「害怕」（等价于原版虚弱I + 缓慢I）
         if (courageRatio < 0.2F) {
-            maintainCourageEffect(serverPlayer, MobEffects.WEAKNESS);
-            maintainCourageEffect(serverPlayer, MobEffects.MOVEMENT_SLOWDOWN);
+            maintainCourageEffect(serverPlayer, DreamingFishCore_Effects.FEAR);
 
             if (canShowMsg) {
                 serverPlayer.displayClientMessage(
@@ -170,9 +169,9 @@ public class PlayerCourageManager {
             }
 //            DreamingFishCore.LOGGER.debug("玩家 {} 勇气值不足20%，施加虚弱I和缓慢I效果", serverPlayer.getScoreboardName());
         }
-        // 勇气值高于一定值：施加力量I
+        // 勇气值高于一定值：施加「勇气」（等价于原版力量I）
         else if (courageRatio >= 0.85F) {
-            maintainCourageEffect(serverPlayer, MobEffects.DAMAGE_BOOST);
+            maintainCourageEffect(serverPlayer, DreamingFishCore_Effects.COURAGE);
 
             if (canShowMsg) {
                 serverPlayer.displayClientMessage(
@@ -272,6 +271,12 @@ public class PlayerCourageManager {
     }
 
     /** 按原版信标的刷新间隔和效果参数维持勇气效果。 */
+    /**
+     * 维持一个模组自有的勇气类效果（「害怕」或「勇气」）。
+     *
+     * <p>只在同效果且等级为 0 时按间隔刷新，避免覆盖其他来源提供的更高等级效果，
+     * 也避免每 tick 反复重加导致属性修饰符被反复搬动。</p>
+     */
     private static void maintainCourageEffect(ServerPlayer player,
                                                Holder<net.minecraft.world.effect.MobEffect> effect) {
         MobEffectInstance existing = player.getEffect(effect);

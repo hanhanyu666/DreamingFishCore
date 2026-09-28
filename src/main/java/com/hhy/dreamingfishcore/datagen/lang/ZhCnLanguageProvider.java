@@ -35,5 +35,8 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add("item.dreamingfishcore.protective_mask.tooltip", "由逐光会牵头制作的防护面具，至少目前可以阻止感染者的传染……");
         add("item.dreamingfishcore.siege_zombie_spawn_egg", "丧尸刷怪蛋");
         add("entity.dreamingfishcore.siege_zombie", "丧尸");
+        add("effect.dreamingfishcore.infection", "感染");
+        add("effect.dreamingfishcore.fear", "害怕");
+        add("effect.dreamingfishcore.courage", "勇气");
     }
 }

@@ -32,7 +32,10 @@ public final class StoryNpcContentPolicy {
             "dreamingfishcore:opening/zhoucen/introduction",
             "dreamingfishcore:opening/zhoucen/member_welcome",
             "dreamingfishcore:opening/zhoucen/independent_ack",
-            "dreamingfishcore:afterdream/baizhi/public_treatment");
+            "dreamingfishcore:afterdream/baizhi/public_treatment",
+            // 终检后的长期随访：由 AfterdreamStory.tickFollowUps 按剧情活动时间投递。
+            "dreamingfishcore:afterdream/baizhi/follow_up_third_day",
+            "dreamingfishcore:afterdream/baizhi/follow_up_seventh_day");
 
     /** 明确退役的旧主线 ID；它不属于新流程，也不能被普通内容入口投递。 */
     private static final Set<String> RETIRED_STORY_MESSAGE_IDS = Set.of(
