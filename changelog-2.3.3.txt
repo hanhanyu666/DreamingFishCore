@@ -51,6 +51,8 @@ config/dreamingfishcore/clue_drop.json 控制（默认 0.01%，可整体关闭�
 只有不稳定感染者与传播复发者会产生接触暴露——稳定感染者在正常状态下与幸存者正常相处
 不会持续感染队友。防护面具仍然按原规则阻断传播来源（现在包含传播复发者）。
 登出、死亡、重生与跨维度都会清空暴露量，不同维度之间也不会互相累积。
+受伤折算顺带修掉一个老问题：/kill 一类来源会用 Float.MAX_VALUE 结算伤害，过去会按它折算成
+"一次自杀直接涨满感染值"；现在单次伤害的折算上限是一整条血条。
 （待接入：领地空气过滤/异常因子抑制设备按 ADR 0017 可以在自己范围内阻断被动传播，
 该设备属于领地建设内容，尚未实装。）
 
@@ -88,5 +90,6 @@ config/dreamingfishcore/clue_drop.json 控制（默认 0.01%，可整体关闭�
 /dreamingfish debug story course complete|followup due|done 直接结算疗程与随访。
 /dreamingfish debug infection set <survivor|unstable|stable|relapse|0|1|2> [感染值] 直接设置感染身份。
 /dreamingfish debug infection stabilize|relapse|cure 稳定治疗 / 强制传播复发 / 重构回幸存者。
+/dreamingfish debug infection exposure step [次数]|clear 按真实规则推进或清空接触暴露（单人也能验证警告与转化）。
 /dreamingfish debug clue list 列出线索池里的编号与标题。
 /dreamingfish debug clue grant <编号> [玩家] 直接发放一条线索（幂等，连敲两次只给一张）。

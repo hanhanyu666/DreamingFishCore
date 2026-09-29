@@ -95,7 +95,7 @@ public class InfectionEventHandler {
         }
 
         float currentInfection = attributesData.getCurrentInfection();
-        float infectionIncrease = healthLoss / 5.0F;
+        float infectionIncrease = infectionInputFor(healthLoss, player.getMaxHealth()) / 5.0F;
         PlayerInfectionManager.addInfection(player, infectionIncrease);
         float newInfection = attributesData.getCurrentInfection();
         if (Math.abs(newInfection - currentInfection) > 0.01F) {
@@ -104,6 +104,24 @@ public class InfectionEventHandler {
                     String.format("%.2f", infectionIncrease), String.format("%.2f", currentInfection),
                     String.format("%.2f", newInfection));
         }
+    }
+
+    /**
+     * 把一次实际伤害折算成可用于感染累积的输入。
+     *
+     * <p>上限是玩家当前最大生命：单次伤害不可能"代表"超过一整条血条的感染输入。
+     * 这不是理论上的洁癖——{@code /kill} 一类来源会用 {@link Float#MAX_VALUE} 结算伤害，
+     * 若直接按它折算，幸存者会在一次自杀里瞬间跨过感染阈值（实测日志出现过
+     * {@code 实际生命损失:3.4e38 → 0.00->100.00}），感染来源就此变得不可解释。</p>
+     */
+    static float infectionInputFor(float healthLoss, double maxHealth) {
+        if (!(healthLoss > 0.0F) || Float.isNaN(healthLoss) || Float.isInfinite(healthLoss)) {
+            return 0.0F;
+        }
+        if (!Double.isFinite(maxHealth) || maxHealth <= 0.0D) {
+            return healthLoss;
+        }
+        return Math.min(healthLoss, (float) maxHealth);
     }
 
     /** 登出时清空暴露量：暴露描述的是现场风险，不该跨会话保留。 */
@@ -138,6 +156,19 @@ public class InfectionEventHandler {
         // 感染身份已经适应异常因子，不再累积暴露；这里仍然调用一次以让旧暴露量自然衰减。
         boolean exposed = identity == InfectionIdentity.SURVIVOR
                 && hasSpreadingSourceNearby(player);
+        applyExposureStep(player, attributesData, exposed);
+    }
+
+    /**
+     * 执行一次暴露判定，并处理警告与转化。
+     *
+     * <p>{@code exposed} 由调用方给出，是为了让调试命令也能走这条完全相同的代码路径：
+     * 验证警告阶梯与转化不需要真的站到另一名感染者旁边。</p>
+     */
+    static void applyExposureStep(ServerPlayer player, PlayerAttributesData attributesData, boolean exposed) {
+        if (player == null || attributesData == null) {
+            return;
+        }
         ContactExposureTracker.Step step = ContactExposureTracker.advance(player.getUUID(), exposed);
 
         if (step.converts()) {
@@ -151,6 +182,33 @@ public class InfectionEventHandler {
         }
         if (step.escalated()) {
             player.displayClientMessage(Component.literal(exposureWarningText(step.warningStep())), true);
+        }
+    }
+
+    /**
+     * 调试命令入口：按指定次数强制推进暴露判定（视为始终处在传播范围内）。
+     *
+     * @return 推进后的暴露量
+     */
+    public static float debugAdvanceExposure(ServerPlayer player, int times) {
+        if (player == null || times <= 0) {
+            return 0.0F;
+        }
+        PlayerAttributesData data = PlayerAttributesDataManager
+                .findStoredPlayerAttributesData(player.getUUID());
+        if (data == null) {
+            return 0.0F;
+        }
+        for (int i = 0; i < times; i++) {
+            applyExposureStep(player, data, true);
+        }
+        return ContactExposureTracker.chargeOf(player.getUUID());
+    }
+
+    /** 调试命令入口：清除暴露量。 */
+    public static void debugClearExposure(ServerPlayer player) {
+        if (player != null) {
+            ContactExposureTracker.clear(player.getUUID());
         }
     }
 

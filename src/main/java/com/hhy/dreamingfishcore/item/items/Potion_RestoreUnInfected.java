@@ -61,7 +61,7 @@ public class Potion_RestoreUnInfected extends Item {
             return InteractionResultHolder.fail(stack);
         }
 
-        if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
+        if (!attributesData.getInfectionIdentity().allowsEarlyReversalReagent()) {
             serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈稳定感染者。"));
             return InteractionResultHolder.fail(stack);
         }
@@ -88,7 +88,7 @@ public class Potion_RestoreUnInfected extends Item {
             return stack;
         }
 
-        if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
+        if (!attributesData.getInfectionIdentity().allowsEarlyReversalReagent()) {
             serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈稳定感染者。"));
             return stack;
         }
@@ -137,10 +137,5 @@ public class Potion_RestoreUnInfected extends Item {
     @Override
     public UseAnim getUseAnimation(ItemStack stack) {
         return UseAnim.NONE;
-    }
-
-    static boolean canUseForInfectionLevel(int infectionLevel) {
-        return infectionLevel == PlayerAttributesData.INFECTION_LEVEL_NONE
-                || infectionLevel == PlayerAttributesData.INFECTION_LEVEL_ONE;
     }
 }

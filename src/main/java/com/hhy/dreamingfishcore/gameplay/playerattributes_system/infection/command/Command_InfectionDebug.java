@@ -2,8 +2,11 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.comm
 
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionRules;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.event.InfectionEventHandler;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -21,6 +24,7 @@ import net.minecraft.server.level.ServerPlayer;
  * /dreamingfish debug infection stabilize   稳定治疗（不稳定 → 稳定；或结束传播复发）
  * /dreamingfish debug infection relapse     强制进入传播复发
  * /dreamingfish debug infection cure        高成本重构（稳定 → 幸存者）
+ * /dreamingfish debug infection exposure step [次数] | clear   推进/清空接触暴露
  * </pre>
  *
  * <p>存在的意义：完整走一遍"幸存者 → 不稳定 → 稳定 → 重构回幸存者"需要真实的感染积累、
@@ -50,7 +54,50 @@ public final class Command_InfectionDebug {
                 .then(Commands.literal("relapse")
                         .executes(context -> runTreatment(context, "relapse")))
                 .then(Commands.literal("cure")
-                        .executes(context -> runTreatment(context, "cure")));
+                        .executes(context -> runTreatment(context, "cure")))
+                .then(Commands.literal("exposure")
+                        .then(Commands.literal("step")
+                                .executes(context -> runExposure(context, 1))
+                                .then(Commands.argument("times", IntegerArgumentType.integer(1, 64))
+                                        .executes(context -> runExposure(context,
+                                                IntegerArgumentType.getInteger(context, "times")))))
+                        .then(Commands.literal("clear")
+                                .executes(context -> clearExposure(context))));
+    }
+
+    /**
+     * 按真实代码路径推进接触暴露（视为始终处在传播范围内）。
+     *
+     * <p>多人实测需要第二名玩家站在 32 格内才能累积暴露；这个入口让单人也能验证
+     * 警告阶梯、转化与衰减，且不会绕过任何规则。</p>
+     */
+    private static int runExposure(CommandContext<CommandSourceStack> context, int times) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("该命令只能由玩家执行"));
+            return 0;
+        }
+        float charge = InfectionEventHandler.debugAdvanceExposure(player, times);
+        source.sendSuccess(() -> Component.literal(
+                "已推进 " + times + " 次接触暴露判定，当前暴露量 "
+                        + String.format("%.1f", charge) + " / "
+                        + String.format("%.1f", InfectionRules.EXPOSURE_THRESHOLD)), true);
+        return 1;
+    }
+
+    private static int clearExposure(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            InfectionEventHandler.debugClearExposure(source.getPlayerOrException());
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("该命令只能由玩家执行"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("已清空接触暴露量。"), true);
+        return 1;
     }
 
     private static int applyInfection(CommandContext<CommandSourceStack> context, float explicitValue) {

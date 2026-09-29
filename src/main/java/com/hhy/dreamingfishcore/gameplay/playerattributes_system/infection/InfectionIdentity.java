@@ -49,11 +49,24 @@ public enum InfectionIdentity {
     }
 
     /**
-     * 是否已经跨过突变、进入可被"稳定"或"重构"处理的阶段。
+     * 是否处于突变已经稳定的状态。
      * 用于替换散落在剧情里的 {@code getInfectionLevel() >= 2} 一类比较。
      */
     public boolean isStabilized() {
         return this == STABLE || this == RELAPSE;
+    }
+
+    /**
+     * 能否被基因复苏试剂（早期逆转一档的药剂）解除感染。
+     *
+     * <p>这是"关键互动资格"目前唯一的真实落点：尚未突变的幸存者与不稳定感染者可以用这一档药剂，
+     * 稳定感染者必须走成本更高的重构疗程（ADR 0005 的分层治疗）。</p>
+     *
+     * <p>设定里其余的资格差异（幸存者提供未突变校准基准、操作部分精密设施，稳定感染者取得特殊样本）
+     * 依赖疑光期/破晓期的设施与样本内容，目前都还没有实装对象，因此不在这里预留空方法。</p>
+     */
+    public boolean allowsEarlyReversalReagent() {
+        return this == SURVIVOR || this == UNSTABLE;
     }
 
     /** 从玩家存档数据解析身份；数据缺失时按幸存者处理。 */

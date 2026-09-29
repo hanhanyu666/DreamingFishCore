@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.even
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,5 +29,21 @@ class InfectionEventHandlerTest {
         assertFalse(InfectionEventHandler.isBlockedByProtectiveMask(unstable, false));
         assertFalse(InfectionEventHandler.isBlockedByProtectiveMask(relapsing, false));
         assertFalse(InfectionEventHandler.isBlockedByProtectiveMask(null, true));
+    }
+
+    @Test
+    void absurdDamageCannotBeConvertedIntoInstantInfection() {
+        // /kill 一类来源用 Float.MAX_VALUE 结算伤害：折算输入必须被血条上限截断。
+        assertEquals(20.0F, InfectionEventHandler.infectionInputFor(Float.MAX_VALUE, 20.0D));
+        assertEquals(20.0F, InfectionEventHandler.infectionInputFor(1000.0F, 20.0D));
+
+        // 正常伤害按原值折算，不改变既有手感。
+        assertEquals(6.0F, InfectionEventHandler.infectionInputFor(6.0F, 20.0D));
+
+        // 非法输入与无效血条上限都不产生感染输入。
+        assertEquals(0.0F, InfectionEventHandler.infectionInputFor(Float.NaN, 20.0D));
+        assertEquals(0.0F, InfectionEventHandler.infectionInputFor(-3.0F, 20.0D));
+        assertEquals(6.0F, InfectionEventHandler.infectionInputFor(6.0F, Double.NaN));
+        assertEquals(6.0F, InfectionEventHandler.infectionInputFor(6.0F, 0.0D));
     }
 }
