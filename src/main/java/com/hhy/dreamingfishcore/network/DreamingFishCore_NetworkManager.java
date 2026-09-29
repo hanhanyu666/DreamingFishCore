@@ -144,7 +144,17 @@ public final class DreamingFishCore_NetworkManager {
                 && !(packet instanceof Packet_PlayerLoginResult)) {
             return;
         }
-        PacketDistributor.sendToPlayer(player, packet);
+        try {
+            PacketDistributor.sendToPlayer(player, packet);
+        } catch (RuntimeException exception) {
+            // 自定义载荷只有在客户端协商过对应通道之后才允许下发，框架在未协商时会直接抛
+            // IllegalArgumentException。这类失败不应该让触发它的服务端逻辑（登录流程、tick
+            // 处理器、剧情结算）连带崩掉，因此在这里兜底留痕。
+            // 无头 gametest 用的模拟连接就是"没有协商通道"的典型场景；生产环境若出现这条
+            // 警告，说明该玩家确实收不到这个同步包，需要按载荷类型排查。
+            com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.warn("向玩家 {} 下发载荷 {} 失败：{}",
+                    player.getScoreboardName(), packet.type().id(), exception.getMessage());
+        }
     }
 
     public static void sendToClient(ServerPlayer player, CustomPacketPayload packet) {

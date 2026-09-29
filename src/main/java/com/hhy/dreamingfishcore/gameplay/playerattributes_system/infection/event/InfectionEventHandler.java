@@ -228,8 +228,11 @@ public class InfectionEventHandler {
      *
      * <p>待接入：ADR 0017 的聚居地抑制设备（领地空气过滤/异常因子抑制）尚未实装，
      * 它落地后应当在这里返回 true 以跳过设备覆盖范围内的来源，而不是改动上面的规则。</p>
+     *
+     * <p>包内可见是为了让 gametest 能直接用两名真实服务端玩家验证"稳定感染者不产生暴露、
+     * 不稳定感染者产生暴露"这条共存规则，而不是只测一个谓词。</p>
      */
-    private static boolean hasSpreadingSourceNearby(ServerPlayer player) {
+    static boolean hasSpreadingSourceNearby(ServerPlayer player) {
         boolean protectedByMask = ProtectiveMaskItem.isEquipped(player);
         for (ServerPlayer otherPlayer : player.server.getPlayerList().getPlayers()) {
             if (otherPlayer.getUUID().equals(player.getUUID())) {

@@ -105,6 +105,22 @@
 - `InfectionIdentityPersistenceTest`：走真实的原子写 + 读盘通道，锁定复发字段的磁盘契约，
   并验证四态改造之前的旧存档（没有复发字段）读回来就是合法的稳定感染者。
 - `InfectionEventHandlerTest`：`/kill` 一类的 `Float.MAX_VALUE` 伤害折算被血条上限截断。
+- `InfectionStateMachineGameTest`（**无头 gametest**，`gradlew runGameTestServer`）：用
+  `GameTestHelper.makeMockServerPlayerInLevel()` 造出真实服务端玩家，覆盖单测够不到的部分——
+  两名玩家同场的传播规则、暴露转化为感染、未认证会话被拒、身份落盘后按真实加载路径重载、
+  重伤触发复发并可由稳定治疗结束。
+
+### 无头 gametest 说明
+
+- 结构模板：`src/main/resources/data/dreamingfishcore/structure/empty.nbt`（3×3×3 石台 + 空气），
+  由 `tools/generate_empty_gametest_structure.py` 生成；原版与 NeoForge 都没有现成的"空模板"。
+- 模拟玩家的两个坑（都已写进测试注释）：`makeMockServerPlayerInLevel` 的匿名子类固定
+  `isCreative() == true`，且刚加入时带着服务端的出生无敌时间（字段是 private，测试改不了），
+  因此伤害相关的验证要用 `damageSources().genericKill()` 绕过无敌——它绕过的只是无敌判定，
+  伤害事件本身照常派发。
+- 网络层的配套改动：`DreamingFishCore_NetworkManager.sendToClient` 现在会兜住载荷下发失败并记
+  警告。自定义载荷只有在客户端协商过通道后才允许下发，模拟连接没有协商通道；在服务端崩溃
+  与"发不出去就留痕"之间，后者才是正确行为。
 
 ## 八、实机验证记录（2026-09-30，玩家 Dev，单机存档）
 
@@ -126,9 +142,13 @@
 旧折算逻辑让幸存者从 `0.00` 直接涨到 `100.00` 感染值（日志原文
 `实际生命损失:3.4e38, 增加感染:6.8e37, 0.00->100.00`）。现在单次伤害折算被血条上限截断。
 
-**尚未实机验证**（需要重启客户端或第二名玩家）：
+**尚未在真人多人环境下跑过**（但已由无头 gametest 覆盖，见第七节）：
 
-1. 接触暴露**攒满 6 点转化为 +8 感染值**这一步（当次实测在 5.0 时被清空，未触发转化）；
-2. 死亡/摔落造成的**重伤触发传播复发**（当次复发是用调试命令进入的）；
-3. **重启后身份保留**的服务端全链路（数据层已有单测与落盘核对，但没跑过一次真实的关服—开服）；
-4. **两名玩家同场**：稳定感染者与幸存者正常相处不持续感染队友；丧尸仇恨向更近的幸存者转移。
+1. 接触暴露攒满 6 点转化为 +8 感染值——已由 gametest `exposureConvertsIntoInfectionAndResets` 覆盖；
+2. 重伤触发传播复发——已由 gametest `heavyDamageTriggersRelapseAndStabilizationEndsIt` 覆盖
+   （真人实测那次复发是用调试命令进入的）；
+3. 重启后身份保留——已由 gametest `treatmentIsServerVerifiedAndSurvivesReload` 走真实的
+   落盘 + 重载路径覆盖，另有数据层单测与存档核对；
+4. 稳定感染者与幸存者同场不持续感染队友、丧尸仇恨转移——前者由 gametest
+   `stableInfectedDoesNotExposeNearbySurvivor` / `unstableInfectedExposesNearbySurvivor` 用
+   两名真实服务端玩家覆盖；**丧尸仇恨转移仍然只有单测证据**（需要真人玩家与丧尸同场才能看到行为）。
