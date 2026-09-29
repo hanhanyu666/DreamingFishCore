@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.network;
 
 import com.hhy.dreamingfishcore.gameplay.marker_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.organization_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.network.*;
@@ -34,9 +35,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 数据驱动剧情/任务状态、感染 infectionLevel 与服务器状态 TPS 的同步契约均已变更，
-    // 旧客户端必须在握手阶段明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.23.0";
+    // 数据驱动剧情/任务状态、感染 infectionLevel、服务器状态 TPS 与玩家组织快照的同步契约
+    // 均已变更（含快照新增创建费字段），旧客户端必须在握手阶段明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.25.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -92,6 +93,10 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_KeepInventoryResponse.TYPE, Packet_KeepInventoryResponse.STREAM_CODEC, Packet_KeepInventoryResponse::handle);
         registrar.playToServer(Packet_NormalRespawnRequest.TYPE, Packet_NormalRespawnRequest.STREAM_CODEC, authenticated(Packet_NormalRespawnRequest::handle));
         registrar.playToClient(Packet_NormalRespawnResponse.TYPE, Packet_NormalRespawnResponse.STREAM_CODEC, Packet_NormalRespawnResponse::handle);
+        registrar.playToServer(Packet_OrganizationSnapshotRequest.TYPE, Packet_OrganizationSnapshotRequest.STREAM_CODEC, authenticated(Packet_OrganizationSnapshotRequest::handle));
+        registrar.playToClient(Packet_OrganizationSnapshotResponse.TYPE, Packet_OrganizationSnapshotResponse.STREAM_CODEC, Packet_OrganizationSnapshotResponse::handle);
+        registrar.playToServer(Packet_OrganizationActionRequest.TYPE, Packet_OrganizationActionRequest.STREAM_CODEC, authenticated(Packet_OrganizationActionRequest::handle));
+        registrar.playToClient(Packet_OrganizationActionResult.TYPE, Packet_OrganizationActionResult.STREAM_CODEC, Packet_OrganizationActionResult::handle);
         registrar.playToClient(Packet_OpenRevivalCharmGUI.TYPE, Packet_OpenRevivalCharmGUI.STREAM_CODEC, Packet_OpenRevivalCharmGUI::handle);
         registrar.playToServer(Packet_RevivalRequest.TYPE, Packet_RevivalRequest.STREAM_CODEC, authenticated(Packet_RevivalRequest::handle));
 

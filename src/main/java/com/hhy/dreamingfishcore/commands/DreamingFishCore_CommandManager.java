@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.guidance_system.command.Command_Guidanc
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_Biomes;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_OverAllLevel;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.command.Command_InfectionDebug;
+import com.hhy.dreamingfishcore.gameplay.organization_system.command.Command_Organization;
 import com.hhy.dreamingfishcore.gameplay.story_system.command.Command_Story;
 import com.hhy.dreamingfishcore.gameplay.story_system.command.Command_StoryDebug;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.command.Command_TaskLocation;
@@ -39,6 +40,7 @@ public final class DreamingFishCore_CommandManager {
 
         Command_Npc.register(dispatcher);
         Command_Guidance.register(dispatcher);
+        Command_Organization.register(dispatcher);
         Command_Zhuiguang.register(dispatcher);
         Command_Biomes.register(dispatcher);
         Command_OverAllLevel.register(dispatcher);

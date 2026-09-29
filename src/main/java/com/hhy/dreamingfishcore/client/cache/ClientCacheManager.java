@@ -10,6 +10,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_message_system.client.cache.NpcMess
 import com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache.GuidanceClientCache;
 import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
+import com.hhy.dreamingfishcore.gameplay.organization_system.client.cache.OrganizationClientCache;
 import com.hhy.dreamingfishcore.server.playerdata_system.client.cache.PlayerDataClientCache;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -141,6 +142,8 @@ public final class ClientCacheManager {
         GuidanceClientCache.clear();
         NoticeClientCache.clear();
         EconomyTerminalClientCache.clear();
+        // 组织列表是上一个服务器的公共数据，换服时必须清掉，避免显示别服的组织。
+        OrganizationClientCache.clear();
     }
 
     @SubscribeEvent

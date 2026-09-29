@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
+import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
@@ -68,6 +69,7 @@ public final class WorldDataLifecycleEvents {
         runSafely("核对私信回复与 NPC 关系", NpcMessageManager::reconcileFavorabilityEffects);
         runSafely("加载复活信息", () -> RevivalInfoManager.loadWorldData(server));
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
+        runSafely("加载玩家组织", () -> OrganizationManager.loadWorldData(server));
         // 所有投影管理器都完成加载后，再补做一次当前阶段入口。
         // 这样重启时即使没有玩家在线，也不会丢失阶段公告/倒计时到期公告；
         // 玩家私信和个人引导仍在登录时按各自事实幂等重建。
@@ -131,6 +133,7 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存个人引导", () -> GuidanceManager.saveIfDirty(server));
         saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存玩家组织", () -> OrganizationManager.saveIfDirty(server));
         // StoryManager 已经保存统一的剧情事实；内容包管理器只负责文案配置，
         // 不再拥有第二份阶段状态。
         return saved;
@@ -153,6 +156,7 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理个人引导缓存", GuidanceManager::clearWorldCache);
         runSafely("清理复活信息缓存", RevivalInfoManager::clearWorldCache);
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
+        runSafely("清理玩家组织缓存", OrganizationManager::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

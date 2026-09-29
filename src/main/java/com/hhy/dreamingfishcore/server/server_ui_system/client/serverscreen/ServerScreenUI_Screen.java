@@ -20,6 +20,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_message_system.client.cache.NpcMess
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageReadRequest;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageReplyRequest;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.Packet_NpcMessageSnapshotRequest;
+import com.hhy.dreamingfishcore.gameplay.organization_system.network.Packet_OrganizationSnapshotRequest;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
@@ -161,9 +162,15 @@ public class ServerScreenUI_Screen extends Screen {
     // ==================== 左侧灵动岛按钮 ====================
     private static final String NOTICE_UI_NAME = "梦屿广播";
     private static final int NPC_MESSAGE_PAGE_INDEX = 10;
+    /**
+     * 「组织」页面的索引。
+     *
+     * <p>公开常量：组织输入弹窗关闭后要重建终端并回到这一页。</p>
+     */
+    public static final int ORGANIZATION_PAGE_INDEX = 11;
     private static final String GUIDANCE_ICON = "⌖";
-    private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "◷", "⚙️", "✉"};
-    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "世界历史", "设置", "NPC 私信"};
+    private static final String[] LEFT_BUTTON_ICONS = {"👤", "❓", "📢", "📖", "🏆", "⭐", "🛒", "🏰", "◷", "⚙️", "✉", "🏳"};
+    private static final String[] LEFT_BUTTON_NAMES = {"个人档案", "新玩家帮助", NOTICE_UI_NAME, "故事进展", "玩家与排行", "服务器成就", "服务器商店", "领地", "世界历史", "设置", "NPC 私信", "组织"};
     private static final int[] LEFT_BUTTON_COLORS = {
         0xFFAAAAAA,  // 个人档案 - 灰色
         0xFF55FF55,  // 帮助 - 绿色
@@ -175,7 +182,8 @@ public class ServerScreenUI_Screen extends Screen {
         0xFF4FC3F7,  // 领地 - 紫色
         0xFFFFC857,  // 世界历史 - 金色
         0xFF888888,  // 设置 - 深灰色
-        0xFF8CCEFF   // NPC 私信 - 终端蓝
+        0xFF8CCEFF,  // NPC 私信 - 终端蓝
+        0xFFFFC857   // 组织 - 金色
     };
 
     // 左侧按钮可点击区域（虚拟坐标）
@@ -185,7 +193,7 @@ public class ServerScreenUI_Screen extends Screen {
     private int[] leftButtonY2 = new int[LEFT_BUTTON_ICONS.length];
 
     // 主页底部 Dock。-1 代表主页，其他值直接映射到一级模块索引。
-    private static final int[] DASHBOARD_DOCK_TARGETS = {-1, 0, 2, NPC_MESSAGE_PAGE_INDEX, 3, 9};
+    private static final int[] DASHBOARD_DOCK_TARGETS = {-1, 0, 2, NPC_MESSAGE_PAGE_INDEX, ORGANIZATION_PAGE_INDEX, 3, 9};
     private final int[] dashboardDockX1 = new int[DASHBOARD_DOCK_TARGETS.length];
     private final int[] dashboardDockY1 = new int[DASHBOARD_DOCK_TARGETS.length];
     private final int[] dashboardDockX2 = new int[DASHBOARD_DOCK_TARGETS.length];
@@ -366,6 +374,8 @@ public class ServerScreenUI_Screen extends Screen {
 
     // 仍负责模型、点击区域等共享渲染工具；旧帮助页正文已从该类移除。
     private ServerScreenUI_PageRenderer pageRenderer;
+    /** 组织页面：渲染与交互都在独立类里，主类只负责转发虚拟坐标与鼠标事件。 */
+    private final OrganizationTerminalPage organizationPage = new OrganizationTerminalPage();
 
     public ServerScreenUI_Screen() {
         super(Component.literal("服务器界面"));
@@ -410,6 +420,8 @@ public class ServerScreenUI_Screen extends Screen {
         // 短信与个人线索仍分别同步；故事页把线索嵌入对应的世界任务卡。
         DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageSnapshotRequest());
         DreamingFishCore_NetworkManager.sendToServer(new Packet_GuidanceSnapshotRequest());
+        // 组织列表是公共信息，打开终端时拉一次，保证红点/成员数与服务端一致。
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_OrganizationSnapshotRequest());
     }
 
     /**
@@ -663,6 +675,8 @@ public class ServerScreenUI_Screen extends Screen {
             case 6 -> renderMarketPage(guiGraphics, x, y, width, height);
             case 8 -> renderHistoryPage(guiGraphics, x, y, width, height);
             case NPC_MESSAGE_PAGE_INDEX -> renderNpcMessagePage(guiGraphics, mouseX, mouseY, x, y, width, height);
+            case ORGANIZATION_PAGE_INDEX -> organizationPage.render(
+                    guiGraphics, mc.font, mouseX / uiScale, mouseY / uiScale, x, y, width, height, uiScale);
             default -> renderPlaceholderPage(guiGraphics, x, y, width, height, LEFT_BUTTON_NAMES[selectedLeftButtonIndex], "该模块将打开独立界面");
         }
     }
@@ -3618,8 +3632,8 @@ public class ServerScreenUI_Screen extends Screen {
 
     private void drawDashboardDock(GuiGraphics guiGraphics, float mouseX, float mouseY,
                                    int x, int y, int width, int height) {
-        String[] icons = {"⌂", LEFT_BUTTON_ICONS[0], LEFT_BUTTON_ICONS[2], LEFT_BUTTON_ICONS[NPC_MESSAGE_PAGE_INDEX], LEFT_BUTTON_ICONS[3], LEFT_BUTTON_ICONS[9]};
-        String[] labels = {"主页", "档案", "广播", "短信", "故事", "设置"};
+        String[] icons = {"⌂", LEFT_BUTTON_ICONS[0], LEFT_BUTTON_ICONS[2], LEFT_BUTTON_ICONS[NPC_MESSAGE_PAGE_INDEX], LEFT_BUTTON_ICONS[ORGANIZATION_PAGE_INDEX], LEFT_BUTTON_ICONS[3], LEFT_BUTTON_ICONS[9]};
+        String[] labels = {"主页", "档案", "广播", "短信", "组织", "故事", "设置"};
         int dockWidth = Math.min(width - 48, 276);
         int dockX = x + (width - dockWidth) / 2;
         drawSoftRect(guiGraphics, dockX, y, dockWidth, height, 5, 0xFF141C24, 0xFF334657);
@@ -4316,6 +4330,11 @@ public class ServerScreenUI_Screen extends Screen {
             }
         }
 
+        if (selectedLeftButtonIndex == ORGANIZATION_PAGE_INDEX
+                && organizationPage.mouseClicked(virtualMouseX, virtualMouseY)) {
+            return true;
+        }
+
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -4376,6 +4395,9 @@ public class ServerScreenUI_Screen extends Screen {
                 conversationScrollOffset = 0L;
                 clearNpcMessageDetail();
                 DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageSnapshotRequest());
+                break;
+            case ORGANIZATION_PAGE_INDEX:
+                organizationPage.onOpened();
                 break;
         }
     }
@@ -4493,6 +4515,14 @@ public class ServerScreenUI_Screen extends Screen {
                 messageThreadScrollOffset = Math.max(0L,
                     Math.min(maximum, messageThreadScrollOffset + Math.round(scrollY)));
                 return maximum > 0;
+            }
+        }
+
+        if (selectedLeftButtonIndex == ORGANIZATION_PAGE_INDEX) {
+            double organizationMouseX = mouseX / uiScale;
+            double organizationMouseY = mouseY / uiScale;
+            if (organizationPage.mouseScrolled(organizationMouseX, organizationMouseY, scrollY)) {
+                return true;
             }
         }
 
