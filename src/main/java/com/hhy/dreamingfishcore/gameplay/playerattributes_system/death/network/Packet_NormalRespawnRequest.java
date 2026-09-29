@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.event.DeathEventHandler;
@@ -157,6 +158,12 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
 
             // 发送成功消息，让客户端执行复活
             sendResponse(player, true, data.getRespawnPoint());
+
+            if (isInfected) {
+                // 感染者的模板重建需要额外平衡，这条记录即机制翻译（保底线索，幂等）。
+                // 死亡与重建没有可追溯的持久化事实，因此这条不参与登录补发。
+                ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_RESPAWN_ANOMALY);
+            }
 
             DreamingFishCore.LOGGER.info("玩家 {} 正常复活，消耗 {} 复活点（剩余: {}，尸体锁定={}）",
                     player.getScoreboardName(), cost, data.getRespawnPoint(), packet.lockCorpse);

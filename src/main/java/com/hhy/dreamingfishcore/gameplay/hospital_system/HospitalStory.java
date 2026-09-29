@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.hospital_system;
 
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
@@ -165,6 +166,7 @@ public final class HospitalStory {
                 StoryManager.recordPlayerTaskProgress(READ_TASK, player.getScoreboardName(), player.getUUID());
                 reconcile();
             }
+            grantReviewClueIfFinished(player);
             syncPlayer(player);
         }
     }
@@ -197,6 +199,14 @@ public final class HospitalStory {
                 : "目前未发现感染指标，本次检查已完成。";
         setServiceResponse(player, StoryNpcContentPolicy.JIANGWAN_ID,
                 result + "\n\n模板重建余量：" + String.format(java.util.Locale.ROOT, "%.1f / 100", data.getRespawnPoint()));
+        // 正式复查属于医院观察区的事实来源，由江晚交出一份观察记录（保底线索，幂等）。
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_OBSERVATION_LOG);
+    }
+
+    /** 已经完成过正式复查的玩家在登录时补发观察区值班记录。 */
+    private static void grantReviewClueIfFinished(ServerPlayer player) {
+        if (!StoryManager.isPlayerFinishedTask(REVIEW_TASK, player.getUUID())) return;
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_OBSERVATION_LOG);
     }
 
     public static void syncPlayer(ServerPlayer player) {

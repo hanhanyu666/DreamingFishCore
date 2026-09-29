@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.afterdream_story_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
@@ -298,7 +299,17 @@ public final class AfterdreamStory {
         sendBaizhiMessage(player);
         AfterdreamPlayerProgress progress = progressFor(player.getUUID());
         rebuildPlayerProjections(player, progress);
+        grantCourseClueIfFinished(player, progress);
         syncPlayer(player);
+    }
+
+    /** 已经完成过疗程终检的玩家在登录时补发康复者口述摘录。 */
+    private static void grantCourseClueIfFinished(
+            ServerPlayer player, AfterdreamPlayerProgress progress) {
+        if (progress == null || progress.getCourseCompletedAtActiveTick() < 0L) {
+            return;
+        }
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_RECOVERED_VOICE);
     }
 
     /** 登录/重启后的幂等投影修复；不会改变个人状态机游标。 */
@@ -802,6 +813,8 @@ public final class AfterdreamStory {
         if (!progress.completeCourse(activeTick)) {
             return;
         }
+        // 终检完成属于康复事实本身，由江晚交出一份康复者口述摘录（保底线索，幂等）。
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_RECOVERED_VOICE);
         GuidanceManager.resolve(player.getUUID(), COURSE_GUIDANCE_ID);
         recordTask(player, MEDICAL_REVIEW_TASK_ID);
         if (!progress.isMaskReceived()) {

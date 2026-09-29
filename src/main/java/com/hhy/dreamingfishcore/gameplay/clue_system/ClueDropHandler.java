@@ -31,8 +31,11 @@ import java.util.List;
  *
  * <p>掉落判定全部在服务端完成，客户端无法请求或指定线索编号。</p>
  *
- * <p>当前未实装的部分（保持与文案文档一致，等后续剧情事件接入）：
- * 关键线索 {@code 01 / 04 / 08 / 11} 的剧情保底发放。</p>
+ * <p>掉落对全部线索一视同仁，不做编号区分：运气好的玩家可能提前掉落出关键线索，
+ * 那条线索之后的保底发放会自动跳过。</p>
+ *
+ * <p>关键线索 {@code 01 / 04 / 08 / 11} 的保底发放由确定的剧情事件负责，
+ * 见 {@link ClueGuaranteeService}；其中 {@code 08} 的触发事件尚未接入。</p>
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public final class ClueDropHandler {
