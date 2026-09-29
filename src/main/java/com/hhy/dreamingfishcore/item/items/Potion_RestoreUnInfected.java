@@ -3,7 +3,7 @@ package com.hhy.dreamingfishcore.item.items;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
@@ -24,7 +24,7 @@ import java.util.List;
 
 /**
  * 基因复苏药剂
- * 可清零感染值；只可解除一级感染者身份，二级感染者不能使用。
+ * 可清零感染值；只可解除不稳定感染者身份，稳定感染者必须走重构疗程。
  */
 public class Potion_RestoreUnInfected extends Item {
     private static final int USE_DURATION_TICKS = 60;
@@ -62,7 +62,7 @@ public class Potion_RestoreUnInfected extends Item {
         }
 
         if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
-            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈二级感染者。"));
+            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈稳定感染者。"));
             return InteractionResultHolder.fail(stack);
         }
 
@@ -89,20 +89,24 @@ public class Potion_RestoreUnInfected extends Item {
         }
 
         if (!canUseForInfectionLevel(attributesData.getInfectionLevel())) {
-            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈二级感染者。"));
+            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法治愈稳定感染者。"));
             return stack;
         }
 
-        // 一级感染者被治愈；非感染者保持非感染者状态。两者都清零感染值。
-        attributesData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
-        attributesData.setCurrentInfection(0);
+        // 身份写入统一走感染系统的服务端入口：
+        // 一级（不稳定感染者）是成本较低的早期逆转；未突变的幸存者属于抑制剂剂量。
+        InfectionTreatmentService.TreatmentOutcome outcome =
+                attributesData.getInfectionLevel() == PlayerAttributesData.INFECTION_LEVEL_ONE
+                        ? InfectionTreatmentService.applyEarlyReversal(serverPlayer)
+                        : InfectionTreatmentService.applyFullSuppressant(serverPlayer);
 
-        // 保存数据
-        PlayerAttributesDataManager.updatePlayerAttributesData(serverPlayer, attributesData);
-
-        // 同步到客户端
-        PlayerInfectionClientSync.sendInfectionDataToClient(
-                serverPlayer, 0, false, PlayerAttributesData.INFECTION_LEVEL_NONE);
+        // 使用动作与结算之间存在时间差，身份可能已经变化：以服务端最终判定为准，
+        // 此时不消耗物品、不推进剧情。
+        if (outcome != InfectionTreatmentService.TreatmentOutcome.APPLIED
+                && outcome != InfectionTreatmentService.TreatmentOutcome.NOTHING_TO_DO) {
+            serverPlayer.sendSystemMessage(Component.literal("§c基因复苏试剂无法作用于你当前的身份。"));
+            return stack;
+        }
 
         // 事件代表“玩家实际服用了阶段发放的药剂”，而不是服用前的感染等级。
         // 非感染者也可能需要用药清零感染值；StoryManager 会按当前阶段事实决定
@@ -115,9 +119,12 @@ public class Potion_RestoreUnInfected extends Item {
         }
         serverPlayer.awardStat(Stats.ITEM_USED.get(this));
 
-        serverPlayer.sendSystemMessage(Component.literal("§a基因复苏试剂已生效，感染值已清零。"));
+        serverPlayer.sendSystemMessage(Component.literal(
+                outcome == InfectionTreatmentService.TreatmentOutcome.NOTHING_TO_DO
+                        ? "§a基因复苏试剂已生效：感染值本来就是 0。"
+                        : "§a基因复苏试剂已生效。"));
 
-        DreamingFishCore.LOGGER.info("玩家 {} 使用基因复苏药剂，感染状态已解除", serverPlayer.getScoreboardName());
+        DreamingFishCore.LOGGER.info("玩家 {} 使用基因复苏药剂，感染状态已处理", serverPlayer.getScoreboardName());
 
         return stack;
     }

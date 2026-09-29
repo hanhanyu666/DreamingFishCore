@@ -83,8 +83,8 @@ public class Packet_KeepInventoryRequest implements CustomPacketPayload {
             float originalRespawnPoint = currentRespawnPoint;
             boolean isInfected = data.isInfected();
 
-            // 计算保留物品消耗（基础消耗 + 30）
-            float cost = DeathEventHandler.getKeepInventoryCost(isInfected);
+            // 计算保留物品消耗（身份基础消耗 + 30）
+            float cost = DeathEventHandler.getKeepInventoryCost(data.getInfectionIdentity());
 
             // 检查复活点数是否足够
             if (currentRespawnPoint < cost) {

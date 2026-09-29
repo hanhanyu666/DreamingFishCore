@@ -106,8 +106,8 @@ public class Packet_NormalRespawnRequest implements CustomPacketPayload {
             float originalRespawnPoint = currentRespawnPoint;
             boolean isInfected = data.isInfected();
 
-            // 计算正常复活消耗
-            float cost = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(currentRespawnPoint, DeathEventHandler.getNormalCost(isInfected));
+            // 计算正常复活消耗（按当前感染身份分档）
+            float cost = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.standardCharge(currentRespawnPoint, DeathEventHandler.getNormalCost(data.getInfectionIdentity()));
 
             // 检查复活点数是否足够
             if (!com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(currentRespawnPoint)) {

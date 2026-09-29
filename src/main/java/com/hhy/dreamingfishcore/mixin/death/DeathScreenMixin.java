@@ -4,7 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
 import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_KeepInventoryRequest;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_NormalRespawnRequest;
@@ -493,7 +495,7 @@ public abstract class DeathScreenMixin extends Screen {
 
         float timesSource = previewingCost ? previewPoints : currentPoints;
         int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(timesSource, data.normalCost());
-        String timesText = dreamingFishCore$getRespawnPreviewHint(hoveredAction, currentPoints, previewCost, respawnTimes, data.isInfected());
+        String timesText = dreamingFishCore$getRespawnPreviewHint(hoveredAction, currentPoints, previewCost, respawnTimes);
         guiGraphics.drawString(this.font, timesText, x, barY + 15,
                 dreamingFishCore$withAlpha(0xFF9E9892, contentAlpha), false);
     }
@@ -533,14 +535,28 @@ public abstract class DeathScreenMixin extends Screen {
         };
     }
 
+    /**
+     * 取本地玩家的感染身份用于死亡界面文案。
+     *
+     * <p>消耗预览的数值仍然来自死亡界面数据包（{@code data.normalCost()}，服务端已按身份算好），
+     * 这里只负责身份名称；取不到玩家或缓存数据时退回幸存者，不抛异常。</p>
+     */
+    @Unique
+    private InfectionIdentity dreamingFishCore$localInfectionIdentity() {
+        if (Minecraft.getInstance().player == null) {
+            return InfectionIdentity.SURVIVOR;
+        }
+        return PlayerAttributesClientCache.getInfectionIdentity(Minecraft.getInstance().player.getUUID());
+    }
+
     @Unique
     private String dreamingFishCore$getRespawnPreviewHint(int hoveredAction, float currentPoints, float previewCost,
-                                                         int respawnTimes, boolean infected) {
+                                                         int respawnTimes) {
         if (hoveredAction == 1 || hoveredAction == 2) {
             if (currentPoints < previewCost) {
                 return "点数不足  还差 " + String.format("%.1f", previewCost - currentPoints);
             }
-            String typeText = infected ? "感染者" : "幸存者";
+            String typeText = dreamingFishCore$localInfectionIdentity().displayName();
             String corpseAccess = hoveredAction == 1
                     ? (dreamingFishCore$lockCorpse ? "  /  尸体仅自己可取" : "  /  尸体允许他人拾取")
                     : "";

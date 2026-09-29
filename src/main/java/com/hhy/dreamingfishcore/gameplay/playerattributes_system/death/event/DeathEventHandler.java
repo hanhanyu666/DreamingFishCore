@@ -25,17 +25,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.UUID;
 
-//幸存者死亡，可以花费50点复活点数死亡不掉落
-//感染值死亡，直接扣除20点死亡点数
+//幸存者死亡，可以花费额外点数让死亡不掉落
+//感染身份按 ADR 0016 分档：幸存者 5 / 稳定感染者 10 / 不稳定感染者 20，保留物品栏额外 +30
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class DeathEventHandler {
 
-    //死亡消耗
-    private final static int RESPAWN_COST_NOT_INFECTED = 5;    //幸存者
-    private final static int RESPAWN_COST_INFECTED = 20;        //感染者
-
-    //死亡不掉落额外消耗
-    private final static int KEEP_INVENTORY_COST = 30;
+    //死亡消耗的唯一来源是 InfectionRules（见下方 getNormalCost 的说明），这里不再保留第二份常量。
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onPlayerDeath(LivingDeathEvent event) {
@@ -78,8 +73,8 @@ public class DeathEventHandler {
         boolean isInfected = deathPlayerAttributesData.isInfected();
         float currentRespawnPoint = deathPlayerAttributesData.getRespawnPoint();
 
-        // 计算消耗
-        int respawnCost = isInfected ? RESPAWN_COST_INFECTED : RESPAWN_COST_NOT_INFECTED;
+        // 计算消耗（按感染身份分档）
+        float respawnCost = getNormalCost(deathPlayerAttributesData.getInfectionIdentity());
         boolean awaitingChoice = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(currentRespawnPoint);
         UUID corpseId = DeathCorpseManager.configureCapture(serverPlayer, awaitingChoice);
 
@@ -132,11 +127,12 @@ public class DeathEventHandler {
         String dimension = serverPlayer.level().dimension().location().toString();
 
         // 玩家 NBT 只保存结算状态和尸体引用；物品由死亡位置的尸体实体持久化。
+        float keepInventoryCost = getKeepInventoryCost(deathPlayerAttributesData.getInfectionIdentity());
         UUID deathId = PendingDeathData.begin(
                 serverPlayer,
                 currentRespawnPoint,
                 respawnCost,
-                respawnCost + KEEP_INVENTORY_COST,
+                keepInventoryCost,
                 isInfected,
                 deathMessage,
                 corpseId);
@@ -144,7 +140,7 @@ public class DeathEventHandler {
         Packet_DeathScreenData packet = new Packet_DeathScreenData(
                 currentRespawnPoint,
                 respawnCost,
-                respawnCost + KEEP_INVENTORY_COST,
+                keepInventoryCost,
                 isInfected,
                 deathMessage,
                 deathX,
@@ -210,13 +206,13 @@ public class DeathEventHandler {
             return;
         }
 
-        // 使用当前复活点数和感染状态
+        // 使用当前复活点数和感染身份
         float currentRespawnPoint = data.getRespawnPoint();
         boolean isInfected = data.isInfected();
 
         // 根据当前状态重新计算消耗
-        float normalCost = getNormalCost(isInfected);
-        float keepInventoryCost = getKeepInventoryCost(isInfected);
+        float normalCost = getNormalCost(data.getInfectionIdentity());
+        float keepInventoryCost = getKeepInventoryCost(data.getInfectionIdentity());
 
         PendingDeathData.DeathLocation corpseLocation = PendingDeathData.getCorpseLocation(player);
         double deathX = corpseLocation.x();
@@ -242,14 +238,18 @@ public class DeathEventHandler {
         DreamingFishCore_NetworkManager.sendToClient(packet, player);
     }
 
-    //获取正常复活消耗
-    public static float getNormalCost(boolean isInfected) {
-        return isInfected ? RESPAWN_COST_INFECTED : RESPAWN_COST_NOT_INFECTED;
+    //获取正常复活消耗：数值唯一来源是 InfectionRules，界面预览与服务端扣费共用
+    public static float getNormalCost(
+            com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity identity) {
+        return com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionRules
+                .respawnCost(identity);
     }
 
     //获取保留物品复活消耗
-    public static float getKeepInventoryCost(boolean isInfected) {
-        return getNormalCost(isInfected) + KEEP_INVENTORY_COST;
+    public static float getKeepInventoryCost(
+            com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity identity) {
+        return com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionRules
+                .keepInventoryCost(identity);
     }
 
     private static String buildRespawnExhaustedReason(PendingDeathData.DeathLocation corpseLocation) {

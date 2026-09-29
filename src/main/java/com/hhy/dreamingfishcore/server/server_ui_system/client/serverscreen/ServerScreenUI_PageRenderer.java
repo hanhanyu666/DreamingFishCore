@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskPlayerData;
@@ -351,9 +352,12 @@ public class ServerScreenUI_PageRenderer {
         int boxHeight = innerMargin * 2 + lineHeight * 6 + 5 * 3;
 
         UUID playerUUID = player.getUUID();
-        boolean isInfected = PlayerAttributesClientCache.isInfected(playerUUID);
+        // 身份显示与服务端分档消耗同源：都经客户端缓存读取，避免界面预览与实际扣费漂移。
+        InfectionIdentity identity = PlayerAttributesClientCache.getInfectionIdentity(playerUUID);
+        boolean isInfected = identity.isInfected();
+        float normalRespawnCost = PlayerAttributesClientCache.getNormalRespawnCost(playerUUID);
         float respawnPoint = ClientCacheManager.getRespawnPoint(playerUUID);
-        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, isInfected ? 20 : 5);
+        int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, normalRespawnCost);
 
         int bgColor, borderColor;
 
@@ -387,7 +391,9 @@ public class ServerScreenUI_PageRenderer {
         int contentY = y + innerMargin;
         int currentLineY = 0;
 
-        String statusText = isInfected ? "§c§l您是感染者" : "§a§l您是幸存者";
+        String statusText = isInfected
+                ? "§c§l您是" + identity.displayName()
+                : "§a§l您是" + identity.displayName();
         guiGraphics.drawString(mc.font, statusText, contentX, contentY + currentLineY, 0xFFFFFF);
         currentLineY += lineHeight + 3;
 
@@ -407,10 +413,12 @@ public class ServerScreenUI_PageRenderer {
             currentLineY += lineHeight + 3;
         }
 
-        int deathCost = isInfected ? 20 : 5;
-        String costText = isInfected ?
-                String.format("§7作为感染者您每次标准重建最多消耗 §c%d §7点模板重建余量", deathCost) :
-                String.format("§7作为幸存者您每次标准重建最多消耗 §a%d §7点模板重建余量", deathCost);
+        // 三档消耗文案：幸存者 5 / 稳定感染者 10 / 不稳定感染者与传播复发 20，数值来自身份规则。
+        String costText = isInfected
+                ? String.format("§7作为%s您每次标准重建最多消耗 §c%d §7点模板重建余量",
+                        identity.displayName(), Math.round(normalRespawnCost))
+                : String.format("§7作为%s您每次标准重建最多消耗 §a%d §7点模板重建余量",
+                        identity.displayName(), Math.round(normalRespawnCost));
         guiGraphics.drawString(mc.font, costText, contentX, contentY + currentLineY, 0xFFFFFF);
         currentLineY += lineHeight + 3;
 

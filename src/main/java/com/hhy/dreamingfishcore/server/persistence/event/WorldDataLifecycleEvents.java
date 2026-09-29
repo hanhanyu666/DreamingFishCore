@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.RevivalInfoManager;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.biome.PlayerBiomesDataManager;
@@ -81,6 +82,8 @@ public final class WorldDataLifecycleEvents {
     public static void onServerTick(ServerTickEvent.Post event) {
         StoryManager.tickActiveTime(event.getServer());
         PlayerInfectionManager.tickTreatmentWindows(event.getServer());
+        // 传播复发到期自动结束：不依赖玩家主动处理，避免永久保留传播能力。
+        InfectionTreatmentService.tickRelapseWindows(event.getServer());
         if (++autoSaveCounter >= AUTO_SAVE_INTERVAL_TICKS) {
             autoSaveCounter = 0;
             saveDirtyData(event.getServer());

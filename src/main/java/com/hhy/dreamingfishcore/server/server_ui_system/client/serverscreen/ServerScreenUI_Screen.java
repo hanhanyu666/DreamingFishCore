@@ -4,6 +4,7 @@ import com.hhy.dreamingfishcore.client.cache.ClientCacheManager;
 import com.hhy.dreamingfishcore.client.cache.EconomyTerminalClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
@@ -325,22 +326,23 @@ public class ServerScreenUI_Screen extends Screen {
             "夜间行动", "带上光源、尽量结伴，并为撤离预留至少 20 点体力；不要让体力和勇气同时见底。"),
         new HelpTopic(
             "03", "死亡与重生", "模板重建余量、物品栏与尸体", 0xFFFFC857,
-            new String[]{"幸存者 5 点", "感染者 20 点", "每日 +5 点"},
+            new String[]{"幸存者 5 点", "稳定感染者 10 点", "不稳定感染者 20 点"},
             new String[]{
                 "正常重生会扣除基础模板重建余量，物品留在死亡地点的尸体中，需要返回取回。",
-                "也可额外消耗 30 点保留物品栏：幸存者总计 35 点，感染者总计 50 点。",
+                "标准重建按感染身份分档：幸存者 5 点、稳定感染者 10 点、不稳定感染者 20 点（传播复发按稳定感染者计）；额外 30 点即可保留物品栏。",
                 "尸体会保存归属与位置；正常重生时可以锁定尸体，保护留下的物品。",
                 "余梦期的余量停止自然恢复。维护服务开放后，可向医疗工作人员提交物资，每个主世界游戏日办理一次；所需物品与恢复量以现场说明为准。"
             },
             "出发前检查", "在个人档案查看剩余模板重建余量。余量上限为 100；最后一点余量仍可完成一次标准重建，耗尽后的下一次死亡需要他人救援。"),
         new HelpTopic(
             "04", "感染与体征", "受伤会推动感染恶化", 0xFF8B5CF6,
-            new String[]{"受伤会累积", "白天 -5 / 日", "100% 感染者"},
+            new String[]{"受伤会累积", "白天 -5 / 日", "80% 出现症状"},
             new String[]{
                 "生命值净下降就会增加感染，增加量约为损失生命的 1/5；被丧尸击败还会额外增加。",
-                "在感染者 32 格内停留，每 30 秒也会增加 1 点感染；达到 80% 后获得虚弱 I 与缓慢 I。",
+                "在具有传播能力的感染者（不稳定感染者、传播复发）附近会累积接触暴露（半径 32 格），攒满后转化为感染增长，离开范围会逐渐衰减；达到 80% 后获得虚弱 I 与缓慢 I。",
+                "只有不稳定感染者与传播复发者会释放异常因子，稳定感染者可以正常相处，不会持续感染队友。",
                 "根据目前的观察，未完全感染者在有天空的白天会逐渐回落，完整一个白天约降低 5 点；这不是治愈。",
-                "感染达到 100% 就会成为感染者，死亡时需要消耗更多模板重建余量；感染规则会随故事阶段变化。"
+                "感染达到 100% 就会变成感染者，死亡时需要消耗更多模板重建余量；感染规则会随故事阶段变化。"
             },
             "关注体征", "饱食度触发的普通自然回血最多恢复到最大生命的 70%；金苹果、恢复效果和医疗物资不受此限制。"),
         new HelpTopic(
@@ -695,9 +697,10 @@ public class ServerScreenUI_Screen extends Screen {
         drawText(guiGraphics, "PLAYER", x + 12, y + 12, TABLET_MUTED_TEXT_COLOR);
 
         float infection = PlayerInfectionManager.getCurrentInfectionClient(player);
-        boolean profileInfected = PlayerAttributesClientCache.isInfected(player.getUUID());
+        InfectionIdentity profileIdentity = PlayerAttributesClientCache.getInfectionIdentity(player.getUUID());
+        boolean profileInfected = profileIdentity.isInfected();
         int infectionMaximum = PlayerInfectionManager.getInfectionMaximumClient(player);
-        String status = profileInfected ? "感染者" : "幸存者";
+        String status = profileIdentity.displayName();
         int statusColor = profileInfected ? 0xFFFF6677 : 0xFF50D890;
         String playerName = player.getScoreboardName();
         if (mc.font.width(playerName) > heroW - 24) {
@@ -785,9 +788,9 @@ public class ServerScreenUI_Screen extends Screen {
         int attrBottom = y + contentH;
         int attrH = Math.max(0, attrBottom - attrY);
         drawSoftRect(guiGraphics, rightX, attrY, rightW, attrH, 2, TABLET_CARD_COLOR, TABLET_CARD_BORDER_COLOR);
-        boolean infected = PlayerAttributesClientCache.isInfected(player.getUUID());
         float respawnPoint = ClientCacheManager.getRespawnPoint(player.getUUID());
-        int deathCost = infected ? 20 : 5;
+        // 消耗按感染身份分档，直接取客户端缓存，与服务端扣费同源。
+        int deathCost = Math.round(PlayerAttributesClientCache.getNormalRespawnCost(player.getUUID()));
         int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, deathCost);
         String respawnWarning = respawnTimes <= 0 ? "警告: 无法复活" : (respawnTimes < 2 ? "警告: 复活不足" : "");
         drawText(guiGraphics, "身体状态", rightX + 12, attrY + 9, TABLET_TEXT_COLOR);
@@ -819,7 +822,7 @@ public class ServerScreenUI_Screen extends Screen {
         drawMiniBar(guiGraphics, innerX, innerY + (rowH + rowGap) * 2, barW, rowH, "感染", infection / infectionMaximum,
             String.format("%.1f/%d", infection, infectionMaximum), 0xFF8B5CF6);
         drawMiniBar(guiGraphics, innerX + barW + columnGap, innerY + (rowH + rowGap) * 2, barW, rowH, "模板重建余量", respawnPoint / 100.0f,
-            String.format("%.1f/100", respawnPoint), infected ? 0xFFFF6677 : 0xFF7AA8C7);
+            String.format("%.1f/100", respawnPoint), profileInfected ? 0xFFFF6677 : 0xFF7AA8C7);
     }
 
     private void renderRankManagementPage(GuiGraphics guiGraphics, int mouseX, int mouseY,
@@ -1025,12 +1028,13 @@ public class ServerScreenUI_Screen extends Screen {
     }
 
     private void renderRespawnSummary(GuiGraphics guiGraphics, LocalPlayer player, int x, int y, int width) {
-        boolean infected = PlayerAttributesClientCache.isInfected(player.getUUID());
+        InfectionIdentity identity = PlayerAttributesClientCache.getInfectionIdentity(player.getUUID());
         float respawnPoint = ClientCacheManager.getRespawnPoint(player.getUUID());
-        int deathCost = infected ? 20 : 5;
+        // 消耗按感染身份分档，直接取客户端缓存，与服务端扣费同源。
+        int deathCost = Math.round(PlayerAttributesClientCache.getNormalRespawnCost(player.getUUID()));
         int respawnTimes = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.remainingReconstructions(respawnPoint, deathCost);
-        int color = infected ? 0xFFFF6677 : (respawnTimes <= 0 ? 0xFFFF6677 : 0xFF50D890);
-        drawText(guiGraphics, infected ? "感染状态: 感染者" : "感染状态: 幸存者", x, y, color);
+        int color = identity.isInfected() ? 0xFFFF6677 : (respawnTimes <= 0 ? 0xFFFF6677 : 0xFF50D890);
+        drawText(guiGraphics, "感染状态: " + identity.displayName(), x, y, color);
         String respawnText = "模板重建余量 " + String.format("%.1f/100", respawnPoint) + "  可重生 " + respawnTimes + " 次";
         if (mc.font.width(respawnText) > width) {
             respawnText = ServerScreenUI_RendererUtils.truncateText(mc.font, respawnText, width - mc.font.width("...")) + "...";
@@ -3457,7 +3461,7 @@ public class ServerScreenUI_Screen extends Screen {
         int level = PlayerLevelManager.getPlayerLevelClient(player);
         float infection = PlayerInfectionManager.getCurrentInfectionClient(player);
         boolean dashboardInfected = PlayerAttributesClientCache.isInfected(player.getUUID());
-        String status = dashboardInfected ? "感染者" : "幸存者";
+        String status = PlayerAttributesClientCache.getInfectionIdentity(player.getUUID()).displayName();
         int statusColor = dashboardInfected ? 0xFFFF6677 : 0xFF50D890;
         int metaY = Math.min(y + height - 34, avatarY + avatarSize + 12);
         String levelText = "LV." + level;

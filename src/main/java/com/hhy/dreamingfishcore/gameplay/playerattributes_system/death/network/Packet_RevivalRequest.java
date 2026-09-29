@@ -300,18 +300,29 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
                 || player.getOffhandItem().is(DreamingFishCore_Items.REVIVAL_CHARM.get());
     }
 
+    /**
+     * 救援过程中的属性回滚快照。
+     *
+     * <p>传播复发窗口与复发冷却也在快照里：救援中途失败必须把被救者恢复成
+     * "救援前那一刻的身份"，否则回滚会把一名本来正在传播复发的玩家悄悄变成普通稳定感染者。</p>
+     */
     private record AttributesSnapshot(boolean infected, int infectionLevel, float infection,
                                       boolean protectiveMaskReceived,
                                       long infectionTreatmentDeadlineActiveTick,
+                                      long relapseUntilActiveTick,
+                                      long relapseCooldownUntilActiveTick,
                                       float respawnPoint, float courage, int strength) {
         private static AttributesSnapshot capture(PlayerAttributesData data) {
             return new AttributesSnapshot(data.isInfected(), data.getInfectionLevel(),
                     data.getCurrentInfection(), data.hasReceivedProtectiveMask(),
                     data.getInfectionTreatmentDeadlineActiveTick(),
+                    data.getRelapseUntilActiveTick(), data.getRelapseCooldownUntilActiveTick(),
                     data.getRespawnPoint(), data.getCurrentCourage(), data.getCurrentStrength());
         }
 
         private void restore(PlayerAttributesData data) {
+            // 先落等级（它会按规则清空复发状态），再按快照原样恢复复发窗口与冷却，
+            // 这样两种顺序差别不会让回滚结果依赖 setInfectionLevel 的清理副作用。
             data.setInfectionLevel(infectionLevel);
             if (infected && infectionLevel == 0) {
                 data.setInfectionLevel(1);
@@ -320,6 +331,8 @@ public class Packet_RevivalRequest implements net.minecraft.network.protocol.com
             data.setProtectiveMaskReceived(protectiveMaskReceived);
             data.setInfectionTreatmentDeadlineActiveTick(
                     infectionTreatmentDeadlineActiveTick);
+            data.setRelapseUntilActiveTick(relapseUntilActiveTick);
+            data.setRelapseCooldownUntilActiveTick(relapseCooldownUntilActiveTick);
             data.setRespawnPoint(respawnPoint);
             data.setCurrentCourage(courage);
             data.setCurrentStrength(strength);

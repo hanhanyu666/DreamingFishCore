@@ -8,6 +8,7 @@ import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
@@ -796,20 +797,26 @@ public final class AfterdreamStory {
         syncPlayer(player);
     }
 
-    /** 终检：感染读数清零、解除感染状态，并进入第 3 / 7 天随访流程。 */
+    /**
+     * 终检：解除感染身份，并进入第 3 / 7 天随访流程。
+     *
+     * <p>按 ADR 0005 的分层治疗，这里走的是<b>重构疗程</b>：三次疗程与终检完成后，
+     * 稳定感染者（含传播复发）恢复为幸存者。身份写入统一交给感染系统的服务端入口。</p>
+     */
     private static void completeCourse(
             ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
         PlayerAttributesData data = PlayerAttributesDataManager.findStoredPlayerAttributesData(player.getUUID());
         if (data == null) {
             return;
         }
-        // 服务端事实：三次疗程 + 终检之后才允许把二级感染清零。
-        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
-        data.setCurrentInfection(0.0F);
-        data.clearInfectionTreatmentDeadline();
-        PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
-        PlayerInfectionClientSync.sendInfectionDataToClient(
-                player, 0, false, PlayerAttributesData.INFECTION_LEVEL_NONE);
+        // 服务端事实：三次疗程 + 终检之后才允许解除稳定感染者的身份。
+        InfectionTreatmentService.TreatmentOutcome outcome =
+                InfectionTreatmentService.applyReconstruction(player);
+        if (outcome != InfectionTreatmentService.TreatmentOutcome.APPLIED) {
+            DreamingFishCore.LOGGER.warn(
+                    "玩家 {} 完成重构疗程终检，但当前身份不是稳定感染者（结果 {}），未改写身份",
+                    player.getScoreboardName(), outcome);
+        }
         if (!progress.completeCourse(activeTick)) {
             return;
         }

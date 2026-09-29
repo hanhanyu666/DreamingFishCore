@@ -205,7 +205,7 @@ public final class Command_StoryDebug {
     private static int completeCourse(CommandContext<CommandSourceStack> context) {
         return withPlayer(context, player -> {
             if (!AfterdreamStory.debugCompleteCourse(player)) {
-                return "无法完成疗程：玩家不在余梦期、还没有开始疗程，或感染等级不是二级。";
+                return "无法完成疗程：玩家不在余梦期、还没有开始疗程，或身份不是稳定感染者。";
             }
             return null;
         }, "疗程已完成（终检结算与正式流程一致）");
