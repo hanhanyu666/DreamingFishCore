@@ -1,18 +1,37 @@
 package com.hhy.dreamingfishcore.gameplay.npc_system.client.ui.screen;
 
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.AnimatedFloat;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.Easing;
+import com.hhy.dreamingfishcore.client.ui.framework.core.UiSounds;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Align;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Box;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Cursor;
+import com.hhy.dreamingfishcore.client.ui.framework.node.EnterEffect;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Justify;
+import com.hhy.dreamingfishcore.client.ui.framework.node.UiNode;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.screen.UiScreen;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextStyle;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Badge;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Dynamic;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Icon;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Icons;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.InteractiveNode;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Text;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Typewriter;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Ui;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcDialogueViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcInteractionType;
+import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.gameplay.npc_system.client.StoryNpcRenderer;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.Packet_NpcInteractionRequest;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -21,441 +40,39 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Screen_NpcDialogue extends Screen {
-    private static final Minecraft MC = Minecraft.getInstance();
-
-    private static final String TITLE_FALLBACK = "NPC对话";
-    private static final String LABEL_ACTION = "你要怎么做？";
-    private static final String BUTTON_DIALOGUE = "交谈";
-    private static final String BUTTON_ABOUT = "关于";
-    private static final String BUTTON_BACK_TO_DIALOGUE = "返回交谈";
-    private static final String BUTTON_FOLLOW = "邀请跟随";
-    private static final String BUTTON_SET_HOME = "设为住处";
-    private static final String TEXT_LOCKED = "未解锁";
-    private static final String TEXT_EMPTY_DIALOGUE = "对方暂时没有继续开口。";
-    private static final String TEXT_CLOSE_HINT = "ESC 离开";
-    /** 每页展示八行，长对白自动翻页，不再被静默截断。 */
-    private static final int DIALOGUE_LINES_PER_PAGE = 8;
-
-    private static final int COLOR_PANEL = 0xDC090B0E;
-    private static final int COLOR_PANEL_BORDER = 0x7A9B7B43;
-    private static final int COLOR_BUTTON = 0x8A1A1815;
-    private static final int COLOR_BUTTON_HOVER = 0xC4372E20;
-    private static final int COLOR_BUTTON_LOCKED = 0x69201E1A;
-    private static final int COLOR_TITLE = 0xFFFFD88A;
-    private static final int COLOR_TEXT = 0xFFEFE6D0;
-    private static final int COLOR_MUTED = 0xFFB8AA91;
-    private static final int COLOR_GOOD = 0xFF9DE08F;
-    private static final int COLOR_ACCENT = 0xFFCDAA64;
-    private static final int COLOR_OPTION = 0xFFEAD9B4;
-    private static final int COLOR_OPTION_HOVER = 0xFFFFD878;
-    private static final int COLOR_OPTION_LOCKED = 0xFF777064;
-    private static final int COLOR_DIVIDER = 0x55D0B16F;
+/**
+ * NPC 对话：画面底部的对话框，左侧是 NPC 立像，中间是逐字显示的对白（长对白分页），
+ * 右侧是交谈、关于、跟随、住处等行动。暖色调与终端的冷色调区分"现场对话"与"设备界面"。
+ */
+public class Screen_NpcDialogue extends UiScreen {
+    private static final int PANEL_TOP = 0xF0120F0B;
+    private static final int PANEL_BOTTOM = 0xF0090807;
+    private static final int PANEL_BORDER = 0x889B7B43;
+    private static final int GOLD = 0xFFFFD88A;
+    private static final int TEXT = 0xFFEFE6D0;
+    private static final int MUTED = 0xFFB8AA91;
+    private static final int GOOD = 0xFF9DE08F;
+    private static final int ACCENT = 0xFFCDAA64;
+    private static final int OPTION = 0xFFEAD9B4;
+    private static final int OPTION_HOVER = 0xFFFFD878;
+    private static final int LOCKED = 0xFF777064;
+    private static final String EMPTY_DIALOGUE = "对方暂时没有继续开口。";
+    private static final String DEFAULT_INTRO = "随着你们逐渐的认识，你对这个人的了解会变多。";
 
     private final NpcDialogueViewData data;
-    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize =
-            new VirtualCoordinateHelper.VirtualSizeResult();
-    private final List<TextActionArea> textActionAreas = new ArrayList<>();
-
-    private int virtualWidth;
-    private int virtualHeight;
-    private float uiScale;
-    private int panelX;
-    private int panelY;
-    private int panelWidth;
-    private int panelHeight;
-    private int modelCenterX;
-    private int modelFootY;
-    private int dialogueX;
-    private int dialogueWidth;
-    private int actionX;
-    private int actionWidth;
+    private final AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 380.0F, Easing.EMPHASIZED);
+    private final Typewriter typewriter = Typewriter.of("").style(TextStyle.BODY.withLineGap(4.0F)).color(TEXT)
+            .linesPerPage(6).speed(55.0F);
     private int dialogueIndex;
-    private int dialoguePage;
     private boolean showingAbout;
-    private long openTime;
 
     public Screen_NpcDialogue(NpcDialogueViewData data) {
-        super(Component.literal(TITLE_FALLBACK));
+        super(Component.literal("NPC对话"));
         this.data = data;
+        setBackground(Background.NONE);
     }
 
-    @Override
-    protected void init() {
-        openTime = System.currentTimeMillis();
-        calculateVirtualLayout();
-        rebuildTextActions();
-    }
-
-    private void calculateVirtualLayout() {
-        VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
-        uiScale = virtualSize.uiScale;
-        virtualWidth = virtualSize.virtualWidth;
-        virtualHeight = virtualSize.virtualHeight;
-
-        panelX = 12;
-        panelWidth = virtualWidth - panelX * 2;
-
-        modelCenterX = panelX + 42;
-        dialogueX = panelX + 84;
-        actionWidth = 166;
-        actionX = panelX + panelWidth - actionWidth - 10;
-        dialogueWidth = Math.max(190, actionX - dialogueX - 14);
-
-        // 只有超过四行的对白才增加面板高度；短对白保持紧凑，长对白仍由分页承载。
-        int maxPanelHeight = Math.max(98, Math.min(150, virtualHeight - 20));
-        int lineCount = MC.font.getSplitter().splitLines(layoutText(), dialogueWidth, Style.EMPTY).size();
-        int visibleLines = Math.min(DIALOGUE_LINES_PER_PAGE, Math.max(1, lineCount));
-        int desiredPanelHeight = 98 + Math.max(0, visibleLines - 4) * 12;
-        panelHeight = Math.min(maxPanelHeight, desiredPanelHeight);
-        panelY = virtualHeight - panelHeight - 10;
-        modelFootY = panelY + panelHeight - 7;
-    }
-
-    private void rebuildTextActions() {
-        textActionAreas.clear();
-        List<TextAction> actions = new java.util.ArrayList<>(List.of(
-                new TextAction(BUTTON_DIALOGUE, ScreenAction.DIALOGUE, true),
-                new TextAction(showingAbout ? BUTTON_BACK_TO_DIALOGUE : BUTTON_ABOUT,
-                        ScreenAction.ABOUT, true),
-                new TextAction(BUTTON_FOLLOW, ScreenAction.FOLLOW,
-                        isActionAvailable(NpcInteractionType.FOLLOW)),
-                new TextAction(BUTTON_SET_HOME, ScreenAction.SET_HOME,
-                        isActionAvailable(NpcInteractionType.SET_HOME))
-        ));
-        if (isActionAvailable(NpcInteractionType.HOSPITAL_REVIEW)) {
-            actions.set(2, new TextAction("正式复查", ScreenAction.HOSPITAL_REVIEW, true));
-        }
-        if (data.getNpcId() == com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy.MEDICAL_STAFF_ID) {
-            actions.set(2, new TextAction("提交并维护", ScreenAction.DAILY_TEMPLATE_SUPPORT,
-                    isActionAvailable(NpcInteractionType.DAILY_TEMPLATE_SUPPORT)));
-            actions.remove(3);
-        }
-
-        int columns = 2;
-        int gap = 6;
-        int buttonWidth = (actionWidth - gap) / columns;
-        int buttonHeight = 22;
-        int startY = panelY + 29;
-        for (int index = 0; index < actions.size(); index++) {
-            TextAction action = actions.get(index);
-            String label = action.enabled ? action.label : action.label + " · " + TEXT_LOCKED;
-            int column = index % columns;
-            int row = index / columns;
-            int x = actionX + column * (buttonWidth + gap);
-            int y = startY + row * (buttonHeight + 6);
-            textActionAreas.add(new TextActionArea(x, y, buttonWidth, buttonHeight,
-                    label, action.type, action.enabled));
-        }
-    }
-
-    private boolean isActionAvailable(NpcInteractionType type) {
-        return data.getAvailableActions().contains(type.name());
-    }
-
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        calculateVirtualLayout();
-        rebuildTextActions();
-
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(uiScale, uiScale, 1.0f);
-        float virtualMouseX = mouseX / uiScale;
-        float virtualMouseY = mouseY / uiScale;
-
-        renderStage(guiGraphics);
-        renderNpcModel(guiGraphics, virtualMouseX, virtualMouseY);
-        renderInfoColumn(guiGraphics);
-        renderDialogueColumn(guiGraphics);
-        renderActionColumn(guiGraphics, virtualMouseX, virtualMouseY);
-        renderFooter(guiGraphics);
-
-        guiGraphics.pose().popPose();
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    private void renderStage(GuiGraphics guiGraphics) {
-        renderQuickFade(guiGraphics);
-        UiPanelRenderer.smoothRoundedRect(guiGraphics, panelX, panelY, panelWidth, panelHeight,
-                7, COLOR_PANEL, COLOR_PANEL_BORDER);
-    }
-
-    private void renderQuickFade(GuiGraphics guiGraphics) {
-        int fadeTop = panelY - 18;
-        for (int y = fadeTop; y < virtualHeight; y += 3) {
-            float ratio = (float) (y - fadeTop) / Math.max(1, virtualHeight - fadeTop);
-            int alpha = (int) (ratio * 88.0f);
-            guiGraphics.fill(0, y, virtualWidth, Math.min(virtualHeight, y + 3), alpha << 24);
-        }
-    }
-
-    private void renderNpcModel(GuiGraphics guiGraphics, float mouseX, float mouseY) {
-        LivingEntity entity = getDialogueEntity();
-        if (entity == null) {
-            return;
-        }
-
-        int modelSize = Math.max(34, Math.min(42, panelHeight / 2 - 8));
-        int modelLeft = modelCenterX - modelSize;
-        int modelTop = modelFootY - modelSize * 2;
-        int modelRight = modelCenterX + modelSize;
-        int clipPadding = 8;
-        int clipLeft = modelLeft - clipPadding;
-        int clipTop = modelTop - clipPadding;
-        int clipRight = modelRight + clipPadding;
-        int clipBottom = modelFootY + clipPadding;
-
-        // 原版接口需要模型边界坐标系中的绝对鼠标坐标；限幅可避免人物大幅扭头。
-        float trackedMouseX = Mth.clamp(mouseX, (float) modelLeft, (float) modelRight);
-        float trackedMouseY = Mth.clamp(mouseY, (float) modelTop, (float) modelFootY);
-
-        // 对话预览复用世界实体，只在这一帧临时隐藏名称牌，渲染后立即恢复。
-        boolean customNameVisible = entity.isCustomNameVisible();
-        entity.setCustomNameVisible(false);
-        try {
-            StoryNpcRenderer.renderWithoutNameplate(() ->
-                    InventoryScreen.renderEntityInInventoryFollowsMouse(
-                            guiGraphics,
-                            clipLeft,
-                            clipTop,
-                            clipRight,
-                            clipBottom,
-                            modelSize,
-                            0.0625F,
-                            trackedMouseX,
-                            trackedMouseY,
-                            entity
-                    ));
-        } finally {
-            entity.setCustomNameVisible(customNameVisible);
-        }
-    }
-
-    private void renderInfoColumn(GuiGraphics guiGraphics) {
-        int headerY = panelY + 10;
-        String relation = data.getRelationName().isEmpty() ? "尚未熟悉" : data.getRelationName();
-        relation = fitText(relation + " · 好感 " + data.getFavorability(),
-                Math.max(72, dialogueWidth / 2));
-        int relationWidth = MC.font.width(relation);
-        int relationX = dialogueX + dialogueWidth - relationWidth;
-
-        String npcName = fitText(data.getNpcName(), Math.max(42, dialogueWidth / 3));
-        guiGraphics.drawString(MC.font, npcName, dialogueX, headerY, COLOR_TITLE, false);
-
-        int professionX = dialogueX + MC.font.width(npcName) + 8;
-        int professionWidth = Math.max(0, relationX - professionX - 8);
-        if (professionWidth > 18 && !data.getNpcProfession().isEmpty()) {
-            guiGraphics.drawString(MC.font, fitText(data.getNpcProfession(), professionWidth),
-                    professionX, headerY, COLOR_MUTED, false);
-        }
-        guiGraphics.drawString(MC.font, relation, relationX, headerY, COLOR_GOOD, false);
-    }
-
-    private void renderDialogueColumn(GuiGraphics guiGraphics) {
-        if (showingAbout) {
-            String introduction = data.getNpcIntroduction().isBlank()
-                    ? "随着你们逐渐的认识，你对这个人的了解会变多。"
-                    : data.getNpcIntroduction();
-            UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
-                    Math.min(DIALOGUE_LINES_PER_PAGE * 12 + 2, panelHeight - 48),
-                    1, COLOR_ACCENT);
-            drawTypewriterWrapped(guiGraphics, introduction, dialogueX, panelY + 31,
-                    dialogueWidth, COLOR_TEXT, dialoguePage);
-            return;
-        }
-
-        String dialogue = currentDialogue();
-        UiPanelRenderer.roundedRect(guiGraphics, dialogueX - 8, panelY + 31, 2,
-                Math.min(DIALOGUE_LINES_PER_PAGE * 12 + 2, panelHeight - 48),
-                1, COLOR_ACCENT);
-        drawTypewriterWrapped(guiGraphics, dialogue, dialogueX, panelY + 31,
-                dialogueWidth, COLOR_TEXT, dialoguePage);
-    }
-
-    private void renderActionColumn(GuiGraphics guiGraphics, float mouseX, float mouseY) {
-        drawColumnHeader(guiGraphics, LABEL_ACTION, actionX, panelY + 10, actionWidth);
-        for (TextActionArea area : textActionAreas) {
-            boolean hovered = area.contains((int) mouseX, (int) mouseY);
-            int textColor = area.enabled
-                    ? (hovered ? COLOR_OPTION_HOVER : COLOR_OPTION)
-                    : COLOR_OPTION_LOCKED;
-            int background = area.enabled
-                    ? (hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON)
-                    : COLOR_BUTTON_LOCKED;
-            int border = hovered && area.enabled ? COLOR_OPTION_HOVER : COLOR_DIVIDER;
-            UiPanelRenderer.roundedRect(guiGraphics, area.x, area.y, area.width, area.height,
-                    4, background);
-            UiPanelRenderer.roundedBorder(guiGraphics, area.x, area.y, area.width, area.height,
-                    4, border);
-
-            String label = fitText(area.label, area.width - 8);
-            int textX = area.x + (area.width - MC.font.width(label)) / 2;
-            int textY = area.y + (area.height - MC.font.lineHeight) / 2;
-            guiGraphics.drawString(MC.font, label, textX, textY, textColor, false);
-        }
-    }
-
-    private void drawColumnHeader(GuiGraphics guiGraphics, String title, int x, int y, int width) {
-        guiGraphics.drawString(MC.font, title, x, y, COLOR_ACCENT, false);
-        guiGraphics.fill(x, y + 12, x + width, y + 13, COLOR_DIVIDER);
-    }
-
-    private void renderFooter(GuiGraphics guiGraphics) {
-        String currentText = showingAbout ? currentIntroduction() : currentDialogue();
-        int pageCount = pageCount(currentText);
-        if (pageCount > 1) {
-            String pageHint = "第 " + (dialoguePage + 1) + "/" + pageCount + " 页 · 点击交谈继续";
-            guiGraphics.drawString(MC.font, pageHint, dialogueX,
-                    panelY + panelHeight - 15, COLOR_MUTED, false);
-        }
-        int hintWidth = MC.font.width(TEXT_CLOSE_HINT);
-        guiGraphics.drawString(MC.font, TEXT_CLOSE_HINT,
-                panelX + panelWidth - hintWidth - 12, panelY + panelHeight - 15,
-                COLOR_MUTED, false);
-    }
-
-    private void drawTypewriterWrapped(GuiGraphics guiGraphics, String text, int x, int y,
-                                       int width, int color, int page) {
-        String safeText = text == null ? "" : text;
-        var lines = MC.font.getSplitter().splitLines(safeText, width, Style.EMPTY);
-        int start = Math.max(0, page) * DIALOGUE_LINES_PER_PAGE;
-        int end = Math.min(start + DIALOGUE_LINES_PER_PAGE, lines.size());
-        int remainingCharacters = elapsedCharacters();
-        for (int index = start; index < end; index++) {
-            String line = lines.get(index).getString();
-            int visibleLength = Math.min(line.length(), remainingCharacters);
-            if (visibleLength > 0) {
-                guiGraphics.drawString(MC.font, line.substring(0, visibleLength), x,
-                        y + (index - start) * 12, color, false);
-            }
-            remainingCharacters -= line.length() + 1;
-            if (remainingCharacters <= 0) {
-                break;
-            }
-        }
-    }
-
-    private String currentDialogue() {
-        List<String> dialogues = data.getDialogues();
-        return dialogues.isEmpty()
-                ? TEXT_EMPTY_DIALOGUE
-                : dialogues.get(Math.min(dialogueIndex, dialogues.size() - 1));
-    }
-
-    private String currentIntroduction() {
-        return data.getNpcIntroduction().isBlank()
-                ? "随着你们逐渐的认识，你对这个人的了解会变多。"
-                : data.getNpcIntroduction();
-    }
-
-    private String layoutText() {
-        return showingAbout ? currentIntroduction() : currentDialogue();
-    }
-
-    private int pageCount(String text) {
-        String safeText = text == null ? "" : text;
-        int lineCount = MC.font.getSplitter().splitLines(safeText, dialogueWidth, Style.EMPTY).size();
-        return Math.max(1, (lineCount + DIALOGUE_LINES_PER_PAGE - 1) / DIALOGUE_LINES_PER_PAGE);
-    }
-
-    private int elapsedCharacters() {
-        return Math.max(0, (int) ((System.currentTimeMillis() - openTime) / 18L));
-    }
-
-    private int currentPageCharacterCount(String text) {
-        String safeText = text == null ? "" : text;
-        var lines = MC.font.getSplitter().splitLines(safeText, dialogueWidth, Style.EMPTY);
-        int start = Math.max(0, dialoguePage) * DIALOGUE_LINES_PER_PAGE;
-        int end = Math.min(start + DIALOGUE_LINES_PER_PAGE, lines.size());
-        int count = 0;
-        for (int index = start; index < end; index++) {
-            count += lines.get(index).getString().length() + 1;
-        }
-        return Math.max(1, count);
-    }
-
-    private String fitText(String text, int maxWidth) {
-        if (text == null || text.isEmpty() || maxWidth <= 0) {
-            return "";
-        }
-        if (MC.font.width(text) <= maxWidth) {
-            return text;
-        }
-        String ellipsis = "…";
-        int contentWidth = Math.max(0, maxWidth - MC.font.width(ellipsis));
-        return MC.font.plainSubstrByWidth(text, contentWidth) + ellipsis;
-    }
-
-    private LivingEntity getDialogueEntity() {
-        if (MC.level == null || data.getEntityId() < 0) {
-            return null;
-        }
-        Entity entity = MC.level.getEntity(data.getEntityId());
-        if (entity instanceof LivingEntity livingEntity) {
-            return livingEntity;
-        }
-        return null;
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            onClose();
-            return true;
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            int virtualMouseX = (int) (mouseX / uiScale);
-            int virtualMouseY = (int) (mouseY / uiScale);
-            for (TextActionArea area : textActionAreas) {
-                if (area.contains(virtualMouseX, virtualMouseY)) {
-                    if (area.enabled) {
-                        if (area.type == ScreenAction.ABOUT) {
-                            showingAbout = !showingAbout;
-                            dialoguePage = 0;
-                            openTime = System.currentTimeMillis();
-                            return true;
-                        }
-                        if (area.type == ScreenAction.DIALOGUE) {
-                            showingAbout = false;
-                            String dialogue = currentDialogue();
-                            if (elapsedCharacters() < currentPageCharacterCount(dialogue)) {
-                                // 第一次点击只结束打字动画，避免玩家还没读完就跳页。
-                                openTime = System.currentTimeMillis()
-                                        - (long) currentPageCharacterCount(dialogue) * 18L;
-                                return true;
-                            }
-                            int pages = pageCount(dialogue);
-                            if (dialoguePage + 1 < pages) {
-                                dialoguePage++;
-                                openTime = System.currentTimeMillis();
-                                return true;
-                            }
-                            dialoguePage = 0;
-                            dialogueIndex++;
-                            openTime = System.currentTimeMillis();
-                        }
-                        DreamingFishCore_NetworkManager.sendToServer(
-                                new Packet_NpcInteractionRequest(data.getNpcId(),
-                                        data.getEntityId(), area.type.interactionType));
-                    }
-                    return true;
-                }
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
-    private enum ScreenAction {
+    private enum Action {
         DIALOGUE(NpcInteractionType.DIALOGUE),
         ABOUT(null),
         FOLLOW(NpcInteractionType.FOLLOW),
@@ -463,21 +80,264 @@ public class Screen_NpcDialogue extends Screen {
         HOSPITAL_REVIEW(NpcInteractionType.HOSPITAL_REVIEW),
         DAILY_TEMPLATE_SUPPORT(NpcInteractionType.DAILY_TEMPLATE_SUPPORT);
 
-        private final NpcInteractionType interactionType;
+        final NpcInteractionType interaction;
 
-        ScreenAction(NpcInteractionType interactionType) {
-            this.interactionType = interactionType;
+        Action(NpcInteractionType interaction) {
+            this.interaction = interaction;
         }
     }
 
-    private record TextAction(String label, ScreenAction type, boolean enabled) {
+    private record ActionEntry(String label, Icons icon, Action type, boolean enabled) {
     }
 
-    private record TextActionArea(int x, int y, int width, int height, String label,
-                                  ScreenAction type, boolean enabled) {
-        private boolean contains(int mouseX, int mouseY) {
-            return mouseX >= x && mouseX < x + width
-                    && mouseY >= y && mouseY < y + height;
+    @Override
+    protected UiNode<?> build() {
+        reveal.set(1.0F);
+        typewriter.text(currentText());
+
+        Badge relation = Badge.of((data.getRelationName().isEmpty() ? "尚未熟悉" : data.getRelationName())
+                + " · 好感 " + data.getFavorability()).color(GOOD);
+        Box nameRow = Ui.row(
+                Text.of(data.getNpcName()).style(TextStyle.TITLE).color(GOLD).singleLine(),
+                Text.of(data.getNpcProfession()).style(TextStyle.LABEL).color(MUTED).singleLine().shrink(1.0F),
+                Ui.spacer(),
+                relation
+        ).gap(Theme.Space.MD).alignItems(Align.CENTER);
+
+        Text modeLabel = Text.of(() -> Component.literal(showingAbout ? "关于 · " + data.getNpcName() : "对话"))
+                .style(TextStyle.CAPTION_STRONG).color(ACCENT).singleLine();
+        Box speech = Ui.row(
+                Ui.stack().width(2.0F).radius(1.0F).background(UiColor.withAlpha(ACCENT, 0.8F)),
+                Ui.column(modeLabel, typewriter).gap(Theme.Space.XS).grow(1.0F).shrink(1.0F)
+        ).gap(Theme.Space.MD).alignItems(Align.STRETCH);
+
+        Text pageHint = Text.of(() -> {
+            int pages = typewriter.pageCount();
+            if (pages > 1) {
+                return Component.literal("第 " + (typewriter.page() + 1) + "/" + pages + " 页 · 点击交谈继续");
+            }
+            return Component.literal(typewriter.isPageFinished() ? "点击交谈继续" : "");
+        }).style(TextStyle.CAPTION).color(MUTED).singleLine();
+
+        Box dialogueColumn = Ui.column(nameRow, divider(), speech.grow(1.0F), Ui.row(pageHint, Ui.spacer(),
+                Text.of("ESC 离开").style(TextStyle.CAPTION).color(MUTED).singleLine())).gap(Theme.Space.SM)
+                .grow(1.0F).basis(0.0F);
+
+        UiNode<?> actions = Dynamic.of(() -> showingAbout, about -> actionGrid()).width(176.0F);
+        Box actionColumn = Ui.column(Text.of("你要怎么做？").style(TextStyle.LABEL_STRONG).color(ACCENT).singleLine(),
+                divider(), actions).gap(Theme.Space.SM);
+
+        Box panel = new DialoguePanel().row().alignItems(Align.STRETCH).gap(Theme.Space.LG)
+                .padding(Theme.Space.LG, Theme.Space.MD, Theme.Space.LG, Theme.Space.MD);
+        panel.add(new NpcPortrait().width(72.0F), dialogueColumn, actionColumn);
+        panel.minHeight(112.0F).maxHeight(190.0F).enter(new EnterEffect(0, 18, 1, 0, 380, 0, Easing.EMPHASIZED));
+
+        return Ui.stack(new BottomFade(), Ui.column(Ui.spacer(), panel).padding(10.0F, 10.0F))
+                .alignItems(Align.STRETCH);
+    }
+
+    private static Box divider() {
+        return Ui.stack().height(1.0F).background(0x55D0B16F);
+    }
+
+    private Box actionGrid() {
+        List<ActionEntry> entries = new ArrayList<>(List.of(
+                new ActionEntry("交谈", Icons.CHAT, Action.DIALOGUE, true),
+                new ActionEntry(showingAbout ? "返回交谈" : "关于", showingAbout ? Icons.ARROW_LEFT : Icons.INFO, Action.ABOUT, true),
+                new ActionEntry("邀请跟随", Icons.USERS, Action.FOLLOW, available(NpcInteractionType.FOLLOW)),
+                new ActionEntry("设为住处", Icons.HOME, Action.SET_HOME, available(NpcInteractionType.SET_HOME))
+        ));
+        if (available(NpcInteractionType.HOSPITAL_REVIEW)) {
+            entries.set(2, new ActionEntry("正式复查", Icons.PULSE, Action.HOSPITAL_REVIEW, true));
+        }
+        if (data.getNpcId() == StoryNpcContentPolicy.MEDICAL_STAFF_ID) {
+            entries.set(2, new ActionEntry("提交并维护", Icons.PLUS, Action.DAILY_TEMPLATE_SUPPORT,
+                    available(NpcInteractionType.DAILY_TEMPLATE_SUPPORT)));
+            entries.remove(3);
+        }
+        Box grid = Ui.column().gap(6.0F);
+        for (int i = 0; i < entries.size(); i += 2) {
+            Box row = Ui.row().gap(6.0F).alignItems(Align.STRETCH);
+            for (int j = i; j < i + 2; j++) {
+                row.add(j < entries.size() ? new ActionButton(entries.get(j)).grow(1.0F).basis(0.0F)
+                        : Ui.spacer().basis(0.0F));
+            }
+            grid.add(row);
+        }
+        return grid;
+    }
+
+    private boolean available(NpcInteractionType type) {
+        return data.getAvailableActions().contains(type.name());
+    }
+
+    private String currentText() {
+        if (showingAbout) {
+            return data.getNpcIntroduction().isBlank() ? DEFAULT_INTRO : data.getNpcIntroduction();
+        }
+        List<String> dialogues = data.getDialogues();
+        return dialogues.isEmpty() ? EMPTY_DIALOGUE : dialogues.get(Math.min(dialogueIndex, dialogues.size() - 1));
+    }
+
+    private void perform(Action action) {
+        if (action == Action.ABOUT) {
+            showingAbout = !showingAbout;
+            typewriter.text(currentText());
+            typewriter.restart();
+            return;
+        }
+        if (action == Action.DIALOGUE) {
+            if (showingAbout) {
+                showingAbout = false;
+                typewriter.text(currentText());
+            }
+            if (typewriter.advance()) {
+                return;
+            }
+            dialogueIndex++;
+            typewriter.text(currentText());
+            typewriter.restart();
+        }
+        DreamingFishCore_NetworkManager.sendToServer(
+                new Packet_NpcInteractionRequest(data.getNpcId(), data.getEntityId(), action.interaction));
+    }
+
+    private LivingEntity dialogueEntity() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || data.getEntityId() < 0) {
+            return null;
+        }
+        Entity entity = minecraft.level.getEntity(data.getEntityId());
+        return entity instanceof LivingEntity living ? living : null;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_SPACE || keyCode == GLFW.GLFW_KEY_ENTER) {
+            UiSounds.soft();
+            perform(Action.DIALOGUE);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    // ==================== 部件 ====================
+
+    /** 对话框底板：暖色玻璃，顶部一道金色高光。 */
+    private final class DialoguePanel extends Box {
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            canvas.shape(0.0F, 0.0F, w, h).radius(Theme.Radius.XL).verticalGradient(PANEL_TOP, PANEL_BOTTOM)
+                    .border(1.0F, PANEL_BORDER).shadow(new Theme.Shadow(0.0F, 8.0F, 28.0F, 0.0F, 0xAA000000)).draw();
+            canvas.shape(20.0F, 0.0F, w - 40.0F, 1.0F)
+                    .horizontalGradient(UiColor.withAlpha(GOLD, 0.0F), UiColor.withAlpha(GOLD, 0.45F)).draw();
+        }
+    }
+
+    /** 画面下方的渐暗，让对话框与世界自然衔接。 */
+    private final class BottomFade extends UiNode<BottomFade> {
+        BottomFade() {
+            pointerEvents(false);
+        }
+
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            float p = reveal.get();
+            float h = height();
+            float top = h * 0.45F;
+            canvas.shape(0.0F, top, width(), h - top)
+                    .verticalGradient(0x00000000, UiColor.withAlpha(0xFF000000, 0.62F * p)).draw();
+        }
+    }
+
+    /** NPC 立像：复用世界中的实体渲染，临时隐藏名称牌；视线跟随鼠标但限制扭头幅度。 */
+    private final class NpcPortrait extends UiNode<NpcPortrait> {
+        NpcPortrait() {
+            pointerEvents(false);
+        }
+
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            canvas.shape(0.0F, 0.0F, width(), height()).radius(Theme.Radius.LG)
+                    .radial(UiColor.withAlpha(ACCENT, 0.18F), 0x00000000, width() * 0.5F, height() * 0.65F, height() * 0.7F).draw();
+        }
+
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            LivingEntity entity = dialogueEntity();
+            if (entity == null) {
+                return;
+            }
+            float x0 = guiLeft();
+            float y0 = guiTop();
+            float x1 = guiRight();
+            float y1 = guiBottom();
+            int size = Math.max(20, Math.round(Math.min((y1 - y0) * 0.42F, (x1 - x0) * 0.6F)));
+            double mouseX = ui().mouseX();
+            double mouseY = ui().mouseY();
+            float trackedX = (float) Mth.clamp(mouseX, x0, x1);
+            float trackedY = (float) Mth.clamp(mouseY, y0, y1);
+            canvas.custom(0.0F, 0.0F, width(), height(), g -> {
+                boolean nameVisible = entity.isCustomNameVisible();
+                entity.setCustomNameVisible(false);
+                PoseStack pose = g.pose();
+                pose.pushPose();
+                pose.last().pose().identity();
+                try {
+                    StoryNpcRenderer.renderWithoutNameplate(() -> InventoryScreen.renderEntityInInventoryFollowsMouse(g,
+                            Math.round(x0), Math.round(y0) - 8, Math.round(x1), Math.round(y1) - 2, size, 0.0625F,
+                            trackedX, trackedY, entity));
+                } finally {
+                    pose.popPose();
+                    entity.setCustomNameVisible(nameVisible);
+                }
+            });
+        }
+    }
+
+    /** 行动按钮：暖色描边，锁定时显示"未解锁"。 */
+    private final class ActionButton extends InteractiveNode<ActionButton> {
+        private final ActionEntry entry;
+        private final Text label;
+        private final Icon icon;
+
+        ActionButton(ActionEntry entry) {
+            this.entry = entry;
+            row().alignItems(Align.CENTER).justify(Justify.CENTER).gap(5.0F).height(22.0F).padding(6.0F, 0.0F);
+            icon = Icon.of(entry.icon(), 10.0F);
+            label = Text.of(entry.enabled() ? entry.label() : entry.label() + " · 未解锁").style(TextStyle.LABEL).singleLine()
+                    .shrink(1.0F);
+            add(icon, label);
+            if (entry.enabled()) {
+                cursor(Cursor.POINTER);
+                focusable(true);
+                onClick(() -> perform(entry.type()));
+            }
+        }
+
+        @Override
+        protected void update() {
+            int color = entry.enabled() ? UiColor.lerp(OPTION, OPTION_HOVER, hover()) : LOCKED;
+            label.color(color);
+            icon.color(color);
+        }
+
+        @Override
+        protected void onStateChanged() {
+            super.onStateChanged();
+            if (entry.enabled()) {
+                animateScale(isPressed() ? 0.97F : 1.0F);
+            }
+        }
+
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float h = hover();
+            int fill = entry.enabled() ? UiColor.lerp(0x8A1A1815, 0xC4372E20, h) : 0x69201E1A;
+            int border = entry.enabled() ? UiColor.lerp(0x55D0B16F, OPTION_HOVER, h) : 0x33D0B16F;
+            canvas.shape(0.0F, 0.0F, width(), height()).radius(Theme.Radius.MD).fill(fill).border(1.0F, border).draw();
         }
     }
 }

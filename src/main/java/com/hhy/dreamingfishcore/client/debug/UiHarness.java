@@ -78,7 +78,10 @@ public final class UiHarness {
                 }
                 return;
             }
-            if (++readyTicks < WORLD_SETTLE_TICKS) {
+            if (++readyTicks == 1) {
+                prepareWorld(minecraft);
+            }
+            if (readyTicks < WORLD_SETTLE_TICKS) {
                 return;
             }
             minecraft.setScreen(null);
@@ -113,6 +116,21 @@ public final class UiHarness {
             log(minecraft, "截图失败 " + step.fileName() + ": " + exception);
         }
         startStep(minecraft, stepIndex + 1);
+    }
+
+    /** 固定时间、天气与难度，让每次截图的背景一致。 */
+    private static void prepareWorld(Minecraft minecraft) {
+        var server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> {
+            var source = server.createCommandSourceStack().withSuppressedOutput();
+            for (String command : new String[]{"time set 6000", "gamerule doDaylightCycle false", "weather clear 999999",
+                    "gamerule doWeatherCycle false", "difficulty peaceful"}) {
+                server.getCommands().performPrefixedCommand(source, command);
+            }
+        });
     }
 
     private static void startStep(Minecraft minecraft, int index) {

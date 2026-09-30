@@ -124,7 +124,7 @@ public class TerminalScreen extends UiScreen {
                 reveal.set(1.0F);
             }
         });
-        return Ui.stack(new Backdrop(), shell).alignItems(Align.STRETCH);
+        return Ui.stack(TerminalChrome.backdrop(reveal::get), shell).alignItems(Align.STRETCH);
     }
 
     // ==================== 外壳 ====================
@@ -157,14 +157,7 @@ public class TerminalScreen extends UiScreen {
     }
 
     private UiNode<?> brand() {
-        return Ui.row(
-                CustomPaint.of(TerminalScreen::paintLogo).size(18.0F, 18.0F),
-                Ui.column(
-                        Text.of("梦屿终端").style(TextStyle.SUBTITLE).singleLine(),
-                        Text.of("DREAMING FISH · WATCH OVER THE ISLE").style(TextStyle.CAPTION).singleLine()
-                                .color(UiColor.withAlpha(TerminalUi.CYAN, 0.7F))
-                ).gap(0.0F)
-        ).gap(8.0F).alignItems(Align.CENTER);
+        return TerminalChrome.brand();
     }
 
     private UiNode<?> pageTitle(Page page) {
@@ -187,16 +180,6 @@ public class TerminalScreen extends UiScreen {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft.player != null && minecraft.player.connection != null
                 ? minecraft.player.connection.getOnlinePlayers().size() : 0;
-    }
-
-    static void paintLogo(UiCanvas canvas, float w, float h) {
-        float cx = w * 0.5F;
-        float cy = h * 0.5F;
-        float r = Math.min(w, h) * 0.5F - 1.5F;
-        double t = UiClock.now() / 1000.0;
-        canvas.arc(cx, cy, r, 1.6F, (float) (t * 0.6), (float) (Math.PI * 1.55), TerminalUi.CYAN, UiColor.withAlpha(TerminalUi.CYAN, 0.15F));
-        canvas.arc(cx, cy, r * 0.55F, 1.4F, (float) (-t * 0.9 + Math.PI), (float) (Math.PI * 1.2), TerminalUi.VIOLET, UiColor.withAlpha(TerminalUi.VIOLET, 0.2F));
-        canvas.circle(cx, cy, r * 0.22F, TerminalUi.GOLD);
     }
 
     // ==================== 导航 ====================
@@ -373,14 +356,7 @@ public class TerminalScreen extends UiScreen {
 
         @Override
         protected void paintBackground(UiCanvas canvas) {
-            float w = width();
-            float h = height();
-            canvas.shape(0.0F, 0.0F, w, h).radius(Theme.Radius.XL)
-                    .verticalGradient(0xF6121B23, 0xF60A1016)
-                    .border(1.0F, 0xFF223140)
-                    .shadow(new Theme.Shadow(0.0F, 10.0F, 32.0F, 0.0F, 0x99000000)).draw();
-            canvas.shape(14.0F, 0.0F, w - 28.0F, 1.0F)
-                    .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.0F), UiColor.withAlpha(TerminalUi.CYAN, 0.35F)).draw();
+            TerminalChrome.paintPanel(canvas, width(), height(), Theme.Radius.XL);
         }
 
         @Override
@@ -394,32 +370,6 @@ public class TerminalScreen extends UiScreen {
                         .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.0F), UiColor.withAlpha(TerminalUi.CYAN, 0.16F)).draw();
                 canvas.fill(bandX, 2.0F, 1.0F, h - 4.0F, UiColor.withAlpha(TerminalUi.CYAN, 0.6F * (1.0F - p)));
             }
-        }
-    }
-
-    /** 背景：遮罩、暗角与细网格。 */
-    private final class Backdrop extends UiNode<Backdrop> {
-        Backdrop() {
-            pointerEvents(false);
-        }
-
-        @Override
-        protected void paintContent(UiCanvas canvas) {
-            float p = reveal.get();
-            float w = width();
-            float h = height();
-            canvas.pushAlpha(Math.min(1.0F, p * 1.4F));
-            canvas.fill(0.0F, 0.0F, w, h, 0x8C04080C);
-            canvas.shape(0.0F, 0.0F, w, h)
-                    .radial(0x00000000, 0x99000000, w * 0.5F, h * 0.5F, (float) Math.hypot(w, h) * 0.55F).draw();
-            int grid = UiColor.withAlpha(TerminalUi.CYAN, 0.035F);
-            for (float gx = 24.0F; gx < w; gx += 24.0F) {
-                canvas.fill(gx, 0.0F, 0.5F, h, grid);
-            }
-            for (float gy = 24.0F; gy < h; gy += 24.0F) {
-                canvas.fill(0.0F, gy, w, 0.5F, grid);
-            }
-            canvas.popAlpha();
         }
     }
 

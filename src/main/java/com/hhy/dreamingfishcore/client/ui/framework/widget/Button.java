@@ -47,6 +47,7 @@ public class Button extends InteractiveNode<Button> {
     private Variant variant = Variant.FILLED;
     private Scale buttonScale = Scale.MEDIUM;
     private ColorRole accent = ColorRole.ACCENT;
+    private int accentOverride;
 
     public Button() {
         row().alignItems(Align.CENTER).justify(Justify.CENTER).gap(5.0F);
@@ -133,6 +134,12 @@ public class Button extends InteractiveNode<Button> {
         return this;
     }
 
+    /** 直接指定主色（不走主题角色）。 */
+    public Button accentColor(int argb) {
+        accentOverride = argb;
+        return this;
+    }
+
     public Button scale(Scale value) {
         buttonScale = value;
         applyScale();
@@ -184,6 +191,9 @@ public class Button extends InteractiveNode<Button> {
     }
 
     private int baseColor() {
+        if (accentOverride != 0 && variant != Variant.DANGER) {
+            return accentOverride;
+        }
         return theme().color(variant == Variant.DANGER ? ColorRole.DANGER : accent);
     }
 

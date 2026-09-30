@@ -27,6 +27,7 @@ public class TextField extends InteractiveNode<TextField> {
     private String placeholder = "";
     private Runnable onSubmit;
     private boolean password;
+    private int accentOverride;
 
     public TextField() {
         row().alignItems(Align.CENTER);
@@ -48,6 +49,16 @@ public class TextField extends InteractiveNode<TextField> {
     public TextField placeholder(String text) {
         placeholder = text == null ? "" : text;
         return this;
+    }
+
+    /** 直接指定焦点强调色（不走主题角色）。 */
+    public TextField accentColor(int argb) {
+        accentOverride = argb;
+        return this;
+    }
+
+    private int accent(Theme theme) {
+        return accentOverride != 0 ? accentOverride : theme.color(ColorRole.ACCENT);
     }
 
     public TextField icon(Icons icon) {
@@ -119,12 +130,12 @@ public class TextField extends InteractiveNode<TextField> {
         Theme theme = theme();
         float focus = focus();
         int border = UiColor.lerp(UiColor.lerp(theme.color(ColorRole.OUTLINE), theme.color(ColorRole.OUTLINE_STRONG), hover()),
-                theme.color(ColorRole.ACCENT), focus);
+                accent(theme), focus);
         canvas.shape(0.0F, 0.0F, width(), height()).radius(radiusValue())
                 .fill(theme.color(ColorRole.SURFACE_SUNKEN)).border(1.0F, border).draw();
         if (focus > 0.01F) {
             canvas.shape(-2.0F, -2.0F, width() + 4.0F, height() + 4.0F).radius(radiusValue() + 2.0F).fill(0)
-                    .border(2.0F, UiColor.multiplyAlpha(theme.color(ColorRole.ACCENT), focus * 0.25F)).draw();
+                    .border(2.0F, UiColor.multiplyAlpha(accent(theme), focus * 0.25F)).draw();
         }
     }
 
@@ -133,7 +144,7 @@ public class TextField extends InteractiveNode<TextField> {
         Theme theme = theme();
         if (leadingIcon != null) {
             Icon.paint(canvas, leadingIcon, padLeft(), (height() - 11.0F) * 0.5F, 11.0F,
-                    UiColor.lerp(theme.color(ColorRole.TEXT_MUTED), theme.color(ColorRole.ACCENT), focus()));
+                    UiColor.lerp(theme.color(ColorRole.TEXT_MUTED), accent(theme), focus()));
         }
         float left = textLeft();
         float textWidth = Math.max(8.0F, width() - left - padRight());
@@ -144,9 +155,10 @@ public class TextField extends InteractiveNode<TextField> {
         box.setWidth(Math.round(textWidth));
         box.setHeight(10);
         box.setTextColor(theme.color(ColorRole.TEXT));
-        if (!placeholder.isEmpty()) {
-            box.setHint(Component.literal(placeholder).withStyle(style -> style.withColor(
-                    theme.color(ColorRole.TEXT_MUTED) & 0xFFFFFF)));
+        if (!placeholder.isEmpty() && box.getValue().isEmpty()) {
+            // 原版只在失焦时画提示；这里始终显示，聚焦时让出光标位置
+            String hint = Minecraft.getInstance().font.plainSubstrByWidth(placeholder, Math.round(textWidth - 8.0F));
+            canvas.text(hint, x + focus() * 7.0F, y, theme.color(ColorRole.TEXT_MUTED), 1.0F, false);
         }
         int mouseX = (int) localX(root() != null ? root().mouseX() : 0.0);
         int mouseY = (int) localY(root() != null ? root().mouseY() : 0.0);
