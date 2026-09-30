@@ -101,6 +101,16 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
+        // UI 截图验证：以 run-harness 为游戏目录直接进入 harness 存档，
+        // 按 run-harness/harness_steps.txt 依次打开界面、截图后自动退出。
+        uiHarness {
+            client()
+            gameDirectory = project.file('run-harness')
+            programArguments.addAll '--username', 'Dev', '--quickPlaySingleplayer', 'harness',
+                    '--width', '1920', '--height', '1080'
+            systemProperty 'dreamingfishcore.uiHarness', 'true'
+        }
+
         server {
             server()
             programArgument '--nogui'
