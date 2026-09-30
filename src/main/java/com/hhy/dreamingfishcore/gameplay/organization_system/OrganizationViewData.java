@@ -36,13 +36,31 @@ public final class OrganizationViewData {
                              boolean online) {
     }
 
+    /**
+     * 组织领地的一行。
+     *
+     * <p>{@code missing=true} 表示这条登记在当前读不到对应领地（被移除，或经济服务不可用）——
+     * 界面要把它显示成"已失效"而不是假装它还在地图上。</p>
+     */
+    public record TerritoryLine(String territoryId, String name, String dimensionId,
+                                int minX, int minZ, int maxX, int maxZ, int area, boolean missing) {
+    }
+
+    /** 组织绑定的一台聚居地过滤装置。 */
+    public record DeviceLine(String dimensionId, int x, int y, int z, boolean active) {
+    }
+
     /** 玩家自己所属组织的详情；没有组织时 {@code myOrganization} 为 null。 */
     public record Detail(String id, String name, String announcement,
                          String myRankId, String myRankName,
                          boolean canReviewApplications, boolean canInvite,
                          boolean canEditAnnouncement, boolean canManageMembers,
                          List<MemberLine> members, List<MemberLine> applicants,
-                         List<MemberLine> invited, long createdAtEpochMillis) {
+                         List<MemberLine> invited, long createdAtEpochMillis,
+                         int funds, int maxDeposit, boolean canDepositFunds,
+                         boolean canManageTerritories, int maxTerritories, int maxFilterDevices,
+                         List<TerritoryLine> territories, List<TerritoryLine> availableTerritories,
+                         List<DeviceLine> devices) {
     }
 
     /** 一次同步的全部内容。 */

@@ -70,6 +70,44 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
             writeLines(buffer, detail.applicants());
             writeLines(buffer, detail.invited());
             buffer.writeLong(detail.createdAtEpochMillis());
+            // 领地联动与资金池（0.27.0 起）
+            buffer.writeVarInt(Math.max(0, detail.funds()));
+            buffer.writeVarInt(Math.max(0, detail.maxDeposit()));
+            buffer.writeBoolean(detail.canDepositFunds());
+            buffer.writeBoolean(detail.canManageTerritories());
+            buffer.writeVarInt(Math.max(0, detail.maxTerritories()));
+            buffer.writeVarInt(Math.max(0, detail.maxFilterDevices()));
+            writeTerritories(buffer, detail.territories());
+            writeTerritories(buffer, detail.availableTerritories());
+            writeDevices(buffer, detail.devices());
+        }
+    }
+
+    private static void writeTerritories(RegistryFriendlyByteBuf buffer,
+                                         List<OrganizationViewData.TerritoryLine> lines) {
+        buffer.writeVarInt(lines.size());
+        for (OrganizationViewData.TerritoryLine line : lines) {
+            buffer.writeUtf(line.territoryId(), 64);
+            buffer.writeUtf(line.name(), 128);
+            buffer.writeUtf(line.dimensionId(), 128);
+            buffer.writeVarInt(line.minX());
+            buffer.writeVarInt(line.minZ());
+            buffer.writeVarInt(line.maxX());
+            buffer.writeVarInt(line.maxZ());
+            buffer.writeVarInt(Math.max(0, line.area()));
+            buffer.writeBoolean(line.missing());
+        }
+    }
+
+    private static void writeDevices(RegistryFriendlyByteBuf buffer,
+                                     List<OrganizationViewData.DeviceLine> lines) {
+        buffer.writeVarInt(lines.size());
+        for (OrganizationViewData.DeviceLine line : lines) {
+            buffer.writeUtf(line.dimensionId(), 128);
+            buffer.writeVarInt(line.x());
+            buffer.writeVarInt(line.y());
+            buffer.writeVarInt(line.z());
+            buffer.writeBoolean(line.active());
         }
     }
 
@@ -119,9 +157,20 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
             List<OrganizationViewData.MemberLine> applicants = readLines(buffer);
             List<OrganizationViewData.MemberLine> invited = readLines(buffer);
             long createdAt = buffer.readLong();
+            int funds = buffer.readVarInt();
+            int maxDeposit = buffer.readVarInt();
+            boolean canDepositFunds = buffer.readBoolean();
+            boolean canManageTerritories = buffer.readBoolean();
+            int maxTerritories = buffer.readVarInt();
+            int maxFilterDevices = buffer.readVarInt();
+            List<OrganizationViewData.TerritoryLine> territories = readTerritories(buffer);
+            List<OrganizationViewData.TerritoryLine> available = readTerritories(buffer);
+            List<OrganizationViewData.DeviceLine> devices = readDevices(buffer);
             detail = new OrganizationViewData.Detail(id, name, announcement, myRankId, myRankName,
                     canReview, canInvite, canEditAnnouncement, canManageMembers,
-                    members, applicants, invited, createdAt);
+                    members, applicants, invited, createdAt,
+                    funds, maxDeposit, canDepositFunds, canManageTerritories,
+                    maxTerritories, maxFilterDevices, territories, available, devices);
         }
 
         return new Packet_OrganizationSnapshotResponse(new OrganizationViewData.Snapshot(
@@ -138,6 +187,39 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
                     buffer.readUtf(64),
                     buffer.readUtf(32),
                     buffer.readUtf(32),
+                    buffer.readBoolean()));
+        }
+        return List.copyOf(lines);
+    }
+
+    private static List<OrganizationViewData.TerritoryLine> readTerritories(
+            RegistryFriendlyByteBuf buffer) {
+        int count = Math.min(buffer.readVarInt(), MAX_LINES);
+        List<OrganizationViewData.TerritoryLine> lines = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            lines.add(new OrganizationViewData.TerritoryLine(
+                    buffer.readUtf(64),
+                    buffer.readUtf(128),
+                    buffer.readUtf(128),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
+                    buffer.readBoolean()));
+        }
+        return List.copyOf(lines);
+    }
+
+    private static List<OrganizationViewData.DeviceLine> readDevices(RegistryFriendlyByteBuf buffer) {
+        int count = Math.min(buffer.readVarInt(), MAX_LINES);
+        List<OrganizationViewData.DeviceLine> lines = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            lines.add(new OrganizationViewData.DeviceLine(
+                    buffer.readUtf(128),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
+                    buffer.readVarInt(),
                     buffer.readBoolean()));
         }
         return List.copyOf(lines);

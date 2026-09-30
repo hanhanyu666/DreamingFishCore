@@ -64,6 +64,8 @@ public final class OrganizationTerminalPage {
     private static final int MEMBER_ROW_HEIGHT = 20;
     private static final int BUTTON_HEIGHT = 16;
     private static final int SMALL_BUTTON_HEIGHT = 14;
+    /** 领地行高度：比成员行略高，因为要放坐标与面积。 */
+    private static final int TERRITORY_ROW_HEIGHT = 20;
 
     // ==================== 跨界面保留的视图状态 ====================
     private static String selectedOrgId = "";
@@ -352,6 +354,7 @@ public final class OrganizationTerminalPage {
             cursor.advance(4);
             renderAnnouncementBox(guiGraphics, font, cursor, x + 10, width - 20, detail.announcement());
             cursor.advance(GAP);
+            renderTerritorySection(guiGraphics, font, mouseX, mouseY, cursor, x + 10, width - 20, detail);
             if (!detail.applicants().isEmpty()) {
                 renderSectionTitle(guiGraphics, font, cursor, x + 10,
                         "入会申请（" + detail.applicants().size() + "）");
@@ -637,6 +640,156 @@ public final class OrganizationTerminalPage {
         cursor.advance(height);
     }
 
+    // ==================== 领地与资金（组织 ↔ 圈地联动） ====================
+
+    /**
+     * 资金池 + 组织领地 + 可登记领地 + 设备。
+     *
+     * <p>所有按钮的可点性都由服务端下发的开关决定（{@code canDepositFunds} /
+     * {@code canManageTerritories}），界面不自己判断权限，避免"按钮画得出来、服务端拒绝"。</p>
+     */
+    private void renderTerritorySection(GuiGraphics guiGraphics, Font font, float mouseX, float mouseY,
+                                        Cursor cursor, int x, int width,
+                                        OrganizationViewData.Detail detail) {
+        renderSectionTitle(guiGraphics, font, cursor, x,
+                "领地与资金（领地 " + detail.territories().size() + "/" + detail.maxTerritories()
+                        + " · 设备 " + detail.devices().size() + "/" + detail.maxFilterDevices() + "）");
+        if (cursor.visible(BUTTON_HEIGHT + 4)) {
+            int rowY = cursor.y();
+            drawText(guiGraphics, font, "资金池：" + detail.funds() + " 梦鱼币", x, rowY + 4, ACCENT_GREEN);
+            int buttonWidth = 48;
+            button(guiGraphics, font, mouseX, mouseY, x + width - buttonWidth, rowY, buttonWidth,
+                    BUTTON_HEIGHT, "捐款", ButtonStyle.PRIMARY,
+                    detail.canDepositFunds() ? this::promptDeposit : null);
+        }
+        cursor.advance(BUTTON_HEIGHT + 6);
+
+        if (detail.territories().isEmpty()) {
+            if (cursor.visible(14)) {
+                drawText(guiGraphics, font, "还没有登记组织领地；登记后在领地内放置并绑定聚居地过滤装置即可",
+                        x, cursor.y() + 2, MUTED);
+            }
+            cursor.advance(14);
+        } else {
+            for (OrganizationViewData.TerritoryLine line : detail.territories()) {
+                if (cursor.visible(TERRITORY_ROW_HEIGHT)) {
+                    renderTerritoryRow(guiGraphics, font, mouseX, mouseY, x, cursor.y(), width,
+                            line, detail, true);
+                }
+                cursor.advance(TERRITORY_ROW_HEIGHT);
+            }
+        }
+        cursor.advance(GAP);
+
+        if (detail.canManageTerritories()) {
+            renderSectionTitle(guiGraphics, font, cursor, x, "可登记的自己名下领地");
+            if (detail.availableTerritories().isEmpty()) {
+                if (cursor.visible(14)) {
+                    drawText(guiGraphics, font, "没有可登记的领地（需要先用圈地杖与 /confirm_claim 圈地）",
+                            x, cursor.y() + 2, MUTED);
+                }
+                cursor.advance(14);
+            } else {
+                for (OrganizationViewData.TerritoryLine line : detail.availableTerritories()) {
+                    if (cursor.visible(TERRITORY_ROW_HEIGHT)) {
+                        renderTerritoryRow(guiGraphics, font, mouseX, mouseY, x, cursor.y(), width,
+                                line, detail, false);
+                    }
+                    cursor.advance(TERRITORY_ROW_HEIGHT);
+                }
+            }
+            cursor.advance(GAP);
+        }
+
+        if (!detail.devices().isEmpty()) {
+            renderSectionTitle(guiGraphics, font, cursor, x, "聚居地过滤装置（右键设备绑定/解绑）");
+            for (OrganizationViewData.DeviceLine device : detail.devices()) {
+                if (cursor.visible(14)) {
+                    String status = device.active() ? "§a● 工作中" : "§c● 已停机";
+                    drawText(guiGraphics, font,
+                            status + " §7" + shortDimension(device.dimensionId())
+                                    + " (" + device.x() + ", " + device.y() + ", " + device.z() + ")",
+                            x, cursor.y() + 2, MUTED);
+                }
+                cursor.advance(14);
+            }
+            cursor.advance(GAP);
+        }
+    }
+
+    private void renderTerritoryRow(GuiGraphics guiGraphics, Font font, float mouseX, float mouseY,
+                                    int x, int y, int width,
+                                    OrganizationViewData.TerritoryLine line,
+                                    OrganizationViewData.Detail detail, boolean registered) {
+        boolean actionable = detail.canManageTerritories();
+        int buttonWidth = actionable ? 48 : 0;
+        int textWidth = width - (buttonWidth > 0 ? buttonWidth + 8 : 0);
+
+        String title;
+        if (line.missing()) {
+            title = "§c已失效的登记（领地不存在或读不到）";
+        } else {
+            title = "§f" + line.name() + " §7" + shortDimension(line.dimensionId())
+                    + " [" + line.minX() + "," + line.minZ() + " → " + line.maxX() + "," + line.maxZ()
+                    + "] §7面积 " + line.area();
+        }
+        drawText(guiGraphics, font, fit(font, title, textWidth), x, y + 3, TEXT);
+
+        if (!actionable || line.missing()) {
+            return;
+        }
+        button(guiGraphics, font, mouseX, mouseY, x + width - buttonWidth, y, buttonWidth,
+                SMALL_BUTTON_HEIGHT, registered ? "移除" : "登记",
+                registered ? ButtonStyle.DANGER : ButtonStyle.NORMAL,
+                registered
+                        ? () -> promptUnregisterTerritory(line)
+                        : () -> send(Packet_OrganizationActionRequest.Action.REGISTER_TERRITORY,
+                                line.territoryId(), "", false));
+    }
+
+    private void promptDeposit() {
+        OrganizationViewData.Snapshot snapshot = OrganizationClientCache.get();
+        OrganizationViewData.Detail detail = snapshot.myOrganization();
+        int limit = detail == null ? 0 : Math.max(1, detail.maxDeposit());
+        Screen_OrganizationPrompt.openText("向组织资金池捐款",
+                "从你自己的梦鱼币账户扣除；单次最多 " + limit + " 梦鱼币。余额只用于设备维护费，不能取现。",
+                12, "", List.of(), value -> {
+                    int amount = parseAmount(value);
+                    if (amount <= 0) {
+                        return;
+                    }
+                    send(Packet_OrganizationActionRequest.Action.DEPOSIT, "",
+                            "", false, Math.min(amount, limit));
+                });
+    }
+
+    private void promptUnregisterTerritory(OrganizationViewData.TerritoryLine line) {
+        Screen_OrganizationPrompt.openConfirm("移除组织领地",
+                "把「" + line.name() + "」从组织领地中移除？领地本身不会被取消，只是不再算作组织领地。",
+                true, value -> send(Packet_OrganizationActionRequest.Action.UNREGISTER_TERRITORY,
+                        line.territoryId(), "", false));
+    }
+
+    /** 把输入解析成正整数；非数字或 ≤0 一律返回 0（由调用方静默忽略）。 */
+    private static int parseAmount(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException exception) {
+            return 0;
+        }
+    }
+
+    private static String shortDimension(String dimensionId) {
+        if (dimensionId == null || dimensionId.isBlank()) {
+            return "未知维度";
+        }
+        int colon = dimensionId.indexOf(':');
+        return colon < 0 ? dimensionId : dimensionId.substring(colon + 1);
+    }
+
     // ==================== 提示与动作 ====================
 
     private void promptSearch() {
@@ -711,8 +864,13 @@ public final class OrganizationTerminalPage {
 
     private void send(Packet_OrganizationActionRequest.Action action, String targetId,
                       String text, boolean flag) {
+        send(action, targetId, text, flag, 0);
+    }
+
+    private void send(Packet_OrganizationActionRequest.Action action, String targetId,
+                      String text, boolean flag, int amount) {
         DreamingFishCore_NetworkManager.sendToServer(
-                new Packet_OrganizationActionRequest(action, targetId, text, flag));
+                new Packet_OrganizationActionRequest(action, targetId, text, flag, amount));
     }
 
     // ==================== 输入路由 ====================

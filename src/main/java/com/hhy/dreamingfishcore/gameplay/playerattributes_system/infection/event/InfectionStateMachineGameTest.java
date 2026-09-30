@@ -7,7 +7,10 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.Conta
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionRules;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
+import com.hhy.dreamingfishcore.gameplay.organization_system.SettlementFilterRegistry;
+import com.hhy.dreamingfishcore.gameplay.organization_system.SettlementFilterService;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerPlayer;
@@ -170,6 +173,56 @@ public class InfectionStateMachineGameTest {
         helper.assertFalse(data.hasActiveRelapseWindow(), "稳定治疗之后不应再处于复发状态");
         helper.assertTrue(data.getInfectionIdentity() == InfectionIdentity.STABLE,
                 "复发结束后应回到稳定感染者");
+        helper.succeed();
+    }
+
+    /**
+     * 工作中的聚居地过滤装置会阻断被动接触暴露（ADR 0017）。
+     *
+     * <p>只验证"设备工作 → 不产生暴露"这条链路：设备本身由 {@link SettlementFilterRegistry}
+     * 直接登记为工作中（维护周期、扣费、领地校验由单测与 {@code SettlementFilterService} 覆盖），
+     * 这样测试不会被资金/领地前置条件绑住，但仍然走真实的
+     * {@link InfectionEventHandler#hasSpreadingSourceNearby} 扫描路径。</p>
+     */
+    @GameTest(template = "empty")
+    public static void workingFilterSuppressesPassiveExposure(GameTestHelper helper) {
+        ServerPlayer survivor = authenticatedPlayer(helper);
+        ServerPlayer unstable = authenticatedPlayer(helper);
+
+        PlayerAttributesData unstableData = dataOf(unstable);
+        unstableData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
+        unstableData.setCurrentInfection(50.0F);
+        PlayerAttributesDataManager.updatePlayerAttributesData(unstable, unstableData);
+
+        // 两名玩家都站到结构内，紧邻设备位置（半径 32 一定覆盖）。
+        BlockPos devicePos = helper.absolutePos(new BlockPos(1, 2, 1));
+        survivor.teleportTo(devicePos.getX() + 0.5D, devicePos.getY(), devicePos.getZ() + 0.5D);
+        unstable.teleportTo(devicePos.getX() + 1.5D, devicePos.getY(), devicePos.getZ() + 0.5D);
+
+        String dimensionId = helper.getLevel().dimension().location().toString();
+        helper.setBlock(new BlockPos(1, 1, 1),
+                com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SETTLEMENT_FILTER.get());
+        SettlementFilterRegistry.register(dimensionId,
+                devicePos.getX(), devicePos.getY(), devicePos.getZ());
+        SettlementFilterRegistry.bind(dimensionId,
+                devicePos.getX(), devicePos.getY(), devicePos.getZ(), "gametest-org");
+
+        // 未标为工作时不抑制：不稳定感染者就在旁边，应当能被扫到。
+        helper.assertFalse(SettlementFilterService.isSuppressed(survivor), "停机设备不应抑制");
+        helper.assertTrue(InfectionEventHandler.hasSpreadingSourceNearby(survivor),
+                "停机时不稳定感染者应被扫到");
+
+        SettlementFilterRegistry.updateState(dimensionId,
+                devicePos.getX(), devicePos.getY(), devicePos.getZ(), true, 0L);
+        helper.assertTrue(SettlementFilterService.isSuppressed(survivor), "工作设备应覆盖附近的幸存者");
+        helper.assertFalse(InfectionEventHandler.hasSpreadingSourceNearby(survivor),
+                "工作中的设备应阻断被动接触暴露");
+
+        // 清理：设备表是全局状态，别影响同一服务器上的其它 gametest。
+        SettlementFilterRegistry.updateState(dimensionId,
+                devicePos.getX(), devicePos.getY(), devicePos.getZ(), false, 0L);
+        SettlementFilterRegistry.unregister(dimensionId,
+                devicePos.getX(), devicePos.getY(), devicePos.getZ());
         helper.succeed();
     }
 

@@ -22,7 +22,7 @@ import java.util.UUID;
  * 所以不为每个操作单独写包。**所有校验都在服务端**，客户端传来的内容一律当作不可信输入。</p>
  */
 public record Packet_OrganizationActionRequest(Action action, String targetId, String text,
-                                               boolean flag) implements CustomPacketPayload {
+                                               boolean flag, int amount) implements CustomPacketPayload {
 
     /** 可发起的操作。 */
     public enum Action {
@@ -38,7 +38,18 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
         SET_RANK,
         TRANSFER_LEADERSHIP,
         LEAVE,
-        DISBAND
+        DISBAND,
+        /** 向组织资金池捐款，金额在 {@code amount}。 */
+        DEPOSIT,
+        /** 把 {@code targetId} 对应的领地登记为组织领地。 */
+        REGISTER_TERRITORY,
+        /** 移除 {@code targetId} 对应的组织领地登记。 */
+        UNREGISTER_TERRITORY
+    }
+
+    /** 旧四参构造：不需要金额的动作保持原样。 */
+    public Packet_OrganizationActionRequest(Action action, String targetId, String text, boolean flag) {
+        this(action, targetId, text, flag, 0);
     }
 
     public static final Type<Packet_OrganizationActionRequest> TYPE = new Type<>(
@@ -65,6 +76,7 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
         buffer.writeUtf(packet.targetId(), 64);
         buffer.writeUtf(packet.text(), 512);
         buffer.writeBoolean(packet.flag());
+        buffer.writeVarInt(packet.amount());
     }
 
     private static Packet_OrganizationActionRequest decode(RegistryFriendlyByteBuf buffer) {
@@ -72,7 +84,8 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
                 buffer.readEnum(Action.class),
                 buffer.readUtf(64),
                 buffer.readUtf(512),
-                buffer.readBoolean());
+                buffer.readBoolean(),
+                buffer.readVarInt());
     }
 
     public static void handle(Packet_OrganizationActionRequest packet, IPayloadContext context) {
@@ -112,6 +125,11 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
                     OrganizationManager.transferLeadership(player, uuidOf(packet.targetId()));
             case LEAVE -> OrganizationManager.leave(player);
             case DISBAND -> OrganizationManager.disband(player);
+            case DEPOSIT -> OrganizationManager.deposit(player, packet.amount());
+            case REGISTER_TERRITORY ->
+                    OrganizationManager.registerTerritory(player, packet.targetId());
+            case UNREGISTER_TERRITORY ->
+                    OrganizationManager.unregisterTerritory(player, packet.targetId());
         };
     }
 

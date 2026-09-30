@@ -110,6 +110,9 @@ maxRegisteredTerritories（默认 4）、maxFilterDevices（默认 2）、filter
 filterMaintenanceCost（默认 20，0 = 免费）、filterMaintenanceIntervalTicks（默认 24000）、
 maxDeposit（默认 10000）。
 装置配方（昂贵）：铁块×4 + 玻璃×4 + 金苹果×1 + 下界合金锭×1。
+梦屿终端「组织」页在公告下方新增「领地与资金」分区：资金池余额与捐款按钮、已登记领地
+（失效项会标注并可直接移除）、可登记领地、设备列表（标明工作/停机）。协议版本提升到 0.27.0，
+旧客户端会被拒绝连接。
 
 测试与调试命令（仅 3 级权限，正式服可不用）
 /dreamingfish debug story preset location medical|abydos 以当前位置为中心创建剧情地点。

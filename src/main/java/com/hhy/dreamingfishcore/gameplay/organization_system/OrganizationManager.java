@@ -1066,6 +1066,35 @@ public final class OrganizationManager {
                     key, displayNameOf(id), OrganizationRank.MEMBER.serializedName(),
                     OrganizationRank.MEMBER.displayName(), isOnline(server, id)));
         });
+        // 领地视图由只读服务装配：已登记（含失效标记）与当前可登记的自己名下领地。
+        OrganizationTerritoryService.Listing listing = player == null
+                ? new OrganizationTerritoryService.Listing(false, List.of(), List.of(),
+                        config().getMaxRegisteredTerritories())
+                : OrganizationTerritoryService.listing(player);
+        List<OrganizationViewData.TerritoryLine> territories = new ArrayList<>();
+        for (OrganizationTerritoryService.LinkedTerritory linked : listing.linked()) {
+            EconomySystemBridge.TerritoryInfo info = linked.info();
+            if (info == null) {
+                territories.add(new OrganizationViewData.TerritoryLine(
+                        "", "已失效的登记", "", 0, 0, 0, 0, 0, true));
+                continue;
+            }
+            territories.add(new OrganizationViewData.TerritoryLine(
+                    info.territoryId(), info.name(), info.dimensionId(),
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+        }
+        List<OrganizationViewData.TerritoryLine> available = new ArrayList<>();
+        for (EconomySystemBridge.TerritoryInfo info : listing.available()) {
+            available.add(new OrganizationViewData.TerritoryLine(
+                    info.territoryId(), info.name(), info.dimensionId(),
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+        }
+        List<OrganizationViewData.DeviceLine> devices = new ArrayList<>();
+        for (SettlementFilterRegistry.Device device : SettlementFilterRegistry.devicesOf(organization.id())) {
+            devices.add(new OrganizationViewData.DeviceLine(
+                    device.dimensionId(), device.x(), device.y(), device.z(), device.active()));
+        }
+
         return new OrganizationViewData.Detail(
                 organization.id(), organization.name(), organization.announcement(),
                 myRank == null ? "" : myRank.serializedName(),
@@ -1075,7 +1104,12 @@ public final class OrganizationManager {
                 OrganizationPermissions.canEditAnnouncement(myRank),
                 myRank != null && myRank.atLeast(OrganizationRank.OFFICER),
                 List.copyOf(members), List.copyOf(applicants), List.copyOf(invited),
-                organization.createdAtEpochMillis());
+                organization.createdAtEpochMillis(),
+                organization.funds(), config().getMaxDeposit(),
+                OrganizationPermissions.canDepositFunds(myRank),
+                OrganizationPermissions.canManageTerritories(myRank),
+                config().getMaxRegisteredTerritories(), config().getMaxFilterDevices(),
+                List.copyOf(territories), List.copyOf(available), List.copyOf(devices));
     }
 
     private static OrganizationViewData.MemberLine toLine(String playerId,
