@@ -24,8 +24,14 @@ public final class OrganizationTerritoryService {
     private OrganizationTerritoryService() {
     }
 
-    /** 一条已登记的领地：登记时间 + 当前从 EconomySystem 读到的信息（读不到时为 null）。 */
-    public record LinkedTerritory(long registeredAt, EconomySystemBridge.TerritoryInfo info) {
+    /**
+     * 一条已登记的领地：登记时间 + 当前从 EconomySystem 读到的信息（读不到时为 null）。
+     *
+     * <p>无论能否读到，{@code territoryId} 都要带出来：否则"已失效"的登记在界面上会丢掉 id，
+     * 玩家就再也删不掉它，只能找服主用命令清。</p>
+     */
+    public record LinkedTerritory(String territoryId, long registeredAt,
+                                  EconomySystemBridge.TerritoryInfo info) {
         /** 读不到对应领地（被移除，或经济服务不可用）。 */
         public boolean missing() {
             return info == null;
@@ -64,7 +70,8 @@ public final class OrganizationTerritoryService {
             EconomySystemBridge.TerritoryInfo info = readable
                     ? EconomySystemBridge.findTerritory(server, entry.getKey()).orElse(null)
                     : null;
-            linked.add(new LinkedTerritory(entry.getValue() == null ? 0L : entry.getValue(), info));
+            linked.add(new LinkedTerritory(entry.getKey(),
+                    entry.getValue() == null ? 0L : entry.getValue(), info));
         }
 
         List<EconomySystemBridge.TerritoryInfo> available = readable
@@ -114,16 +121,26 @@ public final class OrganizationTerritoryService {
         return claimed;
     }
 
-    /** 可登记的领地 = 自己名下 − 已被任何组织登记。纯函数，便于单测。 */
+    /**
+     * 可登记的领地 = 自己名下 − 已被任何组织登记。
+     *
+     * <p>返回<b>可变</b>列表：调用方（终端装配）会按名称排序。
+     * 用 {@code Stream.toList()} 会得到不可变列表，排序时直接抛
+     * {@code UnsupportedOperationException} —— 这个坑被 gametest 抓到过一次。</p>
+     */
     static List<EconomySystemBridge.TerritoryInfo> selectAvailable(
             List<EconomySystemBridge.TerritoryInfo> owned, Set<String> claimed) {
         if (owned == null || owned.isEmpty()) {
-            return List.of();
+            return new ArrayList<>();
         }
         Set<String> taken = claimed == null ? Set.of() : claimed;
-        return owned.stream()
-                .filter(info -> info != null && !taken.contains(info.territoryId()))
-                .toList();
+        List<EconomySystemBridge.TerritoryInfo> available = new ArrayList<>();
+        for (EconomySystemBridge.TerritoryInfo info : owned) {
+            if (info != null && !taken.contains(info.territoryId())) {
+                available.add(info);
+            }
+        }
+        return available;
     }
 
     /** 坐标/维度判定。纯函数，便于单测。 */

@@ -735,7 +735,7 @@ public final class OrganizationTerminalPage {
         }
         drawText(guiGraphics, font, fit(font, title, textWidth), x, y + 3, TEXT);
 
-        if (!actionable || line.missing()) {
+        if (!actionable || line.territoryId().isBlank()) {
             return;
         }
         button(guiGraphics, font, mouseX, mouseY, x + width - buttonWidth, y, buttonWidth,

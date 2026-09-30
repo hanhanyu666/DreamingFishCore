@@ -1076,7 +1076,7 @@ public final class OrganizationManager {
             EconomySystemBridge.TerritoryInfo info = linked.info();
             if (info == null) {
                 territories.add(new OrganizationViewData.TerritoryLine(
-                        "", "已失效的登记", "", 0, 0, 0, 0, 0, true));
+                        linked.territoryId(), "已失效的登记", "", 0, 0, 0, 0, 0, true));
                 continue;
             }
             territories.add(new OrganizationViewData.TerritoryLine(
