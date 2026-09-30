@@ -43,5 +43,6 @@
   "message.dreamingfishcore.territory.claim_buildable_reminder": "Reminder: this claim touches a buildable story area; TNT, mob explosions and lava are restricted, and flint and steel is only allowed for lighting a Nether portal.",
   "effect.dreamingfishcore.infection": "Infection",
   "effect.dreamingfishcore.fear": "Fear",
-  "effect.dreamingfishcore.courage": "Courage"
+  "effect.dreamingfishcore.courage": "Courage",
+  "block.dreamingfishcore.settlement_filter": "Settlement Filter"
 }

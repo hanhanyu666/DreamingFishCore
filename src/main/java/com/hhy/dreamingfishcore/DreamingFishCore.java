@@ -24,6 +24,8 @@ public class DreamingFishCore {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public DreamingFishCore(IEventBus modEventBus, ModContainer modContainer) {
+        // 注册方块（聚居地过滤装置等）；方块物品在 DreamingFishCore_Items 里注册
+        com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.register(modEventBus);
         // 注册物品
         DreamingFishCore_Items.register(modEventBus);
         // 注册网络包

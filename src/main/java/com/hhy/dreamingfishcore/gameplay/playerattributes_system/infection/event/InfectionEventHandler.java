@@ -233,6 +233,12 @@ public class InfectionEventHandler {
      * 不稳定感染者产生暴露"这条共存规则，而不是只测一个谓词。</p>
      */
     static boolean hasSpreadingSourceNearby(ServerPlayer player) {
+        // ADR 0017：领地内工作中的聚居地过滤装置会阻断被动接触传播。
+        // 判定放在最前面：设备覆盖范围内直接不产生暴露，也就不必再扫玩家列表。
+        if (com.hhy.dreamingfishcore.gameplay.organization_system.SettlementFilterService
+                .isSuppressed(player)) {
+            return false;
+        }
         boolean protectedByMask = ProtectiveMaskItem.isEquipped(player);
         for (ServerPlayer otherPlayer : player.server.getPlayerList().getPlayers()) {
             if (otherPlayer.getUUID().equals(player.getUUID())) {

@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.gameplay.npc_system.NpcRelationManager;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationManager;
+import com.hhy.dreamingfishcore.gameplay.organization_system.SettlementFilterRegistry;
+import com.hhy.dreamingfishcore.gameplay.organization_system.SettlementFilterService;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
@@ -71,6 +73,10 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载复活信息", () -> RevivalInfoManager.loadWorldData(server));
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
         runSafely("加载玩家组织", () -> OrganizationManager.loadWorldData(server));
+        runSafely("加载聚居地设备", () -> SettlementFilterRegistry.loadWorldData(server));
+        // 组织领地登记要等经济服务（领地数据）与组织数据都就绪后再校验，
+        // 因此放在加载序列的最后一步：摘除失效登记（经济读不到时会直接跳过）。
+        runSafely("校验组织领地登记", () -> OrganizationManager.reconcileTerritories(server));
         // 所有投影管理器都完成加载后，再补做一次当前阶段入口。
         // 这样重启时即使没有玩家在线，也不会丢失阶段公告/倒计时到期公告；
         // 玩家私信和个人引导仍在登录时按各自事实幂等重建。
@@ -81,6 +87,8 @@ public final class WorldDataLifecycleEvents {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         StoryManager.tickActiveTime(event.getServer());
+        // 聚居地过滤装置的维护周期（自带节流，且活动时钟不可用时会跳过）。
+        SettlementFilterService.tick(event.getServer());
         PlayerInfectionManager.tickTreatmentWindows(event.getServer());
         // 传播复发到期自动结束：不依赖玩家主动处理，避免永久保留传播能力。
         InfectionTreatmentService.tickRelapseWindows(event.getServer());
@@ -137,6 +145,7 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存复活信息", () -> RevivalInfoManager.saveIfDirty(server));
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
         saved &= runSaveSafely("保存玩家组织", () -> OrganizationManager.saveIfDirty(server));
+        saved &= runSaveSafely("保存聚居地设备", () -> SettlementFilterRegistry.saveIfDirty(server));
         // StoryManager 已经保存统一的剧情事实；内容包管理器只负责文案配置，
         // 不再拥有第二份阶段状态。
         return saved;
@@ -160,6 +169,7 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理复活信息缓存", RevivalInfoManager::clearWorldCache);
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
         runSafely("清理玩家组织缓存", OrganizationManager::clearWorldCache);
+        runSafely("清理聚居地设备缓存", SettlementFilterRegistry::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

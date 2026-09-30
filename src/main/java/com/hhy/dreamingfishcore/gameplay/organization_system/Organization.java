@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.organization_system;
 
+import com.hhy.dreamingfishcore.DreamingFishCore;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -64,6 +66,22 @@ public final class Organization {
      * 解散时反而能白拿一笔钱。旧存档没有这个字段，反序列化后为 0，是正确语义。</p>
      */
     private int creationCostPaid;
+    /**
+     * 组织资金池余额（梦鱼币）。
+     *
+     * <p>这是我们自己的内部账：入账靠成员捐款时从个人梦鱼币账户扣除（走 EconomySystem 的 debit），
+     * 出账只用于系统扣费（聚居地抑制设备的维护费）。<b>不提供取现入口</b>，
+     * 因此不需要在 EconomySystem 里再开一个账户，也不会出现"谁能动这笔钱"的争议。</p>
+     */
+    private int funds;
+    /**
+     * 已登记为组织领地的领地 id → 登记时间。
+     *
+     * <p><b>只存引用</b>：领地的所有权、成员、矩形范围、费用与持久化全部归 EconomySystem
+     * （ADR 0035 明确禁止在本模组建立第二份私人领地数据库）。展示与使用前都会用
+     * {@code territoriesByOwner} / {@code territory(id)} 重新校验，失效条目自动摘除。</p>
+     */
+    private Map<String, Long> territoryIds = new LinkedHashMap<>();
     /** 成员：UUID 字符串 → 成员记录。 */
     private Map<String, Member> members = new LinkedHashMap<>();
     /** 待审批的入会申请：UUID 字符串 → 申请时间。 */
@@ -130,6 +148,90 @@ public final class Organization {
 
     public void setCreationCostPaid(int value) {
         this.creationCostPaid = Math.max(0, value);
+    }
+
+    // ==================== 资金池 ====================
+
+    /** 组织资金池余额；损坏数据（负值）按 0 处理。 */
+    public int funds() {
+        return Math.max(0, funds);
+    }
+
+    public void setFunds(int value) {
+        this.funds = Math.max(0, value);
+    }
+
+    /** 入账；返回入账后的余额。 */
+    public int depositFunds(int amount) {
+        if (amount <= 0) {
+            return funds();
+        }
+        long total = (long) funds() + amount;
+        this.funds = (int) Math.min(Integer.MAX_VALUE, total);
+        return this.funds;
+    }
+
+    /**
+     * 从资金池扣费。
+     *
+     * @return 实际扣掉的金额；余额不足时返回余额（调用方据此判断是否欠费）
+     */
+    public int withdrawFundsUpTo(int amount) {
+        if (amount <= 0) {
+            return 0;
+        }
+        int available = funds();
+        int taken = Math.min(available, amount);
+        this.funds = available - taken;
+        return taken;
+    }
+
+    // ==================== 组织领地（只存引用） ====================
+
+    public Map<String, Long> territoryIds() {
+        if (territoryIds == null) {
+            territoryIds = new LinkedHashMap<>();
+        }
+        return territoryIds;
+    }
+
+    public int territoryCount() {
+        return territoryIds().size();
+    }
+
+    public boolean hasTerritory(String territoryId) {
+        return territoryId != null && !territoryId.isBlank()
+                && territoryIds().containsKey(territoryId);
+    }
+
+    /** 登记一块组织领地；已在列表里时刷新登记时间。 */
+    public void registerTerritory(String territoryId, long now) {
+        if (territoryId == null || territoryId.isBlank()) {
+            return;
+        }
+        territoryIds().put(territoryId, now);
+    }
+
+    public boolean unregisterTerritory(String territoryId) {
+        return territoryId != null && territoryIds().remove(territoryId) != null;
+    }
+
+    /**
+     * 批量摘除（失效校验用）。
+     *
+     * @return 实际摘除的数量
+     */
+    public int unregisterTerritories(java.util.Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int removed = 0;
+        for (String id : ids) {
+            if (unregisterTerritory(id)) {
+                removed++;
+            }
+        }
+        return removed;
     }
 
     public Map<String, Member> members() {
@@ -255,6 +357,34 @@ public final class Organization {
                 throw new IllegalStateException("组织成员 UUID 非法：" + key);
             }
         });
+    }
+
+    /**
+     * 归一资金池与领地登记数据；返回是否发生了修改（需要写回存档）。
+     *
+     * <p>刻意<b>不</b>放进 {@link #validate()}：读档时 {@code validate()} 抛异常会让整个组织被跳过，
+     * 而"资金池被手改成负数"或"领地登记时间写坏"都只是可修复的小问题，不该赔上整个组织。
+     * 这里改成静默修正，由调用方决定写回。</p>
+     */
+    public boolean normalizeLinkageData() {
+        boolean changed = false;
+        if (funds < 0) {
+            DreamingFishCore.LOGGER.warn("组织 {} 的资金池为负数（{}），已按 0 处理", id(), funds);
+            funds = 0;
+            changed = true;
+        }
+        Map<String, Long> territories = territoryIds();
+        int before = territories.size();
+        territories.entrySet().removeIf(entry -> entry.getKey() == null
+                || entry.getKey().isBlank()
+                || entry.getValue() == null
+                || entry.getValue() < 0L);
+        if (territories.size() != before) {
+            DreamingFishCore.LOGGER.warn("组织 {} 有 {} 条失效的领地登记，已清除",
+                    id(), before - territories.size());
+            changed = true;
+        }
+        return changed;
     }
 
     private static Optional<UUID> safeUuid(String raw) {

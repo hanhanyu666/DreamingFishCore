@@ -93,6 +93,24 @@ config/dreamingfishcore/clue_drop.json 控制（默认 0.01%，可整体关闭�
 顺带：自定义载荷下发失败不再让服务端线程抛异常，而是记一条警告——这类失败过去会连带打断
 触发它的登录流程或 tick 处理器。
 
+组织与圈地联动（新）
+组织的会长与副会长现在可以把自己名下的领地登记为「组织领地」：/organization territory 查看已登记
+与可登记的领地，register/remove 登记与移除。本模组只保存登记引用，领地的所有权、成员、权限、
+费用与持久化仍全部归经济模组（ADR 0035 明确禁止再建第二份私人领地数据）；每次展示与使用前都会
+重新校验，领地消失或主人已退会时自动摘除。
+组织新增资金池：任何成员都能捐款（/organization deposit <金额>，从自己的梦鱼币账户扣除），
+余额只用于系统扣费、不提供取现入口；解散组织时余额全额退给会长，退款失败只记日志不阻塞解散。
+新增方块「聚居地过滤装置」：放在本组织已登记的领地内，由会长/副会长右键绑定（再右键解除）。
+设备每个维护周期（默认一个剧情活动日，仅在线累计）从组织资金池扣一次维护费（默认 20 梦鱼币）；
+工作期间在半径内（默认 32 格，按 X/Z 水平距离、贯穿高度）阻断被动接触暴露——只阻断被动传播，
+不治疗既有感染，也不阻止受伤、污染物与特殊袭击造成的感染（ADR 0017）。
+设备被拆、位置不再属于组织领地、组织解散或资金池不足以支付维护费时会自动停机，并在聊天栏说明原因。
+配置在 config/dreamingfishcore/organization.json，改完用 /organization reload 生效：
+maxRegisteredTerritories（默认 4）、maxFilterDevices（默认 2）、filterRadius（默认 32）、
+filterMaintenanceCost（默认 20，0 = 免费）、filterMaintenanceIntervalTicks（默认 24000）、
+maxDeposit（默认 10000）。
+装置配方（昂贵）：铁块×4 + 玻璃×4 + 金苹果×1 + 下界合金锭×1。
+
 测试与调试命令（仅 3 级权限，正式服可不用）
 /dreamingfish debug story preset location medical|abydos 以当前位置为中心创建剧情地点。
 /dreamingfish debug story preset reception|finalcheck|followup 快进到疗程各阶段。
@@ -102,3 +120,8 @@ config/dreamingfishcore/clue_drop.json 控制（默认 0.01%，可整体关闭�
 /dreamingfish debug infection exposure step [次数]|clear 按真实规则推进或清空接触暴露（单人也能验证警告与转化）。
 /dreamingfish debug clue list 列出线索池里的编号与标题。
 /dreamingfish debug clue grant <编号> [玩家] 直接发放一条线索（幂等，连敲两次只给一张）。
+
+组织命令（正式服可用）
+/organization deposit <金额> 向本组织资金池捐款。
+/organization territory 查看已登记与可登记的领地。
+/organization territory register|remove <领地名或 id> 登记 / 移除组织领地。

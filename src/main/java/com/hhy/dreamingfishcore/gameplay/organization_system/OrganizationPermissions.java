@@ -26,6 +26,21 @@ public final class OrganizationPermissions {
         return actor != null && actor.atLeast(OrganizationRank.OFFICER);
     }
 
+    /**
+     * 登记或移除组织领地：仅会长与副会长。
+     *
+     * <p>领地登记涉及"把某人的私人财产挂到组织名下"，权限刻意比发公告更紧；
+     * 往资金池捐钱则对所有成员开放，因为那只进不出。</p>
+     */
+    public static boolean canManageTerritories(OrganizationRank actor) {
+        return actor != null && actor.atLeast(OrganizationRank.VICE_LEADER);
+    }
+
+    /** 向组织资金池捐款：任何成员都可以（只进不出，不需要额外权限）。 */
+    public static boolean canDepositFunds(OrganizationRank actor) {
+        return actor != null;
+    }
+
     /** 踢人：必须高于对方；会长不能被任何人踢（也不能踢自己，由调用方挡住）。 */
     public static boolean canKick(OrganizationRank actor, OrganizationRank target) {
         return actor != null && target != null

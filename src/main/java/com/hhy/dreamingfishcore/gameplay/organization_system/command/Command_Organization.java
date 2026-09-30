@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationConfig;
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationManager;
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationRank;
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationResult;
+import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationTerritoryService;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -15,6 +17,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -128,6 +131,23 @@ public final class Command_Organization {
                         .then(Commands.argument("name", StringArgumentType.greedyString())
                                 .executes(context -> info(context,
                                         StringArgumentType.getString(context, "name")))))
+                .then(Commands.literal("deposit")
+                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                .executes(context -> run(context,
+                                        player -> OrganizationManager.deposit(player,
+                                                IntegerArgumentType.getInteger(context, "amount"))))))
+                .then(Commands.literal("territory")
+                        .executes(Command_Organization::listTerritories)
+                        .then(Commands.literal("register")
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(context -> run(context,
+                                                player -> registerTerritory(context, player)))))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(context -> run(context,
+                                                player -> OrganizationManager.unregisterTerritory(
+                                                        player,
+                                                        StringArgumentType.getString(context, "name")))))))
                 .then(Commands.literal("reload")
                         .requires(source -> source.hasPermission(3))
                         .executes(context -> {
@@ -155,6 +175,98 @@ public final class Command_Organization {
         } catch (IllegalArgumentException exception) {
             return null;
         }
+    }
+
+    // ==================== 领地联动 ====================
+
+    /**
+     * 登记领地：玩家给的是"领地名"（在可选列表里解析）或直接给领地 id。
+     *
+     * <p>名字可能重复，所以同名多于一块时要求改用 id —— 猜一块可能把不该登记的地登记掉。</p>
+     */
+    private static OrganizationResult registerTerritory(CommandContext<CommandSourceStack> context,
+                                                       ServerPlayer player) {
+        String raw = StringArgumentType.getString(context, "name");
+        OrganizationTerritoryService.Listing listing = OrganizationTerritoryService.listing(player);
+        if (!listing.economyReadable()) {
+            return OrganizationResult.fail("经济服务暂不可用，无法登记领地");
+        }
+        String query = raw == null ? "" : raw.trim();
+        if (query.isEmpty()) {
+            return OrganizationResult.fail("请指定要登记的领地");
+        }
+        List<com.hhy.dreamingfishcore.server.economy_bridge.EconomySystemBridge.TerritoryInfo> matches =
+                listing.available().stream()
+                        .filter(info -> info.territoryId().equalsIgnoreCase(query)
+                                || info.name().equalsIgnoreCase(query))
+                        .toList();
+        if (matches.isEmpty()) {
+            return OrganizationResult.fail("你名下没有可登记的领地叫「" + query + "」（用 /organization territory 查看）");
+        }
+        if (matches.size() > 1) {
+            return OrganizationResult.fail("有 " + matches.size()
+                    + " 块领地同名，请改用领地 id 登记");
+        }
+        return OrganizationManager.registerTerritory(player, matches.get(0).territoryId());
+    }
+
+    /** 列出组织已登记的领地与当前可登记的领地。 */
+    private static int listTerritories(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player;
+        try {
+            player = context.getSource().getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            context.getSource().sendFailure(Component.literal("该命令只能由玩家执行"));
+            return 0;
+        }
+        OrganizationTerritoryService.Listing listing = OrganizationTerritoryService.listing(player);
+        Organization organization = OrganizationManager.findByPlayer(player.getUUID()).orElse(null);
+        if (organization == null) {
+            context.getSource().sendFailure(Component.literal("你还没有组织"));
+            return 0;
+        }
+        StringBuilder message = new StringBuilder();
+        message.append("§6[组织领地] §f").append(organization.name())
+                .append(" §7已登记 ").append(organization.territoryCount())
+                .append("/").append(listing.limit()).append(" 块")
+                .append("，资金池 ").append(organization.funds()).append(" 梦鱼币");
+        if (listing.linked().isEmpty()) {
+            message.append("\n§7（还没有登记任何领地）");
+        }
+        for (OrganizationTerritoryService.LinkedTerritory linked : listing.linked()) {
+            if (linked.missing()) {
+                message.append("\n§c- 已失效的登记（领地不存在，或经济服务读不到）");
+                continue;
+            }
+            var info = linked.info();
+            message.append("\n§a- ").append(info.name())
+                    .append(" §7").append(shortDimension(info.dimensionId()))
+                    .append(" §7[§f").append(info.minX()).append(",").append(info.minZ())
+                    .append(" §7→ §f").append(info.maxX()).append(",").append(info.maxZ())
+                    .append("§7] §7面积 ").append(info.area());
+        }
+        message.append("\n§6可登记：");
+        if (!listing.economyReadable()) {
+            message.append("§c（经济服务暂不可用）");
+        } else if (listing.available().isEmpty()) {
+            message.append("§7（没有可登记的自己名下领地）");
+        } else {
+            for (var info : listing.available()) {
+                message.append("\n§e- ").append(info.name())
+                        .append(" §7").append(shortDimension(info.dimensionId()))
+                        .append(" §7id=").append(info.territoryId());
+            }
+        }
+        context.getSource().sendSuccess(() -> Component.literal(message.toString()), false);
+        return 1;
+    }
+
+    private static String shortDimension(String dimensionId) {
+        if (dimensionId == null || dimensionId.isBlank()) {
+            return "未知维度";
+        }
+        int colon = dimensionId.indexOf(':');
+        return colon < 0 ? dimensionId : dimensionId.substring(colon + 1);
     }
 
     /** 允许写组织名或组织 id，解析失败时返回空串，由 Manager 统一报"组织不存在"。 */

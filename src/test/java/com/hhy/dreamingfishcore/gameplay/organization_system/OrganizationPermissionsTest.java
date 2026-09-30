@@ -28,6 +28,26 @@ class OrganizationPermissionsTest {
     }
 
     @Test
+    void territoryManagementIsLimitedToLeaderAndViceLeader() {
+        assertTrue(OrganizationPermissions.canManageTerritories(OrganizationRank.LEADER));
+        assertTrue(OrganizationPermissions.canManageTerritories(OrganizationRank.VICE_LEADER));
+
+        assertFalse(OrganizationPermissions.canManageTerritories(OrganizationRank.OFFICER),
+                "干部不能登记/移除组织领地");
+        assertFalse(OrganizationPermissions.canManageTerritories(OrganizationRank.MEMBER));
+        assertFalse(OrganizationPermissions.canManageTerritories(null));
+    }
+
+    @Test
+    void everyMemberMayDepositIntoTheFundPool() {
+        // 捐款只进不出，所以不需要额外权限；没有职位（非成员）才挡住。
+        for (OrganizationRank rank : OrganizationRank.values()) {
+            assertTrue(OrganizationPermissions.canDepositFunds(rank), rank + " 应能捐款");
+        }
+        assertFalse(OrganizationPermissions.canDepositFunds(null));
+    }
+
+    @Test
     void kickRequiresStrictlyHigherRankAndNeverTargetsLeader() {
         assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.MEMBER));
         assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.OFFICER));

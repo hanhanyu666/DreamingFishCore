@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 组织配置：创建费与解散退款比例的默认值、越界修正、退款算法。 */
@@ -129,5 +130,96 @@ class OrganizationConfigTest {
 
         organization.setCreationCostPaid(-1);
         assertEquals(0, organization.creationCostPaid(), "负数实付应被收敛为 0");
+    }
+
+    // ==================== 领地联动与资金池 ====================
+
+    @Test
+    void linkageDefaultsArePresent(@TempDir Path dir) throws Exception {
+        Path path = dir.resolve("organization.json");
+
+        OrganizationConfig config = OrganizationConfig.load(path);
+
+        assertEquals(4, config.getMaxRegisteredTerritories());
+        assertEquals(2, config.getMaxFilterDevices());
+        assertEquals(32, config.getFilterRadius());
+        assertEquals(20, config.getFilterMaintenanceCost(), "维护费是可改变量，不是写死的常量");
+        assertEquals(24_000, config.getFilterMaintenanceIntervalTicks(), "默认一个剧情活动日");
+        assertEquals(10_000, config.getMaxDeposit());
+    }
+
+    @Test
+    void linkageValuesAreClampedAndWrittenBack(@TempDir Path dir) throws Exception {
+        Path path = write(dir, """
+                {"schemaVersion": 1, "enabled": true,
+                 "maxRegisteredTerritories": 9999, "maxFilterDevices": -3,
+                 "filterRadius": 1, "filterMaintenanceCost": -5,
+                 "filterMaintenanceIntervalTicks": 10, "maxDeposit": 0}
+                """);
+
+        OrganizationConfig config = OrganizationConfig.load(path);
+
+        assertEquals(64, config.getMaxRegisteredTerritories());
+        assertEquals(0, config.getMaxFilterDevices());
+        assertEquals(4, config.getFilterRadius());
+        assertEquals(0, config.getFilterMaintenanceCost(), "负维护费应修正为 0（免费）");
+        assertEquals(1_000, config.getFilterMaintenanceIntervalTicks());
+        assertEquals(1, config.getMaxDeposit());
+
+        String writtenBack = Files.readString(path, StandardCharsets.UTF_8);
+        assertTrue(writtenBack.contains("\"filterMaintenanceCost\": 0"), writtenBack);
+        assertTrue(writtenBack.contains("\"filterRadius\": 4"), writtenBack);
+    }
+
+    @Test
+    void legacyConfigWithoutLinkageKeysGetsThemWrittenBack(@TempDir Path dir) throws Exception {
+        Path path = write(dir, """
+                {"schemaVersion": 1, "enabled": true, "creationCost": 150, "disbandRefundPercent": 50}
+                """);
+
+        OrganizationConfig config = OrganizationConfig.load(path);
+
+        assertEquals(20, config.getFilterMaintenanceCost());
+        String writtenBack = Files.readString(path, StandardCharsets.UTF_8);
+        assertTrue(writtenBack.contains("\"filterMaintenanceCost\""),
+                "新键应被补进旧配置，服主才看得见：" + writtenBack);
+        assertTrue(writtenBack.contains("\"filterRadius\""), writtenBack);
+    }
+
+    @Test
+    void organizationFundsAndTerritoryReferencesBehaveAsLedger() {
+        Organization organization = new Organization("id", "测试", "leader", "会长", 0L);
+        assertEquals(0, organization.funds());
+
+        assertEquals(500, organization.depositFunds(500));
+        assertEquals(500, organization.depositFunds(-100), "负数入账应被忽略");
+        assertEquals(120, organization.withdrawFundsUpTo(120));
+        assertEquals(380, organization.funds());
+        assertEquals(380, organization.withdrawFundsUpTo(1000), "余额不足时只扣到 0");
+        assertEquals(0, organization.funds());
+
+        organization.registerTerritory("t-1", 100L);
+        organization.registerTerritory("t-2", 200L);
+        assertTrue(organization.hasTerritory("t-1"));
+        assertEquals(2, organization.territoryCount());
+        assertEquals(1, organization.unregisterTerritories(java.util.List.of("t-1", "不存在")));
+        assertEquals(1, organization.territoryCount());
+    }
+
+    @Test
+    void brokenFundsAndTerritoryEntriesAreNormalizedInsteadOfRejected() {
+        // 手改配置把资金池写成负数、或领地登记时间写坏，都只是小问题：
+        // 归一即可，绝不能因此让整个组织被跳过（读档时 validate 抛异常会这样）。
+        Organization organization = GSON.fromJson(
+                "{\"id\":\"id\",\"name\":\"测试\",\"leaderId\":\"leader\","
+                        + "\"members\":{\"leader\":{\"lastName\":\"会长\",\"rank\":\"leader\"}},"
+                        + "\"funds\":-500,\"territoryIds\":{\"\":1,\"t-1\":-2,\"t-2\":50}}",
+                Organization.class);
+
+        assertTrue(organization.normalizeLinkageData(), "归一应报告发生了修改");
+        assertEquals(0, organization.funds());
+        assertEquals(1, organization.territoryCount(), "只保留合法条目");
+        assertTrue(organization.hasTerritory("t-2"));
+        assertFalse(organization.normalizeLinkageData(), "归一之后应为幂等");
     }
 }

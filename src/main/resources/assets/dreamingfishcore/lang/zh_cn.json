@@ -43,5 +43,6 @@
   "message.dreamingfishcore.territory.claim_buildable_reminder": "提示：你正在故事可建造区域内圈地；TNT、生物爆炸和岩浆受限，打火石仅可用于点燃下界传送门。",
   "effect.dreamingfishcore.infection": "感染",
   "effect.dreamingfishcore.fear": "害怕",
-  "effect.dreamingfishcore.courage": "勇气"
+  "effect.dreamingfishcore.courage": "勇气",
+  "block.dreamingfishcore.settlement_filter": "聚居地过滤装置"
 }

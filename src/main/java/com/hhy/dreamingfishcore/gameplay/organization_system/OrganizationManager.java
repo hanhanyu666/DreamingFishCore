@@ -101,6 +101,10 @@ public final class OrganizationManager {
                     DreamingFishCore.LOGGER.error("跳过损坏的组织条目：{}", organization.id(), exception);
                     continue;
                 }
+                // 资金池/领地登记只是可修复的小问题，静默归一而不是跳过整个组织。
+                if (organization.normalizeLinkageData()) {
+                    dirty = true;
+                }
                 if (ORGANIZATIONS.containsKey(organization.id())) {
                     skipped++;
                     DreamingFishCore.LOGGER.error("跳过重复的组织 id：{}", organization.id());
@@ -264,6 +268,11 @@ public final class OrganizationManager {
         return ORGANIZATIONS.size();
     }
 
+    /** 组织数据是否已加载（设备维护等低频逻辑据此跳过启动期）。 */
+    public static synchronized boolean isLoaded() {
+        return loaded;
+    }
+
     /** 已加载**且读档可靠**才允许写入：读档失败时保持只读，避免把空数据写回去盖掉存档。 */
     private static boolean writable() {
         return loaded && !persistenceUnsafe;
@@ -423,13 +432,43 @@ public final class OrganizationManager {
         for (String playerId : organization.members().keySet()) {
             PLAYER_ORGANIZATION.remove(playerId);
         }
+        // 组织没了，它绑定的聚居地设备也必须停下：否则设备会一直"工作"，
+        // 维护费却再也扣不到任何人头上。
+        int unbound = SettlementFilterRegistry.unbindAllOf(organization.id());
+        if (unbound > 0) {
+            DreamingFishCore.LOGGER.info("组织「{}」解散，已解除 {} 台设备的绑定",
+                    organization.name(), unbound);
+        }
         markDirty();
 
-        String refundNote = refundDisbandCost(organization, refundTo);
-        DreamingFishCore.LOGGER.info("组织「{}」已解散（实付创建费 {}，退款说明：{}）",
-                organization.name(), organization.creationCostPaid(),
+        String refundNote = refundDisbandCost(organization, refundTo)
+                + refundDisbandFunds(organization, refundTo);
+        DreamingFishCore.LOGGER.info("组织「{}」已解散（实付创建费 {}，资金池 {}，退款说明：{}）",
+                organization.name(), organization.creationCostPaid(), organization.funds(),
                 refundNote.isEmpty() ? "无" : refundNote);
         return OrganizationResult.ok(message + refundNote);
+    }
+
+    /**
+     * 解散时把资金池余额全额退给发起人。
+     *
+     * <p>只有会长能解散，所以发起人就是会长；余额是成员共同捐进来的，按用户确认的规则全额退。
+     * 退款失败只记日志、不阻塞解散 —— 组织已经从内存里摘掉了，卡在这里只会让状态更难看。</p>
+     */
+    private static String refundDisbandFunds(Organization organization, ServerPlayer refundTo) {
+        int funds = organization.funds();
+        if (funds <= 0 || refundTo == null) {
+            return "";
+        }
+        EconomySystemBridge.MutationResult result = EconomySystemBridge.credit(
+                refundTo, funds, "organization/funds_refund",
+                "解散组织「" + organization.name() + "」退还资金池余额");
+        if (result != EconomySystemBridge.MutationResult.SUCCESS) {
+            DreamingFishCore.LOGGER.error("组织「{}」解散时资金池退款失败（应退 {}，结果 {}）",
+                    organization.name(), funds, result);
+            return "（应退资金池 " + funds + " 梦鱼币，但经济服务未能发放，请联系服主）";
+        }
+        return "（已退回资金池 " + funds + " 梦鱼币）";
     }
 
     /**
@@ -741,6 +780,238 @@ public final class OrganizationManager {
     // ==================== 快照 ====================
 
     /** 构建一次同步所需的全部只读数据。 */
+    // ==================== 资金池（A/D 联动） ====================
+
+    /**
+     * 成员向组织资金池捐款。
+     *
+     * <p>顺序是"先扣个人账户 → 入组织账 → 立刻写盘；写盘失败就退回个人账户"。
+     * 这样既不会出现"钱花了组织没记上"，也不会出现"组织账加了钱但个人没扣"。</p>
+     */
+    public static synchronized OrganizationResult deposit(ServerPlayer player, int amount) {
+        if (!requireAuthenticated(player)) {
+            return OrganizationResult.fail("登录认证未完成");
+        }
+        if (!writable()) {
+            return OrganizationResult.fail(notWritableMessage());
+        }
+        Organization organization = findByPlayer(player.getUUID()).orElse(null);
+        if (organization == null) {
+            return OrganizationResult.fail("你还没有组织");
+        }
+        if (!OrganizationPermissions.canDepositFunds(organization.rankOf(player.getUUID()).orElse(null))) {
+            return OrganizationResult.fail("你不是组织成员");
+        }
+        if (amount <= 0) {
+            return OrganizationResult.fail("捐款金额必须大于 0");
+        }
+        int limit = config().getMaxDeposit();
+        if (amount > limit) {
+            return OrganizationResult.fail("单次捐款不能超过 " + limit + " 梦鱼币");
+        }
+
+        EconomySystemBridge.MutationResult result = EconomySystemBridge.debit(
+                player, amount, "organization/deposit", "向组织「" + organization.name() + "」捐款");
+        if (result == EconomySystemBridge.MutationResult.NOT_AVAILABLE) {
+            return OrganizationResult.fail("经济服务暂不可用，无法捐款");
+        }
+        if (result == EconomySystemBridge.MutationResult.INSUFFICIENT_FUNDS) {
+            int balance = EconomySystemBridge.balance(player);
+            return OrganizationResult.fail("梦鱼币不足：需要 " + amount
+                    + (balance >= 0 ? "，你当前有 " + balance : ""));
+        }
+        if (result != EconomySystemBridge.MutationResult.SUCCESS) {
+            return OrganizationResult.fail("捐款被经济服务拒绝，请稍后重试");
+        }
+
+        int funds = organization.depositFunds(amount);
+        markDirty();
+        if (!saveIfDirty(player.getServer())) {
+            // 组织账没落盘：把钱退回去，避免"扣了个人余额但组织余额重启后消失"。
+            organization.withdrawFundsUpTo(amount);
+            markDirty();
+            EconomySystemBridge.MutationResult refund = EconomySystemBridge.credit(
+                    player, amount, "organization/deposit_rollback",
+                    "组织资金池写入失败，捐款已退回");
+            DreamingFishCore.LOGGER.error("组织「{}」捐款写盘失败，已回滚（退款结果 {}）",
+                    organization.name(), refund);
+            return OrganizationResult.fail(
+                    refund == EconomySystemBridge.MutationResult.SUCCESS
+                            ? "组织数据写入失败，捐款已退回你的账户"
+                            : "组织数据写入失败，且退款未能发放，请联系服主");
+        }
+        DreamingFishCore.LOGGER.info("玩家 {} 向组织「{}」捐款 {} 梦鱼币（资金池 {}）",
+                player.getScoreboardName(), organization.name(), amount, funds);
+        return OrganizationResult.ok("已向组织「" + organization.name() + "」捐款 " + amount
+                + " 梦鱼币，当前资金池 " + funds + " 梦鱼币");
+    }
+
+    /**
+     * 从组织资金池扣维护费（供聚居地抑制设备的维护周期调用）。
+     *
+     * @return 实际扣到的金额；小于 {@code amount} 表示资金不足，设备应当停机
+     */
+    public static synchronized int chargeMaintenance(String organizationId, int amount) {
+        if (!writable() || organizationId == null || organizationId.isBlank() || amount <= 0) {
+            return 0;
+        }
+        Organization organization = findById(organizationId).orElse(null);
+        if (organization == null) {
+            return 0;
+        }
+        int taken = organization.withdrawFundsUpTo(amount);
+        if (taken > 0) {
+            markDirty();
+        }
+        return taken;
+    }
+
+    /** 组织资金池余额；组织不存在时返回 -1。 */
+    public static synchronized int fundsOf(String organizationId) {
+        Organization organization = findById(organizationId).orElse(null);
+        return organization == null ? -1 : organization.funds();
+    }
+
+    // ==================== 组织领地（只存引用，A/B 联动） ====================
+
+    /** 按领地 id 反查登记它的组织；设备据此判断"站的是不是自己组织的领地"。 */
+    public static synchronized Optional<Organization> findByTerritory(String territoryId) {
+        if (territoryId == null || territoryId.isBlank()) {
+            return Optional.empty();
+        }
+        for (Organization organization : ORGANIZATIONS.values()) {
+            if (organization.hasTerritory(territoryId)) {
+                return Optional.of(organization);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** 会长/副会长把自己名下的领地登记为组织领地。 */
+    public static synchronized OrganizationResult registerTerritory(ServerPlayer actor, String territoryId) {
+        if (!requireAuthenticated(actor)) {
+            return OrganizationResult.fail("登录认证未完成");
+        }
+        if (!writable()) {
+            return OrganizationResult.fail(notWritableMessage());
+        }
+        Organization organization = findByPlayer(actor.getUUID()).orElse(null);
+        if (organization == null) {
+            return OrganizationResult.fail("你还没有组织");
+        }
+        if (!OrganizationPermissions.canManageTerritories(
+                organization.rankOf(actor.getUUID()).orElse(null))) {
+            return OrganizationResult.fail("只有会长与副会长可以登记组织领地");
+        }
+        String id = territoryId == null ? "" : territoryId.trim();
+        if (id.isEmpty()) {
+            return OrganizationResult.fail("请指定要登记的领地");
+        }
+        if (organization.hasTerritory(id)) {
+            return OrganizationResult.fail("这块领地已经登记给本组织了");
+        }
+        Organization holder = findByTerritory(id).orElse(null);
+        if (holder != null) {
+            return OrganizationResult.fail("这块领地已经登记给组织「" + holder.name() + "」");
+        }
+        int limit = config().getMaxRegisteredTerritories();
+        if (organization.territoryCount() >= limit) {
+            return OrganizationResult.fail("每个组织最多登记 " + limit + " 块领地");
+        }
+        MinecraftServer server = actor.getServer();
+        if (!EconomySystemBridge.isTerritoryReadable(server)) {
+            return OrganizationResult.fail("经济服务暂不可用，无法登记领地");
+        }
+        EconomySystemBridge.TerritoryInfo info = EconomySystemBridge.findTerritory(server, id).orElse(null);
+        if (info == null) {
+            return OrganizationResult.fail("找不到这块领地（可能已被移除）");
+        }
+        if (!info.ownerId().equals(actor.getUUID().toString())) {
+            return OrganizationResult.fail("只能登记你自己名下的领地");
+        }
+
+        organization.registerTerritory(id, System.currentTimeMillis());
+        markDirty();
+        DreamingFishCore.LOGGER.info("玩家 {} 把领地「{}」登记为组织「{}」的组织领地",
+                actor.getScoreboardName(), info.name(), organization.name());
+        return OrganizationResult.ok("已把领地「" + info.name() + "」登记为组织领地（"
+                + organization.territoryCount() + "/" + limit + "）");
+    }
+
+    /** 移除一条组织领地登记（未登记的 id 与已失效的 id 都接受）。 */
+    public static synchronized OrganizationResult unregisterTerritory(ServerPlayer actor, String territoryId) {
+        if (!requireAuthenticated(actor)) {
+            return OrganizationResult.fail("登录认证未完成");
+        }
+        if (!writable()) {
+            return OrganizationResult.fail(notWritableMessage());
+        }
+        Organization organization = findByPlayer(actor.getUUID()).orElse(null);
+        if (organization == null) {
+            return OrganizationResult.fail("你还没有组织");
+        }
+        if (!OrganizationPermissions.canManageTerritories(
+                organization.rankOf(actor.getUUID()).orElse(null))) {
+            return OrganizationResult.fail("只有会长与副会长可以移除组织领地");
+        }
+        String id = territoryId == null ? "" : territoryId.trim();
+        if (id.isEmpty() || !organization.unregisterTerritory(id)) {
+            return OrganizationResult.fail("这块领地没有登记给本组织");
+        }
+        markDirty();
+        return OrganizationResult.ok("已移除组织领地登记（剩余 " + organization.territoryCount() + " 块）");
+    }
+
+    /**
+     * 重新校验所有组织的领地登记，摘除失效项。
+     *
+     * <p><b>经济服务读不到时直接返回</b>：把"读不到"当成"没有领地"会把所有登记一次清空，
+     * 那是比不校验严重得多的错误。</p>
+     *
+     * @return 摘除的登记数量
+     */
+    public static synchronized int reconcileTerritories(MinecraftServer server) {
+        if (!writable() || server == null || !EconomySystemBridge.isTerritoryReadable(server)) {
+            return 0;
+        }
+        int removed = 0;
+        for (Organization organization : ORGANIZATIONS.values()) {
+            List<String> stale = new ArrayList<>();
+            for (String id : organization.territoryIds().keySet()) {
+                EconomySystemBridge.TerritoryInfo info =
+                        EconomySystemBridge.findTerritory(server, id).orElse(null);
+                if (info == null) {
+                    stale.add(id);
+                    continue;
+                }
+                UUID owner = parseUuid(info.ownerId());
+                // 领地主人已经退会/转会后，这块地不再是本组织的地盘。
+                if (owner == null || !organization.isMember(owner)) {
+                    stale.add(id);
+                }
+            }
+            int count = organization.unregisterTerritories(stale);
+            if (count > 0) {
+                removed += count;
+                markDirty();
+                DreamingFishCore.LOGGER.info("组织「{}」摘除 {} 条失效的领地登记：{}",
+                        organization.name(), count, stale);
+            }
+        }
+        return removed;
+    }
+
+    private static UUID parseUuid(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
     public static synchronized OrganizationViewData.Snapshot buildSnapshot(ServerPlayer player,
                                                                           MinecraftServer server) {
         OrganizationConfig config = config();
