@@ -60,9 +60,9 @@
 | 差异 | 落点 | 现状 |
 | --- | --- | --- |
 | 重生代价分档 | `InfectionRules.respawnCost` → `DeathEventHandler.getNormalCost` | 已实装（5 / 10 / 20，保留物品栏 +30） |
-| 丧尸仇恨偏好 | `AggroPreferenceRules` + `InfectionAggroHandler`（`LivingChangeTargetEvent`） | 已实装：普通丧尸对稳定感染者会转向 24 格内更近的幸存者，否则 60% 概率放弃目标；尸潮丧尸的正在执行的声音/广播目标不参与 |
+| 丧尸仇恨偏好 | `AggroPreferenceRules` + `InfectionAggroHandler`（`LivingChangeTargetEvent`） | 已实装并端到端验证：普通丧尸对稳定感染者会转向 24 格内更近的幸存者，否则 60% 概率放弃目标；尸潮丧尸正在执行的声音/广播目标不参与 |
 | 污染适应 | `PlayerInfectionManager.applyInfectionDebuff` | v1：稳定感染者不再承受「感染」效果的移速/攻击力惩罚；污染区域实装后应在此追加环境伤害减免 |
-| 关键互动资格 | — | **未实装**：校准基准、精密设施、特殊样本都还没有对应内容（疑光期/破晓期尚未注册到运行时）。现有唯一的身份门槛是基因复苏试剂拒绝稳定感染者 |
+| 关键互动资格 | `InfectionIdentity.allowsEarlyReversalReagent` | 部分实装：现有唯一真实门槛是基因复苏试剂按身份准入（幸存者/不稳定可用，稳定与复发必须走重构）。校准基准、精密设施、特殊样本都还没有对应内容（疑光期/破晓期尚未注册到运行时），因此不预留空方法 |
 
 数值全部集中在 `InfectionRules`：内容设计（`PROJECT-M.D.G.A/docs/story/待决策事项.md`）
 定稿后只改这一个类，不必翻调用点。该里程碑刻意不做配置化平衡。
@@ -109,6 +109,9 @@
   `GameTestHelper.makeMockServerPlayerInLevel()` 造出真实服务端玩家，覆盖单测够不到的部分——
   两名玩家同场的传播规则、暴露转化为感染、未认证会话被拒、身份落盘后按真实加载路径重载、
   重伤触发复发并可由稳定治疗结束。
+- `InfectionAggroGameTest`（同为无头 gametest）：验证仇恨软差异的**接线**——
+  真实丧尸调用 `setTarget` 时，`LivingChangeTargetEvent` 是否真的把目标改到更近的幸存者身上；
+  以及不稳定感染者不会被降仇恨（保持原目标）。
 
 ### 无头 gametest 说明
 
@@ -151,4 +154,5 @@
    落盘 + 重载路径覆盖，另有数据层单测与存档核对；
 4. 稳定感染者与幸存者同场不持续感染队友、丧尸仇恨转移——前者由 gametest
    `stableInfectedDoesNotExposeNearbySurvivor` / `unstableInfectedExposesNearbySurvivor` 用
-   两名真实服务端玩家覆盖；**丧尸仇恨转移仍然只有单测证据**（需要真人玩家与丧尸同场才能看到行为）。
+   两名真实服务端玩家覆盖；后者由 `InfectionAggroGameTest` 用真实丧尸 + 两名玩家覆盖
+   （真人多人环境下尚未肉眼确认，但事件接线与规则都已端到端验证）。
