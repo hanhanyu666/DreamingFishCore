@@ -32,7 +32,6 @@
     "ui.ChatScreenMixin",
     "ui.CommandSuggestionsMixin",
     "ui.GuiNotificationOverlayMixin",
-    "ui.ServerScreenUiEconomyBridgeMixin",
     "kill_effect.LivingEntityRendererKillEffectMixin"
   ],
   "server": [

@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.neoforged.api.distmarker.Dist;
@@ -25,8 +26,7 @@ public class ServerScreenUI_ClientEventHandler {
         Minecraft current = Minecraft.getInstance();
         if (current.player != null && ServerScreenUI.isSubScreenActive() && current.screen == null) {
             ServerScreenUI.onSubScreenClosed();
-            ServerScreenUI.setReturningFromSubScreen(true);
-            current.setScreen(new ServerScreenUI_Screen());
+            current.setScreen(TerminalScreen.reopen());
             return;
         }
         // 每20 tick（1秒）检查一次
@@ -48,12 +48,12 @@ public class ServerScreenUI_ClientEventHandler {
 
         // 如果UI应该显示但没有显示（例如重生后）
         // 但如果子屏幕正在显示，则不需要恢复
-        if (ServerScreenUI.isShowUI() && !(mc.screen instanceof ServerScreenUI_Screen) && !ServerScreenUI.isSubScreenActive()) {
+        if (ServerScreenUI.isShowUI() && !(mc.screen instanceof TerminalScreen) && !ServerScreenUI.isSubScreenActive()) {
             DreamingFishCore.LOGGER.info("检测到UI状态不一致，重新打开TaskUI");
-            mc.setScreen(new ServerScreenUI_Screen());
+            mc.setScreen(new TerminalScreen());
         }
         // 如果UI不应该显示但还在显示
-        else if (!ServerScreenUI.isShowUI() && mc.screen instanceof ServerScreenUI_Screen) {
+        else if (!ServerScreenUI.isShowUI() && mc.screen instanceof TerminalScreen) {
             DreamingFishCore.LOGGER.info("检测到UI状态不一致，关闭TaskUI");
             mc.setScreen(null);
         }

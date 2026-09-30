@@ -25,7 +25,8 @@ public class Dynamic<K> extends UiNode<Dynamic<K>> {
     public Dynamic(Supplier<K> key, Function<K, UiNode<?>> builder) {
         this.key = key;
         this.builder = builder;
-        column().alignItems(Align.STRETCH);
+        // 叠放 + 拉伸：唯一的子节点铺满容器，同时容器仍可按内容测量尺寸
+        stack().alignItems(Align.STRETCH);
     }
 
     public static <K> Dynamic<K> of(Supplier<K> key, Function<K, UiNode<?>> builder) {
