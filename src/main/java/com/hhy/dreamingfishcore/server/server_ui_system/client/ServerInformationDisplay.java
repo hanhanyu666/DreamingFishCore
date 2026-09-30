@@ -1,12 +1,8 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client;
 
-import com.google.common.collect.Ordering;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.client.ui.render.GuiQuadBatchRenderer;
 import com.hhy.dreamingfishcore.client.ui.render.PlayerFaceBatchRenderer;
-import com.hhy.dreamingfishcore.client.ui.render.RetainedGuiBuffers;
-import com.hhy.dreamingfishcore.client.ui.render.RetainedPlayerFace;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_OnlinePlayerCountRequest;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
@@ -17,35 +13,26 @@ import com.hhy.dreamingfishcore.server.title_system.TitleRegistry;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.UUID;
-import org.joml.Matrix4f;
 
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
@@ -54,30 +41,9 @@ public class ServerInformationDisplay {
     private static final boolean USE_LEGACY_INFO_BOXES = false;
     private static final String SERVER_NAME_DREAMING = "Dreaming";
     private static final String SERVER_NAME_FISH = "fish";
-    private static final String TOP_INFO_SEPARATOR = " | ";
     private static final String ONLINE_SUFFIX = " 在线";
-    private static final String LEVEL_PREFIX = "Lv.";
-    private static final String EXP_OPEN = "（";
-    private static final String EXP_SEPARATOR = "/";
-    private static final String EXP_CLOSE = "）";
     private static final String TPS_ICON = "⚡";
-    private static final String ONLINE_ICON = "👤";
     private static final String UNKNOWN_TIME_TEXT = "未知";
-    private static final int COMPACT_INFO_OUTLINE = 0xFF555555;
-    private static final int COMPACT_INFO_BG = 0xFF212121;
-    private static final int COMPACT_INFO_TEXT = 0xFFE6E6E6;
-    private static final int COMPACT_INFO_MUTED = 0xFF9A9A9A;
-    private static final int COMPACT_INFO_LEVEL = 0xFFFFAA33;
-    private static final int COMPACT_INFO_NAME = 0xFFFFEE88;
-    private static final int COMPACT_INFO_ONLINE = 0xFFB8D8FF;
-    private static final int COMPACT_INFO_DREAMING = 0xFF55FFFF;
-    private static final int COMPACT_INFO_FISH = 0xFFFF55FF;
-    private static final float COMPACT_INFO_SCALE = 0.75f;
-    private static final int COMPACT_INFO_PADDING = 4;
-    private static final int COMPACT_INFO_MESSAGE_GAP = 4;
-    private static final int COMPACT_INFO_LINE_SPACING = 2;
-    private static final int COMPACT_INFO_AVATAR_SIZE = 9;
-    private static final int COMPACT_INFO_AVATAR_SPACING = 3;
     private static final int COMPACT_INFO_RADIUS = 4;
     private static final float MAX_TPS = 10_000.0F;
     private static final int BOX_PADDING = 8;              // 框内边距
@@ -90,14 +56,6 @@ public class ServerInformationDisplay {
     private static final int INFO_BOX_TEXT_PADDING = 5;    // 文字左右内边距
     private static final float INFO_TEXT_SCALE = 0.82f;    // 文字缩放比例
     private static final int PROGRESS_BAR_HEIGHT = 5;      // 进度条高度
-    private static final float COMPACT_EFFECT_SCALE = 0.75f;
-    private static final int COMPACT_EFFECT_SIZE = 18;
-    private static final int COMPACT_EFFECT_GAP = 2;
-    private static final int COMPACT_EFFECT_INFO_GAP = 3;
-    private static final ResourceLocation EFFECT_BACKGROUND_AMBIENT_SPRITE =
-            ResourceLocation.withDefaultNamespace("hud/effect_background_ambient");
-    private static final ResourceLocation EFFECT_BACKGROUND_SPRITE =
-            ResourceLocation.withDefaultNamespace("hud/effect_background");
 
     // 客户端缓存数据（从网络包获取）
     public static int ONLINE_PLAYERS = 0;
@@ -122,34 +80,6 @@ public class ServerInformationDisplay {
     private static float LAST_FORMATTED_TPS = Float.NaN;
     private static String CACHED_TPS_TEXT = TPS_ICON + "--";
     private static String CACHED_TPS_VALUE_TEXT = "--";
-    private static int CACHED_ONLINE_PLAYER_COUNT = Integer.MIN_VALUE;
-    private static String CACHED_ONLINE_TEXT = ONLINE_ICON + "0";
-    private static Font CACHED_COMPACT_FONT;
-    private static String CACHED_COMPACT_ONLINE_TEXT;
-    private static String CACHED_COMPACT_TIME_TEXT;
-    private static String CACHED_COMPACT_TPS_TEXT;
-    private static String CACHED_COMPACT_PLAYER_TEXT;
-    private static String CACHED_COMPACT_TITLE_TEXT;
-    private static String CACHED_COMPACT_LEVEL_TEXT;
-    private static String CACHED_COMPACT_RANK_TEXT;
-    private static CompactTextLayout CACHED_COMPACT_LAYOUT;
-    private static int CACHED_LEVEL_TEXT_LEVEL = Integer.MIN_VALUE;
-    private static long CACHED_LEVEL_TEXT_CURRENT_EXP = Long.MIN_VALUE;
-    private static long CACHED_LEVEL_TEXT_NEXT_EXP = Long.MIN_VALUE;
-    private static String CACHED_LEVEL_TEXT_VALUE = "";
-    private static List<MobEffectInstance> CACHED_ORDERED_EFFECTS = List.of();
-    private static long LAST_EFFECT_ORDER_UPDATE = Long.MIN_VALUE;
-    private static final long EFFECT_ORDER_CACHE_INTERVAL = 250L;
-    private static MobEffectInstance[] effectBatchInstances = new MobEffectInstance[8];
-    private static IClientMobEffectExtensions[] effectBatchRenderers = new IClientMobEffectExtensions[8];
-    private static int[] effectBatchX = new int[8];
-    private static int[] effectBatchY = new int[8];
-    private static float[] effectBatchAlpha = new float[8];
-    private static boolean[] effectBatchCustomHandled = new boolean[8];
-    private static TextureAtlasSprite cachedEffectBackground;
-    private static TextureAtlasSprite cachedAmbientEffectBackground;
-    private static CompactRenderCache compactRenderCache;
-    private static volatile boolean compactRenderCacheDirty = true;
 
     // 获取当前玩家UUID
     public static UUID getCurrentPlayerUUID() {
@@ -161,7 +91,7 @@ public class ServerInformationDisplay {
     public static void onClientLoginToServer(ClientPlayerNetworkEvent.LoggingIn event) {
         resetTpsCache();
         LAST_SERVER_STATUS_UPDATE = 0L;
-        compactRenderCacheDirty = true;
+        TerminalLensOverlay.invalidate();
 
         // 单人游戏和多人游戏默认显示右上角信息面板，保留O键手动开关
         SHOW_UI = true;
@@ -175,21 +105,14 @@ public class ServerInformationDisplay {
 
     /** Rebuild retained font/panel geometry after client resources change. */
     public static void invalidateCompactRenderCache() {
-        compactRenderCacheDirty = true;
-        CACHED_COMPACT_FONT = null;
-        CACHED_COMPACT_LAYOUT = null;
-        cachedEffectBackground = null;
-        cachedAmbientEffectBackground = null;
+        TerminalLensOverlay.invalidate();
     }
 
     @SubscribeEvent
     public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         resetTpsCache();
         LAST_SERVER_STATUS_UPDATE = 0L;
-        compactRenderCacheDirty = true;
-        CACHED_LEVEL_TEXT_LEVEL = Integer.MIN_VALUE;
-        CACHED_LEVEL_TEXT_CURRENT_EXP = Long.MIN_VALUE;
-        CACHED_LEVEL_TEXT_NEXT_EXP = Long.MIN_VALUE;
+        TerminalLensOverlay.invalidate();
     }
 
     //客户端Tick，触发网络请求 =====================
@@ -249,11 +172,11 @@ public class ServerInformationDisplay {
         }
 
         Rank playerRank = PlayerRankManager.getPlayerRankClient(mc.player);
-        TopInfoAnchor anchor = renderCompactTopInfo(
-                guiGraphics, font, screenWidth, mc, playerLevel, playerRank);
+        TerminalLensOverlay.Anchor anchor = TerminalLensOverlay.render(
+                guiGraphics, mc, font, playerLevel, playerRank);
         if (!systemMessages.isEmpty()) {
             guiGraphics.drawManaged(() -> SystemMessageDisplay.renderSystemMessages(
-                    guiGraphics, font, screenWidth, anchor.y(), anchor.heightOffset(), systemMessages));
+                    guiGraphics, font, screenWidth, anchor.y(), anchor.height(), systemMessages));
         }
     }
 
@@ -273,324 +196,6 @@ public class ServerInformationDisplay {
                 && mc.player != null
                 && !mc.options.hideGui
                 && !mc.getDebugOverlay().showDebugScreen();
-    }
-
-    private static TopInfoAnchor renderCompactTopInfo(GuiGraphics guiGraphics, Font font, int screenWidth,
-                                                      Minecraft mc,
-                                                      int playerLevel, Rank playerRank) {
-        String serverDreamingText = SERVER_NAME_DREAMING;
-        String serverFishText = SERVER_NAME_FISH;
-        String onlineText = getOnlineText();
-        String timeText = getGameTimeString(mc);
-        String tpsText = getClientTpsText(mc);
-        String playerIdText = mc.player.getGameProfile().getName();
-        Title title = PlayerTitleManager.getPlayerTitleClient(mc.player);
-        String titleName = title.getTitleName();
-        int titleColor = 0xFF000000 | title.getColor();
-        long currentExp = PlayerLevelManager.getPlayerExperienceClient(mc.player);
-        long nextLevelExp = PlayerLevelManager.getExperienceNeededForNextLevelClient(mc.player);
-        String levelText = getCachedLevelText(playerLevel, currentExp, nextLevelExp);
-        String rankText = playerRank.getRankName();
-        int rankColor = playerRank.getRankColor();
-        ResourceLocation playerSkin = mc.player.getSkin().texture();
-
-        CompactRenderCache cache = getOrBuildCompactRenderCache(
-                guiGraphics, font, screenWidth,
-                serverDreamingText, serverFishText, onlineText, timeText, tpsText,
-                playerIdText, titleName, levelText, rankText, titleColor, rankColor,
-                playerSkin);
-        CompactRenderLayout layout = cache.layout();
-
-        // No ordinary GUI geometry is produced by the compact path anymore.
-        // Draw its retained panel/text buffers directly at the display rate.
-        guiGraphics.flush();
-        cache.buffers().draw();
-
-        cache.avatar().draw();
-        renderCompactEffects(guiGraphics, mc, layout.infoLeftEdge());
-        return new TopInfoAnchor(layout.anchorY(), layout.anchorHeightOffset());
-    }
-
-    private static CompactRenderCache getOrBuildCompactRenderCache(
-            GuiGraphics guiGraphics, Font font, int screenWidth,
-            String serverDreamingText, String serverFishText,
-            String onlineText, String timeText, String tpsText,
-            String playerIdText, String titleName, String levelText, String rankText,
-            int titleColor, int rankColor, ResourceLocation playerSkin) {
-        Matrix4f currentPose = guiGraphics.pose().last().pose();
-        CompactRenderCache current = compactRenderCache;
-        if (!compactRenderCacheDirty && current != null
-                && current.matches(font, screenWidth, currentPose,
-                onlineText, timeText, tpsText, playerIdText,
-                titleName, levelText, rankText, titleColor, rankColor, playerSkin)) {
-            return current;
-        }
-
-        CompactTextLayout textLayout = getCompactTextLayout(font, onlineText, timeText, tpsText,
-                playerIdText, titleName, levelText, rankText);
-        int padding = INFO_BOX_TEXT_PADDING;
-        int scaledAvatarWidth = textLayout.scaledAvatarWidth();
-        int scaledAvatarSpacing = textLayout.scaledAvatarSpacing();
-        int serverBoxWidth = (int) (textLayout.firstLineWidth() * INFO_TEXT_SCALE) + padding * 2;
-        int playerBoxWidth = scaledAvatarWidth + scaledAvatarSpacing
-                + (int) (textLayout.secondLineTextWidth() * INFO_TEXT_SCALE) + padding * 2;
-        int levelBoxWidth = (int) (textLayout.thirdLineTextWidth() * INFO_TEXT_SCALE) + padding * 2;
-        int scaledTextHeight = textLayout.scaledTextHeight();
-        int avatarHeight = textLayout.avatarHeight();
-        int boxHeight = BOX_HEIGHT;
-        int serverBoxX = screenWidth - serverBoxWidth - RIGHT_OFFSET;
-        int serverBoxY = TOP_OFFSET;
-        int playerBoxX = screenWidth - playerBoxWidth - RIGHT_OFFSET;
-        int playerBoxY = serverBoxY + boxHeight + COMPACT_INFO_LINE_SPACING;
-        int levelBoxX = screenWidth - levelBoxWidth - RIGHT_OFFSET;
-        int levelBoxY = playerBoxY + boxHeight + COMPACT_INFO_LINE_SPACING;
-        int serverLineY = serverBoxY + (boxHeight - scaledTextHeight) / 2;
-        int playerLineY = playerBoxY + (boxHeight - scaledTextHeight) / 2;
-        int levelLineY = levelBoxY + (boxHeight - scaledTextHeight) / 2;
-        int avatarY = playerBoxY + (boxHeight - avatarHeight) / 2;
-        int infoLeftEdge = Math.min(serverBoxX, Math.min(playerBoxX, levelBoxX));
-        int totalHeight = boxHeight * 3 + COMPACT_INFO_LINE_SPACING * 2;
-
-        Matrix4f basePose = new Matrix4f(currentPose);
-        RetainedGuiBuffers replacement;
-        try (RetainedGuiBuffers.Capture capture = new RetainedGuiBuffers.Capture()) {
-            captureVanillaEffectPanel(capture, basePose,
-                    serverBoxX, serverBoxY, serverBoxWidth, boxHeight);
-            captureVanillaEffectPanel(capture, basePose,
-                    playerBoxX, playerBoxY, playerBoxWidth, boxHeight);
-            captureVanillaEffectPanel(capture, basePose,
-                    levelBoxX, levelBoxY, levelBoxWidth, boxHeight);
-
-            Matrix4f serverTextPose = new Matrix4f(basePose)
-                    .translate(serverBoxX + padding, serverLineY, 0.0F)
-                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
-            int currentX = 0;
-            currentX = captureCompactPart(capture, font, serverDreamingText, currentX,
-                    COMPACT_INFO_DREAMING, textLayout.serverDreamingWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, serverFishText, currentX,
-                    COMPACT_INFO_FISH, textLayout.serverFishWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
-                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, onlineText, currentX,
-                    COMPACT_INFO_ONLINE, textLayout.onlineWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
-                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, timeText, currentX,
-                    COMPACT_INFO_MUTED, textLayout.timeWidth(), serverTextPose);
-            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
-                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), serverTextPose);
-            captureCompactPart(capture, font, tpsText, currentX,
-                    COMPACT_INFO_LEVEL, textLayout.tpsWidth(), serverTextPose);
-
-            Matrix4f playerTextPose = new Matrix4f(basePose)
-                    .translate(playerBoxX + padding + scaledAvatarWidth + scaledAvatarSpacing,
-                            playerLineY, 0.0F)
-                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
-            currentX = 0;
-            currentX = captureCompactPart(capture, font, playerIdText, currentX,
-                    COMPACT_INFO_TEXT, textLayout.playerWidth(), playerTextPose);
-            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
-                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), playerTextPose);
-            currentX = captureCompactPart(capture, font, titleName, currentX,
-                    titleColor, textLayout.titleWidth(), playerTextPose);
-            currentX = captureCompactPart(capture, font, TOP_INFO_SEPARATOR, currentX,
-                    COMPACT_INFO_MUTED, textLayout.separatorWidth(), playerTextPose);
-            captureCompactPart(capture, font, rankText, currentX,
-                    0xFF000000 | (rankColor & 0x00FFFFFF), textLayout.rankWidth(), playerTextPose);
-
-            Matrix4f levelTextPose = new Matrix4f(basePose)
-                    .translate(levelBoxX + padding, levelLineY, 0.0F)
-                    .scale(INFO_TEXT_SCALE, INFO_TEXT_SCALE, 1.0F);
-            captureCompactPart(capture, font, levelText, 0,
-                    COMPACT_INFO_LEVEL, textLayout.levelWidth(), levelTextPose);
-            replacement = capture.upload();
-        }
-
-        CompactRenderLayout layout = new CompactRenderLayout(
-                playerBoxX + padding, avatarY, avatarHeight,
-                infoLeftEdge, serverBoxY, totalHeight + COMPACT_INFO_MESSAGE_GAP);
-        RetainedPlayerFace replacementAvatar;
-        try {
-            replacementAvatar = RetainedPlayerFace.create(playerSkin, basePose,
-                    layout.avatarX(), layout.avatarY(), layout.avatarHeight());
-        } catch (Throwable throwable) {
-            replacement.close();
-            throw throwable;
-        }
-        CompactRenderCache rebuilt = new CompactRenderCache(
-                font, screenWidth, onlineText, timeText, tpsText,
-                playerIdText, titleName, levelText, rankText,
-                titleColor, rankColor, playerSkin, basePose, layout,
-                replacement, replacementAvatar);
-        if (current != null) {
-            current.buffers().close();
-            current.avatar().close();
-        }
-        compactRenderCache = rebuilt;
-        compactRenderCacheDirty = false;
-        return rebuilt;
-    }
-
-    private static void captureVanillaEffectPanel(RetainedGuiBuffers.Capture capture, Matrix4f pose,
-                                                  int x, int y, int width, int height) {
-        UiPanelRenderer.roundedRectTo(capture, pose,
-                x, y, width, height, 2, COMPACT_INFO_OUTLINE);
-        UiPanelRenderer.roundedRectTo(capture, pose,
-                x + 1, y + 1, width - 2, height - 2, 1, COMPACT_INFO_BG);
-    }
-
-    private static int captureCompactPart(RetainedGuiBuffers.Capture capture, Font font,
-                                          String text, int x, int color, int measuredWidth,
-                                          Matrix4f pose) {
-        font.drawInBatch(text, x, 0.0F, color, false, pose, capture,
-                Font.DisplayMode.NORMAL, 0, 15728880);
-        return x + measuredWidth;
-    }
-
-    private static String getCachedLevelText(int level, long currentExp, long nextLevelExp) {
-        if (level != CACHED_LEVEL_TEXT_LEVEL
-                || currentExp != CACHED_LEVEL_TEXT_CURRENT_EXP
-                || nextLevelExp != CACHED_LEVEL_TEXT_NEXT_EXP) {
-            CACHED_LEVEL_TEXT_LEVEL = level;
-            CACHED_LEVEL_TEXT_CURRENT_EXP = currentExp;
-            CACHED_LEVEL_TEXT_NEXT_EXP = nextLevelExp;
-            CACHED_LEVEL_TEXT_VALUE = LEVEL_PREFIX + level + EXP_OPEN + currentExp
-                    + EXP_SEPARATOR + nextLevelExp + EXP_CLOSE;
-        }
-        return CACHED_LEVEL_TEXT_VALUE;
-    }
-
-    private static void renderCompactEffects(GuiGraphics guiGraphics, Minecraft mc, int infoLeftEdge) {
-        int beneficialIndex = 0;
-        int harmfulIndex = 0;
-        int count = 0;
-        for (MobEffectInstance effect : getOrderedEffects(mc)) {
-            IClientMobEffectExtensions renderer = IClientMobEffectExtensions.of(effect);
-            if (!renderer.isVisibleInGui(effect) || !effect.showIcon()) {
-                continue;
-            }
-            boolean beneficial = effect.getEffect().value().isBeneficial();
-            int column = beneficial ? beneficialIndex++ : harmfulIndex++;
-            int x = infoLeftEdge - COMPACT_EFFECT_INFO_GAP - COMPACT_EFFECT_SIZE
-                    - column * (COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
-            int y = TOP_OFFSET + (beneficial ? 0 : COMPACT_EFFECT_SIZE + COMPACT_EFFECT_GAP);
-            ensureEffectBatchCapacity(count + 1);
-            effectBatchInstances[count] = effect;
-            effectBatchRenderers[count] = renderer;
-            effectBatchX[count] = x;
-            effectBatchY[count] = y;
-            effectBatchAlpha[count] = effectAlpha(effect);
-            effectBatchCustomHandled[count] = false;
-            count++;
-        }
-        if (count == 0) {
-            return;
-        }
-
-        // The retained information panel was submitted by the caller. The
-        // remaining effect backgrounds and icons each use one atlas batch.
-        Matrix4f pose = guiGraphics.pose().last().pose();
-
-        BufferBuilder backgrounds = GuiQuadBatchRenderer.begin();
-        ResourceLocation backgroundAtlas = null;
-        for (int index = 0; index < count; index++) {
-            MobEffectInstance effect = effectBatchInstances[index];
-            TextureAtlasSprite background = getEffectBackground(mc, effect.isAmbient());
-            if (backgroundAtlas == null) {
-                backgroundAtlas = background.atlasLocation();
-            }
-            GuiQuadBatchRenderer.addSprite(backgrounds, pose, background,
-                    effectBatchX[index], effectBatchY[index],
-                    COMPACT_EFFECT_SIZE, COMPACT_EFFECT_SIZE, 1.0F);
-        }
-        GuiQuadBatchRenderer.draw(backgrounds, backgroundAtlas);
-
-        // Preserve third-party custom effect renderers. They are uncommon and
-        // may perform arbitrary immediate work, while all default icons below
-        // remain in one atlas submission.
-        RenderSystem.enableBlend();
-        try {
-            for (int index = 0; index < count; index++) {
-                IClientMobEffectExtensions renderer = effectBatchRenderers[index];
-                if (renderer == IClientMobEffectExtensions.DEFAULT) {
-                    continue;
-                }
-                guiGraphics.pose().pushPose();
-                guiGraphics.pose().translate(effectBatchX[index], effectBatchY[index], 0.0F);
-                guiGraphics.pose().scale(COMPACT_EFFECT_SCALE, COMPACT_EFFECT_SCALE, 1.0F);
-                effectBatchCustomHandled[index] = renderer.renderGuiIcon(
-                        effectBatchInstances[index], mc.gui, guiGraphics,
-                        0, 0, 0, effectBatchAlpha[index]);
-                guiGraphics.pose().popPose();
-            }
-        } finally {
-            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            RenderSystem.disableBlend();
-        }
-
-        BufferBuilder icons = GuiQuadBatchRenderer.begin();
-        ResourceLocation iconAtlas = null;
-        for (int index = 0; index < count; index++) {
-            if (effectBatchCustomHandled[index]) {
-                continue;
-            }
-            TextureAtlasSprite icon = mc.getMobEffectTextures()
-                    .get(effectBatchInstances[index].getEffect());
-            if (iconAtlas == null) {
-                iconAtlas = icon.atlasLocation();
-            }
-            GuiQuadBatchRenderer.addSprite(icons, pose, icon,
-                    effectBatchX[index] + 3.0F * COMPACT_EFFECT_SCALE,
-                    effectBatchY[index] + 3.0F * COMPACT_EFFECT_SCALE,
-                    18.0F * COMPACT_EFFECT_SCALE,
-                    18.0F * COMPACT_EFFECT_SCALE,
-                    effectBatchAlpha[index]);
-        }
-        if (iconAtlas != null) {
-            GuiQuadBatchRenderer.draw(icons, iconAtlas);
-        } else {
-            // Finish the empty builder so Tesselator's shared storage is ready
-            // for the next immediate batch.
-            icons.build();
-        }
-    }
-
-    private static float effectAlpha(MobEffectInstance effect) {
-        if (effect.isAmbient() || !effect.endsWithin(200)) {
-            return 1.0F;
-        }
-        int duration = effect.getDuration();
-        int pulseStep = 10 - duration / 20;
-        return Mth.clamp(duration / 10.0F / 5.0F * 0.5F, 0.0F, 0.5F)
-                + Mth.cos(duration * (float) Math.PI / 5.0F)
-                * Mth.clamp(pulseStep / 10.0F * 0.25F, 0.0F, 0.25F);
-    }
-
-    private static TextureAtlasSprite getEffectBackground(Minecraft minecraft, boolean ambient) {
-        if (ambient) {
-            if (cachedAmbientEffectBackground == null) {
-                cachedAmbientEffectBackground = minecraft.getGuiSprites()
-                        .getSprite(EFFECT_BACKGROUND_AMBIENT_SPRITE);
-            }
-            return cachedAmbientEffectBackground;
-        }
-        if (cachedEffectBackground == null) {
-            cachedEffectBackground = minecraft.getGuiSprites().getSprite(EFFECT_BACKGROUND_SPRITE);
-        }
-        return cachedEffectBackground;
-    }
-
-    private static void ensureEffectBatchCapacity(int required) {
-        if (required <= effectBatchInstances.length) {
-            return;
-        }
-        int capacity = Math.max(required, effectBatchInstances.length * 2);
-        effectBatchInstances = java.util.Arrays.copyOf(effectBatchInstances, capacity);
-        effectBatchRenderers = java.util.Arrays.copyOf(effectBatchRenderers, capacity);
-        effectBatchX = java.util.Arrays.copyOf(effectBatchX, capacity);
-        effectBatchY = java.util.Arrays.copyOf(effectBatchY, capacity);
-        effectBatchAlpha = java.util.Arrays.copyOf(effectBatchAlpha, capacity);
-        effectBatchCustomHandled = java.util.Arrays.copyOf(effectBatchCustomHandled, capacity);
     }
 
     /**
@@ -662,105 +267,6 @@ public class ServerInformationDisplay {
         LAST_FORMATTED_TPS = Float.NaN;
         CACHED_TPS_TEXT = TPS_ICON + "--";
         CACHED_TPS_VALUE_TEXT = "--";
-        CACHED_COMPACT_TPS_TEXT = null;
-        CACHED_COMPACT_LAYOUT = null;
-    }
-
-    private static String getOnlineText() {
-        if (CACHED_ONLINE_PLAYER_COUNT != ONLINE_PLAYERS) {
-            CACHED_ONLINE_PLAYER_COUNT = ONLINE_PLAYERS;
-            CACHED_ONLINE_TEXT = ONLINE_ICON + ONLINE_PLAYERS;
-        }
-        return CACHED_ONLINE_TEXT;
-    }
-
-    /**
-     * Cache the width measurements used by the compact top HUD.  The values are
-     * invalidated naturally when a player/title/rank/experience string changes
-     * or when Minecraft swaps the active font (for example after a resource-pack
-     * reload).  Drawing still occurs every frame, but repeated font splitter
-     * work and temporary layout objects do not.
-     */
-    private static CompactTextLayout getCompactTextLayout(Font font, String onlineText,
-                                                           String timeText, String tpsText,
-                                                           String playerText, String titleText,
-                                                           String levelText, String rankText) {
-        if (CACHED_COMPACT_LAYOUT != null
-                && CACHED_COMPACT_FONT == font
-                && Objects.equals(CACHED_COMPACT_ONLINE_TEXT, onlineText)
-                && Objects.equals(CACHED_COMPACT_TIME_TEXT, timeText)
-                && Objects.equals(CACHED_COMPACT_TPS_TEXT, tpsText)
-                && Objects.equals(CACHED_COMPACT_PLAYER_TEXT, playerText)
-                && Objects.equals(CACHED_COMPACT_TITLE_TEXT, titleText)
-                && Objects.equals(CACHED_COMPACT_LEVEL_TEXT, levelText)
-                && Objects.equals(CACHED_COMPACT_RANK_TEXT, rankText)) {
-            return CACHED_COMPACT_LAYOUT;
-        }
-
-        int serverDreamingWidth = font.width(SERVER_NAME_DREAMING);
-        int serverFishWidth = font.width(SERVER_NAME_FISH);
-        int separatorWidth = font.width(TOP_INFO_SEPARATOR);
-        int onlineWidth = font.width(onlineText);
-        int timeWidth = font.width(timeText);
-        int tpsWidth = font.width(tpsText);
-        int playerWidth = font.width(playerText);
-        int titleWidth = font.width(titleText);
-        int rankWidth = font.width(rankText);
-        int levelWidth = font.width(levelText);
-        int firstLineWidth = serverDreamingWidth
-                + serverFishWidth
-                + separatorWidth * 3
-                + onlineWidth
-                + timeWidth
-                + tpsWidth;
-        int secondLineTextWidth = playerWidth
-                + separatorWidth * 2
-                + titleWidth
-                + rankWidth;
-        int thirdLineTextWidth = levelWidth;
-        int scaledAvatarWidth = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
-        int scaledAvatarSpacing = (int) (COMPACT_INFO_AVATAR_SPACING * INFO_TEXT_SCALE);
-        int scaledTextHeight = (int) (font.lineHeight * INFO_TEXT_SCALE);
-        int avatarHeight = (int) (COMPACT_INFO_AVATAR_SIZE * INFO_TEXT_SCALE);
-
-        CACHED_COMPACT_FONT = font;
-        CACHED_COMPACT_ONLINE_TEXT = onlineText;
-        CACHED_COMPACT_TIME_TEXT = timeText;
-        CACHED_COMPACT_TPS_TEXT = tpsText;
-        CACHED_COMPACT_PLAYER_TEXT = playerText;
-        CACHED_COMPACT_TITLE_TEXT = titleText;
-        CACHED_COMPACT_LEVEL_TEXT = levelText;
-        CACHED_COMPACT_RANK_TEXT = rankText;
-        CACHED_COMPACT_LAYOUT = new CompactTextLayout(firstLineWidth, secondLineTextWidth,
-                thirdLineTextWidth, scaledAvatarWidth, scaledAvatarSpacing,
-                scaledTextHeight, avatarHeight, serverDreamingWidth, serverFishWidth,
-                separatorWidth, onlineWidth, timeWidth, tpsWidth, playerWidth,
-                titleWidth, rankWidth, levelWidth);
-        return CACHED_COMPACT_LAYOUT;
-    }
-
-    private static List<MobEffectInstance> getOrderedEffects(Minecraft mc) {
-        Collection<MobEffectInstance> activeEffects = mc.player.getActiveEffects();
-        if (activeEffects.isEmpty()) {
-            if (!CACHED_ORDERED_EFFECTS.isEmpty()) {
-                CACHED_ORDERED_EFFECTS = List.of();
-                LAST_EFFECT_ORDER_UPDATE = Long.MIN_VALUE;
-            }
-            return CACHED_ORDERED_EFFECTS;
-        }
-
-        long now = System.currentTimeMillis();
-        if (activeEffects.size() == CACHED_ORDERED_EFFECTS.size()
-                && LAST_EFFECT_ORDER_UPDATE != Long.MIN_VALUE
-                && now - LAST_EFFECT_ORDER_UPDATE < EFFECT_ORDER_CACHE_INTERVAL) {
-            return CACHED_ORDERED_EFFECTS;
-        }
-
-        CACHED_ORDERED_EFFECTS = List.copyOf(Ordering.<MobEffectInstance>natural()
-                .reverse()
-                .sortedCopy(activeEffects));
-        LAST_EFFECT_ORDER_UPDATE = now;
-        return CACHED_ORDERED_EFFECTS;
     }
 
     // 渲染左上角小框（水平排列）
@@ -994,51 +500,6 @@ public class ServerInformationDisplay {
             this.text = text;
             this.borderColor = borderColor;
             this.backgroundColor = backgroundColor;
-        }
-    }
-
-    private record CompactTextLayout(int firstLineWidth, int secondLineTextWidth,
-                                     int thirdLineTextWidth, int scaledAvatarWidth,
-                                     int scaledAvatarSpacing, int scaledTextHeight,
-                                     int avatarHeight, int serverDreamingWidth,
-                                     int serverFishWidth, int separatorWidth, int onlineWidth,
-                                     int timeWidth, int tpsWidth, int playerWidth,
-                                     int titleWidth, int rankWidth, int levelWidth) {
-    }
-
-    private record TopInfoAnchor(int y, int heightOffset) {
-    }
-
-    private record CompactRenderLayout(int avatarX, int avatarY, int avatarHeight,
-                                       int infoLeftEdge, int anchorY, int anchorHeightOffset) {
-    }
-
-    private record CompactRenderCache(Font font, int screenWidth,
-                                      String onlineText, String timeText, String tpsText,
-                                      String playerText, String titleText, String levelText,
-                                      String rankText, int titleColor, int rankColor,
-                                      ResourceLocation playerSkin, Matrix4f pose,
-                                      CompactRenderLayout layout, RetainedGuiBuffers buffers,
-                                      RetainedPlayerFace avatar) {
-        private boolean matches(Font currentFont, int currentScreenWidth, Matrix4f currentPose,
-                                String currentOnlineText, String currentTimeText,
-                                String currentTpsText, String currentPlayerText,
-                                String currentTitleText, String currentLevelText,
-                                String currentRankText, int currentTitleColor,
-                                int currentRankColor, ResourceLocation currentPlayerSkin) {
-            return font == currentFont
-                    && screenWidth == currentScreenWidth
-                    && titleColor == currentTitleColor
-                    && rankColor == currentRankColor
-                    && pose.equals(currentPose)
-                    && Objects.equals(playerSkin, currentPlayerSkin)
-                    && Objects.equals(onlineText, currentOnlineText)
-                    && Objects.equals(timeText, currentTimeText)
-                    && Objects.equals(tpsText, currentTpsText)
-                    && Objects.equals(playerText, currentPlayerText)
-                    && Objects.equals(titleText, currentTitleText)
-                    && Objects.equals(levelText, currentLevelText)
-                    && Objects.equals(rankText, currentRankText);
         }
     }
 
