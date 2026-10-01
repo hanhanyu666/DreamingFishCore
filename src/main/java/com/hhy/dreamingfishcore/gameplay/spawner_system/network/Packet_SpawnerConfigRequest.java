@@ -38,7 +38,9 @@ public record Packet_SpawnerConfigRequest(BlockPos pos, Action action, int value
         SET_REWARD_COINS,
         ADD_REWARD_ITEM,
         REMOVE_REWARD_ITEM,
-        RESET_ROUND
+        RESET_ROUND,
+        /** 换外观（原来绑在"创造模式右键"，但潜行/手持物会抢走方块交互，所以挪进界面）。 */
+        CYCLE_SKIN
     }
 
     public static final Type<Packet_SpawnerConfigRequest> TYPE = new Type<>(

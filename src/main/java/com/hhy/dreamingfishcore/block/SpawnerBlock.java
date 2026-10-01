@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.gameplay.spawner_system.SpawnerService;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -80,10 +82,10 @@ public class SpawnerBlock extends Block {
     }
 
     /**
-     * 右键交互。
+     * 右键交互（空手走这里）。
      *
-     * <p>潜行 + 右键 = 打开配置界面（所有游戏模式）；
-     * 普通右键 = 创造模式循环换外观，生存/冒险模式查看当前状态。</p>
+     * <p>只用普通右键：原版在"潜行 + 手持物品"时会跳过方块交互去放手里的方块，
+     * 所以这个入口在有物品时不会被调用 —— 见下面的 {@link #useItemOn}。</p>
      */
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
@@ -96,6 +98,26 @@ public class SpawnerBlock extends Block {
         return SpawnerService.onInteract(serverPlayer, pos, player.isShiftKeyDown())
                 ? InteractionResult.SUCCESS
                 : InteractionResult.FAIL;
+    }
+
+    /**
+     * 右键交互（手里拿着东西时走这里）。
+     *
+     * <p>两个入口都接到同一个服务：这样"手里拿着方块右键刷怪箱"也会进配置界面，
+     * 而不是被原版判成放方块 —— 那样玩家会以为界面打不开。</p>
+     */
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
+                                              BlockPos pos,
+                                              net.minecraft.world.entity.player.Player player,
+                                              net.minecraft.world.InteractionHand hand,
+                                              BlockHitResult hitResult) {
+        if (level.isClientSide() || !(player instanceof ServerPlayer serverPlayer)) {
+            return ItemInteractionResult.SUCCESS;
+        }
+        return SpawnerService.onInteract(serverPlayer, pos, player.isShiftKeyDown())
+                ? ItemInteractionResult.SUCCESS
+                : ItemInteractionResult.FAIL;
     }
 
     /** 红石：把"有没有信号"同步到方块状态，服主一眼能看出是不是被红石卡住了。 */

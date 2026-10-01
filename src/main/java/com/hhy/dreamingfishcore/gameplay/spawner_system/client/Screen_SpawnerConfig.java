@@ -320,7 +320,9 @@ public class Screen_SpawnerConfig extends Screen {
         int buttonY = panelY + layout.buttonsY();
         button(guiGraphics, mouseX, mouseY, contentX, buttonY, 70, 16, "确认", true,
                 this::confirmAndClose);
-        button(guiGraphics, mouseX, mouseY, contentX + 76, buttonY, 70, 16, "重置本轮", false,
+        button(guiGraphics, mouseX, mouseY, contentX + 76, buttonY, 62, 16, "换外观", false,
+                () -> send(Packet_SpawnerConfigRequest.Action.CYCLE_SKIN, 0, false, ""));
+        button(guiGraphics, mouseX, mouseY, contentX + 144, buttonY, 62, 16, "重置本轮", false,
                 () -> send(Packet_SpawnerConfigRequest.Action.RESET_ROUND, 0, false, ""));
     }
 

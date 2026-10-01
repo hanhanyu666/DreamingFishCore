@@ -60,7 +60,12 @@ public final class SpawnerService {
     /**
      * 玩家右键刷怪箱。
      *
-     * @param shiftDown 是否潜行（潜行 = 打开配置界面）
+     * <p>交互只用<b>普通右键</b>：原版在"潜行 + 手持物品"时会跳过方块交互去放手里的方块
+     * （见 {@code MultiPlayerGameMode#performUseItemOn} 的 {@code isSecondaryUseActive} 分支），
+     * 所以"潜行 + 右键开界面"这种手势并不可靠。现在普通右键一律进配置界面（没有编辑权限则显示状态），
+     * 换外观挪到界面里的按钮。</p>
+     *
+     * @param shiftDown 是否潜行（潜行与否都进同一个入口，保留参数便于将来扩展）
      * @return 是否已处理
      */
     public static boolean onInteract(ServerPlayer player, BlockPos pos, boolean shiftDown) {
@@ -88,33 +93,32 @@ public final class SpawnerService {
             }
         }
 
-        if (shiftDown) {
-            // 潜行 + 右键 = 打开配置界面（服务端校验 + 下发快照，能否编辑也由服务端判断）。
+        if (canEdit(player)) {
             handleOpenRequest(player, pos);
             return true;
         }
-
-        if (player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.CREATIVE) {
-            return cycleSkin(player, pos);
-        }
+        // 普通玩家右键：只给状态与"为什么不在区域内"，不改配置。
         player.displayClientMessage(Component.literal(
                 describeWithArea(player.serverLevel(), pos, entry)), false);
         return true;
     }
 
-    /** 创造模式右键：循环换外观。 */
-    private static boolean cycleSkin(ServerPlayer player, BlockPos pos) {
-        ServerLevel level = player.serverLevel();
+    /** 换外观：循环切到下一套皮肤。 */
+    static boolean cycleSkin(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         if (!state.is(DreamingFishCore_Blocks.SPAWNER.get())) {
             return false;
         }
         int next = (state.getValue(SpawnerBlock.SKIN) + 1) % SpawnerBlock.SKIN_COUNT;
         level.setBlock(pos, state.setValue(SpawnerBlock.SKIN, next), Block.UPDATE_ALL);
-        player.displayClientMessage(
-                Component.literal("§7刷怪箱外观已切换为第 " + (next + 1) + " 套（共 "
-                        + SpawnerBlock.SKIN_COUNT + " 套）"), false);
         return true;
+    }
+
+    /** 当前外观序号（供界面显示）。 */
+    public static int skinOf(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return state.is(DreamingFishCore_Blocks.SPAWNER.get())
+                ? state.getValue(SpawnerBlock.SKIN) : 0;
     }
 
     /** 给玩家看的一行状态。 */
@@ -536,7 +540,7 @@ public final class SpawnerService {
             SpawnerSync.sendResult(player, false, "那里不是刷怪箱。");
             return;
         }
-        String message = applyEdit(entry, action, value, flag, text, level.getGameTime());
+        String message = applyEdit(entry, action, value, flag, text, level.getGameTime(), level);
         if (message == null) {
             SpawnerSync.sendResult(player, false, "这个修改不被接受。");
             return;
@@ -627,7 +631,7 @@ public final class SpawnerService {
      * @return 结果文案；返回 {@code null} 表示这次修改不被接受
      */
     static String applyEdit(SpawnerEntry entry, Packet_SpawnerConfigRequest.Action action,
-                            int value, boolean flag, String text, long now) {
+                            int value, boolean flag, String text, long now, ServerLevel level) {
         switch (action) {
             case SET_ENTITY -> {
                 if (resolveEntityType(text) == null) {
@@ -703,6 +707,13 @@ public final class SpawnerService {
             case RESET_ROUND -> {
                 entry.resetRound(now);
                 return "已重置本轮（批次归零，等冷却后重开）";
+            }
+            case CYCLE_SKIN -> {
+                if (!cycleSkin(level, new BlockPos(entry.x(), entry.y(), entry.z()))) {
+                    return null;
+                }
+                return "外观已切换为第 " + (skinOf(level, new BlockPos(entry.x(), entry.y(), entry.z())) + 1)
+                        + " 套（共 " + SpawnerBlock.SKIN_COUNT + " 套）";
             }
             default -> {
                 return null;

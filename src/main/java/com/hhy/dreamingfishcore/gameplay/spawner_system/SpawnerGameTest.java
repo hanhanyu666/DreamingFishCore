@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.spawner_system;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntity;
+import com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerConfigRequest;
 import com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerSnapshotResponse;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationMode;
@@ -121,6 +122,24 @@ public class SpawnerGameTest {
                 helper.assertTrue(EconomySystemBridge.balance(player) == balanceBefore + 7,
                         "应当发放 7 梦鱼币，实际余额 " + EconomySystemBridge.balance(player));
             }
+
+            // 配置链路：有编辑权限的玩家右键应当能拿到快照（无头环境开屏包发不出去，只看服务端不抛异常），
+            // 界面里的「换外观」按钮走 CYCLE_SKIN，必须真的切换方块状态。
+            player.setGameMode(GameType.CREATIVE);
+            player.teleportTo(devicePos.getX() + 0.5D, devicePos.getY(), devicePos.getZ() + 1.5D);
+            helper.assertTrue(SpawnerService.canEdit(player), "创造模式玩家应当有编辑权限");
+            SpawnerService.handleOpenRequest(player, devicePos);
+            int skinBefore = SpawnerService.skinOf(level, devicePos);
+            SpawnerService.handleConfigRequest(player, devicePos,
+                    Packet_SpawnerConfigRequest.Action.CYCLE_SKIN, 0, false, "");
+            helper.assertTrue(SpawnerService.skinOf(level, devicePos) != skinBefore,
+                    "界面里的换外观应当切换方块外观，实际仍是 " + skinBefore);
+            // 数值修改：客户端传来的越界值必须被服务端夹取。
+            SpawnerService.handleConfigRequest(player, devicePos,
+                    Packet_SpawnerConfigRequest.Action.SET_DETECTION_RADIUS, 9999, false, "");
+            helper.assertTrue(entry.detectionRadius() == SpawnerEntry.DETECTION_MAX,
+                    "越界的检测范围应被夹取到 " + SpawnerEntry.DETECTION_MAX
+                            + "，实际 " + entry.detectionRadius());
 
             // 快照编解码往返：字段顺序写错在编译期看不出来。
             SpawnerView view = SpawnerService.buildView(level, entry, true);
