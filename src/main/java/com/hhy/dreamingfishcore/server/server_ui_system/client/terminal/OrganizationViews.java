@@ -413,7 +413,9 @@ final class OrganizationViews {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.getConnection() != null) {
             for (var info : minecraft.getConnection().getOnlinePlayers()) {
-                online.add(info.getProfile().getName());
+                if (minecraft.player == null || !info.getProfile().getId().equals(minecraft.player.getUUID())) {
+                    online.add(info.getProfile().getName());
+                }
             }
         }
         online.sort(String.CASE_INSENSITIVE_ORDER);

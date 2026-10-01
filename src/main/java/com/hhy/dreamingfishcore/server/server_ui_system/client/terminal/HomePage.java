@@ -26,13 +26,14 @@ import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceViewData;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache.GuidanceClientCache;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcConversationViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.client.cache.NpcMessageClientCache;
+import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationViewData;
+import com.hhy.dreamingfishcore.gameplay.organization_system.client.cache.OrganizationClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
-import com.hhy.dreamingfishcore.gameplay.story_system.network.Packet_WorldHistoryResponse;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerData;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
@@ -46,7 +47,7 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** 终端主页：个人、经济、故事、广播、私信、历史与手册的概览卡片。 */
+/** 终端主页：个人、经济、故事、广播、私信与组织的概览卡片，以及历史与手册的快捷入口。 */
 final class HomePage extends TerminalPage {
     private static final int MESSAGE_BLUE = 0xFF8CCEFF;
 
@@ -63,13 +64,12 @@ final class HomePage extends TerminalPage {
 
     private UiNode<?> regular(boolean wideLayout) {
         wide = wideLayout;
-        Box left = Ui.column(profileCard().grow(1.15F).basis(0), economyCard().grow(0.85F).basis(0))
+        // 三列：个人与经济 / 故事与广播 / 私信、组织与快捷入口
+        Box left = Ui.column(profileCard().grow(wide ? 1.45F : 1.25F).basis(0), economyCard().grow(wide ? 0.55F : 0.75F).basis(0))
                 .gap(Theme.Space.MD).grow(1.0F).basis(0);
         Box center = Ui.column(storyCard().grow(1.2F).basis(0), noticeCard().grow(0.8F).basis(0))
                 .gap(Theme.Space.MD).grow(1.0F).basis(0);
-        Box right = Ui.column(messageCard().grow(1.1F).basis(0),
-                        Ui.row(historyCard().grow(1.0F).basis(0), helpCard().grow(1.0F).basis(0))
-                                .alignItems(Align.STRETCH).gap(Theme.Space.MD).grow(0.9F).basis(0))
+        Box right = Ui.column(messageCard().grow(1.0F).basis(0), organizationCard().grow(0.8F).basis(0), quickLinks())
                 .gap(Theme.Space.MD).grow(1.0F).basis(0);
         stagger(left, center, right);
         return Ui.row(left, center, right).alignItems(Align.STRETCH).gap(Theme.Space.MD)
@@ -81,8 +81,8 @@ final class HomePage extends TerminalPage {
         Box rows = Ui.column(
                 pair(profileCard(), storyCard()),
                 pair(noticeCard(), messageCard()),
-                pair(economyCard(), historyCard()),
-                pair(helpCard(), Ui.spacer())
+                pair(organizationCard(), economyCard()),
+                quickLinks()
         ).gap(Theme.Space.SM);
         int index = 0;
         for (UiNode<?> row : rows.children()) {
@@ -498,39 +498,112 @@ final class HomePage extends TerminalPage {
         );
     }
 
-    // ==================== 历史与手册 ====================
+    // ==================== 组织 ====================
 
-    private Card historyCard() {
-        Dynamic<Object> body = Dynamic.of(TerminalData::history, value -> {
-            @SuppressWarnings("unchecked")
-            List<Packet_WorldHistoryResponse.HistoryEntry> entries = (List<Packet_WorldHistoryResponse.HistoryEntry>) value;
-            if (!TerminalData.historyLoaded()) {
-                return Text.of("正在读取世界年表").style(TextStyle.CAPTION);
+    private Card organizationCard() {
+        Badge state = TerminalUi.chip(HomePage::organizationState, TerminalUi.STEEL);
+        state.onUpdate(() -> state.color(organizationStateColor()));
+        Dynamic<Long> body = Dynamic.of(OrganizationClientCache::version, ignored -> {
+            OrganizationViewData.Snapshot snapshot = OrganizationClientCache.get();
+            if (!OrganizationClientCache.isLoaded()) {
+                return Text.of("正在同步组织名录").style(TextStyle.CAPTION);
             }
-            if (entries.isEmpty()) {
-                return Ui.column(Text.of("尚未留下公开历史").style(TextStyle.LABEL_STRONG).singleLine(),
-                        Text.of("故事事件会记录在这里").style(TextStyle.CAPTION).maxLines(2)).gap(2.0F);
+            if (!snapshot.enabled()) {
+                return Text.of("组织功能未启用").style(TextStyle.BODY_SECONDARY);
             }
-            TerminalData.HistoryView view = TerminalData.describe(entries.get(entries.size() - 1));
-            return Ui.column(Text.of(view.title()).style(TextStyle.LABEL_STRONG).maxLines(2),
-                    Text.of(view.subtitle()).style(TextStyle.CAPTION).singleLine()).gap(2.0F);
+            OrganizationViewData.Detail mine = snapshot.myOrganization();
+            if (mine != null) {
+                long online = mine.members().stream().filter(OrganizationViewData.MemberLine::online).count();
+                Box column = Ui.column(
+                        Ui.row(Text.of(mine.name()).style(TextStyle.TITLE).color(TerminalUi.WARM_TEXT).singleLine()
+                                        .grow(1.0F).shrink(1.0F),
+                                TerminalUi.chip(mine.myRankName(), TerminalUi.GOLD)).gap(Theme.Space.SM).alignItems(Align.CENTER),
+                        Text.of(mine.members().size() + " 名成员 · " + online + " 人在线 · 资金 " + mine.funds())
+                                .style(TextStyle.CAPTION).singleLine()
+                ).gap(3.0F);
+                if (wide && mine.announcement() != null && !mine.announcement().isBlank()) {
+                    column.add(Ui.row(
+                            Ui.stack().width(2.0F).radius(1.0F).background(UiColor.withAlpha(OrganizationPage.ACCENT, 0.6F))
+                                    .shrink(0.0F),
+                            Text.of(mine.announcement().replace('\n', ' ')).style(TextStyle.CAPTION).maxLines(3)
+                                    .grow(1.0F).shrink(1.0F)
+                    ).gap(Theme.Space.SM).alignItems(Align.STRETCH).margin(0.0F, 4.0F, 0.0F, 0.0F));
+                }
+                return column;
+            }
+            long invites = snapshot.organizations().stream()
+                    .filter(summary -> summary.relation() == OrganizationViewData.Relation.INVITED).count();
+            if (invites > 0) {
+                return Ui.column(Text.of("收到 " + invites + " 个组织的邀请").style(TextStyle.BODY).color(TerminalUi.MINT).singleLine(),
+                        Text.of("进入组织页查看并决定是否加入").style(TextStyle.CAPTION).singleLine()).gap(3.0F);
+            }
+            Box column = Ui.column(Text.of("尚未加入组织").style(TextStyle.BODY).singleLine(),
+                    Text.of("梦屿上已有 " + snapshot.organizations().size() + " 个组织，也可以自己创建").style(TextStyle.CAPTION)
+                            .maxLines(2)).gap(3.0F);
+            if (wide && !snapshot.organizations().isEmpty()) {
+                Box list = Ui.column().gap(4.0F).margin(0.0F, 4.0F, 0.0F, 0.0F);
+                snapshot.organizations().stream().limit(3).forEach(summary -> list.add(Ui.row(
+                        Ui.stack().size(4.0F, 4.0F).radius(2.0F).background(UiColor.withAlpha(OrganizationPage.ACCENT, 0.7F))
+                                .shrink(0.0F),
+                        Text.of(summary.name()).style(TextStyle.LABEL_STRONG).singleLine().grow(1.0F).shrink(1.0F),
+                        Text.of(summary.memberCount() + " 人").style(TextStyle.CAPTION).singleLine()
+                ).gap(6.0F).alignItems(Align.CENTER)));
+                column.add(list);
+            }
+            return column;
         });
-        return baseCard(() -> terminal.push(new HistoryPage(terminal))).add(
-                TerminalUi.header(Icons.HISTORY, TerminalUi.GOLD, "历史", "ARCHIVE", null),
+        return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.ORGANIZATION)).add(
+                TerminalUi.header(Icons.USERS, OrganizationPage.ACCENT, "组织", "ORGANIZATION", state),
                 body,
                 Ui.spacer(),
-                Text.of(() -> Component.literal(TerminalData.historyLoaded() ? TerminalData.historyTotal() + " 条公开记录" : "同步中"))
-                        .style(TextStyle.CAPTION).color(TerminalUi.GOLD).singleLine()
+                TerminalUi.footerLink("查看组织", OrganizationPage.ACCENT)
         );
     }
 
-    private Card helpCard() {
-        return baseCard(() -> terminal.push(new HelpPage(terminal))).add(
-                TerminalUi.header(Icons.HELP, TerminalUi.GREEN, "手册", "MANUAL", null),
-                Ui.column(Text.of("从梦屿基础开始").style(TextStyle.LABEL_STRONG).singleLine(),
-                        Text.of("身体、感染、死亡与剧情规则").style(TextStyle.CAPTION).maxLines(2)).gap(2.0F),
-                Ui.spacer(),
-                Text.of("6 个章节").style(TextStyle.CAPTION).color(TerminalUi.GREEN).singleLine()
-        );
+    private static String organizationState() {
+        OrganizationViewData.Snapshot snapshot = OrganizationClientCache.get();
+        if (!OrganizationClientCache.isLoaded()) {
+            return "同步中";
+        }
+        if (!snapshot.enabled()) {
+            return "未启用";
+        }
+        OrganizationViewData.Detail mine = snapshot.myOrganization();
+        if (mine != null) {
+            return mine.canReviewApplications() && !mine.applicants().isEmpty()
+                    ? mine.applicants().size() + " 条申请" : "已加入";
+        }
+        return OrganizationPage.needsAttention() ? "有新邀请" : "未加入";
+    }
+
+    private static int organizationStateColor() {
+        if (OrganizationPage.needsAttention()) {
+            return TerminalUi.GOLD;
+        }
+        return OrganizationClientCache.get().myOrganization() != null ? OrganizationPage.ACCENT : TerminalUi.STEEL;
+    }
+
+    // ==================== 快捷入口 ====================
+
+    /** 世界历史与生存手册：内容不需要在主页展开，做成一行细长入口。 */
+    private UiNode<?> quickLinks() {
+        Card history = quickLink(Icons.HISTORY, TerminalUi.GOLD, "世界历史",
+                () -> TerminalData.historyLoaded() ? TerminalData.historyTotal() + " 条公开记录" : "同步中",
+                () -> terminal.push(new HistoryPage(terminal)));
+        Card help = quickLink(Icons.HELP, TerminalUi.GREEN, "生存手册", () -> "6 个章节",
+                () -> terminal.push(new HelpPage(terminal)));
+        return Ui.row(history.grow(1.0F).basis(0), help.grow(1.0F).basis(0)).alignItems(Align.STRETCH)
+                .gap(Theme.Space.SM);
+    }
+
+    private static Card quickLink(Icons icon, int accent, String title, Supplier<String> caption, Runnable onClick) {
+        Card card = TerminalUi.card().padding(Theme.Space.MD, Theme.Space.SM).onClick(onClick);
+        card.add(Ui.row(TerminalUi.iconBadge(icon, accent, 16.0F),
+                        Ui.column(Text.of(title).style(TextStyle.LABEL_STRONG).singleLine(),
+                                Text.of(() -> Component.literal(caption.get())).style(TextStyle.CAPTION).color(accent)
+                                        .singleLine()).gap(1.0F).grow(1.0F).shrink(1.0F),
+                        Icon.of(Icons.CHEVRON_RIGHT, 8.0F).color(UiColor.withAlpha(accent, 0.8F)))
+                .gap(Theme.Space.SM).alignItems(Align.CENTER));
+        return card;
     }
 }

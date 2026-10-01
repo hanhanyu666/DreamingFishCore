@@ -40,6 +40,7 @@ import net.minecraft.network.chat.Component;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -118,8 +119,7 @@ public class TerminalScreen extends UiScreen {
         navigator.onChange(page -> dock.select(tab));
 
         device = new DevicePanel();
-        device.add(buildHeader(), TerminalWidgets.relayLine(), navigator,
-                Ui.row(dock).justify(Justify.CENTER).padding(0.0F, 6.0F, 0.0F, 8.0F));
+        device.add(buildHeader(), TerminalWidgets.relayLine(), new Body());
         dock.select(tab);
         navigator.reset(rootFor(tab), false);
 
@@ -166,7 +166,22 @@ public class TerminalScreen extends UiScreen {
         Box right = Ui.row(status).justify(Justify.END).grow(1.0F).basis(0.0F);
 
         Responsive middle = Responsive.of(size -> size == Responsive.Size.COMPACT ? Ui.space(0) : clock);
-        return Ui.row(left, middle, right).alignItems(Align.CENTER).height(32.0F).padding(14.0F, 0.0F);
+        Box header = Ui.row(left, middle, right).alignItems(Align.CENTER).padding(14.0F, 0.0F);
+        // 紧凑布局下顶栏压低，把纵向空间让给内容
+        float[] applied = {-1.0F};
+        header.onUpdate(() -> {
+            float height = compactLayout() ? 26.0F : 32.0F;
+            if (applied[0] != height) {
+                applied[0] = height;
+                header.height(height);
+            }
+        });
+        return header;
+    }
+
+    private boolean compactLayout() {
+        float width = ui.width() > 0.0F ? ui.width() : Minecraft.getInstance().getWindow().getGuiScaledWidth();
+        return Responsive.classify(width) == Responsive.Size.COMPACT;
     }
 
     private UiNode<?> brand() {
@@ -324,6 +339,44 @@ public class TerminalScreen extends UiScreen {
     }
 
     // ==================== 视觉部件 ====================
+
+    /**
+     * 内容区：常规布局下页面在上、Dock 胶囊在下；紧凑布局下 Dock 竖排成左侧导轨，页面占满剩余高度。
+     * 切换时只移动已有节点，页面与导航状态保持不变。
+     */
+    private final class Body extends Box {
+        private final Box bar = Ui.row().justify(Justify.CENTER).padding(0.0F, 6.0F, 0.0F, 8.0F);
+        private final Box railSlot = Ui.column().justify(Justify.CENTER).padding(8.0F, 0.0F, 0.0F, 6.0F);
+        private Boolean compact;
+
+        Body() {
+            grow(1.0F).basis(0.0F).minHeight(0.0F);
+            arrange(compactLayout());
+        }
+
+        @Override
+        protected void update() {
+            arrange(compactLayout());
+        }
+
+        private void arrange(boolean compactNow) {
+            if (compact != null && compact == compactNow) {
+                return;
+            }
+            compact = compactNow;
+            dock.rail(compactNow);
+            // 先把 Dock 挪进新容器，再替换子节点，避免旧容器卸载时连带卸载 Dock
+            if (compactNow) {
+                railSlot.add(dock);
+                row().alignItems(Align.STRETCH);
+                setChildren(List.of(railSlot, navigator));
+            } else {
+                bar.add(dock);
+                column().alignItems(Align.STRETCH);
+                setChildren(List.of(navigator, bar));
+            }
+        }
+    }
 
     /** 设备外框：按窗口尺寸留边，驱动开合动画。 */
     private final class DeviceShell extends Box {
