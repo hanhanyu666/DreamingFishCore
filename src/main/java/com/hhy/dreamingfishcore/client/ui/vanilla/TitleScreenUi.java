@@ -2,7 +2,6 @@ package com.hhy.dreamingfishcore.client.ui.vanilla;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.ui.framework.core.UiClock;
 import com.hhy.dreamingfishcore.client.ui.framework.node.Align;
 import com.hhy.dreamingfishcore.client.ui.framework.node.Box;
@@ -42,7 +41,6 @@ import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.util.FormattedCharSequence;
-import net.neoforged.fml.ModList;
 
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -58,13 +56,11 @@ import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.CREAM;
 import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.CREAM_SOFT;
 import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.GOLD;
 import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.GREEN;
-import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.MUTED;
-import static com.hhy.dreamingfishcore.client.ui.vanilla.VanillaChrome.RED;
 
 /**
- * 标题界面：轮播背景 + 左侧标语 + 右下“航线”菜单。
+ * 标题界面：轮播背景 + 左侧标语 + 右下菜单。
  *
- * <p>原版 {@link TitleScreen} 仍负责创建按钮，其他模组照常往里加按钮；这里把主按钮换成航线菜单，
+ * <p>原版 {@link TitleScreen} 仍负责创建按钮，其他模组照常往里加按钮；这里把主按钮换成右下的文字菜单，
  * 语言、辅助功能、模组列表等辅助按钮收拢到右上角的玻璃小按钮里，点击时转调原控件。</p>
  */
 public final class TitleScreenUi {
@@ -142,67 +138,31 @@ public final class TitleScreenUi {
                 Text.of("一片曾让人慢下来生活、重新开始做梦的大陆。").style(TextStyle.BODY).color(CREAM_SOFT),
                 Text.of("如今，它正在风暴与沉默之间，等待新的幸存者。").style(TextStyle.BODY).color(CREAM_SOFT)
         ).gap(3.0F);
-        Box chips = Ui.row(
-                infoTag("CORE", version(), BLUE),
-                infoTag("最新发布", () -> latestRelease.isEmpty() ? "获取中…" : latestRelease, GREEN)
-        ).gap(Theme.Space.SM);
-
         Box hero = Ui.column().alignItems(Align.START).gap(Theme.Space.SM).maxWidth(300.0F);
         hero.add(kicker.enter(EnterEffect.FADE_RIGHT),
                 welcome.margin(0.0F, 6.0F, 0.0F, 0.0F).enter(EnterEffect.FADE_RIGHT.delayed(60.0F)),
                 name.enter(EnterEffect.FADE_RIGHT.delayed(120.0F)),
                 new GoldRule().size(112.0F, 1.5F).margin(0.0F, 2.0F, 0.0F, 4.0F).enter(EnterEffect.FADE.delayed(200.0F)),
-                description.enter(EnterEffect.FADE_RIGHT.delayed(240.0F)),
-                chips.margin(0.0F, 6.0F, 0.0F, 0.0F).enter(EnterEffect.FADE_UP.delayed(320.0F)));
+                description.enter(EnterEffect.FADE_RIGHT.delayed(240.0F)));
         return hero;
     }
 
-    private static UiNode<?> infoTag(String label, String value, int accent) {
-        return infoTag(label, () -> value, accent);
-    }
-
-    private static UiNode<?> infoTag(String label, java.util.function.Supplier<String> value, int accent) {
-        Box tag = Ui.row(
-                Ui.stack().size(2.0F, 12.0F).radius(1.0F).background(UiColor.withAlpha(accent, 0.8F)),
-                Ui.column(Text.of(label).style(TextStyle.CAPTION).color(0xFF8C969F).singleLine(),
-                        Text.of(() -> Component.literal(value.get())).style(TextStyle.LABEL_STRONG).color(0xFFF1F4F6).singleLine())
-                        .gap(1.0F)
-        ).gap(6.0F).alignItems(Align.CENTER).padding(7.0F, 4.0F).radius(Theme.Radius.MD)
-                .background(0x8A070B10).border(1.0F, 0x1CFFFFFF);
-        return tag;
-    }
-
     private UiNode<?> routeMenu(boolean compact) {
-        Box header = Ui.column(
-                Text.of("ROUTE SELECT").style(TextStyle.CAPTION_STRONG).color(BLUE).singleLine(),
-                Text.of("选择你的下一段航线").style(compact ? TextStyle.LABEL : TextStyle.SUBTITLE).color(CREAM).singleLine()
-        ).gap(2.0F).padding(2.0F, 0.0F, 0.0F, compact ? 2.0F : 6.0F);
-
         AbstractWidget multiplayerWidget = findPrimary("menu.multiplayer");
-        RouteButton multiplayer = new RouteButton("01", Icons.USERS, "多人游戏", "选择服务器，加入梦屿与其他玩家共同冒险",
-                GREEN, true, compact, this::openMultiplayer);
+        MenuItem multiplayer = new MenuItem("多人游戏", "加入梦屿，与其他幸存者同行", true, compact, this::openMultiplayer);
         if (multiplayerWidget != null && !multiplayerWidget.active) {
             multiplayer.disabled(true).tooltip(Component.literal("多人游戏当前不可用"));
         }
-        Box footer = Ui.row(
-                Text.of("海图 · 梦屿外海").style(TextStyle.CAPTION).color(0xFF7D8890).singleLine(),
-                Ui.spacer(),
-                Text.of("N 27°41′  E 121°09′").style(TextStyle.CAPTION).color(0xFF7D8890).singleLine()
-        ).alignItems(Align.CENTER).padding(2.0F, compact ? 2.0F : 6.0F, 0.0F, 0.0F);
-
-        Box chart = new RouteChart().column().alignItems(Align.STRETCH).gap(compact ? 1.0F : 3.0F)
-                .padding(compact ? 4.0F : 6.0F);
-        chart.add(header.enter(EnterEffect.FADE_LEFT.delayed(100.0F)),
-                multiplayer.enter(EnterEffect.FADE_LEFT.delayed(160.0F)),
-                new RouteButton("02", Icons.MAP, "单人游戏", "选择或创建你的单人世界", GOLD, false, compact,
-                        () -> minecraft().setScreen(new SelectWorldScreen(screen))).enter(EnterEffect.FADE_LEFT.delayed(210.0F)),
-                new RouteButton("03", Icons.SETTINGS, "设置", "调整游戏选项，自定义你的体验", BLUE, false, compact,
+        Box menu = new MenuShade().column().alignItems(Align.STRETCH);
+        menu.add(multiplayer.enter(EnterEffect.FADE_LEFT.delayed(140.0F)),
+                new MenuItem("单人游戏", "选择或创建你的单人世界", false, compact,
+                        () -> minecraft().setScreen(new SelectWorldScreen(screen))).enter(EnterEffect.FADE_LEFT.delayed(200.0F)),
+                new MenuItem("设置", "调整游戏选项", false, compact,
                         () -> minecraft().setScreen(new OptionsScreen(screen, minecraft().options)))
                         .enter(EnterEffect.FADE_LEFT.delayed(260.0F)),
-                new RouteButton("04", Icons.POWER, "退出游戏", "离开梦屿，返回现实世界", RED, false, compact,
-                        () -> minecraft().stop()).enter(EnterEffect.FADE_LEFT.delayed(310.0F)),
-                footer.enter(EnterEffect.FADE.delayed(380.0F)));
-        return chart;
+                new MenuItem("退出游戏", "离开梦屿，返回现实世界", false, compact,
+                        () -> minecraft().stop()).enter(EnterEffect.FADE_LEFT.delayed(320.0F)));
+        return menu;
     }
 
     private UiNode<?> footer() {
@@ -415,11 +375,6 @@ public final class TitleScreenUi {
         }
     }
 
-    private static String version() {
-        return ModList.get().getModContainerById(DreamingFishCore.MODID)
-                .map(container -> container.getModInfo().getVersion().toString()).orElse("dev");
-    }
-
     private static void startUpdateFetch() {
         if (fetchStarted) {
             return;
@@ -505,125 +460,61 @@ public final class TitleScreenUi {
         }
     }
 
-    /**
-     * 航线图：菜单背后一圈压暗与淡淡的罗盘，四个选项是同一条虚线航路上的航点，虚线缓慢向下流动。
-     */
-    private static final class RouteChart extends Box {
+    /** 菜单背后一圈很淡的压暗托住文字，不画面板；选项之间用向左淡出的细线分隔。 */
+    private static final class MenuShade extends Box {
         @Override
         protected void paintBackground(UiCanvas canvas) {
             float w = width();
             float h = height();
-            // 不画实底面板，只压暗托住文字，让菜单像标在海图上；光晕在正方形范围内完全淡出，不留矩形边
-            float shadeX = w * 0.5F + 10.0F;
-            float shadeY = h * 0.55F;
-            float shadeR = Math.max(w, h) * 0.72F;
+            // 光晕在正方形范围内完全淡出，不留矩形边
+            float shadeX = w * 0.6F;
+            float shadeY = h * 0.5F;
+            float shadeR = Math.max(w, h) * 0.8F;
             canvas.shape(shadeX - shadeR, shadeY - shadeR, shadeR * 2.0F, shadeR * 2.0F)
-                    .radial(0xA0030608, 0x00030608, shadeR, shadeR, shadeR).draw();
-            // 罗盘随菜单宽度缩放，压在标题右侧，尽量不越过第一条航线
-            float compass = Math.max(24.0F, Math.min(38.0F, w * 0.15F));
-            paintCompass(canvas, w - compass + 4.0F, compass - 10.0F, compass);
-
-            float top = Float.NaN;
-            float bottom = Float.NaN;
-            float lineX = 0.0F;
-            for (UiNode<?> child : children()) {
-                if (child instanceof RouteButton button) {
-                    float cy = button.y() + button.height() * 0.5F;
-                    lineX = button.x() + button.nodeCenter();
-                    top = Float.isNaN(top) ? cy : top;
-                    bottom = cy;
-                }
+                    .radial(0x8C030608, 0x00030608, shadeR, shadeR, shadeR).draw();
+            List<UiNode<?>> items = children();
+            for (int i = 0; i < items.size() - 1; i++) {
+                UiNode<?> item = items.get(i);
+                float y = item.y() + item.height();
+                canvas.shape(w * 0.3F, y, w * 0.7F, 1.0F).horizontalGradient(0x00FFFFFF, 0x16FFFFFF).draw();
             }
-            if (Float.isNaN(top)) {
-                return;
-            }
-            float flow = (float) ((UiClock.now() / 90.0) % 7.0);
-            for (float y = top - 7.0F + flow; y < bottom; y += 7.0F) {
-                float from = Math.max(top, y);
-                float to = Math.min(bottom, y + 3.5F);
-                if (to > from) {
-                    canvas.fill(lineX - 0.5F, from, 1.0F, to - from, 0x46D7E3EA);
-                }
-            }
-        }
-
-        /** 罗盘玫瑰：外圈刻度缓慢转动，四个主方位指针，北向标红。 */
-        private static void paintCompass(UiCanvas canvas, float cx, float cy, float r) {
-            int ring = 0x1CFFFFFF;
-            canvas.arc(cx, cy, r, 1.0F, 0.0F, (float) (Math.PI * 2.0), ring, ring);
-            canvas.arc(cx, cy, r * 0.62F, 1.0F, 0.0F, (float) (Math.PI * 2.0), 0x14FFFFFF, 0x14FFFFFF);
-            float spin = (float) (UiClock.now() / 9000.0 % (Math.PI * 2.0));
-            for (int i = 0; i < 36; i++) {
-                double a = spin + i * Math.PI / 18.0;
-                float inner = i % 9 == 0 ? r - 6.0F : r - 3.0F;
-                canvas.line(cx + (float) Math.cos(a) * inner, cy + (float) Math.sin(a) * inner,
-                        cx + (float) Math.cos(a) * r, cy + (float) Math.sin(a) * r, 0.8F, 0x22FFFFFF, false);
-            }
-            for (int i = 0; i < 4; i++) {
-                double a = -Math.PI / 2.0 + i * Math.PI / 2.0;
-                float length = i == 0 ? r * 0.82F : r * 0.6F;
-                int color = i == 0 ? UiColor.withAlpha(RED, 0.5F) : 0x30FFFFFF;
-                canvas.line(cx, cy, cx + (float) Math.cos(a) * length, cy + (float) Math.sin(a) * length, 1.2F, color, true);
-            }
-            for (int i = 0; i < 4; i++) {
-                double a = -Math.PI / 4.0 + i * Math.PI / 2.0;
-                canvas.line(cx, cy, cx + (float) Math.cos(a) * r * 0.36F, cy + (float) Math.sin(a) * r * 0.36F, 0.8F,
-                        0x1CFFFFFF, true);
-            }
-            canvas.circle(cx, cy, 1.6F, 0x55FFFFFF);
         }
     }
 
-    /** 航点按钮：航路上的圆形航点 + 序号、标题与说明；悬停时航点点亮，一束光从航点向右展开。 */
-    private static final class RouteButton extends InteractiveNode<RouteButton> {
-        private final int accent;
+    /**
+     * 菜单项：右对齐的文字，右侧一道细竖条。悬停时标题变亮左移、竖条拉长变成暖金，
+     * 身后从右侧泛起一抹淡光，左边浮现一句说明。
+     */
+    private static final class MenuItem extends InteractiveNode<MenuItem> {
         private final boolean primary;
-        private final Waypoint waypoint;
-        private final Icon icon;
-        private final Text kicker;
         private final Text title;
-        private final Icon chevron;
+        private final Text hint;
 
-        RouteButton(String number, Icons iconType, String label, String description, int accent, boolean primary,
-                    boolean compact, Runnable action) {
-            this.accent = accent;
+        MenuItem(String label, String description, boolean primary, boolean compact, Runnable action) {
             this.primary = primary;
-            float nodeSize = primary ? (compact ? 24.0F : 28.0F) : (compact ? 20.0F : 24.0F);
-            icon = Icon.of(iconType, nodeSize * 0.46F);
-            waypoint = new Waypoint(this);
-            waypoint.stack().alignItems(Align.CENTER).size(nodeSize, nodeSize).shrink(0.0F);
-            waypoint.add(icon);
-            kicker = Text.of("ROUTE " + number).style(TextStyle.CAPTION_STRONG.withScale(0.62F)).singleLine();
-            title = Text.of(label).style(primary ? TextStyle.TITLE : TextStyle.SUBTITLE).singleLine();
-            chevron = Icon.of(Icons.ARROW_RIGHT, 9.0F);
-
-            Box texts = Ui.column(kicker, title).gap(1.0F).grow(1.0F).shrink(1.0F);
-            if (!compact) {
-                texts.add(Text.of(description).style(TextStyle.CAPTION).color(0xFF8E99A3).singleLine());
+            title = Text.of(label).style(primary ? TextStyle.TITLE : TextStyle.SUBTITLE).singleLine().shadow(true)
+                    .shrink(0.0F);
+            hint = Text.of(description).style(TextStyle.CAPTION).color(0xFFB4ADA0).singleLine().shadow(true)
+                    .shrink(1.0F);
+            row().alignItems(Align.CENTER).justify(Justify.END).gap(Theme.Space.MD);
+            float vertical = compact ? 4.0F : (primary ? 8.0F : 6.0F);
+            padding(8.0F, vertical, 10.0F, vertical);
+            if (compact) {
+                add(title);
+            } else {
+                add(hint, title);
             }
-            row().alignItems(Align.CENTER).gap(Theme.Space.MD).radius(Theme.Radius.MD);
-            float vertical = compact ? 3.0F : (primary ? 7.0F : 5.0F);
-            padding(4.0F, vertical, 8.0F, vertical);
-            add(waypoint, texts, chevron);
             cursor(Cursor.POINTER);
             onClick(action);
-        }
-
-        /** 航点圆心相对按钮左缘的横坐标，航路虚线穿过这里。 */
-        float nodeCenter() {
-            return padLeft() + waypoint.width() * 0.5F;
         }
 
         @Override
         protected void update() {
             float h = isEffectivelyDisabled() ? 0.0F : hover();
-            icon.color(UiColor.lerp(UiColor.lerp(0xFFC4CCD3, accent, primary ? 0.8F : 0.5F), 0xFFFFFFFF, h * 0.5F));
-            kicker.color(UiColor.withAlpha(accent, 0.55F + 0.45F * h));
-            title.color(UiColor.lerp(primary ? 0xFFF4F7F9 : 0xFFDDE3E8, 0xFFFFFFFF, h));
-            title.translate(h * 3.0F, 0.0F);
-            kicker.translate(h * 3.0F, 0.0F);
-            chevron.color(UiColor.withAlpha(UiColor.lerp(0xFF8E99A3, accent, h), 0.25F + 0.75F * h));
-            chevron.translate(h * 4.0F - 2.0F, 0.0F);
+            title.color(UiColor.lerp(primary ? 0xFFF4EEE2 : 0xFFD6D0C4, 0xFFFFFFFF, h));
+            title.translate(-3.0F * h, 0.0F);
+            hint.opacity(h);
+            hint.translate(-3.0F * h + 4.0F * (1.0F - h), 0.0F);
             opacity(isEffectivelyDisabled() ? 0.45F : 1.0F);
         }
 
@@ -632,46 +523,19 @@ public final class TitleScreenUi {
             float h = isEffectivelyDisabled() ? 0.0F : hover();
             float w = width();
             float ht = height();
-            float cx = nodeCenter();
-            float band = primary ? Math.max(h, 0.45F) : h;
-            if (band > 0.01F) {
-                canvas.shape(cx, 0.0F, w - cx, ht).radius(0.0F, radiusValue(), radiusValue(), 0.0F)
-                        .horizontalGradient(UiColor.withAlpha(accent, 0.16F * band), UiColor.withAlpha(accent, 0.0F)).draw();
-                canvas.shape(cx, ht - 1.0F, (w - cx) * (0.4F + 0.6F * band), 1.0F)
-                        .horizontalGradient(UiColor.withAlpha(accent, 0.5F * band), UiColor.withAlpha(accent, 0.0F)).draw();
+            if (h > 0.01F) {
+                canvas.shape(0.0F, 0.0F, w, ht)
+                        .horizontalGradient(UiColor.withAlpha(GOLD, 0.0F), UiColor.withAlpha(GOLD, 0.13F * h)).draw();
             }
             float press = press();
             if (press > 0.01F) {
-                canvas.shape(cx, 0.0F, w - cx, ht).radius(radiusValue()).fill(UiColor.withAlpha(accent, 0.1F * press)).draw();
+                canvas.shape(0.0F, 0.0F, w, ht).horizontalGradient(0x00FFFFFF, UiColor.withAlpha(0xFFFFFFFF, 0.06F * press))
+                        .draw();
             }
-        }
-
-        float glow() {
-            return isEffectivelyDisabled() ? 0.0F : hover();
-        }
-    }
-
-    /** 航点：深色圆底遮住航路虚线，外圈随悬停点亮；主航线带一圈缓慢扩散的光环。 */
-    private static final class Waypoint extends Box {
-        private final RouteButton owner;
-
-        Waypoint(RouteButton owner) {
-            this.owner = owner;
-        }
-
-        @Override
-        protected void paintBackground(UiCanvas canvas) {
-            float h = owner.glow();
-            float w = width();
-            float r = w * 0.5F;
-            int accent = owner.accent;
-            if (owner.primary) {
-                float t = (float) ((UiClock.now() % 2400.0) / 2400.0);
-                canvas.circle(r, r, r + 2.0F + t * 6.0F, UiColor.withAlpha(accent, 0.22F * (1.0F - t)));
-            }
-            canvas.circle(r, r, r + 3.0F * h, UiColor.withAlpha(accent, 0.18F * h));
-            canvas.shape(0.0F, 0.0F, w, w).radius(r).fill(UiColor.lerp(0xF00A1117, UiColor.withAlpha(accent, 0.95F), 0.18F + 0.12F * h))
-                    .border(1.2F, UiColor.withAlpha(accent, (owner.primary ? 0.7F : 0.45F) + 0.3F * h)).draw();
+            float idle = primary ? 0.75F : 0.22F;
+            int bar = UiColor.lerp(UiColor.withAlpha(primary ? GOLD : 0xFFFFFFFF, idle), GOLD, h);
+            float barH = (primary ? 12.0F : 8.0F) + 6.0F * h;
+            canvas.shape(w - 2.0F, (ht - barH) * 0.5F, 2.0F, barH).radius(1.0F).fill(bar).draw();
         }
     }
 }
