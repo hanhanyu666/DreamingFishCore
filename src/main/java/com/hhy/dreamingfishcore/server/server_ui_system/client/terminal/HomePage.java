@@ -27,6 +27,9 @@ import com.hhy.dreamingfishcore.gameplay.guidance_system.client.cache.GuidanceCl
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcConversationViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.client.cache.NpcMessageClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.gameplay.story_system.network.Packet_WorldHistoryResponse;
@@ -138,8 +141,8 @@ final class HomePage extends TerminalPage {
             return Component.literal(titleName.isBlank() ? rankName : rankName + " · " + titleName);
         }).style(TextStyle.LABEL).singleLine();
 
-        PlayerHead head = PlayerHead.local().headSize(32.0F).cornerRadius(7.0F);
-        head.onUpdate(() -> head.ring(1.5F, UiColor.withAlpha(rankColor.get(), 0.8F)));
+        PlayerHead head = PlayerHead.local().headSize(30.0F).cornerRadius(5.0F);
+        Box avatar = TerminalWidgets.scanFrame(head, rankColor);
 
         Badge level = TerminalUi.chip(() -> "LV." + (player.get() == null ? 0 : PlayerLevelManager.getPlayerLevelClient(player.get())),
                 TerminalUi.GOLD);
@@ -159,19 +162,92 @@ final class HomePage extends TerminalPage {
                         + " / " + PlayerLevelManager.getExperienceNeededForNextLevelClient(player.get()),
                 () -> player.get() == null ? 0.0F : PlayerLevelManager.getExperienceProgressClient(player.get()),
                 TerminalUi.GOLD);
-        UiNode<?> template = TerminalUi.meter("模板重建余量",
-                () -> player.get() == null ? "--" : String.format("%.1f / 100", ClientCacheManager.getRespawnPoint(player.get().getUUID())),
-                () -> player.get() == null ? 0.0F : ClientCacheManager.getRespawnPoint(player.get().getUUID()) / 100.0F,
-                TerminalUi.CYAN);
-        return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.PROFILE)).add(
-                TerminalUi.sectionLabel("个人档案 · PROFILE"),
-                Ui.row(head, Ui.column(name, rankLine).gap(2.0F).grow(1.0F).shrink(1.0F)).gap(Theme.Space.MD),
-                Ui.row(level, status).gap(Theme.Space.XS),
-                Ui.spacer(),
-                exp,
-                template,
-                footer
-        );
+        Supplier<Float> reserve = () -> player.get() == null ? 0.0F : ClientCacheManager.getRespawnPoint(player.get().getUUID());
+        Supplier<Float> cost = () -> player.get() == null ? 10.0F
+                : PlayerAttributesClientCache.getNormalRespawnCost(player.get().getUUID());
+        UiNode<?> template = Ui.column(
+                Ui.row(Text.of("模板储备").style(TextStyle.LABEL).singleLine().grow(1),
+                        Text.of(() -> Component.literal(player.get() == null ? "--" : String.format("%.1f / 100", reserve.get())))
+                                .style(TextStyle.LABEL_STRONG).singleLine()),
+                TerminalWidgets.reserveCells(reserve, cost)
+        ).gap(4.0F);
+        Card card = baseCard(() -> terminal.switchTab(TerminalScreen.Tab.PROFILE)).add(
+                TerminalUi.sectionLabel("身份档案 · SURVIVOR FILE"),
+                Ui.row(avatar, Ui.column(name, rankLine, Ui.row(level, status).gap(Theme.Space.XS).margin(0.0F, 2.0F, 0.0F, 0.0F))
+                        .gap(2.0F).grow(1.0F).shrink(1.0F)).gap(Theme.Space.MD).alignItems(Align.CENTER));
+        if (wide) {
+            // 大屏时补一块“体征回传”，与游戏内左下角的读数一致
+            card.add(vitalsGrid());
+        }
+        card.add(Ui.spacer(), exp, template);
+        if (wide) {
+            card.add(footer);
+        }
+        return card;
+    }
+
+    /** 生命、感染、勇气、体力四项读数。 */
+    private static UiNode<?> vitalsGrid() {
+        Supplier<LocalPlayer> player = () -> Minecraft.getInstance().player;
+        UiNode<?> health = vital("生命", TerminalUi.GREEN, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? "--" : String.format("%.0f / %.0f", p.getHealth(), p.getMaxHealth());
+        }, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? 0.0F : p.getHealth() / Math.max(1.0F, p.getMaxHealth());
+        });
+        UiNode<?> infection = vital("感染", 0xFF9FD46C, () -> {
+            LocalPlayer p = player.get();
+            if (p == null) {
+                return "--";
+            }
+            if (infected()) {
+                return PlayerAttributesClientCache.getInfectionLevel(p.getUUID()) >= 2 ? "二级感染" : "一级感染";
+            }
+            return Math.round(infectionRatio(p) * 100.0F) + "%";
+        }, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? 0.0F : infected() ? 1.0F : infectionRatio(p);
+        });
+        UiNode<?> courage = vital("勇气", TerminalUi.VIOLET, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? "--" : Math.round(PlayerCourageManager.getCurrentCourageClient(p)) + " / "
+                    + Math.round(PlayerCourageManager.getMaxCourageClient(p));
+        }, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? 0.0F : PlayerCourageManager.getCurrentCourageClient(p)
+                    / Math.max(1.0F, PlayerCourageManager.getMaxCourageClient(p));
+        });
+        UiNode<?> stamina = vital("体力", TerminalUi.AMBER, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? "--" : PlayerStrengthClientSync.getCurrentStrengthClient(p) + " / "
+                    + PlayerStrengthClientSync.getMaxStrengthClient(p);
+        }, () -> {
+            LocalPlayer p = player.get();
+            return p == null ? 0.0F : PlayerStrengthClientSync.getCurrentStrengthClient(p)
+                    / (float) Math.max(1, PlayerStrengthClientSync.getMaxStrengthClient(p));
+        });
+        return Ui.column(
+                TerminalUi.sectionLabel("体征回传 · VITALS").margin(0.0F, 4.0F, 0.0F, 0.0F),
+                Ui.row(health.grow(1.0F).basis(0), infection.grow(1.0F).basis(0)).gap(Theme.Space.SM).alignItems(Align.STRETCH),
+                Ui.row(courage.grow(1.0F).basis(0), stamina.grow(1.0F).basis(0)).gap(Theme.Space.SM).alignItems(Align.STRETCH)
+        ).gap(Theme.Space.SM);
+    }
+
+    private static float infectionRatio(LocalPlayer p) {
+        float max = Math.max(1, PlayerInfectionManager.getInfectionMaximumClient(p));
+        return Math.max(0.0F, Math.min(1.0F, PlayerInfectionManager.getCurrentInfectionClient(p) / max));
+    }
+
+    private static UiNode<?> vital(String label, int color, Supplier<String> value, Supplier<Float> ratio) {
+        return Ui.column(
+                Ui.row(Ui.stack().size(4.0F, 4.0F).radius(2.0F).background(color).shrink(0.0F),
+                        Text.of(label).style(TextStyle.CAPTION).singleLine().grow(1),
+                        Text.of(() -> Component.literal(value.get())).style(TextStyle.LABEL_STRONG).color(color).singleLine())
+                        .gap(4.0F).alignItems(Align.CENTER),
+                com.hhy.dreamingfishcore.client.ui.framework.widget.ProgressBar.of(ratio).color(color).thickness(2.0F)
+        ).gap(3.0F).padding(Theme.Space.SM, Theme.Space.XS + 1.0F).radius(Theme.Radius.MD)
+                .background(0x40060A0E).border(1.0F, UiColor.withAlpha(color, 0.16F));
     }
 
     private static boolean infected() {
@@ -196,7 +272,7 @@ final class HomePage extends TerminalPage {
         Text footer = Text.of(() -> Component.literal(economyFooter(snap.get()))).style(TextStyle.CAPTION).singleLine()
                 .grow(1.0F).shrink(1.0F);
         return baseCard(this::openEconomy).add(
-                TerminalUi.header(Icons.COIN, TerminalUi.GOLD, "经济系统", state),
+                TerminalUi.header(Icons.COIN, TerminalUi.GOLD, "经济系统", "MARKET", state),
                 metrics,
                 Ui.spacer(),
                 Ui.row(footer, TerminalUi.footerLink("打开", TerminalUi.GOLD)).gap(Theme.Space.SM)
@@ -255,6 +331,8 @@ final class HomePage extends TerminalPage {
             Box column = Ui.column(
                     Text.of("阶段 " + current.getStageNumber() + " · " + TerminalData.safe(current.getStageName(), "未命名"))
                             .style(TextStyle.TITLE).singleLine(),
+                    TerminalWidgets.stageTimeline(TerminalData::visibleStageList, TerminalData::currentStage)
+                            .margin(0.0F, 2.0F, 0.0F, 2.0F),
                     Text.of(TerminalData.safe(current.getStageDescription(), "新的剧情会随着公告与 NPC 对话逐步展开。"))
                             .style(TextStyle.BODY_SECONDARY).maxLines(wide ? 3 : 2)
             ).gap(4.0F);
@@ -281,12 +359,34 @@ final class HomePage extends TerminalPage {
         Box clueRow = Ui.row(Icon.of(Icons.TARGET, 10.0F).color(TerminalUi.MINT), clue)
                 .gap(6.0F).padding(8.0F, 5.0F).radius(Theme.Radius.MD)
                 .background(UiColor.withAlpha(TerminalUi.MINT, 0.08F)).border(1.0F, UiColor.withAlpha(TerminalUi.MINT, 0.18F));
+        Badge threat = TerminalUi.chip(HomePage::threatLabel, TerminalUi.STEEL);
+        threat.onUpdate(() -> threat.color(threatColor()));
         return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.STORY)).accent(TerminalUi.MINT).add(
-                TerminalUi.header(Icons.BOOK, TerminalUi.MINT, "故事进展", TerminalUi.chip("服主推进", TerminalUi.STEEL)),
+                TerminalUi.header(Icons.BOOK, TerminalUi.MINT, "故事进展", "STORY · 梦屿纪事", threat),
                 body,
                 Ui.spacer(),
                 clueRow
         );
+    }
+
+    /** 当前阶段的感染体强化倍率，作为“威胁”读数。 */
+    private static float threatMultiplier() {
+        StoryStageData stage = TerminalData.currentStage();
+        if (stage == null || stage.getMonsterModifier() == null) {
+            return 1.0F;
+        }
+        StoryStageData.MonsterModifier modifier = stage.getMonsterModifier();
+        return Math.max(modifier.getHealthMultiplier(), modifier.getDamageMultiplier());
+    }
+
+    private static String threatLabel() {
+        float value = threatMultiplier();
+        return value <= 1.001F ? "威胁 平稳" : String.format("威胁 ×%.1f", value);
+    }
+
+    private static int threatColor() {
+        float value = threatMultiplier();
+        return value <= 1.001F ? TerminalUi.STEEL : value < 1.5F ? TerminalUi.GOLD : TerminalUi.ROSE;
     }
 
     // ==================== 广播 ====================
@@ -297,6 +397,9 @@ final class HomePage extends TerminalPage {
             return unread > 0 ? unread + " 条未读" : "全部已读";
         }, TerminalUi.MINT);
         state.onUpdate(() -> state.color(TerminalData.unreadNotices() > 0 ? TerminalUi.GOLD : TerminalUi.MINT));
+        if (wide) {
+            return wideNoticeCard(state);
+        }
         Dynamic<Object> body = Dynamic.of(TerminalData::latestNotice, value -> {
             NoticeData latest = (NoticeData) value;
             if (latest == null) {
@@ -312,7 +415,38 @@ final class HomePage extends TerminalPage {
             ).gap(3.0F);
         });
         return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.NOTICES)).add(
-                TerminalUi.header(Icons.MEGAPHONE, TerminalUi.SKY, "梦屿广播", state),
+                TerminalUi.header(Icons.MEGAPHONE, TerminalUi.SKY, "梦屿广播", "BROADCAST", state),
+                body,
+                Ui.spacer(),
+                TerminalUi.footerLink("查看全部广播", TerminalUi.SKY)
+        );
+    }
+
+    /** 大屏：列出最近三条广播，未读的带强调点。 */
+    private Card wideNoticeCard(Badge state) {
+        Dynamic<Object> body = Dynamic.of(TerminalData::noticeVersion, ignored -> {
+            List<NoticeData> all = TerminalData.notices();
+            if (all.isEmpty()) {
+                return Ui.column(Text.of("暂无公告").style(TextStyle.BODY),
+                        Text.of("新的服务器广播会显示在这里").style(TextStyle.CAPTION)).gap(3.0F);
+            }
+            Box list = Ui.column().gap(Theme.Space.SM);
+            for (int i = all.size() - 1, shown = 0; i >= 0 && shown < 3; i--, shown++) {
+                NoticeData notice = all.get(i);
+                boolean unread = !TerminalData.isRead(notice);
+                list.add(Ui.row(
+                        Ui.stack().size(4.0F, 4.0F).radius(2.0F).background(unread ? TerminalUi.GOLD : 0x40FFFFFF)
+                                .shrink(0.0F).margin(0.0F, 4.0F, 0.0F, 0.0F),
+                        Ui.column(Text.of(TerminalData.safe(notice.getNoticeTitle(), "无标题")).style(TextStyle.LABEL_STRONG)
+                                        .singleLine(),
+                                Text.of(TerminalData.safe(notice.getNoticeContent(), "").replace('\n', ' ')).style(TextStyle.CAPTION)
+                                        .singleLine()).gap(1.0F).grow(1.0F).shrink(1.0F)
+                ).gap(6.0F).alignItems(Align.START));
+            }
+            return list;
+        });
+        return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.NOTICES)).add(
+                TerminalUi.header(Icons.MEGAPHONE, TerminalUi.SKY, "梦屿广播", "BROADCAST", state),
                 body,
                 Ui.spacer(),
                 TerminalUi.footerLink("查看全部广播", TerminalUi.SKY)
@@ -337,6 +471,18 @@ final class HomePage extends TerminalPage {
                 return Ui.column(Text.of("还没有建立 NPC 私人频道").style(TextStyle.BODY_SECONDARY),
                         Text.of("与剧情 NPC 交谈后会在这里留下记录").style(TextStyle.CAPTION)).gap(3.0F);
             }
+            if (wide) {
+                Box list = Ui.column().gap(Theme.Space.SM);
+                for (int i = 0; i < Math.min(3, conversations.size()); i++) {
+                    NpcConversationViewData conversation = conversations.get(i);
+                    list.add(Ui.column(
+                            Ui.row(Text.of(conversation.npcName()).style(TextStyle.LABEL_STRONG).color(0xFFB8DDF4).singleLine(),
+                                    Text.of(conversation.relationName()).style(TextStyle.CAPTION).singleLine()).gap(6.0F),
+                            Text.of(TerminalData.latestPreview(conversation)).style(TextStyle.CAPTION).maxLines(2)
+                    ).gap(2.0F).padding(Theme.Space.SM, Theme.Space.XS + 1.0F).radius(Theme.Radius.MD).background(0x30060A0E));
+                }
+                return list;
+            }
             NpcConversationViewData latest = conversations.get(0);
             return Ui.column(
                     Ui.row(Text.of(latest.npcName()).style(TextStyle.BODY).color(0xFFB8DDF4).singleLine(),
@@ -345,7 +491,7 @@ final class HomePage extends TerminalPage {
             ).gap(3.0F);
         });
         return baseCard(() -> terminal.switchTab(TerminalScreen.Tab.MESSAGES)).add(
-                TerminalUi.header(Icons.MAIL, MESSAGE_BLUE, "NPC 私信", state),
+                TerminalUi.header(Icons.MAIL, MESSAGE_BLUE, "NPC 私信", "PRIVATE CHANNEL", state),
                 body,
                 Ui.spacer(),
                 TerminalUi.footerLink("查看会话", MESSAGE_BLUE)
@@ -370,7 +516,7 @@ final class HomePage extends TerminalPage {
                     Text.of(view.subtitle()).style(TextStyle.CAPTION).singleLine()).gap(2.0F);
         });
         return baseCard(() -> terminal.push(new HistoryPage(terminal))).add(
-                TerminalUi.header(Icons.HISTORY, TerminalUi.GOLD, "历史", null),
+                TerminalUi.header(Icons.HISTORY, TerminalUi.GOLD, "历史", "ARCHIVE", null),
                 body,
                 Ui.spacer(),
                 Text.of(() -> Component.literal(TerminalData.historyLoaded() ? TerminalData.historyTotal() + " 条公开记录" : "同步中"))
@@ -380,7 +526,7 @@ final class HomePage extends TerminalPage {
 
     private Card helpCard() {
         return baseCard(() -> terminal.push(new HelpPage(terminal))).add(
-                TerminalUi.header(Icons.HELP, TerminalUi.GREEN, "手册", null),
+                TerminalUi.header(Icons.HELP, TerminalUi.GREEN, "手册", "MANUAL", null),
                 Ui.column(Text.of("从梦屿基础开始").style(TextStyle.LABEL_STRONG).singleLine(),
                         Text.of("身体、感染、死亡与剧情规则").style(TextStyle.CAPTION).maxLines(2)).gap(2.0F),
                 Ui.spacer(),

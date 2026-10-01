@@ -86,14 +86,28 @@ final class TerminalDock extends UiNode<TerminalDock> {
                 .verticalGradient(0xF0161F28, 0xF00E151C)
                 .border(1.0F, theme.color(ColorRole.OUTLINE_STRONG))
                 .shadow(Theme.Elevation.LEVEL3).draw();
+        // 胶囊顶缘的一道反光，中间亮两端暗
+        float half = width() * 0.5F;
+        float edge = height() * 0.5F;
+        canvas.shape(edge, 0.5F, half - edge, 1.0F)
+                .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.0F), UiColor.withAlpha(TerminalUi.CYAN, 0.28F)).draw();
+        canvas.shape(half, 0.5F, half - edge, 1.0F)
+                .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.28F), UiColor.withAlpha(TerminalUi.CYAN, 0.0F)).draw();
         if (positioned) {
             float x = indicatorX.get();
             float w = indicatorW.get();
             float inset = padTop();
             float h = height() - inset * 2.0F;
             canvas.shape(x, inset, w, h).radius(h * 0.5F)
-                    .verticalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.24F), UiColor.withAlpha(TerminalUi.CYAN, 0.12F))
-                    .border(1.0F, UiColor.withAlpha(TerminalUi.CYAN, 0.45F)).draw();
+                    .verticalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.24F), UiColor.withAlpha(TerminalUi.CYAN, 0.10F))
+                    .border(1.0F, UiColor.withAlpha(TerminalUi.CYAN, 0.40F)).draw();
+            // 指示块底部的信标灯
+            float cx = x + w * 0.5F;
+            float by = inset + h - 0.75F;
+            canvas.shape(cx - 9.0F, by - 1.75F, 18.0F, 4.0F).radius(2.0F)
+                    .fill(UiColor.withAlpha(TerminalUi.CYAN, 0.16F)).draw();
+            canvas.shape(cx - 5.0F, by - 0.5F, 10.0F, 1.5F).radius(0.75F)
+                    .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.5F), 0xFFE8FBFF).draw();
         }
     }
 
@@ -143,8 +157,9 @@ final class TerminalDock extends UiNode<TerminalDock> {
         protected void paintOverlay(UiCanvas canvas) {
             if (unread != null && unread.getAsBoolean()) {
                 double t = (UiClock.now() % 1800.0) / 1800.0;
-                float cx = width() - 7.0F;
-                float cy = 5.5F;
+                // 角标贴在图标右上角，不挤占文字
+                float cx = icon.x() + icon.width() - 0.5F;
+                float cy = icon.y() + 1.0F;
                 canvas.circle(cx, cy, 2.2F + (float) t * 3.0F, UiColor.withAlpha(TerminalUi.ROSE, (float) (1.0 - t) * 0.35F));
                 canvas.circle(cx, cy, 2.2F, TerminalUi.ROSE);
             }

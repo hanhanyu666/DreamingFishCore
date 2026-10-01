@@ -18,8 +18,8 @@ import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Button;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.CustomPaint;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Dynamic;
-import com.hhy.dreamingfishcore.client.ui.framework.widget.Icon;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Icons;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.PlayerHead;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Responsive;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Text;
 import com.hhy.dreamingfishcore.client.ui.framework.widget.Ui;
@@ -114,7 +114,8 @@ public class TerminalScreen extends UiScreen {
         navigator.onChange(page -> dock.select(tab));
 
         device = new DevicePanel();
-        device.add(buildHeader(), buildDivider(), navigator, Ui.row(dock).justify(Justify.CENTER).padding(0.0F, 6.0F, 0.0F, 8.0F));
+        device.add(buildHeader(), TerminalWidgets.relayLine(), navigator,
+                Ui.row(dock).justify(Justify.CENTER).padding(0.0F, 6.0F, 0.0F, 8.0F));
         dock.select(tab);
         navigator.reset(rootFor(tab), false);
 
@@ -135,25 +136,33 @@ public class TerminalScreen extends UiScreen {
         left.grow(1.0F).basis(0.0F);
 
         Box clock = Ui.row(
-                Text.of(() -> Component.literal(LocalDateTime.now().format(CLOCK))).style(TextStyle.SUBTITLE).singleLine(),
-                Text.of(() -> {
-                    LocalDateTime now = LocalDateTime.now();
-                    return Component.literal(now.format(DATE) + " " + WEEKDAYS[now.getDayOfWeek().getValue() - 1]);
-                }).style(TextStyle.CAPTION).singleLine()
-        ).gap(5.0F).alignItems(Align.CENTER);
+                Text.of(() -> Component.literal(LocalDateTime.now().format(CLOCK))).style(TextStyle.TITLE).singleLine(),
+                Ui.column(
+                        Text.of(() -> {
+                            LocalDateTime now = LocalDateTime.now();
+                            return Component.literal(now.format(DATE) + " " + WEEKDAYS[now.getDayOfWeek().getValue() - 1]);
+                        }).style(TextStyle.CAPTION).singleLine(),
+                        Text.of(() -> Component.literal("梦屿 · 第 " + worldDay() + " 日")).style(TextStyle.CAPTION)
+                                .color(UiColor.withAlpha(TerminalUi.GOLD, 0.85F)).singleLine()
+                ).gap(1.0F)
+        ).gap(6.0F).alignItems(Align.CENTER);
 
+        PlayerHead avatar = PlayerHead.local().headSize(12.0F).cornerRadius(3.0F);
+        avatar.ring(1.0F, UiColor.withAlpha(TerminalUi.CYAN, 0.6F));
         Box status = Ui.row(
                 new PulseDot(),
-                Text.of(() -> Component.literal("在线 " + onlinePlayers() + "/20")).style(TextStyle.LABEL).singleLine(),
-                Ui.space(4.0F),
-                Icon.of(Icons.SIGNAL, 10.0F).color(TerminalUi.MINT),
-                Text.of(() -> Component.literal("TPS " + ServerInformationDisplay.getServerTpsText(Minecraft.getInstance())))
-                        .style(TextStyle.LABEL).singleLine()
+                Text.of(() -> Component.literal("在线 " + onlinePlayers())).style(TextStyle.LABEL).singleLine(),
+                Ui.space(5.0F),
+                TerminalWidgets.signalBars(() -> ServerInformationDisplay.getClientTps(Minecraft.getInstance())),
+                Text.of(() -> Component.literal("中继 " + ServerInformationDisplay.getServerTpsText(Minecraft.getInstance())))
+                        .style(TextStyle.LABEL).singleLine(),
+                Ui.space(5.0F),
+                avatar
         ).gap(4.0F).alignItems(Align.CENTER);
         Box right = Ui.row(status).justify(Justify.END).grow(1.0F).basis(0.0F);
 
         Responsive middle = Responsive.of(size -> size == Responsive.Size.COMPACT ? Ui.space(0) : clock);
-        return Ui.row(left, middle, right).alignItems(Align.CENTER).height(30.0F).padding(12.0F, 0.0F);
+        return Ui.row(left, middle, right).alignItems(Align.CENTER).height(32.0F).padding(14.0F, 0.0F);
     }
 
     private UiNode<?> brand() {
@@ -167,13 +176,10 @@ public class TerminalScreen extends UiScreen {
                 .gap(6.0F).alignItems(Align.CENTER);
     }
 
-    private UiNode<?> buildDivider() {
-        return CustomPaint.of((canvas, w, h) -> {
-            canvas.fill(10.0F, 0.0F, w - 20.0F, 1.0F, UiColor.withAlpha(0xFFFFFFFF, 0.06F));
-            float glow = Math.min(160.0F, w * 0.3F);
-            canvas.shape(12.0F, 0.0F, glow, 1.0F)
-                    .horizontalGradient(UiColor.withAlpha(TerminalUi.CYAN, 0.55F), UiColor.withAlpha(TerminalUi.CYAN, 0.0F)).draw();
-        }).height(1.0F);
+    /** 梦屿上的第几日（按世界时间）。 */
+    private static long worldDay() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.level == null ? 1L : minecraft.level.getDayTime() / 24000L + 1L;
     }
 
     private static int onlinePlayers() {
@@ -317,6 +323,7 @@ public class TerminalScreen extends UiScreen {
     /** 设备外框：按窗口尺寸留边，驱动开合动画。 */
     private final class DeviceShell extends Box {
         private float lastWidth = -1.0F;
+        private float lastHeight = -1.0F;
 
         DeviceShell(Box content) {
             column().alignItems(Align.STRETCH);
@@ -327,8 +334,9 @@ public class TerminalScreen extends UiScreen {
         protected void update() {
             float w = ui.width() > 0 ? ui.width() : width();
             float h = ui.height() > 0 ? ui.height() : height();
-            if (w != lastWidth && w > 0.0F) {
+            if ((w != lastWidth || h != lastHeight) && w > 0.0F) {
                 lastWidth = w;
+                lastHeight = h;
                 float marginX;
                 float marginY;
                 if (w < Responsive.REGULAR_MIN) {
@@ -336,7 +344,8 @@ public class TerminalScreen extends UiScreen {
                     marginY = 6.0F;
                 } else {
                     marginX = Math.max(Math.max(16.0F, (w - 960.0F) * 0.5F), w * 0.035F);
-                    marginY = Math.max(10.0F, h * 0.05F);
+                    // 设备最大 960 × 600，超出部分留给背景，避免卡片被拉得过高
+                    marginY = Math.max(Math.max(10.0F, h * 0.05F), (h - 600.0F) * 0.5F);
                 }
                 padding(marginX, marginY);
             }
@@ -356,7 +365,7 @@ public class TerminalScreen extends UiScreen {
 
         @Override
         protected void paintBackground(UiCanvas canvas) {
-            TerminalChrome.paintPanel(canvas, width(), height(), Theme.Radius.XL);
+            TerminalChrome.paintDevice(canvas, width(), height(), Theme.Radius.XL, 1.0F);
         }
 
         @Override

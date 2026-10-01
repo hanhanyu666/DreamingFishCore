@@ -135,6 +135,12 @@ public class Card extends InteractiveNode<Card> {
             shape.shadow(shadow).shadowAlpha(hover > 0.5F ? 0.6F + hover * 0.4F : 1.0F - hover * 0.5F);
         }
         shape.draw();
+        paintAccentBar(canvas);
+    }
+
+    /** 左侧强调色条；子类自定义背景时可单独调用。 */
+    protected void paintAccentBar(UiCanvas canvas) {
+        int accent = accentRole != null ? theme().color(accentRole) : accentColor;
         if (UiColor.alpha(accent) > 0 && accentWidth > 0.0F) {
             float inset = Math.max(0.0F, radiusValue() * 0.6F);
             canvas.shape(0.0F, inset, accentWidth, Math.max(0.0F, height() - inset * 2.0F))

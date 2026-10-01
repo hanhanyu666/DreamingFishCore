@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.server.server_ui_system.client.terminal;
 import com.hhy.dreamingfishcore.client.ui.framework.node.Align;
 import com.hhy.dreamingfishcore.client.ui.framework.node.Box;
 import com.hhy.dreamingfishcore.client.ui.framework.node.UiNode;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.client.ui.framework.text.TextStyle;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.ColorRole;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
@@ -48,9 +49,22 @@ public final class TerminalUi {
 
     /** 卡片标题行：图标徽章 + 标题 + 右侧附加内容。 */
     public static Box header(Icons icon, int accent, String title, UiNode<?> trailing) {
-        Box row = Ui.row(iconBadge(icon, accent, 18.0F),
-                Text.of(title).style(TextStyle.SUBTITLE).singleLine().grow(1).shrink(1))
-                .gap(Theme.Space.MD);
+        return header(icon, accent, title, null, trailing);
+    }
+
+    /** 卡片标题行，标题上方带一行小号英文标签（如 STORY），强调色淡显。 */
+    public static Box header(Icons icon, int accent, String title, String kicker, UiNode<?> trailing) {
+        UiNode<?> titleBlock;
+        if (kicker == null || kicker.isBlank()) {
+            titleBlock = Text.of(title).style(TextStyle.SUBTITLE).singleLine().grow(1).shrink(1);
+        } else {
+            titleBlock = Ui.column(
+                    Text.of(kicker).style(TextStyle.CAPTION_STRONG.withScale(0.62F)).color(UiColor.withAlpha(accent, 0.75F))
+                            .singleLine(),
+                    Text.of(title).style(TextStyle.SUBTITLE).singleLine()
+            ).gap(1.0F).grow(1).shrink(1);
+        }
+        Box row = Ui.row(iconBadge(icon, accent, 18.0F), titleBlock).gap(Theme.Space.MD).alignItems(Align.CENTER);
         if (trailing != null) {
             row.add(trailing);
         }
@@ -107,9 +121,58 @@ public final class TerminalUi {
                 Icon.of(Icons.CHEVRON_RIGHT, 8.0F).color(accent)).gap(2.0F);
     }
 
-    /** 标准终端卡片。 */
+    /** 标准终端卡片：玻璃底、四角括号，可点击时悬停泛起强调色。 */
     public static Card card() {
-        return new Card().padding(Theme.Space.LG).gap(Theme.Space.MD).radius(Theme.Radius.LG);
+        return new FieldCard().padding(Theme.Space.LG).gap(Theme.Space.MD).radius(Theme.Radius.LG);
+    }
+
+    /** 终端卡片的外观。 */
+    static final class FieldCard extends Card {
+        private int glow = CYAN;
+
+        @Override
+        public Card accent(int argb) {
+            glow = argb;
+            return super.accent(argb);
+        }
+
+        /** 只设置悬停与括号的强调色，不画左侧色条。 */
+        FieldCard glow(int argb) {
+            glow = argb;
+            return this;
+        }
+
+        private boolean interactive() {
+            return onClickHandler() != null && !isEffectivelyDisabled();
+        }
+
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float h = interactive() ? hover() : 0.0F;
+            float w = width();
+            float ht = height();
+            float r = radiusValue();
+            canvas.shape(0.0F, 0.0F, w, ht).radius(r)
+                    .verticalGradient(UiColor.lerp(0xD8131C25, 0xEC1A2631, h), UiColor.lerp(0xDE0D141B, 0xEE111A22, h))
+                    .border(1.0F, UiColor.lerp(0x1CFFFFFF, UiColor.withAlpha(glow, 0.55F), h))
+                    .shadow(new Theme.Shadow(0.0F, 2.0F + h * 4.0F, 8.0F + h * 10.0F, 0.0F,
+                            UiColor.lerp(0x55000000, UiColor.withAlpha(glow, 0.22F), h))).draw();
+            // 顶部内高光
+            canvas.shape(r, 1.0F, Math.max(0.0F, w - r * 2.0F), 1.0F)
+                    .horizontalGradient(0x00FFFFFF, 0x0CFFFFFF).draw();
+            if (h > 0.01F) {
+                canvas.shape(0.0F, 0.0F, w * 0.65F, ht).radius(r, 0.0F, 0.0F, r)
+                        .horizontalGradient(UiColor.withAlpha(glow, 0.07F * h), UiColor.withAlpha(glow, 0.0F)).draw();
+            }
+            paintAccentBar(canvas);
+        }
+
+        @Override
+        protected void paintOverlay(UiCanvas canvas) {
+            float h = interactive() ? hover() : 0.0F;
+            TerminalChrome.paintCornerTicks(canvas, width(), height(), 4.0F + h * 2.0F, 2.5F,
+                    UiColor.lerp(0x26FFFFFF, UiColor.withAlpha(glow, 0.9F), h));
+        }
     }
 
     public static int rgb(int color) {
