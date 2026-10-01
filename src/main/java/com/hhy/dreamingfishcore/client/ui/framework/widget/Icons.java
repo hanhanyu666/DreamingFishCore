@@ -236,7 +236,31 @@ public enum Icons {
         p.poly(6.2F, 13, 12, 3.5F, 17.8F, 13);
     }),
     BOLT(p -> p.polygon(13, 2.5F, 5, 13.5F, 11.5F, 13.5F, 10.5F, 21.5F, 19, 10, 12.5F, 10)),
-    DOT(p -> p.dot(12, 12, 4.5F));
+    DOT(p -> p.dot(12, 12, 4.5F)),
+    GLOBE(p -> {
+        p.ring(12, 12, 8.5F);
+        p.line(3.5F, 12, 20.5F, 12);
+        p.polygon(ellipse(12, 12, 4, 8.5F));
+    }),
+    ACCESSIBILITY(p -> {
+        p.dot(12, 4.8F, 1.9F);
+        p.line(5, 9, 19, 9);
+        p.line(12, 9, 12, 14.5F);
+        p.poly(8, 20.5F, 12, 14.5F, 16, 20.5F);
+    }),
+    SKULL(p -> {
+        p.polygon(5, 11, 5.5F, 7, 8.5F, 4, 15.5F, 4, 18.5F, 7, 19, 11, 17, 14, 17, 19, 7, 19, 7, 14);
+        p.dot(9.5F, 11, 1.6F);
+        p.dot(14.5F, 11, 1.6F);
+        p.line(10.5F, 19, 10.5F, 16.5F);
+        p.line(13.5F, 19, 13.5F, 16.5F);
+    }),
+    RESPAWN(p -> {
+        p.arc(12, 12, 7.5F, -60, 300);
+        p.poly(17.5F, 3.5F, 16.2F, 6.6F, 19.3F, 7.7F);
+        p.line(12, 8.5F, 12, 12.5F);
+        p.line(12, 12.5F, 14.5F, 14);
+    });
 
     private final Consumer<IconPen> painter;
 
@@ -246,5 +270,16 @@ public enum Icons {
 
     void paint(IconPen pen) {
         painter.accept(pen);
+    }
+
+    private static float[] ellipse(float cx, float cy, float rx, float ry) {
+        int segments = 20;
+        float[] points = new float[segments * 2];
+        for (int i = 0; i < segments; i++) {
+            double angle = Math.PI * 2.0 * i / segments;
+            points[i * 2] = cx + (float) Math.cos(angle) * rx;
+            points[i * 2 + 1] = cy + (float) Math.sin(angle) * ry;
+        }
+        return points;
     }
 }

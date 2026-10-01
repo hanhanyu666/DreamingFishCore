@@ -34,8 +34,14 @@ final class UiHarnessScenarios {
         UiHarness.register("title", minecraft -> minecraft.setScreen(new TitleScreen()));
         UiHarness.register("pause", minecraft -> minecraft.setScreen(new PauseScreen(true)));
         UiHarness.register("chat", minecraft -> minecraft.setScreen(new ChatScreen("")));
-        UiHarness.register("death", minecraft -> minecraft.setScreen(
-                new DeathScreen(Component.literal("Dev 被僵尸杀死了"), false)));
+        UiHarness.register("death", minecraft -> {
+            var player = minecraft.player;
+            com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage.setData(
+                    62.5F, 12.5F, 35.0F, false, Component.literal("Dev 在灯塔下被感染者撕碎了"),
+                    player != null ? player.getX() : 0, player != null ? player.getY() : 64, player != null ? player.getZ() : 0,
+                    "minecraft:overworld", java.util.UUID.randomUUID());
+            minecraft.setScreen(new DeathScreen(Component.literal("Dev 被僵尸杀死了"), false));
+        });
 
         UiHarness.register("login", minecraft -> minecraft.setScreen(new Screen_LoginUI(false)));
         UiHarness.register("register", minecraft -> minecraft.setScreen(new Screen_LoginUI(true)));

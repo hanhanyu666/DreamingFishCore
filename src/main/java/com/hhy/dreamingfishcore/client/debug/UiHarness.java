@@ -28,7 +28,8 @@ import java.util.function.Consumer;
  * 进入存档后按 {@code harness_steps.txt} 逐行执行步骤，每步打开一个已登记的界面，
  * 等待动画稳定后把主渲染目标保存到 {@code screenshots/harness/}，全部完成后退出游戏。</p>
  *
- * <p>步骤格式：{@code 场景名 [gui=缩放] [wait=tick] [mouse=x,y] [as=文件名]}。</p>
+ * <p>步骤格式：{@code 场景名 [gui=缩放] [wait=tick] [mouse=x,y] [click=x,y] [as=文件名]}；
+ * {@code click} 在等待过半时模拟一次左键点击（GUI 坐标）。</p>
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public final class UiHarness {
@@ -92,6 +93,13 @@ public final class UiHarness {
             return;
         }
         if (waitTicks > 0) {
+            Step current = steps.get(stepIndex);
+            if (current.clickX() >= 0 && waitTicks == Math.max(1, current.waitTicks() / 2) && minecraft.screen != null) {
+                // 模拟一次左键点击（GUI 坐标），用于截取交互后的状态
+                moveMouse(minecraft, current.clickX(), current.clickY());
+                minecraft.screen.mouseClicked(current.clickX(), current.clickY(), 0);
+                minecraft.screen.mouseReleased(current.clickX(), current.clickY(), 0);
+            }
             waitTicks--;
             if (waitTicks == 0) {
                 captureRequested = true;
@@ -152,15 +160,31 @@ public final class UiHarness {
                 opener.accept(minecraft);
             }
             if (step.mouseX() >= 0) {
-                double scale = minecraft.getWindow().getGuiScale();
-                GLFW.glfwSetCursorPos(minecraft.getWindow().getWindow(),
-                        step.mouseX() * scale, step.mouseY() * scale);
+                moveMouse(minecraft, step.mouseX(), step.mouseY());
             }
         } catch (RuntimeException exception) {
             log(minecraft, "场景执行失败 " + step.scenario() + ": " + exception);
             DreamingFishCore.LOGGER.error("UI harness 场景失败", exception);
         }
         waitTicks = Math.max(1, step.waitTicks());
+    }
+
+    /**
+     * 把鼠标移到 GUI 坐标处。窗口没有焦点时 GLFW 不会回调光标事件，
+     * 所以除了移动系统光标，还直接把位置喂给 {@code MouseHandler}。
+     */
+    private static void moveMouse(Minecraft minecraft, double guiX, double guiY) {
+        double scale = minecraft.getWindow().getGuiScale();
+        long window = minecraft.getWindow().getWindow();
+        GLFW.glfwSetCursorPos(window, guiX * scale, guiY * scale);
+        try {
+            java.lang.reflect.Method onMove = minecraft.mouseHandler.getClass()
+                    .getDeclaredMethod("onMove", long.class, double.class, double.class);
+            onMove.setAccessible(true);
+            onMove.invoke(minecraft.mouseHandler, window, guiX * scale, guiY * scale);
+        } catch (ReflectiveOperationException exception) {
+            log(minecraft, "无法模拟鼠标移动: " + exception);
+        }
     }
 
     private static void finish(Minecraft minecraft) {
@@ -195,7 +219,8 @@ public final class UiHarness {
         DreamingFishCore.LOGGER.info("[UiHarness] {}", message);
     }
 
-    private record Step(String scenario, int guiScale, int waitTicks, int mouseX, int mouseY, String fileName) {
+    private record Step(String scenario, int guiScale, int waitTicks, int mouseX, int mouseY, int clickX, int clickY,
+                        String fileName) {
         static Step parse(String line) {
             String[] parts = line.split("\\s+");
             String scenario = parts[0];
@@ -203,6 +228,8 @@ public final class UiHarness {
             int wait = DEFAULT_WAIT_TICKS;
             int mouseX = -1;
             int mouseY = -1;
+            int clickX = -1;
+            int clickY = -1;
             String name = null;
             for (int i = 1; i < parts.length; i++) {
                 String part = parts[i];
@@ -214,6 +241,10 @@ public final class UiHarness {
                     String[] xy = part.substring(6).split(",");
                     mouseX = Integer.parseInt(xy[0]);
                     mouseY = Integer.parseInt(xy[1]);
+                } else if (part.startsWith("click=")) {
+                    String[] xy = part.substring(6).split(",");
+                    clickX = Integer.parseInt(xy[0]);
+                    clickY = Integer.parseInt(xy[1]);
                 } else if (part.startsWith("as=")) {
                     name = part.substring(3);
                 }
@@ -221,7 +252,7 @@ public final class UiHarness {
             if (name == null) {
                 name = scenario.replace(':', '_').replace('/', '_') + (gui >= 0 ? "_g" + gui : "");
             }
-            return new Step(scenario, gui, wait, mouseX, mouseY, name);
+            return new Step(scenario, gui, wait, mouseX, mouseY, clickX, clickY, name);
         }
     }
 }
