@@ -19,13 +19,13 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * 统一的加载画面：背景图 + 左上“梦屿电台”提示 + 左下信号波形与进度 + 右下 Esc 操作。
+ * 统一的加载画面：背景图 + 左上电台提示语 + 左下信号波形与进度 + 右下 Esc 操作。
  *
  * <p>连接服务器、接收世界、生成区块、准备世界、等待与资源重载都用同一个外观，
  * 屏幕切换时看起来是同一个画面在推进。每帧由调用方写入状态后调用 {@link #render}。</p>
  *
- * <p>首次启动的资源加载阶段字体和着色器都还没就绪，{@link #startup(boolean)} 模式只画背景与波形条，
- * 框架在着色器缺失时会自动退回原版矩形绘制。</p>
+ * <p>首次启动的资源加载阶段字体和着色器都还没就绪，{@link #startup(boolean)} 模式不画文字，
+ * 进度改为底部的夜海航线与灯塔（见 {@link StartupHorizon}），框架在着色器缺失时会自动退回原版矩形绘制。</p>
  */
 public final class LoadingSurface {
     static final int AMBER = 0xFFE0B457;
@@ -44,6 +44,8 @@ public final class LoadingSurface {
     private int failureAccent;
     private String failureDetail = "";
     private String failureState = "";
+    /** 首次启动时平滑后的进度（0~1），海平线与天亮的遮罩共用。 */
+    private float startupShown;
 
     public LoadingSurface() {
         this(LoadingTips.getRandomTip());
@@ -145,8 +147,10 @@ public final class LoadingSurface {
         if (!startup) {
             root.add(tipCard().absolute(18.0F, 14.0F, Float.NaN, Float.NaN));
         }
-        root.add(statusBlock().absolute(24.0F, Float.NaN, Float.NaN, 22.0F));
-        if (!startup) {
+        if (startup) {
+            root.add(new StartupHorizon().absolute(0.0F, 0.0F, 0.0F, 0.0F));
+        } else {
+            root.add(statusBlock().absolute(24.0F, Float.NaN, Float.NaN, 22.0F));
             root.add(new ActionChip().absolute(Float.NaN, Float.NaN, 24.0F, 22.0F));
         }
         root.onUpdate(() -> root.opacity(opacity));
@@ -157,10 +161,8 @@ public final class LoadingSurface {
         String shown = tip.replace("§7", "§r");
         Box card = Ui.row(
                 new RadioIcon().size(16.0F, 16.0F),
-                Ui.column(
-                        Text.of("梦屿电台 · 随机播报").style(TextStyle.CAPTION).color(UiColor.withAlpha(AMBER_DIM, 0.85F)).singleLine(),
-                        Text.of(shown).style(TextStyle.LABEL.withLineGap(2.0F)).color(TIP).maxLines(2).shadow(true)
-                ).gap(3.0F).shrink(1.0F)
+                Text.of(shown).style(TextStyle.LABEL.withLineGap(2.0F)).color(TIP).maxLines(2).shadow(true)
+                        .shrink(1.0F).margin(0.0F, 3.0F, 0.0F, 0.0F)
         ).gap(Theme.Space.MD).alignItems(Align.START).maxWidth(300.0F);
         return card;
     }
@@ -170,20 +172,14 @@ public final class LoadingSurface {
             return failureBlock();
         }
         Box block = Ui.column().alignItems(Align.START).gap(5.0F);
-        if (!startup) {
-            block.add(Ui.row(new SignalDot().size(5.0F, 5.0F),
-                            Text.of("RELAY · 梦屿中继").style(TextStyle.CAPTION).color(UiColor.withAlpha(AMBER_DIM, 0.8F)).singleLine())
-                            .gap(5.0F).alignItems(Align.CENTER),
-                    Text.of(() -> Component.literal(status)).style(TextStyle.SUBTITLE).color(AMBER).singleLine().shadow(true)
-                            .maxWidth(320.0F));
-        }
-        Box wave = Ui.row(new Waveform().size(startup ? 240.0F : 196.0F, 20.0F)).gap(Theme.Space.MD).alignItems(Align.CENTER);
-        if (!startup) {
-            Text percent = Text.of(() -> Component.literal(progress < 0 ? "" : progress + "%")).style(TextStyle.LABEL_STRONG)
-                    .color(AMBER_BRIGHT).singleLine().shadow(true);
-            wave.add(percent);
-        }
-        block.add(wave);
+        block.add(Ui.row(new SignalDot().size(5.0F, 5.0F),
+                        Text.of("RELAY · 梦屿中继").style(TextStyle.CAPTION).color(UiColor.withAlpha(AMBER_DIM, 0.8F)).singleLine())
+                        .gap(5.0F).alignItems(Align.CENTER),
+                Text.of(() -> Component.literal(status)).style(TextStyle.SUBTITLE).color(AMBER).singleLine().shadow(true)
+                        .maxWidth(320.0F));
+        Text percent = Text.of(() -> Component.literal(progress < 0 ? "" : progress + "%")).style(TextStyle.LABEL_STRONG)
+                .color(AMBER_BRIGHT).singleLine().shadow(true);
+        block.add(Ui.row(new Waveform().size(196.0F, 20.0F), percent).gap(Theme.Space.MD).alignItems(Align.CENTER));
         return block;
     }
 
@@ -218,6 +214,10 @@ public final class LoadingSurface {
             float w = width();
             float h = height();
             canvas.shape(0.0F, 0.0F, w, h).verticalGradient(0x10000000, 0x78000000).draw();
+            if (startup) {
+                float dark = 1.0F - startupShown;
+                canvas.fill(0.0F, 0.0F, w, h, UiColor.withAlpha(0xFF02040A, 0.58F * dark * dark));
+            }
             if (failureAccent != 0) {
                 float intro = Math.min(1.0F, (float) ((UiClock.now() - createdAt) / 360.0));
                 intro = 1.0F - (1.0F - intro) * (1.0F - intro) * (1.0F - intro);
@@ -254,6 +254,117 @@ public final class LoadingSurface {
             float r = width() * 0.5F;
             canvas.circle(r, r, r + pulse * 1.5F, UiColor.withAlpha(AMBER, 0.18F * pulse));
             canvas.circle(r, r, r * 0.8F, UiColor.withAlpha(AMBER_BRIGHT, 0.55F + 0.45F * pulse));
+        }
+    }
+
+    /**
+     * 首次启动的进度：画面底部是一片夜海，海平线上一点暖光从左端出发，驶向右侧礁石上的灯塔。
+     * 走过的航线亮起、水面泛着倒影，晨光与整个画面的亮度随进度增加，像天慢慢亮起来；
+     * 灯塔的光束不停旋转扫过画面，正对镜头时闪出一道星芒，越接近终点灯越亮。
+     *
+     * <p>线条与暗带只用直角矩形和线性渐变，灯塔与光效是贴图（见 {@link StartupArt}），
+     * 界面着色器还没加载时也能完整显示。</p>
+     */
+    private final class StartupHorizon extends UiNode<StartupHorizon> {
+        private static final double ROTATION_MS = 5600.0;
+
+        StartupHorizon() {
+            pointerEvents(false);
+        }
+
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            double now = UiClock.now();
+            float target = progress < 0 ? 0.0F : progress / 100.0F;
+            // 平滑追赶目标进度，避免资源加载的进度跳变
+            startupShown += (target - startupShown) * 0.08F;
+            float ratio = Math.max(0.0F, Math.min(1.0F, startupShown));
+
+            float horizon = h - 18.0F;
+            float towerH = Math.max(60.0F, Math.min(104.0F, h * 0.27F));
+            float towerW = towerH * 0.5F;
+            float towerX = w - 14.0F - towerW;
+            float towerY = horizon - towerH * StartupArt.HORIZON_V;
+            float lampX = towerX + towerW * StartupArt.LAMP_U;
+            float lampY = towerY + towerH * StartupArt.LAMP_V;
+            float left = 30.0F;
+            float end = towerX + towerW * 0.1F;
+            float head = left + (end - left) * ratio;
+            float lamp = 0.45F + 0.55F * ratio;
+
+            // 夜海：电影感暗带托住航线，海平线上方泛起随进度增强的晨光
+            canvas.shape(0.0F, h - 84.0F, w, 84.0F).verticalGradient(0x0002040A, 0xDC02040A).draw();
+            canvas.shape(0.0F, horizon - 30.0F, w, 30.0F)
+                    .verticalGradient(UiColor.withAlpha(AMBER, 0.0F), UiColor.withAlpha(AMBER, 0.04F + 0.14F * ratio)).draw();
+
+            // 航线：起点刻线、尚未抵达的虚线、走过的亮线与水面倒影
+            canvas.fill(left, horizon, end - left, 1.0F, 0x12FFFFFF);
+            canvas.fill(left - 0.5F, horizon - 3.0F, 1.0F, 7.0F, UiColor.withAlpha(AMBER_BRIGHT, 0.6F));
+            for (float x = head + 7.0F; x < end; x += 8.0F) {
+                canvas.fill(x, horizon, Math.min(4.0F, end - x), 1.0F, UiColor.withAlpha(AMBER_DIM, 0.35F));
+            }
+            if (head > left) {
+                canvas.shape(left, horizon, head - left, 1.0F)
+                        .horizontalGradient(UiColor.withAlpha(AMBER, 0.2F), UiColor.withAlpha(AMBER_BRIGHT, 0.95F)).draw();
+                canvas.shape(left, horizon + 1.0F, head - left, 5.0F)
+                        .verticalGradient(UiColor.withAlpha(AMBER, 0.05F + 0.1F * ratio), UiColor.withAlpha(AMBER, 0.0F)).draw();
+            }
+            paintShimmer(canvas, head, horizon, now, 0.8F, 3);
+            paintShimmer(canvas, lampX, horizon + 4.0F, now + 900.0, lamp * 0.7F, 4);
+
+            // 灯塔与灯火：贴图在原版管线里绘制，着色器未就绪时也能显示
+            double angle = now / ROTATION_MS * Math.PI * 2.0;
+            float side = (float) Math.sin(angle);
+            float facing = (float) Math.cos(angle);
+            float flash = (float) Math.pow(Math.max(0.0F, facing), 6.0) * lamp;
+            float beamLength = Math.max(150.0F, Math.min(560.0F, w * 0.62F)) * Math.abs(side);
+            float beamAlpha = 0.55F * lamp * (0.3F + 0.7F * Math.abs(side)) * (facing >= 0.0F ? 1.0F : 0.6F);
+            float alpha = canvas.alpha();
+            float headX = head;
+            canvas.custom(0.0F, 0.0F, w, h, graphics -> {
+                StartupArt.light(graphics, StartupArt.GLOW, headX - 16.0F, horizon - 16.0F, 32.0F, 32.0F, false,
+                        0.75F * alpha);
+                if (beamLength > 2.0F) {
+                    float beamHeight = beamLength * 0.3F;
+                    float beamX = side < 0.0F ? lampX - beamLength : lampX;
+                    StartupArt.light(graphics, StartupArt.BEAM, beamX, lampY - beamHeight * 0.5F, beamLength, beamHeight,
+                            side < 0.0F, beamAlpha * alpha);
+                }
+                StartupArt.draw(graphics, StartupArt.LIGHTHOUSE, towerX, towerY, towerW, towerH, alpha);
+                float glow = towerW * (1.5F + 0.6F * flash);
+                StartupArt.light(graphics, StartupArt.GLOW, lampX - glow * 0.5F, lampY - glow * 0.5F, glow, glow, false,
+                        (0.55F * lamp + 0.45F * flash) * alpha);
+                if (flash > 0.01F) {
+                    float flareW = towerW * 5.0F;
+                    float flareH = flareW * 0.25F;
+                    StartupArt.light(graphics, StartupArt.FLARE, lampX - flareW * 0.5F, lampY - flareH * 0.5F, flareW, flareH,
+                            false, flash * alpha);
+                }
+            });
+
+            // 光点的亮核与横向星芒，叠在柔光之上
+            float flicker = (float) (0.85 + 0.15 * Math.sin(now / 260.0));
+            canvas.shape(head - 60.0F, horizon, 60.0F, 1.0F)
+                    .horizontalGradient(0x00FFFFFF, UiColor.withAlpha(0xFFFFF6E0, 0.8F * flicker)).draw();
+            canvas.shape(head, horizon, 28.0F, 1.0F)
+                    .horizontalGradient(UiColor.withAlpha(0xFFFFF6E0, 0.8F * flicker), 0x00FFFFFF).draw();
+            canvas.shape(head - 1.5F, horizon - 1.0F, 3.0F, 3.0F).radius(1.5F).fill(0xFFFFF6E0).draw();
+        }
+
+        /** 水面倒影：光源下方几道长短不一、各自明灭的短波光，两端渐隐。 */
+        private void paintShimmer(UiCanvas canvas, float x, float top, double now, float strength, int rows) {
+            for (int i = 0; i < rows; i++) {
+                float wave = (float) (0.55 + 0.45 * Math.sin(now / 340.0 + i * 1.9));
+                float half = (7.0F - i * 1.2F) * (0.75F + 0.25F * wave);
+                float center = x + (float) Math.sin(now / 900.0 + i * 0.8) * 1.5F;
+                float y = top + 3.0F + i * 2.2F;
+                int color = UiColor.withAlpha(AMBER_BRIGHT, strength * 0.42F * wave * (1.0F - i / (float) (rows + 1)));
+                int clear = UiColor.withAlpha(AMBER_BRIGHT, 0.0F);
+                canvas.shape(center - half, y, half, 1.0F).horizontalGradient(clear, color).draw();
+                canvas.shape(center, y, half, 1.0F).horizontalGradient(color, clear).draw();
+            }
         }
     }
 

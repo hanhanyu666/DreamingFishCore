@@ -55,6 +55,7 @@ public final class SdfRenderer {
     private static int solidVaoProgram = -1;
     private static int textureVaoProgram = -1;
     private static boolean failed;
+    private static volatile boolean forceFallback;
 
     private SdfRenderer() {
     }
@@ -78,7 +79,12 @@ public final class SdfRenderer {
 
     /** 着色器已就绪；首次资源加载完成前返回 false，此时由调用方退回原版绘制。 */
     public static boolean available() {
-        return !failed && solidShader != null && textureShader != null;
+        return !forceFallback && !failed && solidShader != null && textureShader != null;
+    }
+
+    /** 调试用：强制按“着色器未就绪”绘制，预览首次启动阶段的样子。 */
+    public static void forceFallback(boolean value) {
+        forceFallback = value;
     }
 
     /**

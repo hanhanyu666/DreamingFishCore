@@ -28,6 +28,7 @@
     "ui.NetworkServerEntryMixin",
     "ui.LanHeaderMixin",
     "ui.TitleScreenMixin",
+    "ui.ButtonAccessor",
     "ui.ChatComponentMixin",
     "ui.ChatScreenMixin",
     "ui.CommandSuggestionsMixin",

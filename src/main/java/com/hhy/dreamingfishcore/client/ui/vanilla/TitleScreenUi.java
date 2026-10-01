@@ -12,6 +12,7 @@ import com.hhy.dreamingfishcore.client.ui.framework.node.Justify;
 import com.hhy.dreamingfishcore.client.ui.framework.node.UiNode;
 import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.client.ui.framework.screen.ScreenHost;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextFit;
 import com.hhy.dreamingfishcore.client.ui.framework.text.TextStyle;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
@@ -30,6 +31,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.PlainTextButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -39,6 +41,7 @@ import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.util.FormattedCharSequence;
 import net.neoforged.fml.ModList;
 
 import java.io.InputStreamReader;
@@ -170,12 +173,10 @@ public final class TitleScreenUi {
     }
 
     private UiNode<?> routeMenu(boolean compact) {
-        Box header = Ui.row(
-                Ui.column(Text.of("ROUTE SELECT").style(TextStyle.CAPTION_STRONG).color(BLUE).singleLine(),
-                        Text.of("选择你的下一段航线").style(TextStyle.LABEL).color(CREAM_SOFT).singleLine()).gap(2.0F),
-                Ui.spacer(),
-                new RouteCompass().size(18.0F, 18.0F)
-        ).alignItems(Align.CENTER).padding(4.0F, 2.0F, 4.0F, 4.0F);
+        Box header = Ui.column(
+                Text.of("ROUTE SELECT").style(TextStyle.CAPTION_STRONG).color(BLUE).singleLine(),
+                Text.of("选择你的下一段航线").style(compact ? TextStyle.LABEL : TextStyle.SUBTITLE).color(CREAM).singleLine()
+        ).gap(2.0F).padding(2.0F, 0.0F, 0.0F, compact ? 2.0F : 6.0F);
 
         AbstractWidget multiplayerWidget = findPrimary("menu.multiplayer");
         RouteButton multiplayer = new RouteButton("01", Icons.USERS, "多人游戏", "选择服务器，加入梦屿与其他玩家共同冒险",
@@ -183,18 +184,25 @@ public final class TitleScreenUi {
         if (multiplayerWidget != null && !multiplayerWidget.active) {
             multiplayer.disabled(true).tooltip(Component.literal("多人游戏当前不可用"));
         }
-        Box menu = VanillaChrome.glassPanel().column().alignItems(Align.STRETCH).gap(compact ? 3.0F : 4.0F)
-                .padding(compact ? 6.0F : 8.0F);
-        menu.add(header,
-                multiplayer.enter(EnterEffect.FADE_LEFT.delayed(140.0F)),
+        Box footer = Ui.row(
+                Text.of("海图 · 梦屿外海").style(TextStyle.CAPTION).color(0xFF7D8890).singleLine(),
+                Ui.spacer(),
+                Text.of("N 27°41′  E 121°09′").style(TextStyle.CAPTION).color(0xFF7D8890).singleLine()
+        ).alignItems(Align.CENTER).padding(2.0F, compact ? 2.0F : 6.0F, 0.0F, 0.0F);
+
+        Box chart = new RouteChart().column().alignItems(Align.STRETCH).gap(compact ? 1.0F : 3.0F)
+                .padding(compact ? 4.0F : 6.0F);
+        chart.add(header.enter(EnterEffect.FADE_LEFT.delayed(100.0F)),
+                multiplayer.enter(EnterEffect.FADE_LEFT.delayed(160.0F)),
                 new RouteButton("02", Icons.MAP, "单人游戏", "选择或创建你的单人世界", GOLD, false, compact,
-                        () -> minecraft().setScreen(new SelectWorldScreen(screen))).enter(EnterEffect.FADE_LEFT.delayed(190.0F)),
+                        () -> minecraft().setScreen(new SelectWorldScreen(screen))).enter(EnterEffect.FADE_LEFT.delayed(210.0F)),
                 new RouteButton("03", Icons.SETTINGS, "设置", "调整游戏选项，自定义你的体验", BLUE, false, compact,
                         () -> minecraft().setScreen(new OptionsScreen(screen, minecraft().options)))
-                        .enter(EnterEffect.FADE_LEFT.delayed(240.0F)),
+                        .enter(EnterEffect.FADE_LEFT.delayed(260.0F)),
                 new RouteButton("04", Icons.POWER, "退出游戏", "离开梦屿，返回现实世界", RED, false, compact,
-                        () -> minecraft().stop()).enter(EnterEffect.FADE_LEFT.delayed(290.0F)));
-        return menu.enter(EnterEffect.FADE_LEFT.delayed(80.0F));
+                        () -> minecraft().stop()).enter(EnterEffect.FADE_LEFT.delayed(310.0F)),
+                footer.enter(EnterEffect.FADE.delayed(380.0F)));
+        return chart;
     }
 
     private UiNode<?> footer() {
@@ -230,8 +238,15 @@ public final class TitleScreenUi {
                 .wrap(true);
         int index = 0;
         for (AbstractWidget widget : widgets) {
-            row.add(VanillaChrome.chip(auxLabel(widget), auxIcon(widget), BLUE, () -> activate(widget))
-                    .enter(EnterEffect.FADE_DOWN.delayed(200.0F + index * 40.0F)));
+            String label = auxLabel(widget);
+            String shown = TextFit.trim(label, minecraft().font, 72);
+            UiNode<?> chip = VanillaChrome.chip(shown, auxIcon(widget), BLUE, () -> activate(widget))
+                    .enter(EnterEffect.FADE_DOWN.delayed(200.0F + index * 40.0F));
+            List<Component> tooltip = auxTooltip(widget, label, shown);
+            if (!tooltip.isEmpty()) {
+                chip.tooltip(() -> tooltip);
+            }
+            row.add(chip);
             index++;
         }
         UiNode<?> changelog = VanillaChrome.chip("更新日志", Icons.HISTORY, GREEN, TitleScreenUi::openUpdateLog)
@@ -250,6 +265,10 @@ public final class TitleScreenUi {
         }
     }
 
+    /**
+     * 辅助按钮的名称。其他模组常用只有图标、标题为空的按钮，依次退到：按钮自带的提示文字、
+     * 按钮所属模组的名称，都取不到时才显示“更多”。
+     */
     private static String auxLabel(AbstractWidget widget) {
         String key = translationKey(widget.getMessage());
         if ("options.language".equals(key) || "narrator.button.language".equals(key)) {
@@ -261,8 +280,51 @@ public final class TitleScreenUi {
         if ("fml.menu.mods".equals(key)) {
             return "模组";
         }
-        String text = widget.getMessage().getString().replace("...", "").replace("…", "").trim();
-        return text.isEmpty() ? "更多" : text;
+        String text = clean(widget.getMessage().getString());
+        if (!text.isEmpty()) {
+            return text;
+        }
+        String tooltip = clean(tooltipLine(widget));
+        if (!tooltip.isEmpty()) {
+            return tooltip;
+        }
+        String mod = WidgetOwner.modName(widget);
+        return mod == null || mod.isBlank() ? "更多" : mod;
+    }
+
+    /** 悬停提示：名称被截短时给出全名，并注明来自哪个模组。 */
+    private static List<Component> auxTooltip(AbstractWidget widget, String label, String shown) {
+        List<Component> lines = new ArrayList<>();
+        String mod = WidgetOwner.modName(widget);
+        boolean fromMod = mod != null && !mod.isBlank() && !mod.equals(label);
+        if (!shown.equals(label) || fromMod) {
+            lines.add(Component.literal(label));
+        }
+        if (fromMod) {
+            lines.add(Component.literal("§7来自 " + mod));
+        }
+        return lines;
+    }
+
+    private static String tooltipLine(AbstractWidget widget) {
+        Tooltip tooltip = widget.getTooltip();
+        if (tooltip == null) {
+            return "";
+        }
+        List<FormattedCharSequence> lines = tooltip.toCharSequence(minecraft());
+        if (lines.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        lines.get(0).accept((index, style, codePoint) -> {
+            builder.appendCodePoint(codePoint);
+            return true;
+        });
+        return builder.toString();
+    }
+
+    private static String clean(String text) {
+        return text == null ? "" : text.replace("...", "").replace("…", "").trim();
     }
 
     private static Icons auxIcon(AbstractWidget widget) {
@@ -443,65 +505,125 @@ public final class TitleScreenUi {
         }
     }
 
-    /** 菜单角标：缓慢旋转的罗盘刻度。 */
-    private static final class RouteCompass extends UiNode<RouteCompass> {
-        RouteCompass() {
-            pointerEvents(false);
+    /**
+     * 航线图：菜单背后一圈压暗与淡淡的罗盘，四个选项是同一条虚线航路上的航点，虚线缓慢向下流动。
+     */
+    private static final class RouteChart extends Box {
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            // 不画实底面板，只压暗托住文字，让菜单像标在海图上；光晕在正方形范围内完全淡出，不留矩形边
+            float shadeX = w * 0.5F + 10.0F;
+            float shadeY = h * 0.55F;
+            float shadeR = Math.max(w, h) * 0.72F;
+            canvas.shape(shadeX - shadeR, shadeY - shadeR, shadeR * 2.0F, shadeR * 2.0F)
+                    .radial(0xA0030608, 0x00030608, shadeR, shadeR, shadeR).draw();
+            // 罗盘随菜单宽度缩放，压在标题右侧，尽量不越过第一条航线
+            float compass = Math.max(24.0F, Math.min(38.0F, w * 0.15F));
+            paintCompass(canvas, w - compass + 4.0F, compass - 10.0F, compass);
+
+            float top = Float.NaN;
+            float bottom = Float.NaN;
+            float lineX = 0.0F;
+            for (UiNode<?> child : children()) {
+                if (child instanceof RouteButton button) {
+                    float cy = button.y() + button.height() * 0.5F;
+                    lineX = button.x() + button.nodeCenter();
+                    top = Float.isNaN(top) ? cy : top;
+                    bottom = cy;
+                }
+            }
+            if (Float.isNaN(top)) {
+                return;
+            }
+            float flow = (float) ((UiClock.now() / 90.0) % 7.0);
+            for (float y = top - 7.0F + flow; y < bottom; y += 7.0F) {
+                float from = Math.max(top, y);
+                float to = Math.min(bottom, y + 3.5F);
+                if (to > from) {
+                    canvas.fill(lineX - 0.5F, from, 1.0F, to - from, 0x46D7E3EA);
+                }
+            }
         }
 
-        @Override
-        protected void paintContent(UiCanvas canvas) {
-            float cx = width() * 0.5F;
-            float cy = height() * 0.5F;
-            float r = Math.min(cx, cy) - 1.0F;
-            float spin = (float) (UiClock.now() / 2600.0 % (Math.PI * 2.0));
-            canvas.arc(cx, cy, r, 1.0F, 0.0F, (float) (Math.PI * 2.0), 0x30FFFFFF, 0x30FFFFFF);
-            canvas.arc(cx, cy, r, 1.5F, spin, 1.3F, UiColor.withAlpha(BLUE, 0.0F), BLUE);
-            canvas.circle(cx, cy, 1.6F, 0xCCFFFFFF);
+        /** 罗盘玫瑰：外圈刻度缓慢转动，四个主方位指针，北向标红。 */
+        private static void paintCompass(UiCanvas canvas, float cx, float cy, float r) {
+            int ring = 0x1CFFFFFF;
+            canvas.arc(cx, cy, r, 1.0F, 0.0F, (float) (Math.PI * 2.0), ring, ring);
+            canvas.arc(cx, cy, r * 0.62F, 1.0F, 0.0F, (float) (Math.PI * 2.0), 0x14FFFFFF, 0x14FFFFFF);
+            float spin = (float) (UiClock.now() / 9000.0 % (Math.PI * 2.0));
+            for (int i = 0; i < 36; i++) {
+                double a = spin + i * Math.PI / 18.0;
+                float inner = i % 9 == 0 ? r - 6.0F : r - 3.0F;
+                canvas.line(cx + (float) Math.cos(a) * inner, cy + (float) Math.sin(a) * inner,
+                        cx + (float) Math.cos(a) * r, cy + (float) Math.sin(a) * r, 0.8F, 0x22FFFFFF, false);
+            }
+            for (int i = 0; i < 4; i++) {
+                double a = -Math.PI / 2.0 + i * Math.PI / 2.0;
+                float length = i == 0 ? r * 0.82F : r * 0.6F;
+                int color = i == 0 ? UiColor.withAlpha(RED, 0.5F) : 0x30FFFFFF;
+                canvas.line(cx, cy, cx + (float) Math.cos(a) * length, cy + (float) Math.sin(a) * length, 1.2F, color, true);
+            }
+            for (int i = 0; i < 4; i++) {
+                double a = -Math.PI / 4.0 + i * Math.PI / 2.0;
+                canvas.line(cx, cy, cx + (float) Math.cos(a) * r * 0.36F, cy + (float) Math.sin(a) * r * 0.36F, 0.8F,
+                        0x1CFFFFFF, true);
+            }
+            canvas.circle(cx, cy, 1.6F, 0x55FFFFFF);
         }
     }
 
-    /** 航线按钮：左侧色条 + 图标 + 标题/说明 + 序号与箭头。 */
+    /** 航点按钮：航路上的圆形航点 + 序号、标题与说明；悬停时航点点亮，一束光从航点向右展开。 */
     private static final class RouteButton extends InteractiveNode<RouteButton> {
         private final int accent;
         private final boolean primary;
+        private final Waypoint waypoint;
         private final Icon icon;
+        private final Text kicker;
         private final Text title;
-        private final Text index;
         private final Icon chevron;
 
         RouteButton(String number, Icons iconType, String label, String description, int accent, boolean primary,
                     boolean compact, Runnable action) {
             this.accent = accent;
             this.primary = primary;
-            icon = Icon.of(iconType, primary ? 13.0F : 11.0F);
+            float nodeSize = primary ? (compact ? 24.0F : 28.0F) : (compact ? 20.0F : 24.0F);
+            icon = Icon.of(iconType, nodeSize * 0.46F);
+            waypoint = new Waypoint(this);
+            waypoint.stack().alignItems(Align.CENTER).size(nodeSize, nodeSize).shrink(0.0F);
+            waypoint.add(icon);
+            kicker = Text.of("ROUTE " + number).style(TextStyle.CAPTION_STRONG.withScale(0.62F)).singleLine();
             title = Text.of(label).style(primary ? TextStyle.TITLE : TextStyle.SUBTITLE).singleLine();
-            index = Text.of(number).style(TextStyle.CAPTION_STRONG).singleLine();
-            chevron = Icon.of(Icons.CHEVRON_RIGHT, 9.0F);
+            chevron = Icon.of(Icons.ARROW_RIGHT, 9.0F);
 
-            Box iconBadge = new IconBadge(accent, primary).alignItems(Align.CENTER).size(primary ? 26.0F : 22.0F,
-                    primary ? 26.0F : 22.0F);
-            iconBadge.add(icon);
-            Box texts = Ui.column(title).gap(1.0F).grow(1.0F).shrink(1.0F);
+            Box texts = Ui.column(kicker, title).gap(1.0F).grow(1.0F).shrink(1.0F);
             if (!compact) {
                 texts.add(Text.of(description).style(TextStyle.CAPTION).color(0xFF8E99A3).singleLine());
             }
             row().alignItems(Align.CENTER).gap(Theme.Space.MD).radius(Theme.Radius.MD);
-            padding(primary ? 8.0F : 7.0F, compact ? (primary ? 6.0F : 4.0F) : (primary ? 8.0F : 5.0F),
-                    8.0F, compact ? (primary ? 6.0F : 4.0F) : (primary ? 8.0F : 5.0F));
-            add(iconBadge, texts, index, chevron);
+            float vertical = compact ? 3.0F : (primary ? 7.0F : 5.0F);
+            padding(4.0F, vertical, 8.0F, vertical);
+            add(waypoint, texts, chevron);
             cursor(Cursor.POINTER);
             onClick(action);
+        }
+
+        /** 航点圆心相对按钮左缘的横坐标，航路虚线穿过这里。 */
+        float nodeCenter() {
+            return padLeft() + waypoint.width() * 0.5F;
         }
 
         @Override
         protected void update() {
             float h = isEffectivelyDisabled() ? 0.0F : hover();
-            icon.color(UiColor.lerp(UiColor.lerp(0xFFC4CCD3, accent, 0.55F), 0xFFFFFFFF, h * 0.6F));
-            title.color(UiColor.lerp(0xFFE2E7EB, 0xFFFFFFFF, h));
-            index.color(UiColor.lerp(0xFF6F7A84, accent, h));
-            chevron.color(UiColor.withAlpha(UiColor.lerp(0xFF8E99A3, accent, h), 0.35F + 0.65F * h));
-            chevron.translate(h * 3.0F, 0.0F);
+            icon.color(UiColor.lerp(UiColor.lerp(0xFFC4CCD3, accent, primary ? 0.8F : 0.5F), 0xFFFFFFFF, h * 0.5F));
+            kicker.color(UiColor.withAlpha(accent, 0.55F + 0.45F * h));
+            title.color(UiColor.lerp(primary ? 0xFFF4F7F9 : 0xFFDDE3E8, 0xFFFFFFFF, h));
+            title.translate(h * 3.0F, 0.0F);
+            kicker.translate(h * 3.0F, 0.0F);
+            chevron.color(UiColor.withAlpha(UiColor.lerp(0xFF8E99A3, accent, h), 0.25F + 0.75F * h));
+            chevron.translate(h * 4.0F - 2.0F, 0.0F);
             opacity(isEffectivelyDisabled() ? 0.45F : 1.0F);
         }
 
@@ -510,42 +632,46 @@ public final class TitleScreenUi {
             float h = isEffectivelyDisabled() ? 0.0F : hover();
             float w = width();
             float ht = height();
-            float r = radiusValue();
-            int base = primary ? UiColor.withAlpha(accent, 0.10F + 0.08F * h) : UiColor.lerp(0x0CFFFFFF, 0x1AFFFFFF, h);
-            canvas.shape(0.0F, 0.0F, w, ht).radius(r).fill(base)
-                    .border(1.0F, UiColor.lerp(primary ? UiColor.withAlpha(accent, 0.28F) : 0x12FFFFFF,
-                            UiColor.withAlpha(accent, 0.6F), h)).draw();
-            if (h > 0.01F) {
-                canvas.shape(0.0F, 0.0F, w * 0.7F, ht).radius(r, 0.0F, 0.0F, r)
-                        .horizontalGradient(UiColor.withAlpha(accent, 0.16F * h), UiColor.withAlpha(accent, 0.0F)).draw();
+            float cx = nodeCenter();
+            float band = primary ? Math.max(h, 0.45F) : h;
+            if (band > 0.01F) {
+                canvas.shape(cx, 0.0F, w - cx, ht).radius(0.0F, radiusValue(), radiusValue(), 0.0F)
+                        .horizontalGradient(UiColor.withAlpha(accent, 0.16F * band), UiColor.withAlpha(accent, 0.0F)).draw();
+                canvas.shape(cx, ht - 1.0F, (w - cx) * (0.4F + 0.6F * band), 1.0F)
+                        .horizontalGradient(UiColor.withAlpha(accent, 0.5F * band), UiColor.withAlpha(accent, 0.0F)).draw();
             }
-            float barH = (ht - 10.0F) * (0.45F + 0.55F * Math.max(h, primary ? 0.6F : 0.0F));
-            canvas.shape(0.0F, (ht - barH) * 0.5F, 2.0F + h, barH).radius(1.0F)
-                    .fill(UiColor.withAlpha(accent, 0.55F + 0.45F * h)).draw();
             float press = press();
             if (press > 0.01F) {
-                canvas.shape(0.0F, 0.0F, w, ht).radius(r).fill(UiColor.withAlpha(accent, 0.12F * press)).draw();
+                canvas.shape(cx, 0.0F, w - cx, ht).radius(radiusValue()).fill(UiColor.withAlpha(accent, 0.1F * press)).draw();
             }
+        }
+
+        float glow() {
+            return isEffectivelyDisabled() ? 0.0F : hover();
         }
     }
 
-    private static final class IconBadge extends Box {
-        private final int accent;
-        private final boolean primary;
+    /** 航点：深色圆底遮住航路虚线，外圈随悬停点亮；主航线带一圈缓慢扩散的光环。 */
+    private static final class Waypoint extends Box {
+        private final RouteButton owner;
 
-        IconBadge(int accent, boolean primary) {
-            this.accent = accent;
-            this.primary = primary;
-            stack();
+        Waypoint(RouteButton owner) {
+            this.owner = owner;
         }
 
         @Override
         protected void paintBackground(UiCanvas canvas) {
+            float h = owner.glow();
             float w = width();
-            float h = height();
-            canvas.shape(0.0F, 0.0F, w, h).radius(Theme.Radius.MD)
-                    .fill(UiColor.withAlpha(accent, primary ? 0.2F : 0.12F))
-                    .border(1.0F, UiColor.withAlpha(accent, primary ? 0.45F : 0.25F)).draw();
+            float r = w * 0.5F;
+            int accent = owner.accent;
+            if (owner.primary) {
+                float t = (float) ((UiClock.now() % 2400.0) / 2400.0);
+                canvas.circle(r, r, r + 2.0F + t * 6.0F, UiColor.withAlpha(accent, 0.22F * (1.0F - t)));
+            }
+            canvas.circle(r, r, r + 3.0F * h, UiColor.withAlpha(accent, 0.18F * h));
+            canvas.shape(0.0F, 0.0F, w, w).radius(r).fill(UiColor.lerp(0xF00A1117, UiColor.withAlpha(accent, 0.95F), 0.18F + 0.12F * h))
+                    .border(1.2F, UiColor.withAlpha(accent, (owner.primary ? 0.7F : 0.45F) + 0.3F * h)).draw();
         }
     }
 }

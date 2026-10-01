@@ -64,6 +64,20 @@ final class UiHarnessScenarios {
             screen.openDialogForTest();
         });
         UiHarness.register("title", minecraft -> minecraft.setScreen(new TitleScreen()));
+        // 模拟其他模组往标题界面加的按钮：带提示的图标按钮、没有任何文字的图标按钮、纯文本按钮
+        UiHarness.register("title_mod_buttons", minecraft -> minecraft.setScreen(new TitleScreen() {
+            @Override
+            protected void init() {
+                super.init();
+                addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.empty(), button -> {
+                        }).bounds(0, 0, 20, 20)
+                        .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("机械动力配置"))).build());
+                addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.empty(), button -> {
+                        }).bounds(0, 0, 20, 20).build());
+                addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.literal("Voxy"), button -> {
+                        }).bounds(0, 0, 40, 20).build());
+            }
+        }));
         UiHarness.register("pause", minecraft -> minecraft.setScreen(new PauseScreen(true)));
         UiHarness.register("chat", minecraft -> minecraft.setScreen(new ChatScreen("")));
         UiHarness.register("markers", minecraft -> {
@@ -113,6 +127,9 @@ final class UiHarnessScenarios {
             screen.progressStartNoAbort(Component.literal("正在准备出生点区域"));
             screen.progressStagePercentage(42);
         });
+        // 首次启动的加载画面：进度 4 秒走完一轮；_fallback 版按界面着色器未就绪时的样子绘制
+        UiHarness.register("loading_startup", minecraft -> minecraft.setScreen(new StartupPreview(false)));
+        UiHarness.register("loading_startup_fallback", minecraft -> minecraft.setScreen(new StartupPreview(true)));
         UiHarness.register("worlds", minecraft -> minecraft.setScreen(
                 new net.minecraft.client.gui.screens.worldselection.SelectWorldScreen(new TitleScreen())));
         // 先退出存档再打开世界列表（存档打开时自身被锁，列表读不出来）；只能放在步骤最后
@@ -189,6 +206,36 @@ final class UiHarnessScenarios {
                 minecraft.setScreen(screen);
                 screen.openRoute(route);
             });
+        }
+    }
+
+    /** 在普通界面里预览首次启动的加载画面。 */
+    private static final class StartupPreview extends net.minecraft.client.gui.screens.Screen {
+        private final com.hhy.dreamingfishcore.client.ui.loading.LoadingSurface surface =
+                new com.hhy.dreamingfishcore.client.ui.loading.LoadingSurface().startup(true);
+        private final boolean fallback;
+        private final long started = net.minecraft.Util.getMillis();
+
+        StartupPreview(boolean fallback) {
+            super(Component.literal("startup preview"));
+            this.fallback = fallback;
+        }
+
+        @Override
+        protected void init() {
+            com.hhy.dreamingfishcore.client.ui.framework.render.SdfRenderer.forceFallback(fallback);
+        }
+
+        @Override
+        public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            int progress = (int) ((net.minecraft.Util.getMillis() - started) / 40L % 101L);
+            surface.progress(progress).render(graphics, width, height);
+        }
+
+        @Override
+        public void removed() {
+            com.hhy.dreamingfishcore.client.ui.framework.render.SdfRenderer.forceFallback(false);
+            surface.host().close();
         }
     }
 

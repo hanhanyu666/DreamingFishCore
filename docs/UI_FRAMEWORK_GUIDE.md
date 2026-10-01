@@ -140,3 +140,12 @@ death gui=2 wait=80 as=death
 
 注意 `wait` 的单位是 tick（20 tick = 1 秒）。场景在 `client/debug/UiHarnessScenarios` 中登记；
 加新界面时顺手登记一个场景，便于在不同 GUI 缩放下检查布局。harness 窗口运行期间不要点击或缩放它。
+
+几个特殊场景：
+
+- `loading_startup` / `loading_startup_fallback`：预览首次启动的加载画面；后者用
+  `SdfRenderer.forceFallback(true)` 模拟界面着色器尚未加载的阶段（只剩原版矩形与线性渐变）。
+  首次启动画面里需要在这一阶段也好看的图形（如灯塔）请画成贴图，见 `client/ui/loading/StartupArt`
+  与生成脚本 `tools/generate_startup_lighthouse.py`。
+- `title_mod_buttons`：标题界面加入几个模拟的其他模组按钮（带提示的图标按钮、无文字按钮、纯文本按钮），
+  检查辅助按钮的命名。
