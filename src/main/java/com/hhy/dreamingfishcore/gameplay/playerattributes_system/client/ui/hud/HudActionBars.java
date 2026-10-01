@@ -2,7 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 
 /**
  * 快捷栏上方的三段进度条：左侧体力、中间原版经验、右侧勇气，三段常驻且左右对称。
@@ -48,7 +48,7 @@ final class HudActionBars {
     private HudActionBars() {
     }
 
-    static void render(GuiGraphics graphics, Minecraft minecraft, HudVitals vitals,
+    static void render(UiCanvas canvas, Minecraft minecraft, HudVitals vitals,
                        boolean detailHeld, float detail, long now, float deltaSeconds) {
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
         int screenHeight = minecraft.getWindow().getGuiScaledHeight();
@@ -63,21 +63,21 @@ final class HudActionBars {
 
         float courageRatio = vitals.courageRatio();
         boolean courageDanger = courageRatio <= COURAGE_DANGER_RATIO;
-        HudDraw.bar(graphics, x, y, SIDE_WIDTH, vitals.strengthRatio(), STAMINA_COLOR, 1.0F, false);
-        HudDraw.bar(graphics, experienceX, y, CENTER_WIDTH, vitals.experienceProgress(), EXPERIENCE_COLOR, 1.0F, false);
-        HudDraw.bar(graphics, courageX, y, SIDE_WIDTH, courageRatio,
+        HudDraw.bar(canvas, x, y, SIDE_WIDTH, vitals.strengthRatio(), STAMINA_COLOR, 1.0F, false);
+        HudDraw.bar(canvas, experienceX, y, CENTER_WIDTH, vitals.experienceProgress(), EXPERIENCE_COLOR, 1.0F, false);
+        HudDraw.bar(canvas, courageX, y, SIDE_WIDTH, courageRatio,
                 courageDanger ? HudPalette.blend(COURAGE_COLOR, LOW_COLOR, 0.36F) : COURAGE_COLOR, 1.0F, courageDanger);
 
         int iconY = y - (ICON_SIZE - HudDraw.BAR_HEIGHT) / 2;
-        HudIconBatch.queue(HudIconBatch.Icon.STAMINA, x - ICON_SIZE - ICON_GAP, iconY, ICON_SIZE, 0.82F);
-        HudIconBatch.queue(HudIconBatch.Icon.COURAGE, courageX + SIDE_WIDTH + ICON_GAP, iconY, ICON_SIZE, 0.82F);
+        HudIconBatch.draw(canvas, HudIconBatch.Icon.STAMINA, x - ICON_SIZE - ICON_GAP, iconY, ICON_SIZE, 0.82F);
+        HudIconBatch.draw(canvas, HudIconBatch.Icon.COURAGE, courageX + SIDE_WIDTH + ICON_GAP, iconY, ICON_SIZE, 0.82F);
 
         if (valueAlpha > 0.01F) {
-            drawValue(graphics, font, staminaText(vitals), x, SIDE_WIDTH, y, STAMINA_COLOR, valueAlpha);
-            drawValue(graphics, font, courageText(vitals), courageX, SIDE_WIDTH, y, COURAGE_COLOR, valueAlpha);
+            drawValue(canvas, font, staminaText(vitals), x, SIDE_WIDTH, y, STAMINA_COLOR, valueAlpha);
+            drawValue(canvas, font, courageText(vitals), courageX, SIDE_WIDTH, y, COURAGE_COLOR, valueAlpha);
         }
         if (vitals.experienceLevel() > 0 || detailHeld) {
-            drawValue(graphics, font, levelText(vitals, detailHeld), experienceX, CENTER_WIDTH, y,
+            drawValue(canvas, font, levelText(vitals, detailHeld), experienceX, CENTER_WIDTH, y,
                     EXPERIENCE_COLOR, 1.0F);
         }
 
@@ -88,7 +88,7 @@ final class HudActionBars {
             float ratio = vitals.maxAir() > 0 ? Math.max(0, vitals.air()) / (float) vitals.maxAir() : 0.0F;
             boolean warning = ratio <= OXYGEN_WARN_RATIO;
             int color = warning ? HudPalette.blend(OXYGEN_COLOR, LOW_COLOR, 0.36F) : OXYGEN_COLOR;
-            HudDraw.bar(graphics, experienceX, y - OXYGEN_OFFSET, CENTER_WIDTH, ratio, color, oxygen, warning);
+            HudDraw.bar(canvas, experienceX, y - OXYGEN_OFFSET, CENTER_WIDTH, ratio, color, oxygen, warning);
         }
     }
 
@@ -113,10 +113,10 @@ final class HudActionBars {
         lastMaxCourage = vitals.maxCourage();
     }
 
-    private static void drawValue(GuiGraphics graphics, Font font, String text, int x, int width, int barY,
+    private static void drawValue(UiCanvas canvas, Font font, String text, int x, int width, int barY,
                                   int color, float alpha) {
         float textWidth = font.width(text) * TEXT_SCALE;
-        HudDraw.text(graphics, font, text, x + (width - textWidth) / 2.0F, barY - 8.0F,
+        HudDraw.text(canvas, font, text, x + (width - textWidth) / 2.0F, barY - 8.0F,
                 HudPalette.withAlpha(HudPalette.blend(color, 0xFFFFFFFF, 0.34F), 214), alpha, TEXT_SCALE);
     }
 

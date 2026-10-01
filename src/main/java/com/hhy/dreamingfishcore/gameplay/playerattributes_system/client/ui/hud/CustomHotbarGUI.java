@@ -1,7 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.item.items.Item_AidKit;
 import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
 import com.hhy.dreamingfishcore.item.items.medicine.Easy_Aid_Kit;
@@ -25,8 +27,6 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.ItemDecoratorHandler;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
-import java.util.ArrayList;
-import java.util.List;
 
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomHotbarGUI {
@@ -56,8 +56,8 @@ public class CustomHotbarGUI {
     private static final int MEDICINE_HUD_GAP = 5;
     private static final int BOTTOM_STATUS_BAR_HEIGHT = 5;
     private static final int BOTTOM_STATUS_HOTBAR_GAP = 4;
-    private static final int MEDICINE_RING_RADIUS = 9;
-    private static final int MEDICINE_RING_THICKNESS = 3;
+    private static final float MEDICINE_RING_RADIUS = 7.5F;
+    private static final float MEDICINE_RING_THICKNESS = 3.0F;
     private static final int MEDICINE_PANEL_BG = 0x64060809;
     private static final int MEDICINE_PANEL_INNER = 0x2AFFFFFF;
     private static final int MEDICINE_RING_TRACK = 0x6850524D;
@@ -65,12 +65,6 @@ public class CustomHotbarGUI {
     private static final int MEDICINE_RING_HEAD = 0xFFFFFFFF;
     private static final int MEDICINE_TEXT_COLOR = 0xFFECE8DD;
     private static final int MEDICINE_DIM_TEXT_COLOR = 0xFF929891;
-    private static final RasterSpan[] MEDICINE_DISK_SPANS =
-            createDiskSpans(MEDICINE_RING_RADIUS + 2);
-    private static final RasterSpan[] MEDICINE_RING_SPANS =
-            createRingSpans(MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS);
-    private static final RingPixel[] MEDICINE_RING_PROGRESS_PIXELS =
-            createRingPixels(MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS);
 
     /* Reusable collection storage feeding the retained hotbar item cache. */
     private static final int MAX_BATCHED_HOTBAR_ITEMS = SLOT_COUNT + 1;
@@ -84,7 +78,27 @@ public class CustomHotbarGUI {
             new HotbarItemRenderCache(MAX_BATCHED_HOTBAR_ITEMS);
     private static int batchedItemCount;
 
+    /** 快捷栏在统一 HUD 画布中的区域，最先绘制。 */
+    public static final HudLayer LAYER = new HudLayer() {
+        @Override
+        public int order() {
+            return 10;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            return shouldRenderCustomHotbar(minecraft);
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            CustomHotbarGUI.paint(frame);
+        }
+    };
+
     private static int lastSelectedSlot = -1;
+    /** 选中框的显示位置（以格为单位），跟随选中格平滑滑动。 */
+    private static float selectionSlot = -1.0F;
     private static long lastHotbarInteractionTime = 0L;
     private static Item localMedicineUseItem = null;
     private static InteractionHand localMedicineUseHand = InteractionHand.MAIN_HAND;
@@ -112,12 +126,9 @@ public class CustomHotbarGUI {
         return shouldRenderCustomHotbar(mc);
     }
 
-    /** Draws into the shared managed gameplay-HUD pass. */
-    public static void renderBatched(GuiGraphics guiGraphics, Minecraft mc) {
-        if (!shouldRenderCustomHotbar(mc)) {
-            return;
-        }
-
+    private static void paint(HudFrame frame) {
+        Minecraft mc = frame.minecraft();
+        UiCanvas canvas = frame.canvas();
         Player player = mc.player;
         updateHotbarInteraction(player);
         MedicineUseInfo medicineUseInfo = getMedicineUseInfo(player);
@@ -132,20 +143,23 @@ public class CustomHotbarGUI {
         int y = getHotbarBaseTopY(screenHeight);
         int anchorY = screenHeight - HOTBAR_BOTTOM_MARGIN;
 
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(screenWidth / 2.0f, anchorY, 0.0f);
-        guiGraphics.pose().scale(scale, scale, 1.0f);
-        guiGraphics.pose().translate(-screenWidth / 2.0f, -anchorY, 0.0f);
+        canvas.push();
+        canvas.scale(scale, screenWidth / 2.0f, anchorY);
 
         batchedItemCount = 0;
-        drawHotbarFrame(guiGraphics, x, y);
-        collectHotbarItems(guiGraphics, player, x, y);
-        collectOffhandSlot(guiGraphics, player, x, y);
-        renderBatchedHotbarItems(guiGraphics, mc, player, scale);
+        drawHotbarFrame(canvas, x, y);
+        collectHotbarItems(canvas, player, x, y, frame.delta());
+        collectOffhandSlot(canvas, player, x, y);
+        if (batchedItemCount > 0) {
+            // 物品模型走保留缓冲的缓存渲染，作为原生命令画在框体之上
+            canvas.custom(x - OFFHAND_SLOT_WIDTH - OFFHAND_SLOT_GAP, y,
+                    HOTBAR_WIDTH + (OFFHAND_SLOT_WIDTH + OFFHAND_SLOT_GAP) * 2, HOTBAR_HEIGHT,
+                    graphics -> renderBatchedHotbarItems(graphics, mc, player, scale));
+        }
 
-        guiGraphics.pose().popPose();
+        canvas.pop();
 
-        drawMedicineUseHud(guiGraphics, mc, screenWidth, screenHeight, medicineUseInfo);
+        drawMedicineUseHud(canvas, mc, screenWidth, screenHeight, medicineUseInfo);
     }
 
     @SubscribeEvent
@@ -269,26 +283,35 @@ public class CustomHotbarGUI {
         }
     }
 
-    private static void drawHotbarFrame(GuiGraphics guiGraphics, int x, int y) {
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, HOTBAR_WIDTH, HOTBAR_HEIGHT,
-                HOTBAR_RADIUS, HOTBAR_BG, HOTBAR_BORDER);
+    private static void drawHotbarFrame(UiCanvas canvas, int x, int y) {
+        drawSlotFrame(canvas, x, y, HOTBAR_WIDTH);
     }
 
-    private static void collectHotbarItems(GuiGraphics guiGraphics, Player player, int x, int y) {
+    private static void drawSlotFrame(UiCanvas canvas, int x, int y, int width) {
+        canvas.shape(x, y, width, HOTBAR_HEIGHT).radius(HOTBAR_RADIUS)
+                .verticalGradient(0x98262B2E, HOTBAR_BG).border(1.0F, HOTBAR_BORDER).draw();
+        // 顶边细高光，中间最亮
+        float inner = (width - HOTBAR_RADIUS * 2) * 0.5F;
+        canvas.shape(x + HOTBAR_RADIUS, y + 1, inner, 1).horizontalGradient(0x00FFFFFF, 0x1CFFFFFF).draw();
+        canvas.shape(x + HOTBAR_RADIUS + inner, y + 1, inner, 1).horizontalGradient(0x1CFFFFFF, 0x00FFFFFF).draw();
+    }
+
+    private static void collectHotbarItems(UiCanvas canvas, Player player, int x, int y, float deltaSeconds) {
         int selectedSlot = player.getInventory().selected;
+        // 选中框平滑滑到新格；跨越很远（如 9→1 滚轮回绕）时直接跳过去
+        if (selectionSlot < 0.0F || Math.abs(selectionSlot - selectedSlot) > 4.0F) {
+            selectionSlot = selectedSlot;
+        } else {
+            selectionSlot += (selectedSlot - selectionSlot) * Math.min(1.0F, deltaSeconds * 22.0F);
+        }
+        float selectedX = x + HOTBAR_PADDING + selectionSlot * SLOT_STEP;
+        canvas.shape(selectedX, y + 2, SLOT_STEP, HOTBAR_HEIGHT - 4).radius(4.0F)
+                .verticalGradient(0x6A6F777C, SELECTED_BG).draw();
+        canvas.shape(selectedX + 5, y + HOTBAR_HEIGHT - 3, SLOT_STEP - 10, 2).radius(1.0F)
+                .fill(SELECTED_UNDERLINE).draw();
+
         for (int i = 0; i < SLOT_COUNT; i++) {
             int slotX = x + HOTBAR_PADDING + i * SLOT_STEP;
-            int slotY = y + 2;
-
-            if (i == selectedSlot) {
-                UiPanelRenderer.smoothRoundedRectBatched(guiGraphics,
-                        slotX, slotY, SLOT_STEP, HOTBAR_HEIGHT - 4,
-                        4, SELECTED_BG, 0x00000000);
-                UiPanelRenderer.crispRoundedRectBatched(guiGraphics,
-                        slotX + 5, y + HOTBAR_HEIGHT - 3, SLOT_STEP - 10, 2,
-                        1, SELECTED_UNDERLINE);
-            }
-
             ItemStack stack = player.getInventory().getItem(i);
             if (!stack.isEmpty()) {
                 int itemX = slotX + (SLOT_STEP - ITEM_SIZE) / 2;
@@ -298,7 +321,7 @@ public class CustomHotbarGUI {
         }
     }
 
-    private static void collectOffhandSlot(GuiGraphics guiGraphics, Player player, int hotbarX, int y) {
+    private static void collectOffhandSlot(UiCanvas canvas, Player player, int hotbarX, int y) {
         ItemStack stack = player.getOffhandItem();
         if (stack.isEmpty()) {
             return;
@@ -309,8 +332,7 @@ public class CustomHotbarGUI {
                 ? hotbarX - OFFHAND_SLOT_GAP - OFFHAND_SLOT_WIDTH
                 : hotbarX + HOTBAR_WIDTH + OFFHAND_SLOT_GAP;
 
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, OFFHAND_SLOT_WIDTH, HOTBAR_HEIGHT,
-                HOTBAR_RADIUS, HOTBAR_BG, HOTBAR_BORDER);
+        drawSlotFrame(canvas, x, y, OFFHAND_SLOT_WIDTH);
 
         int itemX = x + (OFFHAND_SLOT_WIDTH - ITEM_SIZE) / 2;
         int itemY = y + (HOTBAR_HEIGHT - ITEM_SIZE) / 2;
@@ -535,7 +557,7 @@ public class CustomHotbarGUI {
                 || stack.getItem() instanceof Potion_RestoreUnInfected;
     }
 
-    private static void drawMedicineUseHud(GuiGraphics guiGraphics, Minecraft mc, int screenWidth, int screenHeight,
+    private static void drawMedicineUseHud(UiCanvas canvas, Minecraft mc, int screenWidth, int screenHeight,
                                            MedicineUseInfo medicineUseInfo) {
         if (medicineUseInfo == null) {
             return;
@@ -545,23 +567,22 @@ public class CustomHotbarGUI {
         int statusBarY = CustomHotbarGUI.getAnimatedHotbarTopY(screenHeight)
                 - BOTTOM_STATUS_HOTBAR_GAP - BOTTOM_STATUS_BAR_HEIGHT;
         int y = Math.max(2, statusBarY - MEDICINE_HUD_GAP - MEDICINE_HUD_HEIGHT);
-        int centerX = x + 14;
-        int centerY = y + MEDICINE_HUD_HEIGHT / 2;
+        float centerX = x + 14.0F;
+        float centerY = y + MEDICINE_HUD_HEIGHT / 2.0F;
 
-        drawSoftRoundedRect(guiGraphics, x, y, MEDICINE_HUD_WIDTH, MEDICINE_HUD_HEIGHT, MEDICINE_PANEL_BG);
-        guiGraphics.fill(x + 3, y + 2, x + MEDICINE_HUD_WIDTH - 3, y + MEDICINE_HUD_HEIGHT - 2,
-                0x18000000);
-        guiGraphics.fill(x + 5, y + 3, x + MEDICINE_HUD_WIDTH - 5, y + 4, MEDICINE_PANEL_INNER);
+        canvas.shape(x, y, MEDICINE_HUD_WIDTH, MEDICINE_HUD_HEIGHT).radius(HOTBAR_RADIUS)
+                .verticalGradient(0x70080A0B, MEDICINE_PANEL_BG).border(1.0F, 0x18FFFFFF).draw();
+        canvas.shape(x + 5, y + 3, MEDICINE_HUD_WIDTH - 10, 1).horizontalGradient(0x00FFFFFF, MEDICINE_PANEL_INNER).draw();
 
-        drawMedicineProgressRing(guiGraphics, centerX, centerY, medicineUseInfo.progress());
-        drawMedicineGlyph(guiGraphics, centerX, centerY);
+        drawMedicineProgressRing(canvas, centerX, centerY, medicineUseInfo.progress());
+        drawMedicineGlyph(canvas, centerX, centerY);
 
         String timeText = formatUseTime(medicineUseInfo.timeTicks());
-        int timeX = x + 30;
-        int timeY = y + 5;
-        guiGraphics.drawString(mc.font, timeText, timeX + 1, timeY + 1, 0x80000000, false);
-        guiGraphics.drawString(mc.font, timeText, timeX, timeY, MEDICINE_TEXT_COLOR, false);
-        guiGraphics.drawString(mc.font, medicineUseInfo.label(), timeX, timeY + 10, MEDICINE_DIM_TEXT_COLOR, false);
+        float timeX = x + 30.0F;
+        float timeY = y + 5.0F;
+        canvas.text(timeText, timeX + 1.0F, timeY + 1.0F, 0x80000000, 1.0F, false);
+        canvas.text(timeText, timeX, timeY, MEDICINE_TEXT_COLOR, 1.0F, false);
+        canvas.text(medicineUseInfo.label(), timeX, timeY + 10.0F, MEDICINE_DIM_TEXT_COLOR, 1.0F, false);
     }
 
     private static int getEstimatedRemainingMedicineTicks(ItemStack stack, int activeElapsedTicks) {
@@ -633,108 +654,30 @@ public class CustomHotbarGUI {
                 : String.format(java.util.Locale.ROOT, "%.1fs", seconds);
     }
 
-    private static void drawMedicineProgressRing(GuiGraphics guiGraphics, int centerX, int centerY, float progress) {
-        drawRasterSpans(guiGraphics, centerX, centerY, MEDICINE_DISK_SPANS, 0x26000000);
-        drawRasterSpans(guiGraphics, centerX, centerY, MEDICINE_RING_SPANS, MEDICINE_RING_TRACK);
-        drawRingProgress(guiGraphics, centerX, centerY, MEDICINE_RING_FILL, progress);
-
-        if (progress > 0.0f) {
-            double angle = -Math.PI / 2.0 + Math.PI * 2.0 * progress;
-            int headX = centerX + (int) Math.round(Math.cos(angle) * MEDICINE_RING_RADIUS);
-            int headY = centerY + (int) Math.round(Math.sin(angle) * MEDICINE_RING_RADIUS);
-            guiGraphics.fill(headX - 1, headY - 1, headX + 2, headY + 2, MEDICINE_RING_HEAD);
+    private static void drawMedicineProgressRing(UiCanvas canvas, float centerX, float centerY, float progress) {
+        float clamped = Math.max(0.0f, Math.min(1.0f, progress));
+        float full = (float) (Math.PI * 2.0);
+        canvas.circle(centerX, centerY, MEDICINE_RING_RADIUS + MEDICINE_RING_THICKNESS * 0.5F + 2.0F, 0x26000000);
+        canvas.arc(centerX, centerY, MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS, 0.0F, full,
+                MEDICINE_RING_TRACK, MEDICINE_RING_TRACK);
+        if (clamped > 0.0f) {
+            float start = (float) (-Math.PI / 2.0);
+            canvas.arc(centerX, centerY, MEDICINE_RING_RADIUS, MEDICINE_RING_THICKNESS, start, full * clamped,
+                    0xFFB9C4B5, MEDICINE_RING_FILL);
+            double angle = start + full * clamped;
+            canvas.circle(centerX + (float) Math.cos(angle) * MEDICINE_RING_RADIUS,
+                    centerY + (float) Math.sin(angle) * MEDICINE_RING_RADIUS, 1.7F, MEDICINE_RING_HEAD);
         }
     }
 
-    private static void drawMedicineGlyph(GuiGraphics guiGraphics, int centerX, int centerY) {
+    private static void drawMedicineGlyph(UiCanvas canvas, float centerX, float centerY) {
         int color = 0xCFE9ECE4;
-        guiGraphics.fill(centerX - 1, centerY - 4, centerX + 2, centerY + 5, color);
-        guiGraphics.fill(centerX - 4, centerY - 1, centerX + 5, centerY + 2, color);
-        guiGraphics.fill(centerX - 1, centerY - 1, centerX + 2, centerY + 2, 0xFFFFFFFF);
-    }
-
-    private static void drawRingProgress(GuiGraphics guiGraphics, int centerX, int centerY,
-                                         int color, float progress) {
-        float clampedProgress = Math.max(0.0f, Math.min(1.0f, progress));
-        for (RingPixel pixel : MEDICINE_RING_PROGRESS_PIXELS) {
-            if (pixel.progress() <= clampedProgress) {
-                guiGraphics.fill(centerX + pixel.x(), centerY + pixel.y(),
-                        centerX + pixel.x() + 1, centerY + pixel.y() + 1, color);
-            }
-        }
-    }
-
-    private static void drawRasterSpans(GuiGraphics guiGraphics, int centerX, int centerY,
-                                        RasterSpan[] spans, int color) {
-        for (RasterSpan span : spans) {
-            guiGraphics.fill(centerX + span.minX(), centerY + span.y(),
-                    centerX + span.maxXExclusive(), centerY + span.y() + 1, color);
-        }
-    }
-
-    private static RasterSpan[] createDiskSpans(int radius) {
-        List<RasterSpan> spans = new ArrayList<>(radius * 2 + 1);
-        int radiusSq = radius * radius;
-        for (int y = -radius; y <= radius; y++) {
-            int halfWidth = (int) Math.floor(Math.sqrt(radiusSq - y * y));
-            spans.add(new RasterSpan(y, -halfWidth, halfWidth + 1));
-        }
-        return spans.toArray(new RasterSpan[0]);
-    }
-
-    private static RasterSpan[] createRingSpans(int radius, int thickness) {
-        List<RasterSpan> spans = new ArrayList<>((radius * 2 + 1) * 2);
-        int outerSq = radius * radius;
-        int innerRadius = Math.max(0, radius - thickness);
-        int innerSq = innerRadius * innerRadius;
-        for (int y = -radius; y <= radius; y++) {
-            int outerHalfWidth = (int) Math.floor(Math.sqrt(outerSq - y * y));
-            if (y * y > innerSq) {
-                spans.add(new RasterSpan(y, -outerHalfWidth, outerHalfWidth + 1));
-                continue;
-            }
-
-            int innerHalfWidth = (int) Math.floor(Math.sqrt(innerSq - y * y));
-            if (outerHalfWidth > innerHalfWidth) {
-                spans.add(new RasterSpan(y, -outerHalfWidth, -innerHalfWidth));
-                spans.add(new RasterSpan(y, innerHalfWidth + 1, outerHalfWidth + 1));
-            }
-        }
-        return spans.toArray(new RasterSpan[0]);
-    }
-
-    private static RingPixel[] createRingPixels(int radius, int thickness) {
-        List<RingPixel> pixels = new ArrayList<>((radius * 2 + 1) * (radius * 2 + 1));
-        int innerRadius = Math.max(0, radius - thickness);
-        int innerSq = innerRadius * innerRadius;
-        int outerSq = radius * radius;
-        for (int y = -radius; y <= radius; y++) {
-            for (int x = -radius; x <= radius; x++) {
-                int distanceSq = x * x + y * y;
-                if (distanceSq > outerSq || distanceSq <= innerSq) {
-                    continue;
-                }
-                double angle = Math.atan2(y, x) + Math.PI / 2.0;
-                if (angle < 0.0) {
-                    angle += Math.PI * 2.0;
-                }
-                pixels.add(new RingPixel(x, y, (float) (angle / (Math.PI * 2.0))));
-            }
-        }
-        return pixels.toArray(new RingPixel[0]);
-    }
-
-    private static void drawSoftRoundedRect(GuiGraphics guiGraphics, int x, int y, int width, int height, int color) {
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height,
-                HOTBAR_RADIUS, color, 0x00000000);
+        canvas.shape(centerX - 1.5F, centerY - 4.0F, 3.0F, 8.0F).radius(1.0F).fill(color).draw();
+        canvas.shape(centerX - 4.0F, centerY - 1.5F, 8.0F, 3.0F).radius(1.0F).fill(color).draw();
+        canvas.shape(centerX - 1.5F, centerY - 1.5F, 3.0F, 3.0F).fill(0xFFFFFFFF).draw();
     }
 
     private record MedicineUseInfo(float progress, int timeTicks, String label) {
     }
 
-    private record RasterSpan(int y, int minX, int maxXExclusive) {
-    }
-
-    private record RingPixel(int x, int y, float progress) {
-    }
 }

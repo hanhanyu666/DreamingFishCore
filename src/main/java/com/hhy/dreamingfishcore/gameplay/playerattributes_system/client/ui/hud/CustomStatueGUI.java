@@ -3,7 +3,8 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.client.input.KeybindHandler;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
 import net.neoforged.api.distmarker.Dist;
@@ -20,6 +21,28 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  */
 @EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
 public class CustomStatueGUI {
+    /** 体征 HUD 在统一 HUD 画布中的区域：快捷栏与任务卡片之后绘制。 */
+    public static final HudLayer LAYER = new HudLayer() {
+        @Override
+        public int order() {
+            return 40;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            boolean visible = shouldRenderHud(minecraft);
+            if (!visible) {
+                lastFrameMillis = 0L;
+            }
+            return visible;
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            CustomStatueGUI.paint(frame);
+        }
+    };
+
     private static final float DETAIL_OPEN_SPEED = 6.5F;
     private static final float DETAIL_CLOSE_SPEED = 5.0F;
 
@@ -38,14 +61,9 @@ public class CustomStatueGUI {
         HudIconBatch.invalidate();
     }
 
-    /** Draws into the caller's managed HUD pass. */
-    public static void renderBatched(GuiGraphics guiGraphics, Minecraft mc) {
-        if (!shouldRenderHud(mc)) {
-            lastFrameMillis = 0L;
-            return;
-        }
-
-        long now = System.currentTimeMillis();
+    private static void paint(HudFrame frame) {
+        Minecraft mc = frame.minecraft();
+        long now = frame.now();
         float deltaSeconds = lastFrameMillis == 0L ? 0.0F : Math.min(0.1F, (now - lastFrameMillis) / 1000.0F);
         lastFrameMillis = now;
 
@@ -56,12 +74,8 @@ public class CustomStatueGUI {
 
         Player player = mc.player;
         HudVitals vitals = HudVitals.capture(player);
-        HudActionBars.render(guiGraphics, mc, vitals, detailHeld, detail, now, deltaSeconds);
-        HudVitalsPanel.render(guiGraphics, mc, player, vitals, detailHeld, detail, now, deltaSeconds);
-        // This explicit boundary submits the shared panel/text batch before
-        // the icon-atlas mesh. The coordinator puts both task cards in the
-        // same batch ahead of this renderer.
-        HudIconBatch.flush(guiGraphics);
+        HudActionBars.render(frame.canvas(), mc, vitals, detailHeld, detail, now, deltaSeconds);
+        HudVitalsPanel.render(frame.canvas(), mc, player, vitals, detailHeld, detail, now, deltaSeconds);
     }
 
     //拦截原版UI：在UI渲染前取消原版血量的渲染事件

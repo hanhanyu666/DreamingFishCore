@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.client;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudCanvas;
 import com.hhy.dreamingfishcore.item.client.model.CustomRendererBakedModel;
 import com.hhy.dreamingfishcore.gameplay.npc_system.client.StoryNpcRenderer;
 import com.hhy.dreamingfishcore.gameplay.npc_system.entity.StoryNpcEntities;
@@ -34,7 +35,11 @@ public class ClientSetup {
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
-        // 这里可以放一些客户端设置
+        // 游戏内 HUD 统一走框架画布，每帧一次提交；顺序由各区域的 order 决定
+        HudCanvas.register(CustomHotbarGUI.LAYER);
+        HudCanvas.register(TaskLocationHudRenderer.LAYER);
+        HudCanvas.register(TaskLocationReminderHudRenderer.LAYER);
+        HudCanvas.register(CustomStatueGUI.LAYER);
     }
 
     @SubscribeEvent

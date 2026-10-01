@@ -1,12 +1,11 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbType;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.sync.LimbClientInjurySync;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.player.Player;
 
 import java.lang.ref.WeakReference;
@@ -103,7 +102,7 @@ final class HudVitalsPanel {
     private HudVitalsPanel() {
     }
 
-    static void render(GuiGraphics graphics, Minecraft minecraft, Player player, HudVitals vitals,
+    static void render(UiCanvas canvas, Minecraft minecraft, Player player, HudVitals vitals,
                        boolean detailHeld, float detail, long now, float deltaSeconds) {
         if (player != trackedPlayer.get()) {
             reset(player, vitals, now);
@@ -131,23 +130,23 @@ final class HudVitalsPanel {
         if (detail > 0.01F) {
             int right = Math.round(columnX + ICON_SIZE + ICON_GAP + labels + VALUE_WIDTH + PANEL_PADDING);
             int top = Math.min(footY - FIGURE_HEIGHT - 4, headerY) - PANEL_PADDING;
-            UiPanelRenderer.smoothRoundedRectBatched(graphics, 2, top, right - 2, footY + 3 - top, 4,
-                    HudPalette.withAlpha(0x0A0C0E, Math.round(0x80 * detail)),
-                    HudPalette.withAlpha(HudPalette.BONE, Math.round(0x24 * detail)));
+            canvas.shape(2, top, right - 2, footY + 3 - top).radius(4.0F)
+                    .verticalGradient(HudPalette.withAlpha(0x0A0C0E, Math.round(0x70 * detail)),
+                            HudPalette.withAlpha(0x0A0C0E, Math.round(0x90 * detail)))
+                    .border(1.0F, HudPalette.withAlpha(HudPalette.BONE, Math.round(0x24 * detail))).draw();
         }
 
         HudBodyPainter.Visual visual = figureVisual(player, vitals, now);
-        // 线稿合成是即时绘制；查看模式的底板需先提交，才能垫在线稿下面。
-        if (detail > 0.01F) {
-            graphics.flush();
-        }
         HudModelOutline.Layout layout = new HudModelOutline.Layout(FIGURE_REGION_LEFT,
                 footY + FIGURE_REGION_BOTTOM_PADDING - FIGURE_REGION_HEIGHT,
                 FIGURE_REGION_WIDTH, FIGURE_REGION_HEIGHT, centerX, footY, FIGURE_HEIGHT);
         float partialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(true);
-        if (!HudModelOutline.render(graphics, minecraft, player, layout, visual, partialTick)) {
-            HudBodyRenderer.render(graphics, HudBodyRenderer.geometry(player, centerX, footY, now), visual);
-        }
+        // 线稿需要离屏渲染模型再合成，作为原生命令放进画布；画布会保证它压在查看底板之上。
+        canvas.custom(layout.left(), layout.top(), layout.width(), layout.height(), graphics -> {
+            if (!HudModelOutline.render(graphics, minecraft, player, layout, visual, partialTick)) {
+                HudBodyRenderer.render(graphics, HudBodyRenderer.geometry(player, centerX, footY, now), visual);
+            }
+        });
 
         float rowY = footY - ICON_SIZE;
         for (int index = ROWS.length - 1; index >= 0; index--) {
@@ -156,13 +155,13 @@ final class HudVitalsPanel {
                 continue;
             }
             float rowX = columnX - (1.0F - visibility) * ROW_SLIDE;
-            drawRow(graphics, font, ROWS[index], vitals, rowX, Math.round(rowY), visibility, detail, detailHeld,
+            drawRow(canvas, font, ROWS[index], vitals, rowX, Math.round(rowY), visibility, detail, detailHeld,
                     labels, now);
             rowY -= ROW_PITCH * visibility;
         }
 
         if (detail > 0.01F) {
-            drawHeader(graphics, font, columnX, headerY, labels, detail, now);
+            drawHeader(canvas, font, columnX, headerY, labels, detail, now);
         }
     }
 
@@ -277,14 +276,14 @@ final class HudVitalsPanel {
                 vitals.regionPlated(), vitals.regionDurability(), scan, now);
     }
 
-    private static void drawRow(GuiGraphics graphics, Font font, Row row, HudVitals vitals,
+    private static void drawRow(UiCanvas canvas, Font font, Row row, HudVitals vitals,
                                 float x, int y, float visibility, float detail, boolean detailHeld,
                                 float labels, long now) {
         int iconX = Math.round(x);
         float textY = y + 1.0F;
         float valueX = x + ICON_SIZE + ICON_GAP;
         if (labels > 0.5F) {
-            HudDraw.text(graphics, font, row.label, valueX, textY, HudPalette.BONE_DIM,
+            HudDraw.text(canvas, font, row.label, valueX, textY, HudPalette.BONE_DIM,
                     visibility * detail, TEXT_SCALE);
             valueX += labels;
         }
@@ -292,48 +291,48 @@ final class HudVitalsPanel {
 
         switch (row) {
             case HEALTH -> {
-                HudIconBatch.queue(HudIconBatch.Icon.HEALTH, iconX, y, ICON_SIZE, visibility);
+                HudIconBatch.draw(canvas, HudIconBatch.Icon.HEALTH, iconX, y, ICON_SIZE, visibility);
                 float alpha = visibility;
                 if (vitals.healthRatio() < 0.15F) {
                     alpha *= 0.7F + 0.3F * HudPalette.pulse(now, 900L);
                 }
-                HudDraw.text(graphics, font, text, valueX, textY,
+                HudDraw.text(canvas, font, text, valueX, textY,
                         HudPalette.bodyColor(vitals.healthRatio()), alpha, TEXT_SCALE);
             }
             case FOOD -> {
-                HudIconBatch.queue(HudIconBatch.Icon.FOOD, iconX, y, ICON_SIZE, visibility);
+                HudIconBatch.draw(canvas, HudIconBatch.Icon.FOOD, iconX, y, ICON_SIZE, visibility);
                 float ratio = vitals.food() / 20.0F;
-                int width = HudDraw.segments(graphics, Math.round(valueX), y + 2, ratio,
+                int width = HudDraw.segments(canvas, Math.round(valueX), y + 2, ratio,
                         HudPalette.resourceColor(ratio, 0.35F, 0.15F), visibility);
-                HudDraw.text(graphics, font, text, valueX + width + VALUE_GAP, textY,
+                HudDraw.text(canvas, font, text, valueX + width + VALUE_GAP, textY,
                         HudPalette.BONE, visibility * detail, TEXT_SCALE);
             }
             case INFECTION -> {
-                HudIconBatch.queue(HudIconBatch.Icon.INFECTION, iconX, y, ICON_SIZE, visibility);
+                HudIconBatch.draw(canvas, HudIconBatch.Icon.INFECTION, iconX, y, ICON_SIZE, visibility);
                 float alpha = visibility;
                 if (!vitals.infected() && vitals.infectionRatio() >= INFECTION_DANGER_RATIO) {
                     alpha *= 0.72F + 0.28F * HudPalette.pulse(now, 1200L);
                 }
-                HudDraw.text(graphics, font, text, valueX, textY, HudPalette.INFECTION, alpha, TEXT_SCALE);
+                HudDraw.text(canvas, font, text, valueX, textY, HudPalette.INFECTION, alpha, TEXT_SCALE);
             }
             case COURAGE -> {
-                HudIconBatch.queue(HudIconBatch.Icon.COURAGE, iconX, y, ICON_SIZE, visibility);
+                HudIconBatch.draw(canvas, HudIconBatch.Icon.COURAGE, iconX, y, ICON_SIZE, visibility);
                 float ratio = vitals.courageRatio();
-                int width = HudDraw.segments(graphics, Math.round(valueX), y + 2, ratio,
+                int width = HudDraw.segments(canvas, Math.round(valueX), y + 2, ratio,
                         HudPalette.resourceColor(ratio, COURAGE_LOW_RATIO, COURAGE_DANGER_RATIO), visibility);
-                HudDraw.text(graphics, font, text, valueX + width + VALUE_GAP, textY,
+                HudDraw.text(canvas, font, text, valueX + width + VALUE_GAP, textY,
                         HudPalette.BONE, visibility * detail, TEXT_SCALE);
             }
             case ARMOR -> {
-                HudIconBatch.queue(HudIconBatch.Icon.ARMOR, iconX, y, ICON_SIZE, visibility);
-                HudDraw.text(graphics, font, text, valueX, textY, HudPalette.BONE, visibility, TEXT_SCALE);
+                HudIconBatch.draw(canvas, HudIconBatch.Icon.ARMOR, iconX, y, ICON_SIZE, visibility);
+                HudDraw.text(canvas, font, text, valueX, textY, HudPalette.BONE, visibility, TEXT_SCALE);
             }
             case TEMPLATE -> {
                 int remaining = TemplateReconstructionRules.remainingReconstructions(
                         vitals.templatePoints(), vitals.templateCost());
                 int color = remaining <= 0 ? HudPalette.RED : remaining < 2 ? HudPalette.AMBER : HudPalette.BONE;
-                drawTemplateGlyph(graphics, iconX, y, HudPalette.withAlpha(color, Math.round(0xE0 * visibility)));
-                HudDraw.text(graphics, font, text, valueX, textY, color, visibility, TEXT_SCALE);
+                drawTemplateGlyph(canvas, iconX, y, HudPalette.withAlpha(color, Math.round(0xE0 * visibility)));
+                HudDraw.text(canvas, font, text, valueX, textY, color, visibility, TEXT_SCALE);
             }
         }
     }
@@ -376,29 +375,31 @@ final class HudVitalsPanel {
         return detailHeld ? percent + " · 幸存者" : percent;
     }
 
-    private static void drawHeader(GuiGraphics graphics, Font font, int x, int y, float labels,
+    private static void drawHeader(UiCanvas canvas, Font font, int x, int y, float labels,
                                    float detail, long now) {
         // 缓慢闪烁的记录点，表示读数来自实时回传。
         int dotAlpha = Math.round((0x60 + 0x9F * HudPalette.pulse(now, 1600L)) * detail);
-        graphics.fill(x + 3, y + 2, x + 5, y + 4, HudPalette.withAlpha(HudPalette.BONE, dotAlpha));
-        HudDraw.text(graphics, font, HEADER, x + ICON_SIZE + ICON_GAP, y, HudPalette.BONE_DIM, detail, TEXT_SCALE);
+        canvas.circle(x + 4.0F, y + 3.0F, 1.2F, HudPalette.withAlpha(HudPalette.BONE, dotAlpha));
+        HudDraw.text(canvas, font, HEADER, x + ICON_SIZE + ICON_GAP, y, HudPalette.BONE_DIM, detail, TEXT_SCALE);
         int ruleRight = Math.round(x + ICON_SIZE + ICON_GAP + labels + VALUE_WIDTH);
-        graphics.fill(x, y + 8, ruleRight, y + 9, HudPalette.withAlpha(HudPalette.BONE, Math.round(0x30 * detail)));
+        canvas.shape(x, y + 8, ruleRight - x, 1).horizontalGradient(
+                HudPalette.withAlpha(HudPalette.BONE, Math.round(0x40 * detail)),
+                HudPalette.withAlpha(HudPalette.BONE, Math.round(0x08 * detail))).draw();
     }
 
     /** 模板余量没有专属图标：用一枚空心菱形表示“模板”，中心点表示当前身体。 */
-    private static void drawTemplateGlyph(GuiGraphics graphics, int x, int y, int color) {
+    private static void drawTemplateGlyph(UiCanvas canvas, int x, int y, int color) {
         if ((color >>> 24) == 0) {
             return;
         }
-        for (int row = 0; row < 7; row++) {
-            int offset = Math.abs(3 - row);
-            graphics.fill(x + offset, y + row, x + offset + 1, y + row + 1, color);
-            if (offset != 3) {
-                graphics.fill(x + 6 - offset, y + row, x + 7 - offset, y + row + 1, color);
-            }
-        }
-        graphics.fill(x + 3, y + 3, x + 4, y + 4, color);
+        float cx = x + 3.5F;
+        float cy = y + 3.5F;
+        float r = 3.2F;
+        canvas.line(cx, cy - r, cx + r, cy, 1.0F, color, true);
+        canvas.line(cx + r, cy, cx, cy + r, 1.0F, color, true);
+        canvas.line(cx, cy + r, cx - r, cy, 1.0F, color, true);
+        canvas.line(cx - r, cy, cx, cy - r, 1.0F, color, true);
+        canvas.circle(cx, cy, 0.8F, color);
     }
 
     private static float labelWidth(Font font) {

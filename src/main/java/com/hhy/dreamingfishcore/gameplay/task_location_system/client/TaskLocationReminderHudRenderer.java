@@ -1,6 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.task_location_system.client;
 
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
 import com.hhy.dreamingfishcore.client.input.KeybindHandler;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceEntry;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceViewData;
@@ -13,7 +16,6 @@ import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCa
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.locale.Language;
 import net.neoforged.neoforge.client.settings.KeyModifier;
 
@@ -53,6 +55,24 @@ public final class TaskLocationReminderHudRenderer {
     private static final int TASK_ACCENT = 0xFF68D9AE;
 
     private static final int REFRESH_INTERVAL_TICKS = 5;
+
+    /** 右下角提醒卡片与剧情追踪卡片在统一 HUD 画布中的区域，画在保护区卡片之后。 */
+    public static final HudLayer LAYER = new HudLayer() {
+        @Override
+        public int order() {
+            return 30;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            return shouldRenderHud(minecraft);
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            render(frame.canvas(), frame.font(), getSnapshot());
+        }
+    };
     private static volatile ReminderSnapshot cachedSnapshot = ReminderSnapshot.EMPTY;
     private static int lastRefreshTick = Integer.MIN_VALUE;
     private static Object lastRefreshLevel;
@@ -92,24 +112,7 @@ public final class TaskLocationReminderHudRenderer {
                 && (!getSnapshot().lines().isEmpty() || !GuidanceClientCache.getActiveEntries().isEmpty());
     }
 
-    /** Draws into the shared managed HUD pass. */
-    public static void renderBatched(GuiGraphics graphics, Minecraft minecraft) {
-        if (minecraft.player == null || minecraft.level == null
-                || minecraft.options.hideGui
-                || minecraft.getDebugOverlay().showDebugScreen()
-                || minecraft.screen != null) {
-            return;
-        }
-
-        ReminderSnapshot snapshot = getSnapshot();
-        if (snapshot.lines().isEmpty() && GuidanceClientCache.getActiveEntries().isEmpty()) {
-            return;
-        }
-
-        render(graphics, minecraft.font, snapshot);
-    }
-
-    private static void render(GuiGraphics graphics, Font font, ReminderSnapshot snapshot) {
+    private static void render(UiCanvas canvas, Font font, ReminderSnapshot snapshot) {
         Minecraft minecraft = Minecraft.getInstance();
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
         int screenHeight = minecraft.getWindow().getGuiScaledHeight();
@@ -129,35 +132,28 @@ public final class TaskLocationReminderHudRenderer {
                 : TaskLocationHudRenderer.panelTop(screenHeight, font) - CARD_GAP;
         int y = cardBottom - panelHeight;
 
-        renderGuidanceStack(graphics, minecraft, panelMaxWidth, y - (lines.isEmpty() ? 0 : CARD_GAP));
+        renderGuidanceStack(canvas, minecraft, panelMaxWidth, y - (lines.isEmpty() ? 0 : CARD_GAP));
         if (lines.isEmpty()) {
             return;
         }
 
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, x, y, panelWidth, panelHeight,
-                PANEL_RADIUS, PANEL_BACKGROUND,
-                UiPanelRenderer.withAlpha(snapshot.primaryAccent(), 118));
-        UiPanelRenderer.roundedRect(graphics, x + LEFT_PADDING, y + VERTICAL_PADDING,
-                ACCENT_WIDTH, panelHeight - VERTICAL_PADDING * 2, 1,
-                UiPanelRenderer.withAlpha(snapshot.primaryAccent(), 224));
+        canvas.shape(x, y, panelWidth, panelHeight).radius(PANEL_RADIUS).fill(PANEL_BACKGROUND)
+                .border(1.0F, UiColor.withAlpha(snapshot.primaryAccent(), 118)).draw();
+        canvas.shape(x + LEFT_PADDING, y + VERTICAL_PADDING, ACCENT_WIDTH, panelHeight - VERTICAL_PADDING * 2)
+                .radius(1.0F).fill(UiColor.withAlpha(snapshot.primaryAccent(), 224)).draw();
 
-        int textX = x + LEFT_PADDING + ACCENT_WIDTH + ACCENT_GAP;
-        int textY = y + (panelHeight - scaledTextHeight) / 2;
-        graphics.pose().pushPose();
-        graphics.pose().translate(textX, textY, 0.0f);
-        graphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0f);
-        int rawTextY = 0;
+        float textX = x + LEFT_PADDING + ACCENT_WIDTH + ACCENT_GAP;
+        float textY = y + (panelHeight - scaledTextHeight) / 2;
+        float lineY = textY;
         for (PreparedLine line : lines) {
-            graphics.drawString(font, line.prefix(), 0, rawTextY, line.accent(), false);
-            graphics.drawString(font, line.detail(), line.detailX(), rawTextY,
-                    TEXT_COLOR, false);
-            rawTextY += font.lineHeight + LINE_GAP;
+            canvas.text(line.prefix(), textX, lineY, line.accent(), TEXT_SCALE, false);
+            canvas.text(line.detail(), textX + line.detailX() * TEXT_SCALE, lineY, TEXT_COLOR, TEXT_SCALE, false);
+            lineY += (font.lineHeight + LINE_GAP) * TEXT_SCALE;
         }
-        graphics.pose().popPose();
     }
 
     /** 按可见文字收缩卡片，正文最多三行；按住切换键时才展开其他任务。 */
-    private static void renderGuidanceStack(GuiGraphics graphics, Minecraft minecraft, int maxWidth, int bottom) {
+    private static void renderGuidanceStack(UiCanvas canvas, Minecraft minecraft, int maxWidth, int bottom) {
         List<GuidanceViewData> active = GuidanceClientCache.getActiveEntries();
         GuidanceViewData selected = GuidanceClientCache.getTrackedEntry();
         if (selected == null || active.isEmpty()) {
@@ -181,32 +177,27 @@ public final class TaskLocationReminderHudRenderer {
             compactCount--;
         }
         int mainY = Math.max(4, bottom - mainHeight - compactCount * (compactHeight + CARD_GAP));
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, x, mainY, width, mainHeight,
-                PANEL_RADIUS, 0x98141D28, UiPanelRenderer.withAlpha(TASK_ACCENT, 110));
-        graphics.pose().pushPose();
-        graphics.pose().translate(x + 5, mainY + 4, 0);
-        graphics.pose().scale(GUIDANCE_TEXT_SCALE, GUIDANCE_TEXT_SCALE, 1);
-        graphics.drawString(font, layout.title(), 0, 0, TASK_ACCENT, false);
+        canvas.shape(x, mainY, width, mainHeight).radius(PANEL_RADIUS).fill(0x98141D28)
+                .border(1.0F, UiColor.withAlpha(TASK_ACCENT, 110)).draw();
+        float textX = x + 5.0F;
+        float textY = mainY + 4.0F;
+        float step = rawLineHeight * GUIDANCE_TEXT_SCALE;
+        canvas.text(layout.title(), textX, textY, TASK_ACCENT, GUIDANCE_TEXT_SCALE, false);
         for (int line = 0; line < layout.description().size(); line++) {
-            graphics.drawString(font, layout.description().get(line), 0, (line + 1) * rawLineHeight, TEXT_COLOR, false);
+            canvas.text(layout.description().get(line), textX, textY + (line + 1) * step, TEXT_COLOR, GUIDANCE_TEXT_SCALE, false);
         }
         if (expanded) {
-            graphics.drawString(font, layout.hint(),
-                    0, (layout.description().size() + 1) * rawLineHeight, 0xFF9BB8C9, false);
+            canvas.text(layout.hint(), textX, textY + (layout.description().size() + 1) * step, 0xFF9BB8C9,
+                    GUIDANCE_TEXT_SCALE, false);
         }
-        graphics.pose().popPose();
         for (int offset = 1; offset <= compactCount; offset++) {
             PreparedGuidanceCard other = layout.compactCards().get(offset - 1);
             int y = mainY + mainHeight + CARD_GAP + (offset - 1) * (compactHeight + CARD_GAP);
             int otherWidth = other.width();
             int otherX = minecraft.getWindow().getGuiScaledWidth() - otherWidth - RIGHT_MARGIN;
-            UiPanelRenderer.smoothRoundedRectBatched(graphics, otherX, y, otherWidth,
-                    compactHeight, PANEL_RADIUS, PANEL_BACKGROUND, 0x66445B6A);
-            graphics.pose().pushPose();
-            graphics.pose().translate(otherX + 5, y + 3, 0);
-            graphics.pose().scale(GUIDANCE_TEXT_SCALE, GUIDANCE_TEXT_SCALE, 1);
-            graphics.drawString(font, other.title(), 0, 0, 0xFFB4C5D2, false);
-            graphics.pose().popPose();
+            canvas.shape(otherX, y, otherWidth, compactHeight).radius(PANEL_RADIUS).fill(PANEL_BACKGROUND)
+                    .border(1.0F, 0x66445B6A).draw();
+            canvas.text(other.title(), otherX + 5.0F, y + 3.0F, 0xFFB4C5D2, GUIDANCE_TEXT_SCALE, false);
         }
     }
 
