@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client;
 
 import com.google.common.collect.Ordering;
-import com.hhy.dreamingfishcore.client.ui.render.GuiQuadBatchRenderer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.client.ui.render.RetainedGuiBuffers;
 import com.hhy.dreamingfishcore.client.ui.render.RetainedPlayerFace;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
@@ -10,7 +10,6 @@ import com.hhy.dreamingfishcore.server.rank_system.RankRegistry;
 import com.hhy.dreamingfishcore.server.title_system.PlayerTitleManager;
 import com.hhy.dreamingfishcore.server.title_system.Title;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -43,8 +42,8 @@ import java.util.Set;
  * 以信号格表示，等级为分段进度条，状态效果为带倒计时圆环的图标。文字是暖色骨白，
  * 带轻微辉光与色散，模拟投射在镜片上的质感。</p>
  *
- * <p>除状态效果外的全部几何与文字都录成常驻顶点缓冲，只在时间、在线人数、等级等内容变化时重建；
- * 状态效果的圆环与图标每帧绘制。</p>
+ * <p>除状态效果外的全部几何与文字都录成常驻顶点缓冲，只在时间、在线人数、等级等内容变化时重建，
+ * 作为原生命令放进 HUD 画布；状态效果的倒计时圆环与图标每帧画在画布上。</p>
  */
 final class TerminalLensOverlay {
     private static final int MAIN = 0xEEE8D8;
@@ -85,7 +84,6 @@ final class TerminalLensOverlay {
     private static final float EFFECT_RADIUS = 5.2F;
     private static final float EFFECT_ICON = 7.0F;
     private static final float EFFECT_TOP = 57.0F;
-    private static final int RING_SEGMENTS = 36;
     private static final float LOW_TPS = 18.0F;
     private static final long EFFECT_ORDER_CACHE_INTERVAL = 250L;
     private static final String[] WEEKDAYS = {"星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"};
@@ -113,24 +111,33 @@ final class TerminalLensOverlay {
         dirty = true;
     }
 
-    static Anchor render(GuiGraphics graphics, Minecraft mc, Font font, int level, Rank rank) {
+    static Anchor paint(UiCanvas canvas, Minecraft mc, Font font, int level, Rank rank) {
         List<MobEffectInstance> effects = visibleEffects(mc);
         int effectRows = (effects.size() + EFFECTS_PER_ROW - 1) / EFFECTS_PER_ROW;
         Key key = key(mc, font, level, rank, effectRows);
+        float bottom = bracketBottom(effectRows);
+        canvas.custom(key.screenWidth() - LENS_WIDTH, 0.0F, LENS_WIDTH, Math.max(LENS_HEIGHT, bottom),
+                graphics -> drawRetained(graphics, font, key));
+        if (!effects.isEmpty()) {
+            paintEffects(canvas, mc, key.screenWidth() - RIGHT_MARGIN, effects, (float) (1.0D / key.guiScale()));
+        }
+        return new Anchor(4, Math.round(bottom));
+    }
+
+    /** 常驻部分：内容变化时重建顶点缓冲，然后直接绘制。 */
+    private static void drawRetained(GuiGraphics graphics, Font font, Key key) {
         Matrix4f pose = graphics.pose().last().pose();
         Cache current = cache;
         if (dirty || current == null || !current.key().equals(key) || !current.pose().equals(pose)) {
             current = rebuild(font, key, pose, current);
         }
-
-        // 常驻部分不再产生普通 GUI 几何；先提交之前排队的内容，再绘制保留缓冲。
         graphics.flush();
         current.buffers().draw();
         current.avatar().draw();
-        if (!effects.isEmpty()) {
-            renderEffects(graphics, mc, key.screenWidth() - RIGHT_MARGIN, effects, (float) (1.0D / key.guiScale()));
-        }
-        return current.anchor();
+    }
+
+    private static float bracketBottom(int effectRows) {
+        return effectRows > 0 ? 60.0F + EFFECT_STEP * (effectRows - 1) : 51.0F;
     }
 
     private static Key key(Minecraft mc, Font font, int level, Rank rank, int effectRows) {
@@ -196,7 +203,7 @@ final class TerminalLensOverlay {
         Matrix4f base = new Matrix4f(livePose);
         float pixel = (float) (1.0D / key.guiScale());
         float right = key.screenWidth() - RIGHT_MARGIN;
-        float bracketBottom = key.effectRows() > 0 ? 60.0F + EFFECT_STEP * (key.effectRows() - 1) : 51.0F;
+        float bracketBottom = bracketBottom(key.effectRows());
 
         RetainedGuiBuffers buffers;
         int avatarX;
@@ -236,8 +243,7 @@ final class TerminalLensOverlay {
             previous.buffers().close();
             previous.avatar().close();
         }
-        Cache rebuilt = new Cache(key, base, buffers, avatar,
-                new Anchor(4, Math.round(bracketBottom)));
+        Cache rebuilt = new Cache(key, base, buffers, avatar);
         cache = rebuilt;
         dirty = false;
         return rebuilt;
@@ -391,63 +397,60 @@ final class TerminalLensOverlay {
     }
 
     /** 状态效果：细圆环表示剩余时间（以本次观察到的最长时长为满），图标居中。 */
-    private static void renderEffects(GuiGraphics graphics, Minecraft mc, float right,
-                                      List<MobEffectInstance> effects, float pixel) {
-        graphics.drawManaged(() -> {
-            VertexConsumer gui = graphics.bufferSource().getBuffer(RenderType.gui());
-            Matrix4f pose = graphics.pose().last().pose();
-            for (int index = 0; index < effects.size(); index++) {
-                MobEffectInstance effect = effects.get(index);
-                float cx = effectX(right, index);
-                float cy = effectY(index);
-                float alpha = effectAlpha(effect);
-                ring(gui, pose, cx, cy, 1.0F, pixel * 2.0F, Math.round(60 * alpha));
-                ring(gui, pose, cx, cy, remaining(effect), pixel * 3.0F,
-                        Math.round((effect.isAmbient() ? 140 : 230) * alpha));
+    private static void paintEffects(UiCanvas canvas, Minecraft mc, float right, List<MobEffectInstance> effects,
+                                     float pixel) {
+        float full = (float) (Math.PI * 2.0);
+        float start = (float) (-Math.PI / 2.0);
+        for (int index = 0; index < effects.size(); index++) {
+            MobEffectInstance effect = effects.get(index);
+            float cx = effectX(right, index);
+            float cy = effectY(index);
+            float alpha = effectAlpha(effect);
+            int track = Math.round(60 * alpha) << 24 | ACCENT;
+            int ring = Math.round((effect.isAmbient() ? 140 : 230) * alpha) << 24 | ACCENT;
+            canvas.arc(cx, cy, EFFECT_RADIUS, Math.max(pixel * 2.0F, 0.6F), 0.0F, full, track, track);
+            float remaining = remaining(effect);
+            if (remaining > 0.0F) {
+                canvas.arc(cx, cy, EFFECT_RADIUS, Math.max(pixel * 3.0F, 0.9F), start, full * remaining, ring, ring);
             }
-        });
 
-        // 第三方效果可能自绘图标，保留它们的渲染器；其余图标合并为一次图集提交。
+            // 第三方效果可能自绘图标：保留它们的渲染器，失败时退回图集图标
+            IClientMobEffectExtensions renderer = IClientMobEffectExtensions.of(effect);
+            TextureAtlasSprite icon = mc.getMobEffectTextures().get(effect.getEffect());
+            float iconX = cx - EFFECT_ICON / 2.0F;
+            float iconY = cy - EFFECT_ICON / 2.0F;
+            if (renderer == IClientMobEffectExtensions.DEFAULT) {
+                canvas.image(icon.atlasLocation(), iconX, iconY, EFFECT_ICON, EFFECT_ICON, icon.getU0(), icon.getV0(),
+                        icon.getU1(), icon.getV1(), 0.0F, Math.round(255 * Mth.clamp(alpha, 0.0F, 1.0F)) << 24 | 0xFFFFFF);
+            } else {
+                canvas.custom(iconX, iconY, EFFECT_ICON, EFFECT_ICON, graphics -> renderCustomIcon(graphics, mc, effect,
+                        renderer, icon, iconX, iconY, alpha));
+            }
+        }
+    }
+
+    private static void renderCustomIcon(GuiGraphics graphics, Minecraft mc, MobEffectInstance effect,
+                                         IClientMobEffectExtensions renderer, TextureAtlasSprite icon,
+                                         float iconX, float iconY, float alpha) {
         float iconScale = EFFECT_ICON / 18.0F;
-        boolean[] handled = new boolean[effects.size()];
         RenderSystem.enableBlend();
         try {
-            for (int index = 0; index < effects.size(); index++) {
-                MobEffectInstance effect = effects.get(index);
-                IClientMobEffectExtensions renderer = IClientMobEffectExtensions.of(effect);
-                if (renderer == IClientMobEffectExtensions.DEFAULT) {
-                    continue;
-                }
+            graphics.pose().pushPose();
+            graphics.pose().translate(iconX - 3.0F * iconScale, iconY - 3.0F * iconScale, 0.0F);
+            graphics.pose().scale(iconScale, iconScale, 1.0F);
+            boolean handled = renderer.renderGuiIcon(effect, mc.gui, graphics, 0, 0, 0, alpha);
+            graphics.pose().popPose();
+            if (!handled) {
+                graphics.setColor(1.0F, 1.0F, 1.0F, alpha);
                 graphics.pose().pushPose();
-                graphics.pose().translate(effectX(right, index) - EFFECT_ICON / 2.0F - 3.0F * iconScale,
-                        effectY(index) - EFFECT_ICON / 2.0F - 3.0F * iconScale, 0.0F);
-                graphics.pose().scale(iconScale, iconScale, 1.0F);
-                handled[index] = renderer.renderGuiIcon(effect, mc.gui, graphics, 0, 0, 0, effectAlpha(effect));
+                graphics.pose().translate(iconX, iconY, 0.0F);
+                graphics.pose().scale(EFFECT_ICON / 18.0F, EFFECT_ICON / 18.0F, 1.0F);
+                graphics.blit(0, 0, 0, 18, 18, icon);
                 graphics.pose().popPose();
             }
         } finally {
-            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+            graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
             RenderSystem.disableBlend();
-        }
-
-        Matrix4f pose = graphics.pose().last().pose();
-        BufferBuilder icons = GuiQuadBatchRenderer.begin();
-        ResourceLocation atlas = null;
-        for (int index = 0; index < effects.size(); index++) {
-            if (handled[index]) {
-                continue;
-            }
-            MobEffectInstance effect = effects.get(index);
-            TextureAtlasSprite icon = mc.getMobEffectTextures().get(effect.getEffect());
-            atlas = icon.atlasLocation();
-            GuiQuadBatchRenderer.addSprite(icons, pose, icon,
-                    effectX(right, index) - EFFECT_ICON / 2.0F, effectY(index) - EFFECT_ICON / 2.0F,
-                    EFFECT_ICON, EFFECT_ICON, effectAlpha(effect));
-        }
-        if (atlas != null) {
-            GuiQuadBatchRenderer.draw(icons, atlas);
-        } else {
-            icons.build();
         }
     }
 
@@ -482,30 +485,6 @@ final class TerminalLensOverlay {
         return Mth.clamp(duration / 10.0F / 5.0F * 0.5F, 0.0F, 0.5F)
                 + Mth.cos(duration * (float) Math.PI / 5.0F)
                 * Mth.clamp(pulseStep / 10.0F * 0.25F, 0.0F, 0.25F);
-    }
-
-    /** 从正上方顺时针画出 {@code progress} 比例的圆环。 */
-    private static void ring(VertexConsumer gui, Matrix4f pose, float cx, float cy, float progress,
-                             float thickness, int alpha) {
-        int segments = Math.round(RING_SEGMENTS * Mth.clamp(progress, 0.0F, 1.0F));
-        if (segments <= 0 || alpha <= 0) {
-            return;
-        }
-        float inner = EFFECT_RADIUS - thickness / 2.0F;
-        float outer = EFFECT_RADIUS + thickness / 2.0F;
-        int color = Math.min(255, alpha) << 24 | ACCENT;
-        for (int segment = 0; segment < segments; segment++) {
-            double a0 = Math.PI * 2.0D * segment / RING_SEGMENTS;
-            double a1 = Math.PI * 2.0D * (segment + 1) / RING_SEGMENTS;
-            float s0 = (float) Math.sin(a0);
-            float c0 = (float) -Math.cos(a0);
-            float s1 = (float) Math.sin(a1);
-            float c1 = (float) -Math.cos(a1);
-            gui.addVertex(pose, cx + s0 * outer, cy + c0 * outer, 0.0F).setColor(color);
-            gui.addVertex(pose, cx + s0 * inner, cy + c0 * inner, 0.0F).setColor(color);
-            gui.addVertex(pose, cx + s1 * inner, cy + c1 * inner, 0.0F).setColor(color);
-            gui.addVertex(pose, cx + s1 * outer, cy + c1 * outer, 0.0F).setColor(color);
-        }
     }
 
     /** 录制常驻几何与全息文字的绘制器。 */
@@ -629,7 +608,6 @@ final class TerminalLensOverlay {
         }
     }
 
-    private record Cache(Key key, Matrix4f pose, RetainedGuiBuffers buffers, RetainedPlayerFace avatar,
-                         Anchor anchor) {
+    private record Cache(Key key, Matrix4f pose, RetainedGuiBuffers buffers, RetainedPlayerFace avatar) {
     }
 }

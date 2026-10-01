@@ -40,6 +40,9 @@ public class ClientSetup {
         HudCanvas.register(TaskLocationHudRenderer.LAYER);
         HudCanvas.register(TaskLocationReminderHudRenderer.LAYER);
         HudCanvas.register(CustomStatueGUI.LAYER);
+        HudCanvas.register(ServerInformationDisplay.LAYER);
+        HudCanvas.register(NotificationRenderer.CENTER_LAYER);
+        HudCanvas.register(NotificationRenderer.TOP_LEFT_LAYER);
     }
 
     @SubscribeEvent

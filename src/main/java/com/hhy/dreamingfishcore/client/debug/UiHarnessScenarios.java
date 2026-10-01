@@ -24,6 +24,36 @@ final class UiHarnessScenarios {
 
     static void registerAll() {
         UiHarness.register("hud", minecraft -> minecraft.setScreen(null));
+        UiHarness.register("hud_busy", minecraft -> {
+            minecraft.setScreen(null);
+            var notifications = com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.class;
+            com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.show(
+                    com.hhy.dreamingfishcore.client.ui.notification.Notification.builder()
+                            .title(Component.literal("【逐光会】丧尸开始恢复破坏能力"))
+                            .message(Component.literal("按 U 打开终端，在“梦屿广播”中查看详情"))
+                            .position(com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition.TOP_LEFT)
+                            .theme(com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme.GOLD)
+                            .durationMs(20_000L).build());
+            com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.show(
+                    com.hhy.dreamingfishcore.client.ui.notification.Notification.builder()
+                            .title(Component.literal("第二阶段 · 灯塔熄灭"))
+                            .message(Component.literal("海岸医院请求所有幸存者协助转运伤员"))
+                            .position(com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition.CENTER_TOP)
+                            .theme(com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme.GOLD)
+                            .durationMs(20_000L).build());
+            com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay.addMessage(
+                    Component.literal("§c[OPERATOR]§6鱼友§bDev§f来和你VAN辣！"));
+            var server = minecraft.getSingleplayerServer();
+            if (server != null) {
+                server.execute(() -> {
+                    var source = server.createCommandSourceStack().withSuppressedOutput();
+                    server.getCommands().performPrefixedCommand(source, "effect give @a minecraft:speed 120 1");
+                    server.getCommands().performPrefixedCommand(source, "effect give @a minecraft:night_vision 30");
+                    server.getCommands().performPrefixedCommand(source, "effect give @a minecraft:regeneration 8");
+                });
+            }
+            notifications.getName();
+        });
         UiHarness.register("canvas_test", minecraft -> minecraft.setScreen(new UiCanvasTestScreen()));
         UiHarness.register("gallery", minecraft -> minecraft.setScreen(new UiGalleryScreen()));
         UiHarness.register("gallery_dialog", minecraft -> {
