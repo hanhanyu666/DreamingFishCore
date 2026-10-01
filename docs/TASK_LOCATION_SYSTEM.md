@@ -99,6 +99,15 @@ config/dreamingfishcore/task_locations.json
 
 启用的地点在同一维度内不能重叠。`enabled` 为 `false` 时，该地点仍保留在配置里，但不提供保护，也不参与玩家收集。`mode` 不区分大小写，缺省值为 `PROTECTED`，因此旧配置无需修改。
 
+`horde`（可选，缺省 `false`）把这处地点标记为**尸潮区域**：区域内的刷怪箱才会工作，且区域内的自动刷怪禁令只对刷怪箱来源放行（自然刷怪仍禁）。它不是第三种模式 —— 保护与圈地规则完全沿用 `mode`。切换开关用 3 级权限命令，改完立刻写盘：
+
+```text
+/dreamingfish task_location horde on <地点名>
+/dreamingfish task_location horde off <地点名>
+```
+
+细节见 [尸潮区域与刷怪箱](HORDE_AREA_AND_SPAWNER.md)。
+
 ### 两种地点模式
 
 - `PROTECTED`：生存玩家进入后临时切换为冒险模式，普通方块仍不可破坏/放置；容器和书架交互保持可用，剧情 NPC 与场景装饰仍受保护。
@@ -191,9 +200,10 @@ StoryManager.resolveTaskAtConfiguredLocation(server, taskKey, outcome);
 
 ## 后续扩展点
 
-第一版只完成低成本上线所需的官方地点能力。以下内容留给具体任务系统：
+第一版只完成低成本上线所需的官方地点能力。尸潮生成点已由「尸潮区域开关 + 刷怪箱」实现
+（见 [尸潮区域与刷怪箱](HORDE_AREA_AND_SPAWNER.md)）。以下内容留给具体任务系统：
 
-- 尸潮生成点、入口和 NPC 锚点；
+- 入口和 NPC 锚点；
 - 进入或离开地点的剧情触发器；
 - 临时允许玩家操作指定方块的交互白名单；
 - 任务期间的局部规则和失败代价；

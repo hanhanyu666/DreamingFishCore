@@ -144,6 +144,8 @@ public final class ClientCacheManager {
         EconomyTerminalClientCache.clear();
         // 组织列表是上一个服务器的公共数据，换服时必须清掉，避免显示别服的组织。
         OrganizationClientCache.clear();
+        // 刷怪箱配置同理：里面的坐标只对上一个世界有意义。
+        com.hhy.dreamingfishcore.gameplay.spawner_system.client.SpawnerConfigClientCache.clear();
     }
 
     @SubscribeEvent

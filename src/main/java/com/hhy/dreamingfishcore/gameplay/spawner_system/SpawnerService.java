@@ -7,6 +7,8 @@ import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.overalllevel.PlayerLevelManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
+import com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerConfigRequest;
+import com.hhy.dreamingfishcore.gameplay.spawner_system.network.SpawnerSync;
 import com.hhy.dreamingfishcore.server.economy_bridge.EconomySystemBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -87,8 +89,8 @@ public final class SpawnerService {
         }
 
         if (shiftDown) {
-            // 配置界面在下一阶段接入；当前先给出完整状态，至少让服主能核对参数。
-            player.displayClientMessage(Component.literal(describe(entry)), false);
+            // 潜行 + 右键 = 打开配置界面（服务端校验 + 下发快照，能否编辑也由服务端判断）。
+            handleOpenRequest(player, pos);
             return true;
         }
 
@@ -136,6 +138,19 @@ public final class SpawnerService {
                 || !SpawnerRegistry.isLoaded()
                 || server.getTickCount() % SCAN_INTERVAL_TICKS != 0
                 || SpawnerRegistry.count() == 0) {
+            return;
+        }
+        tickNow(server);
+    }
+
+    /**
+     * 立刻扫描一次，跳过 tick 节流。
+     *
+     * <p>只给 gametest 用：无头测试不能保证服务器 tick 数正好落在节流点上，
+     * 否则测试会随机失败。</p>
+     */
+    static void tickNow(MinecraftServer server) {
+        if (server == null || !SpawnerRegistry.isLoaded() || SpawnerRegistry.count() == 0) {
             return;
         }
         for (SpawnerEntry entry : SpawnerRegistry.all()) {
@@ -462,6 +477,207 @@ public final class SpawnerService {
         }
         var item = BuiltInRegistries.ITEM.getOptional(id).orElse(null);
         return item == null ? ItemStack.EMPTY : new ItemStack(item, reward.count());
+    }
+
+    // ==================== 配置界面（服务端权威） ====================
+
+    /** 编辑权限：创造模式或 2 级权限（刷怪箱是服主布置的剧情设备）。 */
+    public static boolean canEdit(ServerPlayer player) {
+        if (player == null) {
+            return false;
+        }
+        return player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.CREATIVE
+                || player.hasPermissions(2);
+    }
+
+    /** 玩家请求打开配置界面：校验方块与权限，下发快照并（有权限时）开屏。 */
+    public static void handleOpenRequest(ServerPlayer player, BlockPos pos) {
+        ServerLevel level = player.serverLevel();
+        SpawnerEntry entry = resolveEditableEntry(level, pos);
+        if (entry == null) {
+            SpawnerSync.sendResult(player, false, "那里不是刷怪箱。");
+            return;
+        }
+        boolean canEdit = canEdit(player);
+        SpawnerSync.sendSnapshot(player, buildView(level, entry, canEdit));
+        if (canEdit) {
+            SpawnerSync.openConfigScreen(player, pos);
+        } else {
+            SpawnerSync.sendResult(player, false, "需要创造模式或 2 级权限才能修改刷怪箱。");
+        }
+    }
+
+    /** 玩家提交一次配置修改。 */
+    public static void handleConfigRequest(ServerPlayer player, BlockPos pos,
+                                           Packet_SpawnerConfigRequest.Action action,
+                                           int value, boolean flag, String text) {
+        if (!canEdit(player)) {
+            SpawnerSync.sendResult(player, false, "没有修改权限。");
+            return;
+        }
+        ServerLevel level = player.serverLevel();
+        // 防止隔着半个世界远程改别人的刷怪箱。
+        if (player.blockPosition().distSqr(pos) > 64.0D * 64.0D) {
+            SpawnerSync.sendResult(player, false, "离刷怪箱太远了（超过 64 格）。");
+            return;
+        }
+        SpawnerEntry entry = resolveEditableEntry(level, pos);
+        if (entry == null) {
+            SpawnerSync.sendResult(player, false, "那里不是刷怪箱。");
+            return;
+        }
+        String message = applyEdit(entry, action, value, flag, text, level.getGameTime());
+        if (message == null) {
+            SpawnerSync.sendResult(player, false, "这个修改不被接受。");
+            return;
+        }
+        SpawnerRegistry.markChanged();
+        SpawnerSync.sendResult(player, true, message);
+        SpawnerSync.sendSnapshot(player, buildView(level, entry, true));
+    }
+
+    /** 找出某个坐标上的可编辑条目：方块必须是刷怪箱，登记缺失时补登记。 */
+    private static SpawnerEntry resolveEditableEntry(ServerLevel level, BlockPos pos) {
+        if (level == null || pos == null
+                || !level.getBlockState(pos).is(DreamingFishCore_Blocks.SPAWNER.get())) {
+            return null;
+        }
+        String dimensionId = level.dimension().location().toString();
+        SpawnerEntry entry = SpawnerRegistry
+                .find(dimensionId, pos.getX(), pos.getY(), pos.getZ()).orElse(null);
+        if (entry == null) {
+            SpawnerRegistry.register(dimensionId, pos.getX(), pos.getY(), pos.getZ());
+            entry = SpawnerRegistry
+                    .find(dimensionId, pos.getX(), pos.getY(), pos.getZ()).orElse(null);
+        }
+        return entry;
+    }
+
+    /** 组装下发视图。 */
+    static SpawnerView buildView(ServerLevel level, SpawnerEntry entry, boolean canEdit) {
+        BlockPos pos = new BlockPos(entry.x(), entry.y(), entry.z());
+        boolean inHordeArea = TaskLocationManager.isHordeArea(level, pos);
+        BlockState state = level.getBlockState(pos);
+        boolean active = state.is(DreamingFishCore_Blocks.SPAWNER.get())
+                && state.getValue(SpawnerBlock.ACTIVE);
+        return SpawnerView.of(entry, canEdit, inHordeArea, active);
+    }
+
+    /**
+     * 应用一次修改并回一句给玩家看的结果。
+     *
+     * <p>全部数值都走 {@link SpawnerEntry} 的 setter（自带上下限）：
+     * 客户端提交的任何数值都当作不可信输入，这里只做"能不能解析"的检查。</p>
+     *
+     * @return 结果文案；返回 {@code null} 表示这次修改不被接受
+     */
+    static String applyEdit(SpawnerEntry entry, Packet_SpawnerConfigRequest.Action action,
+                            int value, boolean flag, String text, long now) {
+        switch (action) {
+            case SET_ENTITY -> {
+                if (resolveEntityType(text) == null) {
+                    return null;
+                }
+                entry.setEntityId(text);
+                return "刷的怪改为 " + entry.entityId();
+            }
+            case SET_DETECTION_RADIUS -> {
+                entry.setDetectionRadius(value);
+                return "检测范围 = " + entry.detectionRadius() + " 格";
+            }
+            case SET_SPAWN_RADIUS -> {
+                entry.setSpawnRadius(value);
+                return "刷怪半径 = " + entry.spawnRadius() + " 格";
+            }
+            case SET_SPAWN_COUNT -> {
+                entry.setSpawnCount(value);
+                return "每批数量 = " + entry.spawnCount();
+            }
+            case SET_COOLDOWN -> {
+                entry.setCooldownTicks(value);
+                return "刷怪冷却 = " + entry.cooldownTicks() + " tick（"
+                        + Math.round(entry.cooldownTicks() / 20.0F) + " 秒）";
+            }
+            case SET_BATCHES -> {
+                entry.setBatches(value);
+                return "批次 = " + entry.batches();
+            }
+            case SET_REDSTONE -> {
+                entry.setRedstoneControlled(flag);
+                return "红石控制：" + (flag ? "需要持续供电" : "忽略红石");
+            }
+            case SET_SELF_DESTRUCT -> {
+                entry.setSelfDestructWhenCleared(flag);
+                return "剿灭后自毁：" + (flag ? "开" : "关");
+            }
+            case SET_CLUE_ENABLED -> {
+                entry.setFixedClueEnabled(flag);
+                return "固定线索：" + (flag ? "开" : "关");
+            }
+            case SET_CLUE_ID -> {
+                entry.setClueId(value);
+                return "线索编号 = " + entry.clueId() + (entry.clueId() == 0 ? "（未指定，不发放）" : "");
+            }
+            case SET_REWARD_EXPERIENCE -> {
+                entry.setRewardExperience(value);
+                return "奖励经验 = " + entry.rewardExperience();
+            }
+            case SET_REWARD_COINS -> {
+                entry.setRewardCoins(value);
+                return "奖励梦鱼币 = " + entry.rewardCoins();
+            }
+            case ADD_REWARD_ITEM -> {
+                SpawnerEntry.RewardEntry reward = parseReward(text);
+                if (reward == null) {
+                    return null;
+                }
+                if (entry.rewardItems().size() >= SpawnerEntry.REWARD_ITEM_ENTRIES_MAX) {
+                    return "奖励条目已达上限（" + SpawnerEntry.REWARD_ITEM_ENTRIES_MAX + " 条）";
+                }
+                entry.rewardItems().add(reward);
+                return "已添加奖励物品 " + reward.itemId() + " ×" + reward.count();
+            }
+            case REMOVE_REWARD_ITEM -> {
+                List<SpawnerEntry.RewardEntry> items = entry.rewardItems();
+                if (value < 0 || value >= items.size()) {
+                    return null;
+                }
+                SpawnerEntry.RewardEntry removed = items.remove(value);
+                return "已移除奖励物品 " + removed.itemId();
+            }
+            case RESET_ROUND -> {
+                entry.resetRound(now);
+                return "已重置本轮（批次归零，等冷却后重开）";
+            }
+            default -> {
+                return null;
+            }
+        }
+    }
+
+    /** 解析 "minecraft:apple" 或 "minecraft:apple x8" 形式的奖励物品。 */
+    private static SpawnerEntry.RewardEntry parseReward(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String raw = text.trim();
+        int count = 1;
+        int separator = raw.lastIndexOf(' ');
+        if (separator > 0) {
+            String tail = raw.substring(separator + 1).trim().toLowerCase(java.util.Locale.ROOT);
+            String digits = tail.startsWith("x") ? tail.substring(1) : tail;
+            try {
+                count = Integer.parseInt(digits);
+                raw = raw.substring(0, separator).trim();
+            } catch (NumberFormatException exception) {
+                // 不是数量后缀，按纯物品 id 处理。
+            }
+        }
+        ResourceLocation id = ResourceLocation.tryParse(raw);
+        if (id == null || BuiltInRegistries.ITEM.getOptional(id).isEmpty()) {
+            return null;
+        }
+        return new SpawnerEntry.RewardEntry(id.toString(), count);
     }
 
     // ==================== 工具 ====================
