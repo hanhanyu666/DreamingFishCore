@@ -64,6 +64,20 @@ final class UiHarnessScenarios {
         UiHarness.register("title", minecraft -> minecraft.setScreen(new TitleScreen()));
         UiHarness.register("pause", minecraft -> minecraft.setScreen(new PauseScreen(true)));
         UiHarness.register("chat", minecraft -> minecraft.setScreen(new ChatScreen("")));
+        UiHarness.register("markers", minecraft -> {
+            minecraft.setScreen(null);
+            if (minecraft.player == null) {
+                return;
+            }
+            var look = minecraft.player.getLookAngle();
+            var eye = minecraft.player.getEyePosition();
+            long now = net.minecraft.Util.getMillis();
+            // 一个在视野内，一个在身后（显示为边缘箭头）
+            com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager.addOrReplace(java.util.UUID.randomUUID(),
+                    "Lighthouse", eye.add(look.scale(12.0)).add(2.0, 0.0, 0.0), now);
+            com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager.addOrReplace(java.util.UUID.randomUUID(),
+                    "守望者07", eye.subtract(look.scale(30.0)), now);
+        });
         UiHarness.register("chat_busy", minecraft -> {
             minecraft.setScreen(null);
             var chat = com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.class;

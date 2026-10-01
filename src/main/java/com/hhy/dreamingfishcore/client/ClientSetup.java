@@ -43,6 +43,7 @@ public class ClientSetup {
         HudCanvas.register(ServerInformationDisplay.LAYER);
         HudCanvas.register(NotificationRenderer.CENTER_LAYER);
         HudCanvas.register(NotificationRenderer.TOP_LEFT_LAYER);
+        HudCanvas.register(com.hhy.dreamingfishcore.gameplay.marker_system.client.render.MarkerRenderer.LAYER);
     }
 
     @SubscribeEvent
