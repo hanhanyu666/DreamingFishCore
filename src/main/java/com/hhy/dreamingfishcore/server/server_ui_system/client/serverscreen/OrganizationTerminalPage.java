@@ -84,6 +84,25 @@ public final class OrganizationTerminalPage {
     // ==================== 实例状态 ====================
     /** 本帧登记的可点击区域；后画的在上层，点击时倒序命中。 */
     private final List<Hit> hits = new ArrayList<>();
+
+    /**
+     * 滚动中的详情区可见范围的上下边界；-1 表示当前不在滚动区内。
+     *
+     * <p>详情区用像素偏移滚动，内容会滑到内容区之外。绘制要裁剪，命中区同样要裁——
+     * 否则滚出视野的按钮仍然能被点到，而 {@link #mouseClicked} 是倒序命中的，
+     * 后画的（被裁掉的）按钮反而会抢走点击。</p>
+     */
+    private int scrollClipTop = -1;
+    private int scrollClipBottom = -1;
+
+    /**
+     * 当前帧的虚拟坐标 → 屏幕坐标缩放比。
+     *
+     * <p>页面画在缩放过的 pose 里（{@code ServerScreenUI_Screen} 会 {@code pose().scale(uiScale, …)}），
+     * 而 {@code enableScissor} 吃的是屏幕像素，所以裁剪框必须乘这个系数，
+     * 否则会按虚拟坐标去裁屏幕，把内容切掉一大块。</p>
+     */
+    private float uiScale = 1.0f;
     private long leftMaxScroll = 0L;
     private long rightMaxScroll = 0L;
     private int listAreaTop = 0;
@@ -147,6 +166,7 @@ public final class OrganizationTerminalPage {
     public void render(GuiGraphics guiGraphics, Font font, float mouseX, float mouseY,
                        int x, int y, int width, int height, float uiScale) {
         hits.clear();
+        this.uiScale = uiScale;
         OrganizationViewData.Snapshot snapshot = OrganizationClientCache.get();
 
         if (!snapshot.enabled()) {
@@ -340,6 +360,16 @@ public final class OrganizationTerminalPage {
         rightScroll = clamp(rightScroll, 0L, rightMaxScroll);
         Cursor cursor = new Cursor(contentTop, detailAreaBottom, rightScroll);
 
+        // 详情区按像素偏移滚动，内容会滑出内容区：不裁剪的话公告栏会盖住上面的操作按钮
+        // （按钮先画、内容后画），滚出视野的按钮也还能被点到（见 registerHit）。
+        // 注意裁剪框要换算到屏幕坐标，页面本身是在 scale(uiScale) 过的 pose 里画的。
+        scrollClipTop = contentTop;
+        scrollClipBottom = Math.max(contentTop, detailAreaBottom);
+        guiGraphics.enableScissor(
+                (int) (x * uiScale),
+                (int) (contentTop * uiScale),
+                (int) ((x + width) * uiScale),
+                (int) (scrollClipBottom * uiScale));
         if (detail == null) {
             cursor.advance(4);
             renderAnnouncementBox(guiGraphics, font, cursor, x + 10, width - 20, "");
@@ -379,6 +409,9 @@ public final class OrganizationTerminalPage {
             cursor.advance(GAP);
             renderFooterActions(guiGraphics, font, mouseX, mouseY, cursor, x + 10, width - 20, detail);
         }
+        guiGraphics.disableScissor();
+        scrollClipTop = -1;
+        scrollClipBottom = -1;
 
         rightMaxScroll = clamp(cursor.maxScroll(), 0, Integer.MAX_VALUE);
         if (rightMaxScroll > 0) {
@@ -983,6 +1016,16 @@ public final class OrganizationTerminalPage {
     }
 
     private void registerHit(int x1, int y1, int x2, int y2, Runnable action) {
+        if (scrollClipTop >= 0) {
+            // 滚动内容里的按钮：命中区跟着可见范围裁，避免点到已经滚出视野的按钮。
+            int top = Math.max(y1, scrollClipTop);
+            int bottom = Math.min(y2, scrollClipBottom);
+            if (bottom <= top) {
+                return;
+            }
+            hits.add(new Hit(x1, top, x2, bottom, action));
+            return;
+        }
         hits.add(new Hit(x1, y1, x2, y2, action));
     }
 

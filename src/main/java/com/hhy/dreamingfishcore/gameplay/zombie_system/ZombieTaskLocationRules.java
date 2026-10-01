@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.zombie_system;
 
+import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.BlockPos;
@@ -68,7 +69,14 @@ public final class ZombieTaskLocationRules {
         }
         // Most spawn attempts are outside a task location. Avoid resolving a
         // story snapshot for those common misses.
-        if (!isTaskLocation(serverLevel, position)) {
+        TaskLocationDefinition location = TaskLocationManager.findLocationAt(serverLevel, position)
+                .orElse(null);
+        if (location == null) {
+            return false;
+        }
+        // 尸潮区域：只放行刷怪箱（SPAWNER）的生成。自然刷怪与增援仍被拦，
+        // 否则开着尸潮开关的地点会顺带变成野生刷怪区。
+        if (allowsHordeSpawnerSpawn(location.isHorde(), spawnType)) {
             return false;
         }
         ZombieSpeciesConfig.ResolvedSettings settings = ZombieSpeciesConfig.current()
@@ -146,6 +154,16 @@ public final class ZombieTaskLocationRules {
             case SPAWN_EGG, COMMAND, MOB_SUMMONED, BREEDING, CONVERSION, BUCKET, DISPENSER -> false;
             default -> true;
         };
+    }
+
+    /**
+     * 尸潮区域里刷怪箱的生成不受自动刷怪禁令限制。
+     *
+     * <p>只有 {@code SPAWNER} 这一种来源豁免：刷怪箱是我们自己的剧情设备，
+     * 而自然刷怪、增援仍然是"不该出现在剧情地点里"的自动生成。</p>
+     */
+    static boolean allowsHordeSpawnerSpawn(boolean hordeArea, @Nullable MobSpawnType spawnType) {
+        return hordeArea && spawnType == MobSpawnType.SPAWNER;
     }
 
     private static boolean isTaskLocation(Level level, BlockPos position) {

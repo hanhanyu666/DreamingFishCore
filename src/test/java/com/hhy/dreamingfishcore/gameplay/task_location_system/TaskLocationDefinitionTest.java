@@ -78,4 +78,37 @@ class TaskLocationDefinitionTest {
         assertTrue(TaskLocationMode.parse(" PROTECTED ") == TaskLocationMode.PROTECTED);
         assertThrows(IllegalStateException.class, () -> TaskLocationMode.parse("arena"));
     }
+
+    @Test
+    void hordeFlagDefaultsOffAndOnlyCountsWhileTheLocationIsEnabled() {
+        TaskLocationDefinition location = new TaskLocationDefinition(
+                "dreamingfishcore:horde_area", "尸潮区", OVERWORLD,
+                new BlockPos(0, 60, 0), new BlockPos(20, 80, 20), TaskLocationMode.BUILDABLE);
+
+        // 旧配置没有 horde 字段，默认必须是"不是尸潮区域"。
+        assertFalse(location.hasHordeFlag(), "尸潮开关默认关闭");
+        assertFalse(location.isHorde(), "默认不是尸潮区域");
+
+        location.setHordeFlag(true);
+        assertTrue(location.hasHordeFlag());
+        assertTrue(location.isHorde(), "开着开关且地点启用时才算尸潮区域");
+    }
+
+    @Test
+    void hordeFlagIsIndependentOfModeButStillRespectsEnabled() {
+        // 尸潮开关不是第三种模式：可建造与强制保护地点都能开，语义相同。
+        TaskLocationDefinition buildable = new TaskLocationDefinition(
+                "dreamingfishcore:horde_buildable", "尸潮聚居地", OVERWORLD,
+                new BlockPos(0, 60, 0), new BlockPos(10, 70, 10), TaskLocationMode.BUILDABLE);
+        buildable.setHordeFlag(true);
+        assertTrue(buildable.isHorde());
+        assertTrue(buildable.isBuildable(), "开尸潮不改变可建造语义");
+
+        TaskLocationDefinition protectedLocation = new TaskLocationDefinition(
+                "dreamingfishcore:horde_protected", "尸潮保护区", OVERWORLD,
+                new BlockPos(40, 60, 40), new BlockPos(50, 70, 50), TaskLocationMode.PROTECTED);
+        protectedLocation.setHordeFlag(true);
+        assertTrue(protectedLocation.isHorde());
+        assertTrue(protectedLocation.forcesAdventure(), "开尸潮不改变强制保护语义");
+    }
 }

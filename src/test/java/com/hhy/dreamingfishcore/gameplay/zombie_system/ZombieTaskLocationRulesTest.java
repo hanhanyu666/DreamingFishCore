@@ -46,4 +46,16 @@ class ZombieTaskLocationRulesTest {
         assertFalse(ZombieTaskLocationRules.isAutomaticSpawnType(MobSpawnType.MOB_SUMMONED));
         assertFalse(ZombieTaskLocationRules.isAutomaticSpawnType(null));
     }
+
+    @Test
+    void hordeAreaOnlyExemptsTheSpawnerBlockSource() {
+        // 尸潮区域：只放行刷怪箱（SPAWNER）的生成。
+        assertTrue(ZombieTaskLocationRules.allowsHordeSpawnerSpawn(true, MobSpawnType.SPAWNER));
+        // 自然刷怪与增援在尸潮区域里仍被拦，否则地点会变成野生刷怪区。
+        assertFalse(ZombieTaskLocationRules.allowsHordeSpawnerSpawn(true, MobSpawnType.NATURAL));
+        assertFalse(ZombieTaskLocationRules.allowsHordeSpawnerSpawn(true, MobSpawnType.REINFORCEMENT));
+        // 没开尸潮开关的地点不豁免任何来源。
+        assertFalse(ZombieTaskLocationRules.allowsHordeSpawnerSpawn(false, MobSpawnType.SPAWNER));
+        assertFalse(ZombieTaskLocationRules.allowsHordeSpawnerSpawn(true, null));
+    }
 }
