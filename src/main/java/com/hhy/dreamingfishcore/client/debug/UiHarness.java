@@ -54,6 +54,13 @@ public final class UiHarness {
         return ENABLED;
     }
 
+    /** 当前步骤期间每个客户端 tick 执行一次（例如持续覆盖服务端同步回来的数据），换步骤时清除。 */
+    private static Runnable stepTicker;
+
+    public static void whileStep(Runnable ticker) {
+        stepTicker = ticker;
+    }
+
     /** 登记一个可在步骤文件中引用的场景。 */
     public static void register(String name, Consumer<Minecraft> opener) {
         SCENARIOS.put(name, opener);
@@ -91,6 +98,9 @@ public final class UiHarness {
         }
         if (captureRequested) {
             return;
+        }
+        if (stepTicker != null) {
+            stepTicker.run();
         }
         if (waitTicks > 0) {
             Step current = steps.get(stepIndex);
@@ -148,6 +158,7 @@ public final class UiHarness {
             return;
         }
         Step step = steps.get(index);
+        stepTicker = null;
         try {
             if (step.guiScale() >= 0 && minecraft.options.guiScale().get() != step.guiScale()) {
                 minecraft.options.guiScale().set(step.guiScale());

@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.network;
 
 import com.hhy.dreamingfishcore.gameplay.marker_system.network.*;
+import com.hhy.dreamingfishcore.gameplay.organization_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.npc_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.network.*;
@@ -34,9 +35,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 数据驱动剧情/任务状态、感染 infectionLevel 与服务器状态 TPS 的同步契约均已变更，
-    // 旧客户端必须在握手阶段明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.23.0";
+    // 数据驱动剧情/任务状态、感染身份（含传播复发标记）、玩家组织（新增领地联动与资金池字段、
+    // 动作包新增金额字段）、服务器状态 TPS 的同步契约均已变更，旧客户端必须在握手阶段明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.27.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -92,6 +93,10 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_KeepInventoryResponse.TYPE, Packet_KeepInventoryResponse.STREAM_CODEC, Packet_KeepInventoryResponse::handle);
         registrar.playToServer(Packet_NormalRespawnRequest.TYPE, Packet_NormalRespawnRequest.STREAM_CODEC, authenticated(Packet_NormalRespawnRequest::handle));
         registrar.playToClient(Packet_NormalRespawnResponse.TYPE, Packet_NormalRespawnResponse.STREAM_CODEC, Packet_NormalRespawnResponse::handle);
+        registrar.playToServer(Packet_OrganizationSnapshotRequest.TYPE, Packet_OrganizationSnapshotRequest.STREAM_CODEC, authenticated(Packet_OrganizationSnapshotRequest::handle));
+        registrar.playToClient(Packet_OrganizationSnapshotResponse.TYPE, Packet_OrganizationSnapshotResponse.STREAM_CODEC, Packet_OrganizationSnapshotResponse::handle);
+        registrar.playToServer(Packet_OrganizationActionRequest.TYPE, Packet_OrganizationActionRequest.STREAM_CODEC, authenticated(Packet_OrganizationActionRequest::handle));
+        registrar.playToClient(Packet_OrganizationActionResult.TYPE, Packet_OrganizationActionResult.STREAM_CODEC, Packet_OrganizationActionResult::handle);
         registrar.playToClient(Packet_OpenRevivalCharmGUI.TYPE, Packet_OpenRevivalCharmGUI.STREAM_CODEC, Packet_OpenRevivalCharmGUI::handle);
         registrar.playToServer(Packet_RevivalRequest.TYPE, Packet_RevivalRequest.STREAM_CODEC, authenticated(Packet_RevivalRequest::handle));
 
@@ -139,7 +144,17 @@ public final class DreamingFishCore_NetworkManager {
                 && !(packet instanceof Packet_PlayerLoginResult)) {
             return;
         }
-        PacketDistributor.sendToPlayer(player, packet);
+        try {
+            PacketDistributor.sendToPlayer(player, packet);
+        } catch (RuntimeException exception) {
+            // 自定义载荷只有在客户端协商过对应通道之后才允许下发，框架在未协商时会直接抛
+            // IllegalArgumentException。这类失败不应该让触发它的服务端逻辑（登录流程、tick
+            // 处理器、剧情结算）连带崩掉，因此在这里兜底留痕。
+            // 无头 gametest 用的模拟连接就是"没有协商通道"的典型场景；生产环境若出现这条
+            // 警告，说明该玩家确实收不到这个同步包，需要按载荷类型排查。
+            com.hhy.dreamingfishcore.DreamingFishCore.LOGGER.warn("向玩家 {} 下发载荷 {} 失败：{}",
+                    player.getScoreboardName(), packet.type().id(), exception.getMessage());
+        }
     }
 
     public static void sendToClient(ServerPlayer player, CustomPacketPayload packet) {

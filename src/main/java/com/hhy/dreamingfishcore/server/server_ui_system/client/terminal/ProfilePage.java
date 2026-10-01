@@ -82,9 +82,8 @@ final class ProfilePage extends TerminalPage {
     // ==================== 人物 ====================
 
     private Card heroCard(boolean withModel) {
-        Supplier<Boolean> infected = fromPlayer(p -> PlayerAttributesClientCache.isInfected(p.getUUID()), false);
-        Badge status = TerminalUi.chip(() -> infected.get() ? "感染者" : "幸存者", TerminalUi.GREEN);
-        status.onUpdate(() -> status.color(infected.get() ? TerminalUi.ROSE : TerminalUi.GREEN));
+        Badge status = TerminalUi.chip(() -> TerminalData.identity().displayName(), TerminalUi.GREEN);
+        status.onUpdate(() -> status.color(TerminalData.identityColor(TerminalData.identity())));
         Badge member = TerminalUi.chip("逐光会成员", TerminalUi.GOLD);
         member.onUpdate(() -> {
             LocalPlayer p = player();
@@ -220,10 +219,11 @@ final class ProfilePage extends TerminalPage {
     // ==================== 身体状态 ====================
 
     private Card bodyCard() {
-        Supplier<Boolean> infected = fromPlayer(p -> PlayerAttributesClientCache.isInfected(p.getUUID()), false);
+        // 消耗按感染身份分档，与服务端扣费同源。
+        Supplier<Float> respawnCost = fromPlayer(p -> PlayerAttributesClientCache.getNormalRespawnCost(p.getUUID()), 5.0F);
         Supplier<Float> respawnPoint = fromPlayer(p -> ClientCacheManager.getRespawnPoint(p.getUUID()), 0.0F);
         Supplier<Integer> respawnTimes = () -> TemplateReconstructionRules.remainingReconstructions(
-                respawnPoint.get(), infected.get() ? 20 : 5);
+                respawnPoint.get(), respawnCost.get());
         Badge warning = TerminalUi.chip(() -> respawnTimes.get() <= 0 ? "无法复活" : "复活不足", TerminalUi.ROSE);
         warning.onUpdate(() -> {
             int times = respawnTimes.get();

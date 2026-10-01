@@ -53,6 +53,7 @@ public class TerminalScreen extends UiScreen {
         PROFILE,
         NOTICES,
         MESSAGES,
+        ORGANIZATION,
         STORY,
         MORE
     }
@@ -100,6 +101,8 @@ public class TerminalScreen extends UiScreen {
         DreamingFishCore_NetworkManager.sendToServer(new Packet_WorldHistoryRequest());
         DreamingFishCore_NetworkManager.sendToServer(new Packet_NpcMessageSnapshotRequest());
         DreamingFishCore_NetworkManager.sendToServer(new Packet_GuidanceSnapshotRequest());
+        // 组织名录是公共信息，打开终端时拉一次，保证角标与成员数和服务端一致
+        OrganizationPage.requestSnapshot();
     }
 
     @Override
@@ -108,6 +111,7 @@ public class TerminalScreen extends UiScreen {
                 .item(Tab.PROFILE, Icons.USER, "档案", null)
                 .item(Tab.NOTICES, Icons.MEGAPHONE, "广播", () -> TerminalData.unreadNotices() > 0)
                 .item(Tab.MESSAGES, Icons.MAIL, "私信", () -> NpcMessageClientCache.getUnreadCount() > 0)
+                .item(Tab.ORGANIZATION, Icons.USERS, "组织", OrganizationPage::needsAttention)
                 .item(Tab.STORY, Icons.BOOK, "故事", TerminalData::hasOpenStoryProgress)
                 .item(Tab.MORE, Icons.GRID, "更多", null);
         navigator.grow(1.0F).basis(0.0F).minHeight(0.0F);
@@ -218,6 +222,7 @@ public class TerminalScreen extends UiScreen {
             case PROFILE -> new ProfilePage(this);
             case NOTICES -> new NoticesPage(this);
             case MESSAGES -> new MessagesPage(this);
+            case ORGANIZATION -> new OrganizationPage(this);
             case STORY -> new StoryPage(this);
             case MORE -> new MorePage(this);
         });

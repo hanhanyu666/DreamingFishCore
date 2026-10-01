@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.courage.PlayerCourageManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbType;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.strength.client.sync.PlayerStrengthClientSync;
@@ -20,6 +21,7 @@ record HudVitals(
         float infection,
         int infectionMaximum,
         int infectionLevel,
+        InfectionIdentity identity,
         float courage,
         float maxCourage,
         int strength,
@@ -70,6 +72,7 @@ record HudVitals(
                 PlayerInfectionManager.getCurrentInfectionClient(player),
                 infectionMaximum <= 0 ? 100 : infectionMaximum,
                 PlayerAttributesClientCache.getInfectionLevel(uuid),
+                PlayerAttributesClientCache.getInfectionIdentity(uuid),
                 PlayerCourageManager.getCurrentCourageClient(player),
                 maxCourage <= 0.0F ? 100.0F : maxCourage,
                 PlayerStrengthClientSync.getCurrentStrengthClient(player),

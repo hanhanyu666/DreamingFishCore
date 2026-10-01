@@ -1,5 +1,7 @@
 package com.hhy.dreamingfishcore.client.debug;
 
+import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationViewData;
+import com.hhy.dreamingfishcore.gameplay.organization_system.client.cache.OrganizationClientCache;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -173,6 +175,9 @@ final class UiHarnessScenarios {
                 minecraft.setScreen(new TerminalScreen(false, tab));
             });
         }
+        // 组织页：用样例快照覆盖服务端同步回来的空名录
+        UiHarness.register("organization_member", minecraft -> openOrganization(minecraft, true));
+        UiHarness.register("organization_outsider", minecraft -> openOrganization(minecraft, false));
         UiHarness.register("terminal", minecraft -> {
             ServerScreenUI.setShowUI(true);
             minecraft.setScreen(new TerminalScreen());
@@ -185,6 +190,50 @@ final class UiHarnessScenarios {
                 screen.openRoute(route);
             });
         }
+    }
+
+    private static void openOrganization(net.minecraft.client.Minecraft minecraft, boolean member) {
+        ServerScreenUI.setShowUI(true);
+        String self = minecraft.player == null ? "" : minecraft.player.getUUID().toString();
+        var snapshot = sampleOrganizations(self, member);
+        OrganizationClientCache.set(snapshot);
+        minecraft.setScreen(new TerminalScreen(true, TerminalScreen.Tab.ORGANIZATION));
+        UiHarness.whileStep(() -> {
+            var current = OrganizationClientCache.get();
+            if (current != snapshot) {
+                OrganizationClientCache.set(snapshot);
+            }
+        });
+    }
+
+    private static OrganizationViewData.Snapshot sampleOrganizations(String self, boolean member) {
+        List<OrganizationViewData.MemberLine> members = List.of(
+                new OrganizationViewData.MemberLine(self, "Dev", "LEADER", "会长", true),
+                new OrganizationViewData.MemberLine("a1", "林潮", "VICE_LEADER", "副会长", true),
+                new OrganizationViewData.MemberLine("a2", "白芷", "OFFICER", "干部", false),
+                new OrganizationViewData.MemberLine("a3", "周岑", "MEMBER", "成员", true),
+                new OrganizationViewData.MemberLine("a4", "听海", "MEMBER", "成员", false));
+        OrganizationViewData.Detail detail = new OrganizationViewData.Detail(
+                "lighthouse", "灯塔守望会", "每晚八点在灯塔下集合巡夜。\n过滤装置的维护费由资金池统一支付，请大家量力捐款。",
+                "LEADER", "会长", true, true, true, true, members,
+                List.of(new OrganizationViewData.MemberLine("b1", "拾荒的阿洛", "MEMBER", "成员", true)),
+                List.of(new OrganizationViewData.MemberLine("b2", "雾港旅人", "MEMBER", "成员", false)),
+                System.currentTimeMillis(), 1280, 10000, true, true, 4, 2,
+                List.of(new OrganizationViewData.TerritoryLine("t1", "灯塔聚居地", "minecraft:overworld",
+                                -320, 410, -256, 470, 3840, false),
+                        new OrganizationViewData.TerritoryLine("t2", "", "minecraft:overworld", 0, 0, 0, 0, 0, true)),
+                List.of(new OrganizationViewData.TerritoryLine("t3", "海岸菜园", "minecraft:overworld",
+                        -180, 520, -150, 548, 840, false)),
+                List.of(new OrganizationViewData.DeviceLine("minecraft:overworld", -290, 72, 436, true),
+                        new OrganizationViewData.DeviceLine("minecraft:overworld", -270, 70, 455, false)));
+        List<OrganizationViewData.Summary> organizations = List.of(
+                new OrganizationViewData.Summary("lighthouse", "灯塔守望会", 5, member ? "Dev" : "林潮",
+                        member ? OrganizationViewData.Relation.MEMBER : OrganizationViewData.Relation.INVITED),
+                new OrganizationViewData.Summary("dawn", "逐光后援队", 12, "江晚", OrganizationViewData.Relation.NONE),
+                new OrganizationViewData.Summary("coast", "海岸互助社", 7, "听潮", OrganizationViewData.Relation.APPLIED),
+                new OrganizationViewData.Summary("north", "北港拾荒者", 3, "阿洛", OrganizationViewData.Relation.NONE));
+        return new OrganizationViewData.Snapshot(true, 32, 12, 200, 150, member ? "lighthouse" : "",
+                organizations, member ? detail : null);
     }
 
     private static List<StoryBookEntryViewData> sampleFragments() {

@@ -1,11 +1,15 @@
 package com.hhy.dreamingfishcore.commands;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.command.Command_ClueDebug;
 import com.hhy.dreamingfishcore.gameplay.npc_system.command.Command_Npc;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.command.Command_Guidance;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_Biomes;
 import com.hhy.dreamingfishcore.gameplay.playerlevel_system.command.Command_OverAllLevel;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.command.Command_InfectionDebug;
+import com.hhy.dreamingfishcore.gameplay.organization_system.command.Command_Organization;
 import com.hhy.dreamingfishcore.gameplay.story_system.command.Command_Story;
+import com.hhy.dreamingfishcore.gameplay.story_system.command.Command_StoryDebug;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.command.Command_TaskLocation;
 import com.hhy.dreamingfishcore.gameplay.task_system.command.Command_Task;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.command.Command_Zhuiguang;
@@ -37,6 +41,7 @@ public final class DreamingFishCore_CommandManager {
 
         Command_Npc.register(dispatcher);
         Command_Guidance.register(dispatcher);
+        Command_Organization.register(dispatcher);
         Command_Zhuiguang.register(dispatcher);
         Command_Biomes.register(dispatcher);
         Command_OverAllLevel.register(dispatcher);
@@ -48,6 +53,12 @@ public final class DreamingFishCore_CommandManager {
         Command_Story.register(dreamingFishRoot);
         Command_TaskLocation.register(dreamingFishRoot);
         Command_ZombieSpecies.register(dreamingFishRoot);
+        // 仅 3 级权限可用：感染等级直改 + 疗程/随访直接完成 + 线索发放，供服务器自测。
+        dreamingFishRoot.then(Commands.literal("debug")
+                .requires(source -> source.hasPermission(3))
+                .then(Command_InfectionDebug.infectionBranch())
+                .then(Command_ClueDebug.clueBranch())
+                .then(Command_StoryDebug.storyBranch()));
         dispatcher.register(dreamingFishRoot);
     }
 }

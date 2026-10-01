@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.ui.hud;
 
 import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.LimbType;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.limb_health_system.client.sync.LimbClientInjurySync;
 import net.minecraft.client.Minecraft;
@@ -368,8 +369,15 @@ final class HudVitalsPanel {
 
     private static String infectionText(HudVitals vitals, boolean detailHeld) {
         if (vitals.infected()) {
-            String level = vitals.infectionLevel() >= 2 ? "二级感染" : "一级感染";
-            return detailHeld ? level + "者" : level;
+            InfectionIdentity identity = vitals.identity();
+            if (detailHeld) {
+                return identity.displayName();
+            }
+            return switch (identity) {
+                case UNSTABLE -> "不稳定";
+                case RELAPSE -> "复发";
+                default -> "已稳定";
+            };
         }
         String percent = Math.round(vitals.infectionRatio() * 100.0F) + "%";
         return detailHeld ? percent + " · 幸存者" : percent;

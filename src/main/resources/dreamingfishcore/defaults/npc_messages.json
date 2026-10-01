@@ -113,6 +113,34 @@
       "membershipRequirement": "ANY",
       "replies": [],
       "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:afterdream/baizhi/follow_up_third_day",
+      "npcId": 101,
+      "subject": "第 3 天随访",
+      "content": "你完成疗程终检已经三天了。\n\n这次的随访只是核对恢复情况：读数是否稳定、有没有出现新的不适。麻烦你到逐光会医疗接待点来一趟，当面看一下记录。\n\n如果这几天情况有变化，也可以提前来找我，不用等到约定的时间。漏做或者延后都不会有什么后果，我只是需要把事实记下来。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 210,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:afterdream/baizhi/follow_up_seventh_day",
+      "npcId": 101,
+      "subject": "第 7 天随访",
+      "content": "该做最后一次随访了。\n\n到这一步，你的记录就完整了：三次疗程、一次终检，加上两次随访。以后再有变化，也随时可以来找我。\n\n方便的话，到医疗接待点来一趟，我把这次的读数核对完就归档。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 211,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
     }
   ]
 }

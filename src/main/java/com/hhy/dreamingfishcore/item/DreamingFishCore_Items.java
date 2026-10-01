@@ -154,6 +154,12 @@ public class DreamingFishCore_Items {
                     .rarity(Rarity.EPIC)  // 史诗品质
             ));
 
+    // 聚居地过滤装置：方块物品，绑定组织后在领地内阻断被动接触暴露（ADR 0017）。
+    public static final DeferredHolder<Item, BlockItem> SETTLEMENT_FILTER = ITEMS.register("settlement_filter",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SETTLEMENT_FILTER.get(),
+                    new Item.Properties().rarity(Rarity.RARE)));
+
     private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
         EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);
         for (ArmorItem.Type type : ArmorItem.Type.values()) {

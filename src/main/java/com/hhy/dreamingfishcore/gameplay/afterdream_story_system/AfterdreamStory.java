@@ -1,17 +1,21 @@
 package com.hhy.dreamingfishcore.gameplay.afterdream_story_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionClientSync;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryTextCatalog;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.StoryLocationResolver;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
@@ -50,8 +54,14 @@ public final class AfterdreamStory {
             "随着危机的进一步发展，逐光会发现阿拜多斯发生了多起感染事件。";
     public static final int BAIZHI_NPC_ID = StoryNpcContentPolicy.BAIZHI_ID;
     public static final int JIANGWAN_NPC_ID = StoryNpcContentPolicy.JIANGWAN_ID;
+    /**
+     * 医疗接待点的兜底 ID。
+     *
+     * <p>判定与解析都走 {@link StoryLocationResolver}（允许服主按名称建点）；这个常量只在
+     * “一个地点都没有”时作为写进任务/引导的兜底引用，取值由角色枚举统一提供。</p>
+     */
     public static final String MEDICAL_LOCATION_ID =
-            "dreamingfishcore:location_d41fd2b0cc77479c9e2017ae727fd117";
+            StoryLocationResolver.Role.ZHUIGUANG.fixedId();
 
     public static final String BAIZHI_PUBLIC_TREATMENT_MESSAGE_ID =
             "dreamingfishcore:afterdream/baizhi/public_treatment";
@@ -94,6 +104,22 @@ public final class AfterdreamStory {
             "dreamingfishcore:guidance/afterdream/meet_jiangwan";
     public static final String MASK_GUIDANCE_ID =
             "dreamingfishcore:guidance/afterdream/receive_protective_mask";
+    public static final String COURSE_GUIDANCE_ID =
+            "dreamingfishcore:guidance/afterdream/revival_course";
+    public static final String FOLLOW_UP_GUIDANCE_ID =
+            "dreamingfishcore:guidance/afterdream/follow_up";
+
+    /**
+     * 三次早期逆转疗程的用药间隔：一个剧情活动日。
+     * 只有至少一名认证玩家在线时才会累计，因此离线等待不会消耗疗程间隔。
+     */
+    public static final long COURSE_DOSE_INTERVAL_TICKS = AfterdreamPlayerProgress.ACTIVE_TICKS_PER_DAY;
+
+    /** 白芷在终检后第 3 / 7 天发出的随访私信。 */
+    public static final String BAIZHI_FOLLOW_UP_THIRD_DAY_MESSAGE_ID =
+            "dreamingfishcore:afterdream/baizhi/follow_up_third_day";
+    public static final String BAIZHI_FOLLOW_UP_SEVENTH_DAY_MESSAGE_ID =
+            "dreamingfishcore:afterdream/baizhi/follow_up_seventh_day";
 
     /**
      * 瞬时的界面会话门槛：只有完成首次接待后重新打开江晚对话，才可领取面具。
@@ -114,7 +140,8 @@ public final class AfterdreamStory {
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.AFTERDREAM_TASK_RECEPTION_NAME,
                                 "前往逐光会医疗接待点"),
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.AFTERDREAM_TASK_RECEPTION_CONTENT,
-                                "进入保护区“人类逐光联合会”，前往逐光会大楼的医疗接待点。"), MEDICAL_LOCATION_ID,
+                                "进入保护区“人类逐光联合会”，前往逐光会大楼的医疗接待点。"),
+                        StoryLocationResolver.referenceId(StoryLocationResolver.Role.ZHUIGUANG),
                         ENTER_RECEPTION_GUIDANCE_ID),
                 task(MEDICAL_REVIEW_TASK_ID, MEDICAL_REVIEW_TASK_NUMBER,
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.AFTERDREAM_TASK_REVIEW_NAME,
@@ -142,7 +169,9 @@ public final class AfterdreamStory {
 
     /** 余梦期私信由阶段脚本决定后续，不走 NPC 配置的自动 follow-up。 */
     public static boolean isJavaControlledMessage(String definitionId) {
-        return BAIZHI_PUBLIC_TREATMENT_MESSAGE_ID.equals(definitionId);
+        return BAIZHI_PUBLIC_TREATMENT_MESSAGE_ID.equals(definitionId)
+                || BAIZHI_FOLLOW_UP_THIRD_DAY_MESSAGE_ID.equals(definitionId)
+                || BAIZHI_FOLLOW_UP_SEVENTH_DAY_MESSAGE_ID.equals(definitionId);
     }
 
     /** 故事页任务由本阶段个人事实逐步开放，而不是由引导是否成功写入决定。 */
@@ -224,7 +253,18 @@ public final class AfterdreamStory {
         }
         UUID playerId = player.getUUID();
         MASK_ELIGIBLE_DIALOGUE_SESSIONS.remove(playerId);
-        if (!canWrite() || !isCurrentStage() || npcId != JIANGWAN_NPC_ID) {
+        if (!canWrite() || !isCurrentStage()) {
+            return;
+        }
+        if (npcId == BAIZHI_NPC_ID) {
+            // 白芷负责终检后的长期随访：当面交谈即完成一次待办复核。
+            AfterdreamPlayerProgress baizhiProgress = StoryManager.findAfterdreamProgress(playerId);
+            if (baizhiProgress != null) {
+                completeFollowUpReview(player, baizhiProgress, currentActiveTick());
+            }
+            return;
+        }
+        if (npcId != JIANGWAN_NPC_ID) {
             return;
         }
         AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(playerId);
@@ -260,7 +300,17 @@ public final class AfterdreamStory {
         sendBaizhiMessage(player);
         AfterdreamPlayerProgress progress = progressFor(player.getUUID());
         rebuildPlayerProjections(player, progress);
+        grantCourseClueIfFinished(player, progress);
         syncPlayer(player);
+    }
+
+    /** 已经完成过疗程终检的玩家在登录时补发康复者口述摘录。 */
+    private static void grantCourseClueIfFinished(
+            ServerPlayer player, AfterdreamPlayerProgress progress) {
+        if (progress == null || progress.getCourseCompletedAtActiveTick() < 0L) {
+            return;
+        }
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_RECOVERED_VOICE);
     }
 
     /** 登录/重启后的幂等投影修复；不会改变个人状态机游标。 */
@@ -296,6 +346,16 @@ public final class AfterdreamStory {
             createMeetJiangwanGuidance(player);
         } else {
             GuidanceManager.resolve(player.getUUID(), MEET_JIANGWAN_GUIDANCE_ID);
+        }
+        if (targets.contains(AfterdreamPlayerProgress.GuidanceTarget.COURSE)) {
+            createCourseGuidance(player);
+        } else {
+            GuidanceManager.resolve(player.getUUID(), COURSE_GUIDANCE_ID);
+        }
+        if (targets.contains(AfterdreamPlayerProgress.GuidanceTarget.FOLLOW_UP)) {
+            createFollowUpGuidance(player);
+        } else {
+            GuidanceManager.resolve(player.getUUID(), FOLLOW_UP_GUIDANCE_ID);
         }
         if (targets.contains(AfterdreamPlayerProgress.GuidanceTarget.MASK)) {
             createMaskGuidance(player);
@@ -335,7 +395,9 @@ public final class AfterdreamStory {
     public static synchronized void onLocationEntered(
             ServerPlayer player, TaskLocationDefinition location) {
         if (!canWrite() || player == null || location == null
-                || !(isMedicalLocation(location.getId()) || isInsideActiveMedicalLocation(player)) || !isCurrentStage()) {
+                || !(StoryLocationResolver.matches(StoryLocationResolver.Role.ZHUIGUANG, location)
+                        || isInsideActiveMedicalLocation(player))
+                || !isCurrentStage()) {
             return;
         }
         AfterdreamPlayerProgress progress = progressFor(player.getUUID());
@@ -375,37 +437,46 @@ public final class AfterdreamStory {
                 syncPlayer(player);
             }
             case INTRODUCTION -> completeFirstReception(player, progress, activeTick);
-            case RESULT_LEVEL_ONE, RESULT_NONINFECTED, RESULT_LEVEL_TWO -> {
+            case RESULT_LEVEL_TWO -> {
+                // 二级感染的唯一正规出路是三次疗程：结果对话已经说明药剂无效，
+                // 下一次交互直接开始第一次治疗（面具可领取时仍优先发放面具）。
+                if (tryGrantMaskInSession(player, progress, activeTick)) {
+                    return;
+                }
+                startCourse(player, progress, activeTick);
+            }
+            case RESULT_LEVEL_ONE, RESULT_NONINFECTED -> {
                 // 结果对话已经在上一次交互中展示完毕。若全服面具已可领取，
                 // 只有新的江晚对话会话才直接尝试发放；背包满时保留原状态以便重试。
-                if (worldProgress().isMaskDistributionAvailable()
-                        && progress.isFirstReceptionCompleted()
-                        && !progress.isMaskReceived()
-                        && isMaskEligibleDialogueSession(player)) {
-                    tryGrantMask(player, progress, activeTick);
-                } else {
-                    progress.setStep(AfterdreamMedicalStep.AWAITING_TREATMENT, activeTick);
-                    StoryManager.markDirty();
-                    syncPlayer(player);
+                if (tryGrantMaskInSession(player, progress, activeTick)) {
+                    return;
                 }
+                progress.setStep(AfterdreamMedicalStep.AWAITING_TREATMENT, activeTick);
+                StoryManager.markDirty();
+                syncPlayer(player);
             }
+            case COURSE_IN_PROGRESS -> advanceCourse(player, progress, activeTick);
             case MASK_RECEIVED -> {
-                progress.setStep(progress.isMedicalTreatmentCompleted()
+                AfterdreamMedicalStep next = progress.isCourseActive()
+                        ? AfterdreamMedicalStep.COURSE_IN_PROGRESS
+                        : (progress.isMedicalTreatmentCompleted()
                         ? AfterdreamMedicalStep.COMPLETED
-                        : AfterdreamMedicalStep.AWAITING_TREATMENT, activeTick);
+                        : AfterdreamMedicalStep.AWAITING_TREATMENT);
+                progress.setStep(next, activeTick);
                 StoryManager.markDirty();
                 syncPlayer(player);
             }
             case AWAITING_TREATMENT, COMPLETED -> {
-                if (worldProgress().isMaskDistributionAvailable()
-                        && progress.isFirstReceptionCompleted()
-                        && !progress.isMaskReceived()
-                        && isMaskEligibleDialogueSession(player)) {
-                    tryGrantMask(player, progress, activeTick);
-                } else {
-                    StoryManager.markDirty();
-                    syncPlayer(player);
+                if (tryGrantMaskInSession(player, progress, activeTick)) {
+                    return;
                 }
+                // 旧存档里的二级感染此前停在“无药可治”；现在可以直接转入疗程。
+                if (isLevelTwoInfection(player)) {
+                    startCourse(player, progress, activeTick);
+                    return;
+                }
+                StoryManager.markDirty();
+                syncPlayer(player);
             }
             default -> {
                 // 尚未读完白芷说明，或已经处于纯展示状态；交互不能越过前置事实。
@@ -451,6 +522,8 @@ public final class AfterdreamStory {
         if (!canWrite() || server == null || !isCurrentStage()) {
             return;
         }
+        // 随访提醒按剧情活动时间推进，与面具倒计时共用同一时钟。
+        tickFollowUps(server, currentActiveTick());
         boolean becameAvailable = worldProgress().advanceMaskCountdown(currentActiveTick());
         if (becameAvailable) {
             StoryManager.markDirty();
@@ -529,12 +602,24 @@ public final class AfterdreamStory {
 
     public static synchronized Optional<List<String>> getDialogueOverride(
             ServerPlayer player, int npcId) {
-        if (!StoryManager.areWritesEnabled() || player == null
-                || npcId != JIANGWAN_NPC_ID || !isCurrentStage()) {
+        if (!StoryManager.areWritesEnabled() || player == null || !isCurrentStage()) {
             return Optional.empty();
         }
         AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(player.getUUID());
         if (progress == null) {
+            return Optional.empty();
+        }
+        if (npcId == BAIZHI_NPC_ID) {
+            // 白芷只负责随访对白：有待办随访时播报对应那一档，其余情况交回默认台词。
+            if (progress.isFollowUpThirdDayNotified() && !progress.isFollowUpThirdDayCompleted()) {
+                return dialogue(StoryTextCatalog.AFTERDREAM_BAIZHI_FOLLOWUP_THIRD_DAY);
+            }
+            if (progress.isFollowUpSeventhDayNotified() && !progress.isFollowUpSeventhDayCompleted()) {
+                return dialogue(StoryTextCatalog.AFTERDREAM_BAIZHI_FOLLOWUP_SEVENTH_DAY);
+            }
+            return Optional.empty();
+        }
+        if (npcId != JIANGWAN_NPC_ID) {
             return Optional.empty();
         }
         return switch (progress.getStep()) {
@@ -543,11 +628,11 @@ public final class AfterdreamStory {
             case RESULT_LEVEL_ONE -> dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_LEVEL_ONE);
             case RESULT_NONINFECTED -> dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_NONINFECTED);
             case RESULT_LEVEL_TWO -> dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_LEVEL_TWO);
+            case COURSE_IN_PROGRESS -> courseDialogue(progress);
             case AWAITING_TREATMENT -> {
                 var attributes = PlayerAttributesDataManager.findStoredPlayerAttributesData(player.getUUID());
                 yield attributes != null && attributes.getInfectionLevel() >= 2
-                        ? Optional.of(List.of(StoryTextCatalog.textOrDefault("hospital.jiangwan.level_two_followup",
-                                "你的复核已经完成，但当前药物不能治疗二级感染，不需要继续尝试服用。我们会继续观察。你可以正常办理模板维护；医院开诊后再来做正式复查。")))
+                        ? dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_LEVEL_TWO_COURSE)
                         : dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_AWAITING);
             }
             case MASK_RECEIVED -> dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_MASK);
@@ -557,6 +642,19 @@ public final class AfterdreamStory {
                     : dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_COMPLETED);
             default -> Optional.empty();
         };
+    }
+
+    /** 疗程中的江晚对白：终检 / 可以治疗 / 还没到间隔，三种情况各一套。 */
+    private static Optional<List<String>> courseDialogue(AfterdreamPlayerProgress progress) {
+        if (progress.isFinalCheckReady()) {
+            return dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_COURSE_FINAL);
+        }
+        if (!progress.isNextDoseAvailable(currentActiveTick())) {
+            return dialogue(StoryTextCatalog.AFTERDREAM_JIANGWAN_COURSE_WAITING);
+        }
+        return dialogue(progress.getCourseDoses() == 0
+                ? StoryTextCatalog.AFTERDREAM_JIANGWAN_COURSE_START
+                : StoryTextCatalog.AFTERDREAM_JIANGWAN_COURSE_DOSE);
     }
 
     public static synchronized String getDialogueRevision(ServerPlayer player, int npcId) {
@@ -636,6 +734,410 @@ public final class AfterdreamStory {
         }
         StoryManager.markDirty();
         syncPlayer(player);
+    }
+
+    /** 面具领取的统一入口：只有新的江晚对话会话才允许发放，避免每次交互都塞一件。 */
+    private static boolean tryGrantMaskInSession(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
+        if (!worldProgress().isMaskDistributionAvailable()
+                || !progress.isFirstReceptionCompleted()
+                || progress.isMaskReceived()
+                || !isMaskEligibleDialogueSession(player)) {
+            return false;
+        }
+        tryGrantMask(player, progress, activeTick);
+        return true;
+    }
+
+    private static boolean isLevelTwoInfection(ServerPlayer player) {
+        PlayerAttributesData data = PlayerAttributesDataManager.findStoredPlayerAttributesData(player.getUUID());
+        return data != null && data.getInfectionLevel() >= PlayerAttributesData.INFECTION_LEVEL_TWO;
+    }
+
+    /**
+     * 开始三次早期逆转疗程。进入当次交互即完成第一次治疗；后续治疗由
+     * {@link #advanceCourse} 按“一个剧情活动日”的间隔推进。
+     */
+    private static void startCourse(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
+        if (!isLevelTwoInfection(player)) {
+            // 感染等级已被其他途径改变（例如二级之前自行用药）：不进入疗程，
+            // 只刷新投影，让玩家看到当前真实状态。
+            StoryManager.markDirty();
+            syncPlayer(player);
+            return;
+        }
+        if (progress.getStep() != AfterdreamMedicalStep.COURSE_IN_PROGRESS) {
+            progress.startCourse(activeTick);
+        }
+        StoryManager.markDirty();
+        advanceCourse(player, progress, activeTick);
+    }
+
+    /** 疗程推进：按间隔完成一次院内治疗，或在三次完成后执行终检。 */
+    private static void advanceCourse(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
+        if (progress.isFinalCheckReady()) {
+            completeCourse(player, progress, activeTick);
+            return;
+        }
+        if (!progress.isNextDoseAvailable(activeTick)) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_WAITING)));
+            syncPlayer(player);
+            return;
+        }
+        // 院内治疗：治疗在接待点由江晚执行，不消耗玩家物品，也不依赖药剂使用事件。
+        if (!progress.recordCourseDose(activeTick, COURSE_DOSE_INTERVAL_TICKS)) {
+            return;
+        }
+        StoryManager.markDirty();
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_DOSE_DONE)));
+        syncPlayer(player);
+    }
+
+    /**
+     * 终检：解除感染身份，并进入第 3 / 7 天随访流程。
+     *
+     * <p>按 ADR 0005 的分层治疗，这里走的是<b>重构疗程</b>：三次疗程与终检完成后，
+     * 稳定感染者（含传播复发）恢复为幸存者。身份写入统一交给感染系统的服务端入口。</p>
+     */
+    private static void completeCourse(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
+        PlayerAttributesData data = PlayerAttributesDataManager.findStoredPlayerAttributesData(player.getUUID());
+        if (data == null) {
+            return;
+        }
+        // 服务端事实：三次疗程 + 终检之后才允许解除稳定感染者的身份。
+        InfectionTreatmentService.TreatmentOutcome outcome =
+                InfectionTreatmentService.applyReconstruction(player);
+        if (outcome != InfectionTreatmentService.TreatmentOutcome.APPLIED) {
+            DreamingFishCore.LOGGER.warn(
+                    "玩家 {} 完成重构疗程终检，但当前身份不是稳定感染者（结果 {}），未改写身份",
+                    player.getScoreboardName(), outcome);
+        }
+        if (!progress.completeCourse(activeTick)) {
+            return;
+        }
+        // 终检完成属于康复事实本身，由江晚交出一份康复者口述摘录（保底线索，幂等）。
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_RECOVERED_VOICE);
+        GuidanceManager.resolve(player.getUUID(), COURSE_GUIDANCE_ID);
+        recordTask(player, MEDICAL_REVIEW_TASK_ID);
+        if (!progress.isMaskReceived()) {
+            createMaskGuidance(player);
+        }
+        StoryManager.markDirty();
+        NotificationPushHelper.sendTopLeftNotification(
+                player, StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_COMPLETED_NOTIFICATION), 7000);
+        syncPlayer(player);
+    }
+
+    /** 终检后的第 3 / 7 天随访提醒；只在玩家在线时由活动时间推进。 */
+    private static void tickFollowUps(MinecraftServer server, long activeTick) {
+        if (!NpcMessageManager.isWorldDataLoaded()) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!AuthSessionGuard.isAuthenticated(player)) {
+                continue;
+            }
+            AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(player.getUUID());
+            if (progress == null) {
+                continue;
+            }
+            int day = progress.pendingFollowUpDay(activeTick);
+            if (day <= 0) {
+                continue;
+            }
+            String messageId = day == AfterdreamPlayerProgress.FOLLOW_UP_THIRD_DAY
+                    ? BAIZHI_FOLLOW_UP_THIRD_DAY_MESSAGE_ID
+                    : BAIZHI_FOLLOW_UP_SEVENTH_DAY_MESSAGE_ID;
+            boolean sent = NpcMessageManager.sendStoryMessage(player, messageId)
+                    || NpcMessageManager.hasReceivedDefinition(player.getUUID(), messageId);
+            if (!sent) {
+                // 私信系统尚未就绪或消息定义缺失：保留待提醒状态，下一次 tick 继续重试。
+                continue;
+            }
+            progress.markFollowUpNotified(day, activeTick);
+            StoryManager.markDirty();
+            rebuildPlayerProjections(player, progress);
+            syncPlayer(player);
+        }
+    }
+
+    /** 与白芷交谈即视为完成一次待办随访复核；逾期或漏做只记录，不带惩罚。 */
+    private static boolean completeFollowUpReview(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick) {
+        return completeFollowUpReview(player, progress, activeTick, 0);
+    }
+
+    /**
+     * @param explicitDay 0 表示自动取当前待办的那一次；非 0 时用于调试命令指定具体天数。
+     */
+    private static boolean completeFollowUpReview(
+            ServerPlayer player, AfterdreamPlayerProgress progress, long activeTick, int explicitDay) {
+        int day = explicitDay != 0 ? explicitDay : pendingFollowUpDay(progress);
+        if (day == 0 || !progress.recordFollowUpCompletion(day, activeTick)) {
+            return false;
+        }
+        GuidanceManager.resolve(player.getUUID(), FOLLOW_UP_GUIDANCE_ID);
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_FOLLOWUP_REVIEW_DONE)));
+        StoryManager.markDirty();
+        rebuildPlayerProjections(player, progress);
+        syncPlayer(player);
+        return true;
+    }
+
+    /** 当前等待复核的那一次随访；没有待办时返回 0。 */
+    private static int pendingFollowUpDay(AfterdreamPlayerProgress progress) {
+        if (progress.isFollowUpThirdDayNotified() && !progress.isFollowUpThirdDayCompleted()) {
+            return AfterdreamPlayerProgress.FOLLOW_UP_THIRD_DAY;
+        }
+        if (progress.isFollowUpSeventhDayNotified() && !progress.isFollowUpSeventhDayCompleted()) {
+            return AfterdreamPlayerProgress.FOLLOW_UP_SEVENTH_DAY;
+        }
+        return 0;
+    }
+
+    // ==================== 测试用入口（只由 3 级权限的 /dreamingfish debug 调用） ====================
+
+    /**
+     * 测试用：把玩家一键快进到指定进度。返回 {@code null} 表示成功，否则返回失败原因。
+     *
+     * <p>预设：</p>
+     * <ul>
+     *   <li>{@code reception}：二级感染 + 首次接待完成（结果为二级）——下一次与江晚交互即开始疗程。</li>
+     *   <li>{@code finalcheck}：疗程三次用药已完成——下一次与江晚交互即执行终检。</li>
+     *   <li>{@code followup}：疗程已完成，且第 3 天随访已提醒——可直接去找白芷验证随访对话。</li>
+     * </ul>
+     */
+    public static synchronized String debugApplyPreset(ServerPlayer player, String preset) {
+        if (player == null) {
+            return "需要由玩家执行该命令";
+        }
+        if (!StoryManager.areWritesEnabled()) {
+            return "故事系统尚未随世界加载完成，请先进入世界";
+        }
+        if (!isCurrentStage()) {
+            // 一键快进包含阶段切换，省掉手动切换与走开场流程。
+            if (!StoryManager.changeStage(STAGE_ID, player.getName().getString())) {
+                return "无法切换到余梦期：请确认当前世界的故事已加载";
+            }
+        }
+
+        AfterdreamPlayerProgress progress = progressFor(player.getUUID());
+        long activeTick = currentActiveTick();
+
+        switch (preset) {
+            case "reception" -> {
+                applyLevelTwoInfection(player);
+                if (!walkToLevelTwoResult(progress, activeTick)) {
+                    return "当前进度已经超过“首次接待完成”，无需再快进到该预设";
+                }
+            }
+            case "finalcheck" -> {
+                applyLevelTwoInfection(player);
+                if (!walkToLevelTwoResult(progress, activeTick)) {
+                    return "当前进度已经超过“首次接待完成”，请改用 followup 预设或重置剧情";
+                }
+                if (progress.getStep() != AfterdreamMedicalStep.COURSE_IN_PROGRESS) {
+                    progress.startCourse(activeTick);
+                }
+                while (progress.getCourseDoses() < AfterdreamPlayerProgress.COURSE_TOTAL_DOSES) {
+                    if (!progress.recordCourseDoseForTesting(activeTick, COURSE_DOSE_INTERVAL_TICKS)) {
+                        break;
+                    }
+                }
+                if (!progress.isFinalCheckReady()) {
+                    return "无法构造终检前的疗程进度（用药次数未能补齐）";
+                }
+            }
+            case "followup" -> {
+                applyLevelTwoInfection(player);
+                if (!walkToLevelTwoResult(progress, activeTick)) {
+                    return "当前进度已经超过“首次接待完成”，请改用 followup 预设或重置剧情";
+                }
+                if (!progress.isMedicalTreatmentCompleted()) {
+                    if (progress.getStep() != AfterdreamMedicalStep.COURSE_IN_PROGRESS) {
+                        progress.startCourse(activeTick);
+                    }
+                    while (progress.getCourseDoses() < AfterdreamPlayerProgress.COURSE_TOTAL_DOSES) {
+                        if (!progress.recordCourseDoseForTesting(activeTick, COURSE_DOSE_INTERVAL_TICKS)) {
+                            break;
+                        }
+                    }
+                    if (!progress.completeCourse(activeTick)) {
+                        return "无法完成疗程终检";
+                    }
+                }
+                if (!progress.isFollowUpThirdDayNotified()) {
+                    progress.markFollowUpNotified(AfterdreamPlayerProgress.FOLLOW_UP_THIRD_DAY, activeTick);
+                }
+            }
+            default -> {
+                return "未知的预设：" + preset + "（可用：reception / finalcheck / followup）";
+            }
+        }
+
+        StoryManager.markDirty();
+        rebuildPlayerProjections(player, progress);
+        syncPlayer(player);
+        return null;
+    }
+
+    /** 沿余梦期合法迁移把进度推到“首次接待结果为二级”。已经是后续状态时返回 false。 */
+    private static boolean walkToLevelTwoResult(AfterdreamPlayerProgress progress, long activeTick) {
+        AfterdreamMedicalStep step = progress.getStep();
+        if (step == AfterdreamMedicalStep.COURSE_IN_PROGRESS
+                || step == AfterdreamMedicalStep.MASK_RECEIVED
+                || step == AfterdreamMedicalStep.COMPLETED) {
+            return false;
+        }
+        if (step == AfterdreamMedicalStep.NOT_STARTED) {
+            progress.setStep(AfterdreamMedicalStep.MESSAGE_RECEIVED, activeTick);
+        }
+        step = progress.getStep();
+        if (step == AfterdreamMedicalStep.MESSAGE_RECEIVED) {
+            progress.setStep(AfterdreamMedicalStep.MESSAGE_READ, activeTick);
+        }
+        step = progress.getStep();
+        if (step == AfterdreamMedicalStep.MESSAGE_READ) {
+            progress.setStep(AfterdreamMedicalStep.RECEPTION_READY, activeTick);
+        }
+        step = progress.getStep();
+        if (step == AfterdreamMedicalStep.RECEPTION_READY) {
+            progress.setStep(AfterdreamMedicalStep.INTRODUCTION, activeTick);
+        }
+        step = progress.getStep();
+        if (step == AfterdreamMedicalStep.INTRODUCTION) {
+            progress.setStep(AfterdreamMedicalStep.RESULT_LEVEL_TWO, activeTick);
+        }
+        if (!progress.isPotionGranted()) {
+            progress.markPotionGranted(activeTick);
+        }
+        if (!progress.isFirstReceptionCompleted()) {
+            progress.markFirstReceptionCompleted(activeTick);
+        }
+        return true;
+    }
+
+    /** 把玩家直接写成二级感染者，与调试命令走同一套服务端写入与客户端同步。 */
+    private static void applyLevelTwoInfection(ServerPlayer player) {
+        PlayerAttributesData data = PlayerAttributesDataManager.getPlayerAttributesData(player.getUUID());
+        if (data == null) {
+            return;
+        }
+        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        data.setCurrentInfection(150.0F);
+        PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
+        PlayerInfectionClientSync.sendInfectionDataToClient(
+                player, 150, true, PlayerAttributesData.INFECTION_LEVEL_TWO);
+    }
+
+
+    /**
+     * 测试用：直接把玩家推进到疗程完成，终检结算与正式流程完全一致
+     * （清零感染、记录进度、关闭引导、发布完成通知）。
+     */
+    public static synchronized boolean debugCompleteCourse(ServerPlayer player) {
+        if (!canWrite() || player == null || !isCurrentStage()) {
+            return false;
+        }
+        AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(player.getUUID());
+        if (progress == null) {
+            return false;
+        }
+        long activeTick = currentActiveTick();
+        if (progress.getStep() != AfterdreamMedicalStep.COURSE_IN_PROGRESS) {
+            if (!isLevelTwoInfection(player)) {
+                return false;
+            }
+            progress.startCourse(activeTick);
+        }
+        // 按真实间隔补齐剩余用药次数，保证存档里的疗程数据与正常路径一致。
+        while (progress.getCourseDoses() < AfterdreamPlayerProgress.COURSE_TOTAL_DOSES) {
+            long doseTick = Math.max(activeTick, progress.getCourseNextDoseAtActiveTick());
+            if (!progress.recordCourseDose(doseTick, COURSE_DOSE_INTERVAL_TICKS)) {
+                break;
+            }
+        }
+        if (!progress.isFinalCheckReady()) {
+            return false;
+        }
+        completeCourse(player, progress, activeTick);
+        return progress.isMedicalTreatmentCompleted();
+    }
+
+    /** 测试用：把某一次随访直接置为“已提醒、待复核”，用于验证白芷对话与复核记录。 */
+    public static synchronized boolean debugMarkFollowUpDue(ServerPlayer player, int day) {
+        if (!canWrite() || player == null || !isCurrentStage()) {
+            return false;
+        }
+        AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(player.getUUID());
+        if (progress == null || progress.getCourseCompletedAtActiveTick() < 0L) {
+            return false;
+        }
+        long activeTick = currentActiveTick();
+        if (!progress.isFollowUpThirdDayNotified()) {
+            progress.markFollowUpNotified(AfterdreamPlayerProgress.FOLLOW_UP_THIRD_DAY, activeTick);
+        }
+        if (day == AfterdreamPlayerProgress.FOLLOW_UP_SEVENTH_DAY
+                && !progress.isFollowUpSeventhDayNotified()) {
+            progress.markFollowUpNotified(AfterdreamPlayerProgress.FOLLOW_UP_SEVENTH_DAY, activeTick);
+        }
+        if (!progress.isFollowUpAwaitingReview()) {
+            return false;
+        }
+        StoryManager.markDirty();
+        rebuildPlayerProjections(player, progress);
+        syncPlayer(player);
+        return true;
+    }
+
+    /** 测试用：直接把某一次随访记为已复核，跳过与白芷的对话。 */
+    public static synchronized boolean debugCompleteFollowUp(ServerPlayer player, int day) {
+        if (!canWrite() || player == null || !isCurrentStage()) {
+            return false;
+        }
+        AfterdreamPlayerProgress progress = StoryManager.findAfterdreamProgress(player.getUUID());
+        if (progress == null || progress.getCourseCompletedAtActiveTick() < 0L) {
+            return false;
+        }
+        long activeTick = currentActiveTick();
+        if (!progress.isFollowUpThirdDayNotified()) {
+            progress.markFollowUpNotified(AfterdreamPlayerProgress.FOLLOW_UP_THIRD_DAY, activeTick);
+        }
+        if (day == AfterdreamPlayerProgress.FOLLOW_UP_SEVENTH_DAY
+                && !progress.isFollowUpSeventhDayNotified()) {
+            progress.markFollowUpNotified(AfterdreamPlayerProgress.FOLLOW_UP_SEVENTH_DAY, activeTick);
+        }
+        return completeFollowUpReview(player, progress, activeTick, day);
+    }
+
+    private static void createCourseGuidance(ServerPlayer player) {
+        GuidanceSeed seed = new GuidanceSeed(
+                COURSE_GUIDANCE_ID,
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_GUIDANCE_TITLE),
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_GUIDANCE_CONTENT))
+                .withStoryStage(STAGE_ID);
+        addMedicalLocation(seed);
+        GuidanceManager.ensureActiveFromStoryEvent(player.getUUID(), seed,
+                "dreamingfishcore:afterdream/event/revival_course_started", JIANGWAN_NPC_ID,
+                "江晚", StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_COURSE_GUIDANCE_QUOTE));
+    }
+
+    private static void createFollowUpGuidance(ServerPlayer player) {
+        GuidanceSeed seed = new GuidanceSeed(
+                FOLLOW_UP_GUIDANCE_ID,
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_FOLLOWUP_GUIDANCE_TITLE),
+                StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_FOLLOWUP_GUIDANCE_CONTENT))
+                .withStoryStage(STAGE_ID);
+        addMedicalLocation(seed);
+        GuidanceManager.ensureActiveFromStoryEvent(player.getUUID(), seed,
+                "dreamingfishcore:afterdream/event/follow_up_due", BAIZHI_NPC_ID,
+                "白芷", StoryTextCatalog.text(StoryTextCatalog.AFTERDREAM_FOLLOWUP_GUIDANCE_QUOTE));
     }
 
     private static void tryGrantMask(
@@ -790,7 +1292,8 @@ public final class AfterdreamStory {
 
     public static String activeMedicalLocationId() {
         return com.hhy.dreamingfishcore.gameplay.hospital_system.HospitalStory.isOpen()
-                ? StoryManager.getHospitalProgress().getLocationId() : MEDICAL_LOCATION_ID;
+                ? StoryManager.getHospitalProgress().getLocationId()
+                : StoryLocationResolver.referenceId(StoryLocationResolver.Role.ZHUIGUANG);
     }
 
     private static boolean isInsideActiveMedicalLocation(ServerPlayer player) {
@@ -798,8 +1301,10 @@ public final class AfterdreamStory {
                 .map(location -> location.contains(player.level().dimension(), player.blockPosition())).orElse(false);
     }
 
+    /** 医疗接待点不再要求固定 ID：ID 或名称命中都算（见 {@link StoryLocationResolver}）。 */
     private static boolean isMedicalLocation(String id) {
-        return MEDICAL_LOCATION_ID.equals(id) || activeMedicalLocationId().equals(id);
+        return StoryLocationResolver.matchesId(StoryLocationResolver.Role.ZHUIGUANG, id)
+                || activeMedicalLocationId().equals(id);
     }
 
     private static void createMeetJiangwanGuidance(ServerPlayer player) {

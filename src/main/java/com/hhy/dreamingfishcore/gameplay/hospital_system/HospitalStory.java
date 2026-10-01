@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.hospital_system;
 
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
@@ -165,6 +166,7 @@ public final class HospitalStory {
                 StoryManager.recordPlayerTaskProgress(READ_TASK, player.getScoreboardName(), player.getUUID());
                 reconcile();
             }
+            grantReviewClueIfFinished(player);
             syncPlayer(player);
         }
     }
@@ -190,13 +192,28 @@ public final class HospitalStory {
         StoryManager.recordPlayerTaskProgress(REVIEW_TASK, player.getScoreboardName(), player.getUUID());
         saveStory();
         syncPlayer(player);
-        String result = data.getInfectionLevel() >= 2
-                ? "当前为二级感染，现有药剂不适用。已记录本次复查，后续继续观察；这不表示已经治愈。"
-                : data.isInfected() || data.getCurrentInfection() > 0
-                ? "当前仍有感染指标，请按原医疗流程完成早期治疗；本次检查已完成。"
-                : "目前未发现感染指标，本次检查已完成。";
+        // 复查话术按感染身份分支：只有已经跨过突变的身份才需要重构疗程，
+        // 不稳定感染者仍走成本较低的早期逆转（基因复苏试剂）。
+        String result = switch (data.getInfectionIdentity()) {
+            case RELAPSE -> "当前处于传播复发，异常因子重新活跃。已记录本次复查；"
+                    + "请先让感染系统重新受控，再决定是否进入重构疗程。这不表示已经治愈。";
+            case STABLE -> "当前为稳定感染，基因复苏试剂不适用。已记录本次复查，"
+                    + "后续可通过重构疗程恢复；这不表示已经治愈。";
+            case UNSTABLE -> "当前为不稳定感染，请按原医疗流程完成早期逆转；本次检查已完成。";
+            case SURVIVOR -> data.getCurrentInfection() > 0
+                    ? "当前仍有感染指标，请按原医疗流程完成早期治疗；本次检查已完成。"
+                    : "目前未发现感染指标，本次检查已完成。";
+        };
         setServiceResponse(player, StoryNpcContentPolicy.JIANGWAN_ID,
                 result + "\n\n模板重建余量：" + String.format(java.util.Locale.ROOT, "%.1f / 100", data.getRespawnPoint()));
+        // 正式复查属于医院观察区的事实来源，由江晚交出一份观察记录（保底线索，幂等）。
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_OBSERVATION_LOG);
+    }
+
+    /** 已经完成过正式复查的玩家在登录时补发观察区值班记录。 */
+    private static void grantReviewClueIfFinished(ServerPlayer player) {
+        if (!StoryManager.isPlayerFinishedTask(REVIEW_TASK, player.getUUID())) return;
+        ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_OBSERVATION_LOG);
     }
 
     public static void syncPlayer(ServerPlayer player) {

@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system;
 
 import com.google.gson.Gson;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,5 +120,57 @@ class PlayerAttributesDataTest {
 
         assertEquals(99L, restored.getInfectionTreatmentDeadlineActiveTick());
         assertTrue(restored.hasPendingInfectionTreatmentWindow());
+    }
+
+    @Test
+    void relapseWindowOnlyExistsForStableInfectedAndSurvivesSerialization() {
+        PlayerAttributesData original = new PlayerAttributesData();
+        original.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        assertTrue(original.beginRelapse(4_800L));
+        assertTrue(original.hasActiveRelapseWindow());
+        assertTrue(original.isRelapsing());
+        assertFalse(original.isStableInfected());
+
+        PlayerAttributesData restored = GSON.fromJson(
+                GSON.toJson(original), PlayerAttributesData.class);
+
+        assertEquals(4_800L, restored.getRelapseUntilActiveTick());
+        assertTrue(restored.hasActiveRelapseWindow());
+        assertEquals(InfectionIdentity.RELAPSE, restored.getInfectionIdentity());
+    }
+
+    @Test
+    void leavingStableIdentityClearsRelapseWindowAndCooldown() {
+        PlayerAttributesData data = new PlayerAttributesData();
+        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        data.beginRelapse(1_000L);
+        data.setRelapseCooldownUntilActiveTick(2_000L);
+
+        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
+
+        assertFalse(data.hasActiveRelapseWindow());
+        assertFalse(data.isRelapseCoolingDown());
+        assertEquals(-1L, data.getRelapseUntilActiveTick());
+        assertEquals(-1L, data.getRelapseCooldownUntilActiveTick());
+    }
+
+    @Test
+    void normalizationDropsStaleRelapseStateFromLegacyOrBrokenSaves() {
+        // 非稳定身份却带着复发窗口：读档时必须被清掉，否则幸存者会被判定成传播复发。
+        PlayerAttributesData data = GSON.fromJson(
+                "{\"infectionLevel\":1,\"relapseUntilActiveTick\":500}",
+                PlayerAttributesData.class);
+
+        assertTrue(data.normalizeInfectionState());
+        assertEquals(-1L, data.getRelapseUntilActiveTick());
+        assertEquals(InfectionIdentity.UNSTABLE, data.getInfectionIdentity());
+
+        // 哨兵值比 -1 更小同样要归一到 -1。
+        PlayerAttributesData broken = GSON.fromJson(
+                "{\"infectionLevel\":2,\"relapseUntilActiveTick\":-50,\"relapseCooldownUntilActiveTick\":-9}",
+                PlayerAttributesData.class);
+        assertTrue(broken.normalizeInfectionState());
+        assertEquals(-1L, broken.getRelapseUntilActiveTick());
+        assertEquals(-1L, broken.getRelapseCooldownUntilActiveTick());
     }
 }

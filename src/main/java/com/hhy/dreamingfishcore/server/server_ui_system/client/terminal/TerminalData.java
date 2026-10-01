@@ -7,12 +7,15 @@ import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcConversationViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageRecord;
 import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageViewData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.gameplay.story_system.network.Packet_WorldHistoryResponse;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeCategory;
 import com.hhy.dreamingfishcore.server.notice_system.NoticeData;
 import com.hhy.dreamingfishcore.server.notice_system.client.cache.NoticeClientCache;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -57,6 +60,22 @@ public final class TerminalData {
     }
 
     // ==================== 网络包入口 ====================
+
+    /** 本地玩家的感染身份；与服务端扣费同源，取不到玩家时按幸存者显示。 */
+    public static InfectionIdentity identity() {
+        var player = Minecraft.getInstance().player;
+        return player == null ? InfectionIdentity.SURVIVOR : PlayerAttributesClientCache.getInfectionIdentity(player.getUUID());
+    }
+
+    /** 身份徽章配色：幸存者绿、不稳定感染者玫红、稳定感染者琥珀、传播复发红。 */
+    public static int identityColor(InfectionIdentity identity) {
+        return switch (identity) {
+            case SURVIVOR -> TerminalUi.GREEN;
+            case UNSTABLE -> TerminalUi.ROSE;
+            case STABLE -> TerminalUi.AMBER;
+            case RELAPSE -> TerminalUi.RED;
+        };
+    }
 
     public static void setNoticeData(List<NoticeData> list, Set<Integer> readIds) {
         notices = list == null ? List.of() : List.copyOf(list.stream().filter(Objects::nonNull).toList());

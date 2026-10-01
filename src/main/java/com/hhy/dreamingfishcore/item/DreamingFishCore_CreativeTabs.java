@@ -30,6 +30,7 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.REVIVAL_CHARM.get());
                         output.accept(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get());
                         output.accept(DreamingFishCore_Items.PROTECTIVE_MASK.get());
+                        output.accept(DreamingFishCore_Items.SETTLEMENT_FILTER.get());
                         output.accept(SiegeZombieEntities.SIEGE_ZOMBIE_SPAWN_EGG.get());
                     })
                     .build()

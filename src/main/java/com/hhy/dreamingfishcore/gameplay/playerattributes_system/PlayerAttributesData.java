@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -45,7 +46,8 @@ public class PlayerAttributesData {
     // 是否为感染者（兼容旧存档；具体等级见 infectionLevel）
     private boolean isInfected;
 
-    // 感染者等级：0=非感染者，1=一级，2=二级。旧存档缺失该字段时按状态迁移。
+    // 感染身份等级：0=幸存者，1=不稳定感染者，2=稳定感染者。旧存档缺失该字段时按状态迁移。
+    // 「传播复发」不是更高的等级，而是稳定感染者的临时状态，见 relapseUntilActiveTick。
     private int infectionLevel;
 
     // 是否已经通过江晚的剧情交互领取过防护面具；这是领取事实，不改变感染等级。
@@ -56,6 +58,18 @@ public class PlayerAttributesData {
      * -1 表示不是“新一级”治疗窗口（旧一级感染者也使用 -1）。
      */
     private long infectionTreatmentDeadlineActiveTick = -1L;
+
+    /**
+     * 传播复发的到期活动 tick（稳定感染者因重伤或高污染暂时重新释放异常因子）。
+     * -1 表示当前没有复发；只有感染等级 2 才可能非 -1。
+     */
+    private long relapseUntilActiveTick = -1L;
+
+    /**
+     * 传播复发结束后的冷却截止活动 tick。
+     * -1 表示不在冷却期；冷却用于避免同一名玩家被连续触发复发。
+     */
+    private long relapseCooldownUntilActiveTick = -1L;
 
     // 复活点数（0-100，感染者死亡时消耗）
     private float respawnPoint;
@@ -91,6 +105,8 @@ public class PlayerAttributesData {
         this.infectionLevel = INFECTION_LEVEL_NONE;
         this.protectiveMaskReceived = false;
         this.infectionTreatmentDeadlineActiveTick = -1L;
+        this.relapseUntilActiveTick = -1L;
+        this.relapseCooldownUntilActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -122,6 +138,8 @@ public class PlayerAttributesData {
         this.infectionLevel = INFECTION_LEVEL_NONE;
         this.protectiveMaskReceived = false;
         this.infectionTreatmentDeadlineActiveTick = -1L;
+        this.relapseUntilActiveTick = -1L;
+        this.relapseCooldownUntilActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -154,6 +172,8 @@ public class PlayerAttributesData {
         this.infectionLevel = INFECTION_LEVEL_NONE;
         this.protectiveMaskReceived = false;
         this.infectionTreatmentDeadlineActiveTick = -1L;
+        this.relapseUntilActiveTick = -1L;
+        this.relapseCooldownUntilActiveTick = -1L;
         this.respawnPoint = 100;
 
         // 初始化提示标记
@@ -492,7 +512,8 @@ public class PlayerAttributesData {
     }
 
     /**
-     * 设置感染者等级并同步旧的布尔状态。等级 0 表示非感染者；等级 1、2 均表示感染者。
+     * 设置感染身份等级并同步旧的布尔状态。
+     * 等级 0 表示幸存者，1 表示不稳定感染者，2 表示稳定感染者；1、2 均表示感染者。
      */
     public void setInfectionLevel(int infectionLevel) {
         int normalized = normalizeInfectionLevel(infectionLevel);
@@ -500,6 +521,10 @@ public class PlayerAttributesData {
         this.isInfected = normalized > INFECTION_LEVEL_NONE;
         if (normalized != INFECTION_LEVEL_ONE) {
             this.infectionTreatmentDeadlineActiveTick = -1L;
+        }
+        // 传播复发只属于稳定感染者；离开该身份时一并清空复发窗口与冷却。
+        if (normalized != INFECTION_LEVEL_TWO) {
+            clearRelapseState();
         }
     }
 
@@ -562,6 +587,78 @@ public class PlayerAttributesData {
         return isInfected() && getInfectionLevel() == INFECTION_LEVEL_TWO;
     }
 
+    // ========== 感染身份（CONTEXT.md「感染身份」） ==========
+
+    /** 不稳定感染者：正在经历剧烈修复与突变，会被动影响附近幸存者。 */
+    public boolean isUnstableInfected() {
+        return isInfected() && getInfectionLevel() == INFECTION_LEVEL_ONE;
+    }
+
+    /** 稳定感染者：突变已经稳定；处于传播复发时不算稳定状态。 */
+    public boolean isStableInfected() {
+        return isInfected() && getInfectionLevel() == INFECTION_LEVEL_TWO && !hasActiveRelapseWindow();
+    }
+
+    /** 传播复发：稳定感染者暂时重新释放异常因子。 */
+    public boolean isRelapsing() {
+        return isInfected() && getInfectionLevel() == INFECTION_LEVEL_TWO && hasActiveRelapseWindow();
+    }
+
+    /** 当前感染身份；供服务端规则与界面文案统一取用。 */
+    public InfectionIdentity getInfectionIdentity() {
+        return InfectionIdentity.of(this);
+    }
+
+    public long getRelapseUntilActiveTick() {
+        return relapseUntilActiveTick;
+    }
+
+    /**
+     * 是否处于传播复发窗口内。
+     *
+     * <p>这里只判断"有没有窗口"，不比较当前时间：到期由感染系统的服务端 tick 统一清除，
+     * 因此调用方无需持有活动时钟即可得到一致的身份判定。</p>
+     */
+    public boolean hasActiveRelapseWindow() {
+        return getInfectionLevel() == INFECTION_LEVEL_TWO && relapseUntilActiveTick >= 0L;
+    }
+
+    /** 开始传播复发；只有稳定感染者可以进入。 */
+    public boolean beginRelapse(long untilActiveTick) {
+        if (getInfectionLevel() != INFECTION_LEVEL_TWO) {
+            return false;
+        }
+        relapseUntilActiveTick = Math.max(0L, untilActiveTick);
+        return true;
+    }
+
+    public void setRelapseUntilActiveTick(long untilActiveTick) {
+        relapseUntilActiveTick = untilActiveTick < -1L ? -1L : untilActiveTick;
+    }
+
+    /** 结束复发；冷却由调用方另行设置。 */
+    public void endRelapse() {
+        relapseUntilActiveTick = -1L;
+    }
+
+    public long getRelapseCooldownUntilActiveTick() {
+        return relapseCooldownUntilActiveTick;
+    }
+
+    public void setRelapseCooldownUntilActiveTick(long untilActiveTick) {
+        relapseCooldownUntilActiveTick = untilActiveTick < -1L ? -1L : untilActiveTick;
+    }
+
+    public boolean isRelapseCoolingDown() {
+        return relapseCooldownUntilActiveTick >= 0L;
+    }
+
+    /** 身份离开"稳定感染者"时清空全部复发状态（复发窗口与冷却）。 */
+    public void clearRelapseState() {
+        relapseUntilActiveTick = -1L;
+        relapseCooldownUntilActiveTick = -1L;
+    }
+
     /**
      * 修复感染等级与旧布尔字段之间的不一致。
      *
@@ -611,6 +708,24 @@ public class PlayerAttributesData {
         }
         if (normalizedDeadline != infectionTreatmentDeadlineActiveTick) {
             infectionTreatmentDeadlineActiveTick = normalizedDeadline;
+            changed = true;
+        }
+
+        // 传播复发窗口与冷却：只对稳定感染者有意义，且不允许比 -1 更小的哨兵值。
+        long normalizedRelapse = relapseUntilActiveTick < -1L ? -1L : relapseUntilActiveTick;
+        if (normalizedLevel != INFECTION_LEVEL_TWO) {
+            normalizedRelapse = -1L;
+        }
+        if (normalizedRelapse != relapseUntilActiveTick) {
+            relapseUntilActiveTick = normalizedRelapse;
+            changed = true;
+        }
+        long normalizedCooldown = relapseCooldownUntilActiveTick < -1L ? -1L : relapseCooldownUntilActiveTick;
+        if (normalizedLevel != INFECTION_LEVEL_TWO) {
+            normalizedCooldown = -1L;
+        }
+        if (normalizedCooldown != relapseCooldownUntilActiveTick) {
+            relapseCooldownUntilActiveTick = normalizedCooldown;
             changed = true;
         }
         return changed;

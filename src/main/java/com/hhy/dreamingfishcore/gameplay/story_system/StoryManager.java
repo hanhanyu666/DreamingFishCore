@@ -11,6 +11,7 @@ import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgre
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamPlayerProgress;
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamWorldProgress;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.StoryLocationResolver;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
@@ -421,7 +422,7 @@ public final class StoryManager {
     private static void applyContinuousLocationEffects(
             ServerPlayer player, TaskLocationDefinition location) {
         if (location == null
-                || !OpeningStory.ZHUIGUANG_LOCATION_ID.equals(location.getId())
+                || !StoryLocationResolver.matches(StoryLocationResolver.Role.ZHUIGUANG, location)
                 || !ZhuiguangMembershipManager.isMember(player)) {
             return;
         }

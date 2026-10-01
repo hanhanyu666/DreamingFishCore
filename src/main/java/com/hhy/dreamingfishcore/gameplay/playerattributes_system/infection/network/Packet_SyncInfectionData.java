@@ -21,21 +21,35 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
     private final boolean infected;
     private final int infectionLevel;
     private final int infectionMaximum;
+    /**
+     * 是否处于传播复发。
+     *
+     * <p>复发不是更高的感染等级（存档里仍然是 2），而是稳定感染者的临时状态；
+     * 客户端只有同时拿到等级与这个标记，才能算出「稳定感染者 / 传播复发」的区别。</p>
+     */
+    private final boolean relapsing;
 
     public Packet_SyncInfectionData(float currentInfection, boolean infected) {
-        this(currentInfection, infected, infected ? 1 : 0, 100);
+        this(currentInfection, infected, infected ? 1 : 0, 100, false);
     }
 
     public Packet_SyncInfectionData(float currentInfection, boolean infected, int infectionLevel) {
-        this(currentInfection, infected, infectionLevel, infectionLevel == 2 ? 200 : 100);
+        this(currentInfection, infected, infectionLevel, infectionLevel == 2 ? 200 : 100, false);
     }
 
     public Packet_SyncInfectionData(float currentInfection, boolean infected,
                                     int infectionLevel, int infectionMaximum) {
+        this(currentInfection, infected, infectionLevel, infectionMaximum, false);
+    }
+
+    public Packet_SyncInfectionData(float currentInfection, boolean infected,
+                                    int infectionLevel, int infectionMaximum, boolean relapsing) {
         this.currentInfection = currentInfection;
         this.infected = infected;
         this.infectionLevel = Math.max(0, Math.min(infectionLevel, 2));
         this.infectionMaximum = infectionMaximum >= 200 ? 200 : 100;
+        // 只有稳定感染者（等级 2）才可能处于传播复发。
+        this.relapsing = relapsing && this.infectionLevel == 2;
     }
 
     public static void encode(Packet_SyncInfectionData packet, FriendlyByteBuf buf) {
@@ -43,6 +57,7 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         buf.writeBoolean(packet.infected);
         buf.writeVarInt(packet.infectionLevel);
         buf.writeVarInt(packet.infectionMaximum);
+        buf.writeBoolean(packet.relapsing);
     }
 
     public static Packet_SyncInfectionData decode(FriendlyByteBuf buf) {
@@ -50,7 +65,8 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         boolean infected = buf.readBoolean();
         int infectionLevel = buf.readVarInt();
         int infectionMaximum = buf.readVarInt();
-        return new Packet_SyncInfectionData(current, infected, infectionLevel, infectionMaximum);
+        boolean relapsing = buf.readBoolean();
+        return new Packet_SyncInfectionData(current, infected, infectionLevel, infectionMaximum, relapsing);
     }
 
     public static void handle(Packet_SyncInfectionData packet, IPayloadContext context) {
@@ -58,14 +74,16 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         final boolean safeInfected = packet.infected;
         final int safeInfectionLevel = packet.infectionLevel;
         final int safeInfectionMaximum = packet.infectionMaximum;
+        final boolean safeRelapsing = packet.relapsing;
 
         context.enqueueWork(() -> processOnMainThread(
-                safeCurrentInfection, safeInfected, safeInfectionLevel, safeInfectionMaximum));
+                safeCurrentInfection, safeInfected, safeInfectionLevel, safeInfectionMaximum, safeRelapsing));
     }
 
     private static void processOnMainThread(
-            float currentInfection, boolean infected, int infectionLevel, int infectionMaximum) {
-        new ClientRunnable(currentInfection, infected, infectionLevel, infectionMaximum).run();
+            float currentInfection, boolean infected, int infectionLevel,
+            int infectionMaximum, boolean relapsing) {
+        new ClientRunnable(currentInfection, infected, infectionLevel, infectionMaximum, relapsing).run();
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -74,13 +92,15 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
         private final boolean infected;
         private final int infectionLevel;
         private final int infectionMaximum;
+        private final boolean relapsing;
 
         public ClientRunnable(float currentInfection, boolean infected,
-                              int infectionLevel, int infectionMaximum) {
+                              int infectionLevel, int infectionMaximum, boolean relapsing) {
             this.currentInfection = currentInfection;
             this.infected = infected;
             this.infectionLevel = infectionLevel;
             this.infectionMaximum = infectionMaximum;
+            this.relapsing = relapsing;
         }
 
         @Override
@@ -91,7 +111,7 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
 
             PlayerInfectionManager.setInfectionDataClient(
                     player, this.currentInfection, this.infected,
-                    this.infectionLevel, this.infectionMaximum);
+                    this.infectionLevel, this.infectionMaximum, this.relapsing);
         }
     }
 
@@ -109,5 +129,9 @@ public class Packet_SyncInfectionData implements net.minecraft.network.protocol.
 
     public int getInfectionMaximum() {
         return infectionMaximum;
+    }
+
+    public boolean isRelapsing() {
+        return relapsing;
     }
 }

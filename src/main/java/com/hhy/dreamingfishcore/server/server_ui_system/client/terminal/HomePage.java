@@ -146,8 +146,8 @@ final class HomePage extends TerminalPage {
 
         Badge level = TerminalUi.chip(() -> "LV." + (player.get() == null ? 0 : PlayerLevelManager.getPlayerLevelClient(player.get())),
                 TerminalUi.GOLD);
-        Badge status = TerminalUi.chip(() -> infected() ? "感染者" : "幸存者", TerminalUi.GREEN);
-        status.onUpdate(() -> status.color(infected() ? TerminalUi.ROSE : TerminalUi.GREEN));
+        Badge status = TerminalUi.chip(() -> TerminalData.identity().displayName(), TerminalUi.GREEN);
+        status.onUpdate(() -> status.color(TerminalData.identityColor(TerminalData.identity())));
 
         Text footer = Text.of(() -> {
             LocalPlayer p = player.get();
@@ -202,7 +202,7 @@ final class HomePage extends TerminalPage {
                 return "--";
             }
             if (infected()) {
-                return PlayerAttributesClientCache.getInfectionLevel(p.getUUID()) >= 2 ? "二级感染" : "一级感染";
+                return TerminalData.identity().displayName();
             }
             return Math.round(infectionRatio(p) * 100.0F) + "%";
         }, () -> {

@@ -9,8 +9,8 @@ import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.runtime.StoryTextCatalog;
+import com.hhy.dreamingfishcore.gameplay.task_location_system.StoryLocationResolver;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
-import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_system.TaskDataManager;
 import com.hhy.dreamingfishcore.gameplay.zhuiguang_system.ZhuiguangMembershipManager;
 import com.hhy.dreamingfishcore.server.notice_system.BuiltInNoticeCatalog;
@@ -38,10 +38,16 @@ public final class OpeningStory {
     public static final String STAGE_ID = "dreamingfishcore:dream_beginning";
     public static final String STAGE_DESCRIPTION =
             "灾难来临后，阿拜多斯成了许多幸存者暂时的落脚处。你读到临时安置通知，穿过危险抵达小镇，在学校见到正在做医疗志愿的白芷。她告诉你，大家的伤势和感染仍在变化，逐光会也正准备把救援、医疗与补给的人连接起来。随后你认识了周岑，听他说明人类逐光联合会的计划，并在两条路之间做出自己的选择：加入逐光会，和大家一起建设基地；或保持独立，在阿拜多斯继续生活并以自己的方式提供帮助。你的选择已经被记下，故事将从这里继续。";
+    /**
+     * 阿拜多斯与逐光会区域的默认 ID。
+     *
+     * <p>判定不再依赖这两个值——{@link StoryLocationResolver} 允许服主用**名称**建点；它们只是
+     * “找不到地点时写进任务/引导的兜底引用”。取值统一由角色枚举提供，避免两处真相。</p>
+     */
     public static final String ABYDOS_LOCATION_ID =
-            "dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3";
+            StoryLocationResolver.Role.ABYDOS.fixedId();
     public static final String ZHUIGUANG_LOCATION_ID =
-            "dreamingfishcore:location_d41fd2b0cc77479c9e2017ae727fd117";
+            StoryLocationResolver.Role.ZHUIGUANG.fixedId();
     public static final int BAIZHI_NPC_ID = StoryNpcContentPolicy.BAIZHI_ID;
     public static final int ZHOUCEN_NPC_ID = StoryNpcContentPolicy.ZHOUCEN_ID;
 
@@ -93,7 +99,8 @@ public final class OpeningStory {
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.OPENING_TASK_SETTLE_NAME, "抵达阿拜多斯"),
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.OPENING_TASK_SETTLE_CONTENT,
                                 "阅读临时安置通知，前往任务地点“阿拜多斯”完成安置。"),
-                        ABYDOS_LOCATION_ID, TRAVEL_GUIDANCE_ID),
+                        StoryLocationResolver.referenceId(StoryLocationResolver.Role.ABYDOS),
+                        TRAVEL_GUIDANCE_ID),
                 task(MEET_BAIZHI_TASK_ID, MEET_BAIZHI_TASK_NUMBER,
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.OPENING_TASK_MEET_BAIZHI_NAME, "去学校见白芷"),
                         StoryTextCatalog.textOrDefault(StoryTextCatalog.OPENING_TASK_MEET_BAIZHI_CONTENT,
@@ -202,7 +209,7 @@ public final class OpeningStory {
             return;
         }
         if (!canWrite()
-                || !OpeningStory.ABYDOS_LOCATION_ID.equals(location.getId())
+                || !StoryLocationResolver.matches(StoryLocationResolver.Role.ABYDOS, location)
                 || !OpeningStory.STAGE_ID.equals(
                 StoryManager.getCurrentStageIdOrDefault())) {
             return;
@@ -230,7 +237,7 @@ public final class OpeningStory {
     public static synchronized void onNpcInteraction(
             ServerPlayer player, int npcId, String locationId) {
         if (!canWrite() || player == null || npcId != BAIZHI_NPC_ID
-                || !OpeningStory.ABYDOS_LOCATION_ID.equals(locationId)) {
+                || !StoryLocationResolver.matchesId(StoryLocationResolver.Role.ABYDOS, locationId)) {
             return;
         }
         if (!OpeningStory.STAGE_ID.equals(
@@ -515,7 +522,7 @@ public final class OpeningStory {
                 StoryTextCatalog.text(StoryTextCatalog.OPENING_TRAVEL_GUIDANCE_TITLE),
                 StoryTextCatalog.text(StoryTextCatalog.OPENING_TRAVEL_GUIDANCE_CONTENT))
                 .withStoryStage(OpeningStory.STAGE_ID);
-        TaskLocationManager.getLocation(OpeningStory.ABYDOS_LOCATION_ID)
+        StoryLocationResolver.find(StoryLocationResolver.Role.ABYDOS)
                 .ifPresent(location -> {
                     BlockPos min = location.getMin();
                     BlockPos max = location.getMax();
@@ -562,7 +569,7 @@ public final class OpeningStory {
                 StoryTextCatalog.text(StoryTextCatalog.OPENING_BUILD_GUIDANCE_TITLE),
                 StoryTextCatalog.text(StoryTextCatalog.OPENING_BUILD_GUIDANCE_CONTENT))
                 .withStoryStage(OpeningStory.STAGE_ID);
-        TaskLocationManager.getLocation(OpeningStory.ZHUIGUANG_LOCATION_ID)
+        StoryLocationResolver.find(StoryLocationResolver.Role.ZHUIGUANG)
                 .ifPresent(location -> {
                     BlockPos min = location.getMin();
                     BlockPos max = location.getMax();

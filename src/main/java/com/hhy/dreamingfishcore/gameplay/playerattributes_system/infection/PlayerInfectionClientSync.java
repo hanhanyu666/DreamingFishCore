@@ -22,8 +22,20 @@ public class PlayerInfectionClientSync {
     public static void sendInfectionDataToClient(
             ServerPlayer player, float currentInfection, boolean infected,
             int infectionLevel, int infectionMaximum) {
+        sendInfectionDataToClient(
+                player, currentInfection, infected, infectionLevel, infectionMaximum, false);
+    }
+
+    /**
+     * 完整重载。
+     *
+     * @param relapsing 是否处于传播复发；稳定感染者的临时状态，客户端据此算出感染身份
+     */
+    public static void sendInfectionDataToClient(
+            ServerPlayer player, float currentInfection, boolean infected,
+            int infectionLevel, int infectionMaximum, boolean relapsing) {
         Packet_SyncInfectionData packet = new Packet_SyncInfectionData(
-                currentInfection, infected, infectionLevel, infectionMaximum);
+                currentInfection, infected, infectionLevel, infectionMaximum, relapsing);
         DreamingFishCore_NetworkManager.sendToClient(packet, player);
     }
 }

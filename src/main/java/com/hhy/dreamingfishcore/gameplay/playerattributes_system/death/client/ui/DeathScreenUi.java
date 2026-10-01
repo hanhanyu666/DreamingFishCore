@@ -28,6 +28,8 @@ import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.ca
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_KeepInventoryRequest;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_NormalRespawnRequest;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -235,6 +237,13 @@ public final class DeathScreenUi {
         return String.format(Locale.ROOT, "%.0f / 100", current);
     }
 
+    /** 本地玩家的感染身份，只用于文案；消耗数值仍以死亡界面数据包为准。 */
+    private static InfectionIdentity localIdentity() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player == null ? InfectionIdentity.SURVIVOR
+                : PlayerAttributesClientCache.getInfectionIdentity(minecraft.player.getUUID());
+    }
+
     private String previewHint() {
         DeathScreenDataStorage.DeathScreenData data = data();
         float current = data.respawnPoint();
@@ -244,7 +253,7 @@ public final class DeathScreenUi {
                 return "余量不足，还差 " + format1(cost - current);
             }
             int times = TemplateReconstructionRules.remainingReconstructions(Math.max(0.0F, current - cost), data.normalCost());
-            String type = data.isInfected() ? "感染者" : "幸存者";
+            String type = localIdentity().displayName();
             String corpse = hoveredAction == ACTION_RESPAWN ? (lockCorpse ? " · 尸体仅自己可取" : " · 尸体允许他人拾取") : "";
             return "确认后作为" + type + (hoveredAction == ACTION_KEEP ? "保留物品重生" : "重生") + " · 之后可复活 " + times + " 次" + corpse;
         }

@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.effect.DreamingFishCore_Effects;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.client.cache.PlayerAttributesClientCache;
@@ -9,7 +10,6 @@ import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
@@ -32,6 +32,8 @@ public class PlayerInfectionManager {
 
     private static final int INFECTION_CHECK_INTERVAL = 40;
     private static final float INFECTION_EPSILON = 0.01F;
+    /** 「感染」效果的持续时间；检查间隔是 40 tick，取同样长度即可无缝隙覆盖。 */
+    private static final int INFECTION_EFFECT_DURATION_TICKS = 40;
     /** 面具阶段新晋一级感染者可以接受治疗的完整游戏日。 */
     public static final long NEW_LEVEL_ONE_TREATMENT_WINDOW_TICKS = 24_000L;
 
@@ -72,24 +74,14 @@ public class PlayerInfectionManager {
         int msgShownLevel = INFECTION_MSG_SHOWN.getOrDefault(playerUUID, 0);
 
         if (infectionRatio >= 1.0F) {
-            MobEffectInstance slownessEffect = new MobEffectInstance(
-                    MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, true);
-            MobEffectInstance weaknessEffect = new MobEffectInstance(
-                    MobEffects.WEAKNESS, 40, 0, false, true);
-            serverPlayer.addEffect(slownessEffect);
-            serverPlayer.addEffect(weaknessEffect);
+            applyInfectionDebuff(serverPlayer, attributesData);
 
             if (msgShownLevel < 3) {
                 sendInfectionStateMessage(serverPlayer, attributesData);
                 INFECTION_MSG_SHOWN.put(playerUUID, 3);
             }
         } else if (infectionRatio >= 0.8F) {
-            MobEffectInstance slownessEffect = new MobEffectInstance(
-                    MobEffects.MOVEMENT_SLOWDOWN, 40, 0, false, true);
-            MobEffectInstance weaknessEffect = new MobEffectInstance(
-                    MobEffects.WEAKNESS, 40, 0, false, true);
-            serverPlayer.addEffect(slownessEffect);
-            serverPlayer.addEffect(weaknessEffect);
+            applyInfectionDebuff(serverPlayer, attributesData);
 
             if (msgShownLevel < 2) {
                 serverPlayer.displayClientMessage(
@@ -108,6 +100,9 @@ public class PlayerInfectionManager {
     /**
      * 每服务器 tick 检查面具阶段新一级感染者的个人治疗窗口。
      * 只处理截止时间已到的那一名玩家，不会批量改写其他一级感染者。
+     *
+     * <p>窗口到期表示突变没能被及时逆转，玩家由此成为<b>稳定感染者</b>；
+     * 身份写入统一交给 {@link InfectionTreatmentService}。</p>
      */
     public static void tickTreatmentWindows(net.minecraft.server.MinecraftServer server) {
         if (server == null || !isPostMaskEraEnabled()
@@ -130,13 +125,12 @@ public class PlayerInfectionManager {
                     || data.getInfectionTreatmentDeadlineActiveTick() > activeTick) {
                 continue;
             }
-            data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
-            data.setCurrentInfection(POST_MASK_INFECTION_MAX);
-            data.clearInfectionTreatmentDeadline();
-            PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
-            sendInfectionStateMessage(player, data);
-            syncInfectionData(player, data);
-            StoryManager.onVirusEvolution();
+            InfectionTreatmentService.TreatmentOutcome outcome =
+                    InfectionTreatmentService.applyStabilization(player,
+                            "§4治疗窗口已经关闭，突变就此稳定：你成为稳定感染者。");
+            if (outcome == InfectionTreatmentService.TreatmentOutcome.APPLIED) {
+                StoryManager.onVirusEvolution();
+            }
         }
     }
 
@@ -265,8 +259,8 @@ public class PlayerInfectionManager {
     }
 
     /**
-     * 在一次感染值写入后检查当前阈值，并写入一级感染状态。
-     * 面具阶段的新一级感染者会额外保存一个个人治疗截止 tick；截止后才转为二级。
+     * 在一次感染值写入后检查当前阈值，并写入"不稳定感染者"身份。
+     * 面具阶段的新晋不稳定感染者会额外保存一个个人治疗截止 tick；截止后转为稳定感染者。
      */
     public static boolean markInfectedAtThreshold(ServerPlayer player, PlayerAttributesData data) {
         if (player == null || data == null || data.isInfected()) {
@@ -278,26 +272,21 @@ public class PlayerInfectionManager {
         }
 
         boolean postMask = usesPostMaskRules(player, data);
-        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
-        if (postMask) {
-            long activeTick;
-            try {
-                activeTick = StoryManager.getSnapshot().activeTicks();
-            } catch (RuntimeException exception) {
-                activeTick = 0L;
-            }
-            data.startInfectionTreatmentWindow(
-                    safeAdd(activeTick, NEW_LEVEL_ONE_TREATMENT_WINDOW_TICKS));
-        }
-        return true;
+        // 活动时钟不可用时（故事运行时尚未加载）不排期治疗窗口，避免写入一个立刻到期的期限。
+        long activeTick = InfectionTreatmentService.currentActiveTick();
+        return InfectionTreatmentService.becomeUnstable(player, data, postMask, activeTick);
     }
 
     /**
      * 将感染状态交给复活系统时使用的唯一规则入口。
      *
      * <p>复活目标不是一次普通的“写入 100 点”操作：面具阶段的感染上限是 200，
-     * 新产生的一级感染者还必须拥有自己的治疗截止时间；二级感染者则始终落在
+     * 新产生的不稳定感染者还必须拥有自己的治疗截止时间；稳定感染者则始终落在
      * 200 点。把这些规则集中在这里，避免死亡/复活网络包复制一份已经过时的数值逻辑。</p>
+     *
+     * <p>传播复发与复发冷却<b>不随复活传递</b>：被复活的身体是按生命模板重建的，
+     * 复发必须由这名玩家自己再次受到重伤或高污染刺激才会发生。否则一次救援就会
+     * 把施救者剩下几分钟的复发窗口连同一段冷却一起过继给另一个人。</p>
      */
     public static void applyRevivalInfectionState(
             PlayerAttributesData source, PlayerAttributesData target) {
@@ -319,6 +308,9 @@ public class PlayerInfectionManager {
             PlayerAttributesData target,
             boolean postMaskEra,
             long activeTick) {
+        // 复发是临时身体状态，不随复活过继；被复活者一律从"不在复发中"开始。
+        target.clearRelapseState();
+
         if (!source.isInfected() || source.getInfectionLevel() == PlayerAttributesData.INFECTION_LEVEL_NONE) {
             target.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
             target.setCurrentInfection(0.0F);
@@ -336,8 +328,8 @@ public class PlayerInfectionManager {
         target.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
         if (postMaskEra) {
             target.setCurrentInfection(POST_MASK_INFECTION_MAX);
-            // 只有面具时代新产生的一级感染者才有治疗期限。
-            // 复活一个在面具发放前就已存在的一级感染者时，不能因为复活动作
+            // 只有面具时代新产生的不稳定感染者才有治疗期限。
+            // 复活一个在面具发放前就已存在的不稳定感染者时，不能因为复活动作
             // 重新开始 24,000 tick 倒计时；已经存在的期限则原样保留。
             if (source.hasPendingInfectionTreatmentWindow()) {
                 target.setInfectionTreatmentDeadlineActiveTick(
@@ -410,15 +402,10 @@ public class PlayerInfectionManager {
         return true;
     }
 
-    private static long safeAdd(long first, long second) {
-        return second > 0L && first > Long.MAX_VALUE - second
-                ? Long.MAX_VALUE : first + second;
-    }
-
     public static void setInfectionDataClient(Player player, float currentInfection, boolean infected) {
         setInfectionDataClient(
                 player, currentInfection, infected, infected ? 1 : 0,
-                (int) PRE_MASK_INFECTION_MAX);
+                (int) PRE_MASK_INFECTION_MAX, false);
     }
 
     public static void setInfectionDataClient(
@@ -426,12 +413,18 @@ public class PlayerInfectionManager {
         int fallbackMaximum = infectionLevel == PlayerAttributesData.INFECTION_LEVEL_TWO
                 ? (int) POST_MASK_INFECTION_MAX
                 : (int) PRE_MASK_INFECTION_MAX;
-        setInfectionDataClient(player, currentInfection, infected, infectionLevel, fallbackMaximum);
+        setInfectionDataClient(player, currentInfection, infected, infectionLevel, fallbackMaximum, false);
     }
 
     public static void setInfectionDataClient(
             Player player, float currentInfection, boolean infected,
             int infectionLevel, int infectionMaximum) {
+        setInfectionDataClient(player, currentInfection, infected, infectionLevel, infectionMaximum, false);
+    }
+
+    public static void setInfectionDataClient(
+            Player player, float currentInfection, boolean infected,
+            int infectionLevel, int infectionMaximum, boolean relapsing) {
         if (player == null || !player.level().isClientSide()) {
             return;
         }
@@ -446,6 +439,8 @@ public class PlayerInfectionManager {
                 player.getUUID(), data.getInfectionLevel());
         PlayerAttributesClientCache.setInfectionMaximum(
                 player.getUUID(), normalizeInfectionMaximum(infectionMaximum));
+        // 传播复发是稳定感染者的临时状态，必须单独下发，客户端才能算出正确身份。
+        PlayerAttributesClientCache.setRelapsing(player.getUUID(), relapsing);
     }
 
     public static float getCurrentInfectionClient(Player player) {
@@ -464,21 +459,38 @@ public class PlayerInfectionManager {
                 PlayerAttributesClientCache.getInfectionMaximum(player.getUUID()));
     }
 
+    /** 身份同步的唯一出口：复发窗口必须一起下发，否则客户端算不出「传播复发」。 */
     private static void syncInfectionData(ServerPlayer player, PlayerAttributesData data) {
-        PlayerInfectionClientSync.sendInfectionDataToClient(
-                player,
-                data.getCurrentInfection(),
-                data.isInfected(),
-                data.getInfectionLevel(),
-                getInfectionMaximum(player, data));
+        InfectionTreatmentService.syncIdentity(player, data);
+    }
+
+    /**
+     * 感染值过高时的负面状态：施加模组自有的「感染」。
+     *
+     * <p>它内部同时施加移速 -15% 与攻击力 -4（与原版缓慢 I + 虚弱 I 完全等价），
+     * 但 HUD 上显示为「感染」，玩家能立刻知道惩罚来自感染而不是某个药水。</p>
+     *
+     * <p>稳定感染者不再承受这个惩罚：突变已经稳定意味着身体适应了异常因子
+     * （ADR 0016「稳定感染者适应污染」）。这是里程碑 1 里"污染适应"的 v1 落点；
+     * 等到污染区域实装后，环境伤害减免也应挂在同一处身份判定上。</p>
+     */
+    private static void applyInfectionDebuff(ServerPlayer player, PlayerAttributesData data) {
+        if (data != null && data.getInfectionIdentity() == InfectionIdentity.STABLE) {
+            return;
+        }
+        player.addEffect(new MobEffectInstance(
+                DreamingFishCore_Effects.INFECTION,
+                INFECTION_EFFECT_DURATION_TICKS, 0, false, true));
     }
 
     private static void sendInfectionStateMessage(ServerPlayer player, PlayerAttributesData data) {
-        String levelText = data.getInfectionLevel() == PlayerAttributesData.INFECTION_LEVEL_TWO
-                ? "二级感染者"
-                : "一级感染者";
-        player.displayClientMessage(
-                Component.literal("§4§l你已经完全感染，变成了" + levelText + "！"), true);
+        String text = switch (data.getInfectionIdentity()) {
+            case UNSTABLE -> "§4§l你已经感染：不稳定感染者。尽快接受早期逆转治疗。";
+            case STABLE -> "§4§l突变已经稳定：你现在是稳定感染者。";
+            case RELAPSE -> "§4§l你的身体重新释放异常因子：传播复发。";
+            case SURVIVOR -> "§a你已经恢复为幸存者。";
+        };
+        player.displayClientMessage(Component.literal(text), true);
     }
 
     private static float infectionRatio(float currentInfection, float infectionMaximum) {

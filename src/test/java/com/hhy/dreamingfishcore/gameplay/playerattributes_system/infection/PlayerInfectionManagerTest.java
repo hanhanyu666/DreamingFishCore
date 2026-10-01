@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection;
 
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,5 +62,25 @@ class PlayerInfectionManagerTest {
         assertFalse(target.isInfected());
         assertEquals(0.0F, target.getCurrentInfection());
         assertFalse(target.hasPendingInfectionTreatmentWindow());
+    }
+
+    @Test
+    void revivalDoesNotInheritRelapseWindowOrCooldown() {
+        // 施救者正在传播复发；被复活者的复发必须由本人再次受重伤才会发生。
+        PlayerAttributesData source = new PlayerAttributesData();
+        source.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        source.beginRelapse(9_999L);
+
+        PlayerAttributesData target = new PlayerAttributesData();
+        target.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        target.beginRelapse(4_000L);
+        target.setRelapseCooldownUntilActiveTick(8_000L);
+
+        PlayerInfectionManager.applyRevivalInfectionState(source, target, true, 0L);
+
+        assertTrue(target.isLevelTwoInfected());
+        assertFalse(target.hasActiveRelapseWindow());
+        assertFalse(target.isRelapseCoolingDown());
+        assertEquals(InfectionIdentity.STABLE, target.getInfectionIdentity());
     }
 }

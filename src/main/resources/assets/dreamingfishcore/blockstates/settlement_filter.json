@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "active=false": {
+      "model": "dreamingfishcore:block/settlement_filter_off"
+    },
+    "active=true": {
+      "model": "dreamingfishcore:block/settlement_filter"
+    }
+  }
+}

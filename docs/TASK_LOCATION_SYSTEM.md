@@ -108,7 +108,45 @@ config/dreamingfishcore/task_locations.json
 
 EconomySystem 虽然保存两个选点的 Y，并要求选点处于同一 Y，但进入判定、权限保护、重叠检测和价格都只使用 X/Z；实际领地是一根贯穿全部高度的竖直柱。因此 DreamingFishCore 检查其是否覆盖 `PROTECTED` 时也只比较 X/Z，不会通过在保护区上方或下方选点来绕过限制。任务地点自身仍是包含 Y 的三维区域。
 
-`id` 是系统自动生成的内部稳定 ID，用于故事任务、世界存档和代码引用。它会显示在 JSON 中，但服主在游戏内创建、查看、更新和删除地点时只使用地点名称；不要手动修改它。地点名称必须唯一，同名执行 `select` 会更新原地点范围。
+`id` 是系统自动生成的内部稳定 ID，用于故事任务、世界存档和代码引用。它会显示在 JSON 中，但服主在游戏内创建、查看、更新和删除地点时只使用地点名称；**不要手动修改它**，除非是为了让地点对上剧情固定 ID（见下一节）。地点名称必须唯一，同名执行 `select` 会更新原地点范围。
+
+## 剧情地点怎么被识别（重要）
+
+剧情里有两处地点是**写死在代码里的角色**，不是随便圈一块地就会生效：
+
+| 角色 | 默认固定 ID | 名称关键词 |
+| --- | --- | --- |
+| 阿拜多斯 | `dreamingfishcore:location_d105866ccdc84c4da7b017a7f13ec7d3` | `阿拜多斯` |
+| 逐光会 / 医疗接待点 | `dreamingfishcore:location_d41fd2b0cc77479c9e2017ae727fd117` | `逐光会`、`医疗接待` |
+
+判定规则是**两者取或**（实现见 `gameplay/task_location_system/StoryLocationResolver`）：
+
+1. 地点 ID 与上表固定 ID **精确相等**；或
+2. 地点**显示名称包含**该角色的任一关键词。
+
+也就是说，服主用 `/dreamingfish task_location select 逐光会医疗接待点` 建出来的地点**会被剧情直接认到**，不需要去凑 ID。`阿拜多斯区域`、`医疗接待区域`、`逐光会基地` 这类命名都在命中范围内；反过来 `旧医疗中心`（含"医疗"但不含"医疗接待"）不会被误认。
+
+需要同时保留**阿拜多斯**和**逐光会**两个区域时，它们不能重叠（启用的地点之间禁止重叠），请分别站在两处各自划定。逐光会区域同时承担余梦期的医疗接待点，所以只需一个。
+
+本地测试可以用一条命令代替手动选区（需要 3 级权限，会以你当前位置为中心建点）：
+
+```text
+/dreamingfish debug story preset location medical [半径] [protected|buildable]
+/dreamingfish debug story preset location abydos  [半径] [protected|buildable]
+```
+
+`medical` 默认半径 16、`abydos` 默认半径 48；重复执行即移动或改范围。若已存在**同名但随机 ID** 的旧地点，会被一并替换——同名条目重复会让整份配置在下次加载时校验失败，地点系统会整场进入只读状态。
+
+### 排查：建了地点但剧情不推进
+
+如果地点名称不含任何关键词、也没有使用固定 ID，剧情**不会**认为玩家进入了该区域：NPC 仍能对话，但进度不动，而且**不报错**。确认方式：
+
+```text
+/dreamingfish task_location list
+/dreamingfish task_location info <你给地点起的名字>
+```
+
+再对照上表：名称对不上时，改名为含关键词的名字重新 `select` + `confirm`，或直接在 `task_locations.json` 里把 `id` 改成固定 ID 后执行 `/dreamingfish task_location reload`。
 
 ## 当前保护规则
 
