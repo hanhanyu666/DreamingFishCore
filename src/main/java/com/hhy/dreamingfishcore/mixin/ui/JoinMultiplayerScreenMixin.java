@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
@@ -8,26 +8,37 @@ import net.minecraft.client.gui.screens.multiplayer.ServerSelectionList;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/** 服务器列表交给 {@link SelectionScreenUi}；延迟检测、局域网扫描与按钮逻辑保持原版。 */
 @Mixin(JoinMultiplayerScreen.class)
 public abstract class JoinMultiplayerScreenMixin extends Screen {
-
     @Shadow
     protected ServerSelectionList serverSelectionList;
+
+    @Unique
+    private SelectionScreenUi dreamingFishCore$ui;
 
     protected JoinMultiplayerScreenMixin(Component title) {
         super(title);
     }
 
+    @Unique
+    private SelectionScreenUi dreamingFishCore$ui() {
+        if (dreamingFishCore$ui == null) {
+            dreamingFishCore$ui = new SelectionScreenUi(this, SelectionScreenUi.Kind.SERVERS, () -> this.serverSelectionList, () -> null);
+        }
+        return dreamingFishCore$ui;
+    }
+
     @Inject(method = "init", at = @At("RETURN"))
-    private void dreamingFishCore$layoutAfterInit(CallbackInfo ci) {
-        ModernSelectionScreenUi.resetAnimation(this);
-        ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, false);
-        ModernSelectionScreenUi.applyLayout(this, layout, null, this.serverSelectionList, false);
+    private void dreamingFishCore$afterInit(CallbackInfo ci) {
+        dreamingFishCore$ui().hideVanillaWidgets();
     }
 
     @ModifyArg(
@@ -40,36 +51,37 @@ public abstract class JoinMultiplayerScreenMixin extends Screen {
             require = 0
     )
     private int dreamingFishCore$modernServerRowHeight(int original) {
-        return 56;
+        return 50;
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         ci.cancel();
+        dreamingFishCore$ui().render(guiGraphics, mouseX, mouseY, partialTick);
+    }
 
-        ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, false);
-        ModernSelectionScreenUi.applyLayout(this, layout, null, this.serverSelectionList, false);
-        ModernSelectionScreenUi.renderBase(guiGraphics, this, layout, ModernSelectionScreenUi.Kind.MULTIPLAYER);
-        ModernSelectionScreenUi.prepareTransparentButtons(this);
-
-        // In 1.20.1 this list is registered with addWidget(), not
-        // addRenderableWidget(), so the cancelled vanilla render method must be
-        // replaced with an explicit list render. ModernSelectionScreenUi has
-        // already disabled the list's dirt background.
-        if (this.serverSelectionList != null) {
-            this.serverSelectionList.render(guiGraphics, mouseX, mouseY, partialTick);
+    @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
+    private void dreamingFishCore$keyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
+        if (dreamingFishCore$ui().host().keyPressed(keyCode, scanCode, modifiers)) {
+            cir.setReturnValue(true);
         }
+    }
 
-        ModernSelectionScreenUi.setButtonsVisible(this, false);
-        try {
-            super.render(guiGraphics, mouseX, mouseY, partialTick);
-        } finally {
-            ModernSelectionScreenUi.setButtonsVisible(this, true);
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return dreamingFishCore$ui().host().mouseClicked(mouseX, mouseY, button) || super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        boolean handled = dreamingFishCore$ui().host().mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(mouseX, mouseY, button) || handled;
+    }
+
+    @Inject(method = "removed", at = @At("HEAD"))
+    private void dreamingFishCore$removed(CallbackInfo ci) {
+        if (dreamingFishCore$ui != null) {
+            dreamingFishCore$ui.host().close();
         }
-
-        int itemCount = this.serverSelectionList == null ? 0 : this.serverSelectionList.children().size();
-        boolean hasSelection = this.serverSelectionList != null && this.serverSelectionList.getSelected() != null;
-        ModernSelectionScreenUi.renderForeground(guiGraphics, this, layout,
-                ModernSelectionScreenUi.Kind.MULTIPLAYER, itemCount, hasSelection, mouseX, mouseY);
     }
 }

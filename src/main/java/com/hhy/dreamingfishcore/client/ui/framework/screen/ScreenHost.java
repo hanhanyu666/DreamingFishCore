@@ -25,6 +25,8 @@ public final class ScreenHost {
 
     public ScreenHost(Supplier<UiNode<?>> builder) {
         this.builder = builder;
+        // 只拦截真正被节点处理的点击，其余交还原版界面
+        ui.setBlockUnhandledClicks(false);
     }
 
     public UiRoot ui() {

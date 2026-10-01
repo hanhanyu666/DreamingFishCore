@@ -54,7 +54,30 @@ final class UiHarnessScenarios {
             screen.progressStartNoAbort(Component.literal("正在准备出生点区域"));
             screen.progressStagePercentage(42);
         });
-        UiHarness.register("reload", minecraft -> minecraft.reloadResourcePacks());
+        UiHarness.register("worlds", minecraft -> minecraft.setScreen(
+                new net.minecraft.client.gui.screens.worldselection.SelectWorldScreen(new TitleScreen())));
+        // 先退出存档再打开世界列表（存档打开时自身被锁，列表读不出来）；只能放在步骤最后
+        UiHarness.register("worlds_offline", minecraft -> {
+            if (minecraft.level != null) {
+                minecraft.level.disconnect();
+            }
+            minecraft.disconnect();
+            minecraft.setScreen(new net.minecraft.client.gui.screens.worldselection.SelectWorldScreen(new TitleScreen()));
+        });
+        UiHarness.register("servers", minecraft -> {
+            minecraft.options.skipMultiplayerWarning = true;
+            var servers = new net.minecraft.client.multiplayer.ServerList(minecraft);
+            servers.load();
+            if (servers.size() == 0) {
+                servers.add(new net.minecraft.client.multiplayer.ServerData("梦屿 · 守望主服", "127.0.0.1:25565",
+                        net.minecraft.client.multiplayer.ServerData.Type.OTHER), false);
+                servers.add(new net.minecraft.client.multiplayer.ServerData("逐光会 · 测试服", "test.invalid",
+                        net.minecraft.client.multiplayer.ServerData.Type.OTHER), false);
+                servers.save();
+            }
+            minecraft.setScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new TitleScreen()));
+        });
+        UiHarness.register("reload",minecraft -> minecraft.reloadResourcePacks());
         UiHarness.register("disconnect", minecraft -> minecraft.setScreen(new net.minecraft.client.gui.screens.DisconnectedScreen(
                 new net.minecraft.client.gui.screens.TitleScreen(), Component.literal("连接丢失"),
                 Component.literal("Connection timed out: no further information"))));

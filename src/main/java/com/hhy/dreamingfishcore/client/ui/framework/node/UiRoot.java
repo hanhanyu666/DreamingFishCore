@@ -32,6 +32,7 @@ public final class UiRoot {
     private double mouseY = -1.0;
     private long paintFrame = -1L;
     private UiNode<?> pressedNode;
+    private boolean blockUnhandledClicks = true;
     private int pressedButton = -1;
     private double pressX;
     private double pressY;
@@ -303,7 +304,15 @@ public final class UiRoot {
                 return true;
             }
         }
-        return target != null;
+        return blockUnhandledClicks && target != null;
+    }
+
+    /**
+     * 点在节点上但没有节点处理时是否算作已处理。独立界面需要拦住点击；
+     * 挂在原版界面上时应放行，让下面的原版控件（如列表）继续收到点击。
+     */
+    public void setBlockUnhandledClicks(boolean value) {
+        blockUnhandledClicks = value;
     }
 
     public boolean mouseReleased(double gx, double gy, int button) {

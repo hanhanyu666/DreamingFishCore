@@ -1,6 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryAccess;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryPainter;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.FaviconTexture;
 import net.minecraft.resources.ResourceLocation;
@@ -13,26 +15,34 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(targets = "net.minecraft.client.gui.screens.worldselection.WorldSelectionList$WorldListEntry")
-public abstract class WorldListEntryMixin {
+public abstract class WorldListEntryMixin implements SelectionEntryAccess.World {
 
     @Shadow
     @Final
-    private LevelSummary summary;
+    LevelSummary summary;
 
     @Shadow
     @Final
     private FaviconTexture icon;
 
+    @Override
+    public LevelSummary dreamingFishCore$summary() {
+        return summary;
+    }
+
+    @Override
+    public ResourceLocation dreamingFishCore$icon() {
+        return icon.textureLocation();
+    }
+
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void dreamingFishCore$renderModernWorldEntry(GuiGraphics guiGraphics, int index, int top, int left,
                                                         int width, int height, int mouseX, int mouseY,
                                                         boolean hovering, float partialTick, CallbackInfo ci) {
-        if (!ModernSelectionScreenUi.isModernSelectionScreen()) {
+        if (!SelectionScreenUi.isActive()) {
             return;
         }
-
         ci.cancel();
-        ResourceLocation texture = this.icon.textureLocation();
-        ModernSelectionScreenUi.renderWorldEntry(guiGraphics, this.summary, texture, index, top, left, width, height, hovering);
+        SelectionEntryPainter.paintWorld(guiGraphics, this, summary, icon.textureLocation(), index, top, left, width, height, hovering);
     }
 }
