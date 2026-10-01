@@ -1,7 +1,6 @@
 package com.hhy.dreamingfishcore.client.ui.loading;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ConnectScreen;
@@ -77,7 +76,7 @@ public final class LoadingTransitionController {
         if (next == null && isLoadingSurface(previous) && minecraft.level != null) {
             LoadingFrame frame = lastFrame != null
                     ? lastFrame
-                    : LoadingFrame.text("", "正在进入梦屿");
+                    : new LoadingFrame("", "正在进入梦屿", -1, null);
             minecraft.setScreen(new LoadingExitTransitionScreen(frame));
             return true;
         }
@@ -133,12 +132,9 @@ public final class LoadingTransitionController {
         }
     }
 
-    public static void rememberProgressFrame(String tip, String status, int progress, boolean cancelHint) {
-        lastFrame = LoadingFrame.progress(tip, status, LoadingScreenUi.clampProgress(progress), cancelHint);
-    }
-
-    public static void rememberTextFrame(String tip, String status) {
-        lastFrame = LoadingFrame.text(tip, status);
+    /** 记下加载画面的最后一帧，世界就绪后用它淡出。 */
+    public static void rememberFrame(LoadingSurface surface) {
+        lastFrame = new LoadingFrame(surface.tip(), surface.status(), surface.progress(), surface.action());
     }
 
     /** Drawn last on a loading screen, revealing that screen from the dark midpoint of the entry fade. */
@@ -210,32 +206,19 @@ public final class LoadingTransitionController {
         committingEntryDestination = false;
     }
 
-    private record LoadingFrame(String tip, String status, int progress,
-                                boolean progressVisible, boolean cancelHint) {
-        private static LoadingFrame progress(String tip, String status, int progress, boolean cancelHint) {
-            return new LoadingFrame(safe(tip), safe(status), progress, true, cancelHint);
-        }
-
-        private static LoadingFrame text(String tip, String status) {
-            return new LoadingFrame(safe(tip), safe(status), 0, false, false);
-        }
-
-        private static String safe(String value) {
-            return value == null ? "" : value;
-        }
+    private record LoadingFrame(String tip, String status, int progress, @Nullable String action) {
     }
 
     /** Re-renders the last loading frame with decreasing alpha while the world is already visible beneath it. */
     private static final class LoadingExitTransitionScreen extends Screen {
-        private final LoadingFrame frame;
-        private final VirtualCoordinateHelper.VirtualSizeResult virtualSize =
-                new VirtualCoordinateHelper.VirtualSizeResult();
+        private final LoadingSurface surface;
         private long startedAt = -1L;
         private boolean finished;
 
         private LoadingExitTransitionScreen(LoadingFrame frame) {
             super(Component.empty());
-            this.frame = frame;
+            surface = new LoadingSurface(frame.tip()).status(frame.status()).progress(frame.progress())
+                    .action(frame.action(), null);
         }
 
         @Override
@@ -248,33 +231,14 @@ public final class LoadingTransitionController {
             float progress = smoothStep((now - startedAt) / (float) LOADING_EXIT_MS);
             float opacity = 1.0F - progress;
             if (opacity > 0.001F) {
-                renderLoadingFrame(guiGraphics, now, opacity);
+                surface.opacity(opacity).render(guiGraphics, width, height);
             } else {
                 finish();
             }
         }
 
-        private void renderLoadingFrame(GuiGraphics guiGraphics, long now, float opacity) {
-            VirtualCoordinateHelper.calculateVirtualSize(this, virtualSize);
-            LoadingScreenUi.renderBackground(guiGraphics, width, height, opacity);
-
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().scale(virtualSize.uiScale, virtualSize.uiScale, 1.0F);
-            LoadingScreenUi.renderTip(guiGraphics, font, frame.tip,
-                    Math.min(250, virtualSize.virtualWidth - 52), opacity);
-            if (frame.progressVisible) {
-                LoadingScreenUi.renderStatusWaveform(guiGraphics, font,
-                        virtualSize.virtualWidth, virtualSize.virtualHeight,
-                        frame.status, frame.progress, now, opacity);
-            } else {
-                LoadingScreenUi.renderBottomStatusText(guiGraphics, font,
-                        virtualSize.virtualWidth, virtualSize.virtualHeight, frame.status, opacity);
-            }
-            if (frame.cancelHint) {
-                LoadingScreenUi.renderActionHint(guiGraphics, font,
-                        virtualSize.virtualWidth, virtualSize.virtualHeight, " 中断连接", opacity);
-            }
-            guiGraphics.pose().popPose();
+        @Override
+        public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         }
 
         private void finish() {
@@ -282,6 +246,11 @@ public final class LoadingTransitionController {
                 finished = true;
                 minecraft.setScreen(null);
             }
+        }
+
+        @Override
+        public void removed() {
+            surface.host().close();
         }
 
         @Override

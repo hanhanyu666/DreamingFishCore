@@ -43,7 +43,28 @@ final class UiHarnessScenarios {
             minecraft.setScreen(new DeathScreen(Component.literal("Dev 被僵尸杀死了"), false));
         });
 
-        UiHarness.register("login", minecraft -> minecraft.setScreen(new Screen_LoginUI(false)));
+        UiHarness.register("loading_message", minecraft -> minecraft.setScreen(
+                new net.minecraft.client.gui.screens.GenericMessageScreen(Component.literal("正在保存世界"))));
+        UiHarness.register("loading_waiting", minecraft -> minecraft.setScreen(
+                net.minecraft.client.gui.screens.GenericWaitingScreen.createWaiting(Component.literal("正在连接 Realms"),
+                        Component.literal("取消"), () -> minecraft.setScreen(null))));
+        UiHarness.register("loading_progress", minecraft -> {
+            var screen = new net.minecraft.client.gui.screens.ProgressScreen(false);
+            minecraft.setScreen(screen);
+            screen.progressStartNoAbort(Component.literal("正在准备出生点区域"));
+            screen.progressStagePercentage(42);
+        });
+        UiHarness.register("reload", minecraft -> minecraft.reloadResourcePacks());
+        UiHarness.register("disconnect", minecraft -> minecraft.setScreen(new net.minecraft.client.gui.screens.DisconnectedScreen(
+                new net.minecraft.client.gui.screens.TitleScreen(), Component.literal("连接丢失"),
+                Component.literal("Connection timed out: no further information"))));
+        UiHarness.register("disconnect_death", minecraft -> minecraft.setScreen(new net.minecraft.client.gui.screens.DisconnectedScreen(
+                new net.minecraft.client.gui.screens.TitleScreen(), Component.literal("连接丢失"),
+                Component.literal("你的复活点数耗尽，正在等待一名幸存者。\n尸体位置：主世界 -297, 71, -458"))));
+        UiHarness.register("disconnect_ban", minecraft -> minecraft.setScreen(new net.minecraft.client.gui.screens.DisconnectedScreen(
+                new net.minecraft.client.gui.screens.TitleScreen(), Component.literal("连接丢失"),
+                Component.literal("You are banned from this server.\nReason: 恶意破坏公共设施\nYour ban will be removed on 2026-10-07"))));
+        UiHarness.register("login",minecraft -> minecraft.setScreen(new Screen_LoginUI(false)));
         UiHarness.register("register", minecraft -> minecraft.setScreen(new Screen_LoginUI(true)));
         UiHarness.register("revival", minecraft -> minecraft.setScreen(new Screen_RevivalCharm()));
         UiHarness.register("storybook", minecraft -> minecraft.setScreen(new Screen_StoryBookCatalog(sampleFragments())));

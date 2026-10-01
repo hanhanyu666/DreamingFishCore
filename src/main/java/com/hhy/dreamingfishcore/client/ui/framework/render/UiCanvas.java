@@ -564,20 +564,44 @@ public final class UiCanvas {
 
     /** 着色器未就绪时（首次资源加载期间）用原版矩形近似。 */
     private void emitFallback(Shape s) {
+        if (s.gradientType == 2) {
+            // 径向渐变多用于光晕和暗角，近似成纯色反而突兀，干脆不画
+            return;
+        }
         int fill = UiColor.multiplyAlpha(s.fill0, alpha);
+        int fillEnd = UiColor.multiplyAlpha(s.fill1, alpha);
         int border = UiColor.multiplyAlpha(s.borderColor, alpha);
+        boolean vertical = s.gradientType == 1 && Math.abs(s.g3 - s.g1) >= Math.abs(s.g2 - s.g0);
+        boolean horizontal = s.gradientType == 1 && !vertical;
         int x0 = Math.round(s.x);
         int y0 = Math.round(s.y);
         int x1 = Math.round(s.x + s.width);
         int y1 = Math.round(s.y + s.height);
         boolean hasBorder = s.borderWidth > 0.0F && UiColor.alpha(border) > 0;
         custom(s.x, s.y, s.width, s.height, g -> {
+            int ix0 = x0;
+            int iy0 = y0;
+            int ix1 = x1;
+            int iy1 = y1;
             if (hasBorder) {
                 g.fill(x0, y0, x1, y1, border);
                 int inset = Math.max(1, Math.round(s.borderWidth));
-                g.fill(x0 + inset, y0 + inset, x1 - inset, y1 - inset, fill);
+                ix0 += inset;
+                iy0 += inset;
+                ix1 -= inset;
+                iy1 -= inset;
+            }
+            if (vertical) {
+                g.fillGradient(ix0, iy0, ix1, iy1, fill, fillEnd);
+            } else if (horizontal) {
+                int strips = Math.max(1, Math.min(24, ix1 - ix0));
+                for (int i = 0; i < strips; i++) {
+                    int sx0 = ix0 + (ix1 - ix0) * i / strips;
+                    int sx1 = ix0 + (ix1 - ix0) * (i + 1) / strips;
+                    g.fill(sx0, iy0, sx1, iy1, UiColor.lerp(fill, fillEnd, (i + 0.5F) / strips));
+                }
             } else {
-                g.fill(x0, y0, x1, y1, fill);
+                g.fill(ix0, iy0, ix1, iy1, fill);
             }
         });
     }

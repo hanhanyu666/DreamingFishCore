@@ -1,14 +1,12 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingSurface;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.util.UiBackgroundRenderer;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.Overlay;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.util.Mth;
 import org.spongepowered.asm.mixin.Final;
@@ -23,34 +21,23 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * LoadingOverlay Mixin
- * Blue rounded progress bar like world generation screen
- * Injects at RETURN to draw custom UI after original rendering
+ * 资源加载遮罩改用统一加载画面。
+ *
+ * <p>首次启动（{@code fadeIn == false}）时字体和界面着色器都还没加载，只画背景与信号波形；
+ * 之后切换资源包等重载可以正常显示文字。</p>
  */
 @Mixin(LoadingOverlay.class)
 public abstract class LoadingOverlayMixin extends Overlay {
-
-    @Unique private static final int ACCENT_BLUE = 0xFF0088FF;
-    @Unique private static final int BAR_BACKGROUND = 0x66000000;
-
     @Shadow @Final private Minecraft minecraft;
     @Shadow @Final private ReloadInstance reload;
     @Shadow @Final private Consumer<Optional<Throwable>> onFinish;
     @Shadow @Final private boolean fadeIn;
     @Shadow private float currentProgress;
     @Shadow private long fadeOutStart;
-    @Shadow private long fadeInStart;
 
-    @Inject(method = "<init>", at = @At("RETURN"))
-    private void dreamingFishCore$init(CallbackInfo ci) {
-        DreamingFishCore.LOGGER.info("LoadingOverlayMixin initialized!");
-    }
+    @Unique private LoadingSurface dreamingFishCore$surface;
 
-    @Inject(
-        method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V",
-        at = @At("HEAD"),
-        cancellable = true
-    )
+    @Inject(method = "render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V", at = @At("HEAD"), cancellable = true)
     private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         ci.cancel();
 
@@ -75,81 +62,27 @@ public abstract class LoadingOverlayMixin extends Overlay {
 
         if (fadeOutProgress >= 1.0F) {
             this.minecraft.setOverlay(null);
+            if (dreamingFishCore$surface != null) {
+                dreamingFishCore$surface.host().close();
+            }
             return;
         }
 
-        int alpha = fadeOutProgress > -1.0F
-                ? Mth.ceil((1.0F - Mth.clamp(fadeOutProgress, 0.0F, 1.0F)) * 255.0F)
-                : 255;
-        float alphaF = alpha / 255.0F;
-
+        float opacity = fadeOutProgress > -1.0F ? 1.0F - Mth.clamp(fadeOutProgress, 0.0F, 1.0F) : 1.0F;
         if (this.minecraft.screen != null && fadeOutProgress > -1.0F) {
             this.minecraft.screen.render(guiGraphics, mouseX, mouseY, partialTick);
         }
 
-        RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alphaF);
-        UiBackgroundRenderer.renderStartupBackground(guiGraphics, width, height, alphaF);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        guiGraphics.fillGradient(0, 0, width, height,
-                (Mth.ceil(0x88 * alphaF) << 24),
-                (Mth.ceil(0xCC * alphaF) << 24));
+        this.currentProgress = Mth.clamp(this.currentProgress * 0.95F + this.reload.getActualProgress() * 0.05F, 0.0F, 1.0F);
 
-        // Update progress
-        float actualProgress = this.reload.getActualProgress();
-        this.currentProgress = Mth.clamp(this.currentProgress * 0.95F + actualProgress * 0.05F, 0.0F, 1.0F);
-
+        if (dreamingFishCore$surface == null) {
+            dreamingFishCore$surface = new LoadingSurface().startup(!this.fadeIn);
+        }
         RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
-
-        int barMargin = 40;
-        int progressBarHeight = 8;
-        int progressBarX = barMargin;
-        int progressBarWidth = width - barMargin * 2;
-        int progressBarY = height - 35;
-
-        int barBg = (BAR_BACKGROUND & 0x00FFFFFF)
-                | (Mth.ceil(((BAR_BACKGROUND >>> 24) & 255) * alphaF) << 24);
-        int barAccent = (ACCENT_BLUE & 0x00FFFFFF)
-                | (Mth.ceil(((ACCENT_BLUE >>> 24) & 255) * alphaF) << 24);
-
-        dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY,
-                progressBarWidth, progressBarHeight, barBg);
-
-        int progressWidth = (int) (this.currentProgress * progressBarWidth);
-        if (progressWidth > 0) {
-            dreamingFishCore$renderRoundedBar(guiGraphics, progressBarX, progressBarY,
-                    progressWidth, progressBarHeight, barAccent);
-            if (progressWidth > 2) {
-                guiGraphics.fill(progressBarX + 2, progressBarY,
-                        progressBarX + progressWidth - 2, progressBarY + 1,
-                        (Mth.ceil(255 * alphaF) << 24) | 0x55AAFF);
-            }
-        }
-
-        RenderSystem.depthMask(true);
+        dreamingFishCore$surface.status("正在载入梦屿资源").progress(Math.round(this.currentProgress * 100.0F))
+                .opacity(opacity).render(guiGraphics, width, height);
         RenderSystem.enableDepthTest();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableBlend();
     }
-
-    @Unique
-    private void dreamingFishCore$renderRoundedBar(GuiGraphics guiGraphics, int x, int y,
-                                                    int width, int height, int color) {
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-        int radius = height >= 6 ? height / 3 : 1;
-        int innerHeight = Math.max(1, height - 2);
-        int left = x + radius;
-        int right = x + width - radius;
-        if (right > left) {
-            guiGraphics.fill(left, y, right, y + height, color);
-        }
-        guiGraphics.fill(x, y + 1, x + radius, y + 1 + innerHeight, color);
-        guiGraphics.fill(x + width - radius, y + 1, x + width, y + 1 + innerHeight, color);
-    }
-
 }

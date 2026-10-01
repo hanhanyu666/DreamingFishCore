@@ -1,9 +1,7 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.loading.LoadingSurface;
 import com.hhy.dreamingfishcore.client.ui.loading.LoadingTransitionController;
-import com.hhy.dreamingfishcore.client.ui.util.LoadingTips;
-import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,13 +16,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/** 单人世界生成区块：统一加载画面，进度取自区块监听器。 */
 @Mixin(LevelLoadingScreen.class)
 public abstract class LevelLoadingScreenMixin extends Screen {
-
     @Unique private static final String SINGLE_PLAYER_STATUS = "正在唤醒梦屿";
     @Shadow @Final private StoringChunkProgressListener progressListener;
-    @Unique private final VirtualCoordinateHelper.VirtualSizeResult vs = new VirtualCoordinateHelper.VirtualSizeResult();
-    @Unique private String tip = "";
+    @Unique private final LoadingSurface dreamingFishCore$surface = new LoadingSurface();
 
     protected LevelLoadingScreenMixin(Component title) {
         super(title);
@@ -34,23 +31,15 @@ public abstract class LevelLoadingScreenMixin extends Screen {
     private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick,
                                          CallbackInfo ci) {
         ci.cancel();
-
-        VirtualCoordinateHelper.calculateVirtualSize(this, vs);
-        if (tip.isEmpty()) {
-            tip = LoadingTips.getRandomTip();
-        }
-
-        long now = System.currentTimeMillis();
-        int progress = Mth.clamp(progressListener.getProgress(), 0, 100);
-
-        LoadingScreenUi.renderBackground(guiGraphics, this.width, this.height);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(vs.uiScale, vs.uiScale, 1.0f);
-        LoadingScreenUi.renderTip(guiGraphics, this.font, tip, Math.min(250, vs.virtualWidth - 52));
-        LoadingScreenUi.renderStatusWaveform(guiGraphics, this.font, vs.virtualWidth, vs.virtualHeight,
-                SINGLE_PLAYER_STATUS, progress, now);
-        guiGraphics.pose().popPose();
-        LoadingTransitionController.rememberProgressFrame(tip, SINGLE_PLAYER_STATUS, progress, false);
+        dreamingFishCore$surface.status(SINGLE_PLAYER_STATUS).progress(Mth.clamp(progressListener.getProgress(), 0, 100))
+                .render(guiGraphics, this.width, this.height);
+        LoadingTransitionController.rememberFrame(dreamingFishCore$surface);
         LoadingTransitionController.renderLoadingEntry(guiGraphics, this.width, this.height);
+    }
+
+    @Override
+    public void removed() {
+        dreamingFishCore$surface.host().close();
+        super.removed();
     }
 }

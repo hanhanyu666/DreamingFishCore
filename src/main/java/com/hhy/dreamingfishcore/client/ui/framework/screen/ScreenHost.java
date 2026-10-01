@@ -49,8 +49,16 @@ public final class ScreenHost {
     }
 
     public void render(Screen screen, GuiGraphics graphics) {
+        render(graphics, screen.width, screen.height);
+    }
+
+    /** 按给定的 GUI 尺寸绘制（用于不是 Screen 的场合，例如资源加载遮罩）。 */
+    public void render(GuiGraphics graphics, int width, int height) {
         ensureBuilt();
-        ui.render(graphics, preciseMouseX(screen), preciseMouseY(screen), screen.width, screen.height);
+        Minecraft minecraft = Minecraft.getInstance();
+        double mouseX = minecraft.mouseHandler.xpos() * width / Math.max(1, minecraft.getWindow().getScreenWidth());
+        double mouseY = minecraft.mouseHandler.ypos() * height / Math.max(1, minecraft.getWindow().getScreenHeight());
+        ui.render(graphics, mouseX, mouseY, width, height);
     }
 
     public static double preciseMouseX(Screen screen) {
