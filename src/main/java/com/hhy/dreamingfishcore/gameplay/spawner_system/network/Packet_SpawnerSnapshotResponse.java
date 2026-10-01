@@ -62,6 +62,7 @@ public record Packet_SpawnerSnapshotResponse(SpawnerView view) implements Custom
         buffer.writeBoolean(view.canEdit());
         buffer.writeBoolean(view.inHordeArea());
         buffer.writeBoolean(view.active());
+        buffer.writeUtf(view.areaHint(), 256);
     }
 
     private static Packet_SpawnerSnapshotResponse decode(RegistryFriendlyByteBuf buffer) {
@@ -91,6 +92,7 @@ public record Packet_SpawnerSnapshotResponse(SpawnerView view) implements Custom
         boolean canEdit = buffer.readBoolean();
         boolean inHordeArea = buffer.readBoolean();
         boolean active = buffer.readBoolean();
+        String areaHint = buffer.readUtf(256);
 
         return new Packet_SpawnerSnapshotResponse(new SpawnerView(
                 dimensionId, x, y, z, entityId,
@@ -98,7 +100,7 @@ public record Packet_SpawnerSnapshotResponse(SpawnerView view) implements Custom
                 batches, batchesSpawned, aliveCount,
                 redstoneControlled, selfDestruct, fixedClue, clueId,
                 rewardExperience, rewardCoins, List.copyOf(rewards),
-                canEdit, inHordeArea, active));
+                canEdit, inHordeArea, active, areaHint));
     }
 
     public static void handle(Packet_SpawnerSnapshotResponse packet, IPayloadContext context) {

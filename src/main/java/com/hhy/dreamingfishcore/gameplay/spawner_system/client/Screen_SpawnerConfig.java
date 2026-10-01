@@ -280,10 +280,13 @@ public class Screen_SpawnerConfig extends Screen {
                         + view.aliveCount() + " 只",
                 contentX, panelY + layout.statusY(), view.inHordeArea() ? COLOR_OK : COLOR_FAIL, false);
 
+        // 不在区域内时，服务端会带上"为什么"（含高度超出 / 没开开关），直接画出来省得玩家猜。
         String message = SpawnerConfigClientCache.message();
-        if (!message.isBlank()) {
-            guiGraphics.drawString(this.font, message, contentX, panelY + layout.messageY(),
-                    SpawnerConfigClientCache.lastSuccess() ? COLOR_OK : COLOR_FAIL, false);
+        String detail = message.isBlank() ? view.areaHint() : message;
+        boolean ok = message.isBlank() ? view.inHordeArea() : SpawnerConfigClientCache.lastSuccess();
+        if (!detail.isBlank()) {
+            guiGraphics.drawString(this.font, this.font.plainSubstrByWidth(detail, contentWidth),
+                    contentX, panelY + layout.messageY(), ok ? COLOR_OK : COLOR_FAIL, false);
         }
 
         button(guiGraphics, mouseX, mouseY, contentX, panelY + layout.buttonsY(), 60, 14, "重置本轮",

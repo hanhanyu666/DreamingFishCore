@@ -64,6 +64,16 @@ public class SpawnerGameTest {
             helper.assertTrue(TaskLocationManager.isHordeArea(level, devicePos),
                     "刷怪箱位置应当落在尸潮区域内");
 
+            // 诊断说明：区域高 -3..+3，正上方 10 格应当被判定为"高度超出"，
+            // 而不是含糊的"不在尸潮区域内"；离得远的地方则说明不在任何任务地点内。
+            String heightHint = SpawnerService.areaHint(level, devicePos.above(10), false);
+            helper.assertTrue(heightHint.contains("高度超出"),
+                    "高度在区域外时应当给出高度超出的说明，实际：" + heightHint);
+            String outsideHint = SpawnerService.areaHint(level,
+                    helper.absolutePos(new BlockPos(40, 1, 40)), false);
+            helper.assertTrue(outsideHint.contains("不在任何任务地点内"),
+                    "区域外应当说明不在任何任务地点内，实际：" + outsideHint);
+
             helper.setBlock(new BlockPos(1, 1, 1), DreamingFishCore_Blocks.SPAWNER.get());
             SpawnerRegistry.register(dimensionId,
                     devicePos.getX(), devicePos.getY(), devicePos.getZ());

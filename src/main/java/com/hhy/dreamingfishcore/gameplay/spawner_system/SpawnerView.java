@@ -17,7 +17,8 @@ public record SpawnerView(String dimensionId, int x, int y, int z,
                           boolean fixedClueEnabled, int clueId,
                           int rewardExperience, int rewardCoins,
                           List<RewardLine> rewardItems,
-                          boolean canEdit, boolean inHordeArea, boolean active) {
+                          boolean canEdit, boolean inHordeArea, boolean active,
+                          String areaHint) {
 
     /** 一条奖励物品。 */
     public record RewardLine(String itemId, int count) {
@@ -25,7 +26,7 @@ public record SpawnerView(String dimensionId, int x, int y, int z,
 
     /** 从登记表条目装配一份视图。 */
     public static SpawnerView of(SpawnerEntry entry, boolean canEdit,
-                                 boolean inHordeArea, boolean active) {
+                                 boolean inHordeArea, boolean active, String areaHint) {
         List<RewardLine> items = new ArrayList<>();
         for (SpawnerEntry.RewardEntry reward : entry.rewardItems()) {
             items.add(new RewardLine(reward.itemId(), reward.count()));
@@ -38,7 +39,7 @@ public record SpawnerView(String dimensionId, int x, int y, int z,
                 entry.redstoneControlled(), entry.selfDestructWhenCleared(),
                 entry.fixedClueEnabled(), entry.clueId(),
                 entry.rewardExperience(), entry.rewardCoins(), List.copyOf(items),
-                canEdit, inHordeArea, active);
+                canEdit, inHordeArea, active, areaHint == null ? "" : areaHint);
     }
 
     /** 冷却秒数，供界面显示（默认 CD 是 tick 数）。 */

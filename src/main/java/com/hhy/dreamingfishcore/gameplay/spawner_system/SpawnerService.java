@@ -97,7 +97,8 @@ public final class SpawnerService {
         if (player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.CREATIVE) {
             return cycleSkin(player, pos);
         }
-        player.displayClientMessage(Component.literal(describe(entry)), false);
+        player.displayClientMessage(Component.literal(
+                describeWithArea(player.serverLevel(), pos, entry)), false);
         return true;
     }
 
@@ -128,6 +129,15 @@ public final class SpawnerService {
                 + (entry.selfDestructWhenCleared() ? " §7| §c剿灭后自毁" : "")
                 + (entry.fixedClueEnabled() && entry.clueId() > 0
                         ? " §7| 线索 §f#" + entry.clueId() : "");
+    }
+
+    /** 状态说明 + 不在尸潮区域内时的原因（右键看状态时一起给出）。 */
+    private static String describeWithArea(ServerLevel level, BlockPos pos, SpawnerEntry entry) {
+        String status = describe(entry);
+        if (TaskLocationManager.isHordeArea(level, pos)) {
+            return status;
+        }
+        return status + "§r\n§c" + areaHint(level, pos, false);
     }
 
     // ==================== 周期 ====================
@@ -560,7 +570,52 @@ public final class SpawnerService {
         BlockState state = level.getBlockState(pos);
         boolean active = state.is(DreamingFishCore_Blocks.SPAWNER.get())
                 && state.getValue(SpawnerBlock.ACTIVE);
-        return SpawnerView.of(entry, canEdit, inHordeArea, active);
+        return SpawnerView.of(entry, canEdit, inHordeArea, active,
+                areaHint(level, pos, inHordeArea));
+    }
+
+    /**
+     * 「为什么不在尸潮区域内」的可操作说明。
+     *
+     * <p>裸报一句"不在尸潮区域内"会让服主无从下手：任务地点是<b>三维</b>盒子，
+     * 常见坑是两个角点选了同一高度，区域只有一格高，刷怪箱放高/放低一格就出去了。</p>
+     */
+    static String areaHint(ServerLevel level, BlockPos pos, boolean inHordeArea) {
+        if (inHordeArea || level == null || pos == null) {
+            return "";
+        }
+        ResourceKey<Level> dimension = level.dimension();
+        TaskLocationDefinition heightMismatch = null;
+        TaskLocationDefinition missingFlag = null;
+        for (TaskLocationDefinition location : TaskLocationManager.getAllLocations()) {
+            if (!location.isEnabled() || !location.getDimensionKey().equals(dimension)) {
+                continue;
+            }
+            BlockPos min = location.getMin();
+            BlockPos max = location.getMax();
+            boolean insideXZ = pos.getX() >= min.getX() && pos.getX() <= max.getX()
+                    && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
+            if (!insideXZ || location.contains(dimension, pos)) {
+                continue;
+            }
+            if (location.isHorde()) {
+                heightMismatch = location;
+                break;
+            }
+            if (missingFlag == null) {
+                missingFlag = location;
+            }
+        }
+        if (heightMismatch != null) {
+            return "位置在尸潮区域「" + heightMismatch.getName() + "」的 X/Z 范围内，但高度超出"
+                    + "（区域 Y " + heightMismatch.getMin().getY() + ".."
+                    + heightMismatch.getMax().getY() + "，当前 Y " + pos.getY() + "）";
+        }
+        if (missingFlag != null) {
+            return "位置在任务地点「" + missingFlag.getName() + "」内，但它没有开启尸潮开关"
+                    + "（/dreamingfish task_location horde on " + missingFlag.getName() + "）";
+        }
+        return "当前位置不在任何任务地点内：刷怪箱必须放在开启尸潮开关的地点里";
     }
 
     /**

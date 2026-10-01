@@ -36,8 +36,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
     // 数据驱动剧情/任务状态、感染身份（含传播复发标记）、玩家组织（领地联动与资金池字段）、
-    // 刷怪箱配置（尸潮功能）、服务器状态 TPS 的同步契约均已变更，旧客户端必须在握手阶段明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.28.0";
+    // 刷怪箱配置（尸潮功能，含"为什么不在尸潮区域内"的说明字段）、服务器状态 TPS 的同步契约均已变更，
+    // 旧客户端必须在握手阶段明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.28.1";
 
     private DreamingFishCore_NetworkManager() {
     }

@@ -209,9 +209,20 @@ public final class Command_TaskLocation {
             }
             TaskLocationDefinition location = TaskLocationManager
                     .getLocationByName(locationName).orElse(null);
-            String hint = location != null && location.isBuildable()
-                    ? ""
-                    : "（提示：该地点是强制保护模式，玩家在里面不能建造；尸潮开关本身照常生效）";
+            StringBuilder hint = new StringBuilder();
+            if (location != null && !location.isBuildable()) {
+                hint.append("（提示：该地点是强制保护模式，玩家在里面不能建造；尸潮开关本身照常生效）");
+            }
+            if (location != null && horde) {
+                int span = location.getMax().getY() - location.getMin().getY() + 1;
+                if (span < 5) {
+                    // 任务地点是三维盒子：只有一格高的区域会让刷怪箱放高/放低一格就"不在区域内"。
+                    hint.append("（注意：该区域只有 ").append(span).append(" 格高（Y ")
+                            .append(location.getMin().getY()).append("..")
+                            .append(location.getMax().getY())
+                            .append("），刷怪箱必须放在这个高度范围内；建议把区域划高一些）");
+                }
+            }
             context.getSource().sendSuccess(() -> Component.literal(
                     "任务地点「" + locationName + "」的尸潮区域已"
                             + (horde ? "开启" : "关闭") + hint), true);
