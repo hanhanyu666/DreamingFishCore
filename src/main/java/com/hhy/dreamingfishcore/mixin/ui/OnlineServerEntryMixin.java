@@ -1,6 +1,8 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryAccess;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryPainter;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
@@ -27,7 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Mixin(targets = "net.minecraft.client.gui.screens.multiplayer.ServerSelectionList$OnlineServerEntry")
-public abstract class OnlineServerEntryMixin {
+public abstract class OnlineServerEntryMixin implements SelectionEntryAccess.Server {
 
     @Unique
     private static final ExecutorService DREAMINGFISHCORE_SERVER_PING_EXECUTOR = Executors.newFixedThreadPool(4, runnable -> {
@@ -61,6 +63,11 @@ public abstract class OnlineServerEntryMixin {
      * Vanilla can build narration before the first entry render, so initialize them at
      * the narration boundary instead of waiting for the ping/render path.
      */
+    @Override
+    public ResourceLocation dreamingFishCore$icon() {
+        return this.icon.textureLocation();
+    }
+
     @Inject(method = "getNarration", at = @At("HEAD"))
     private void dreamingFishCore$ensureNarrationComponents(CallbackInfoReturnable<Component> cir) {
         dreamingFishCore$ensureStatusComponents();
@@ -71,7 +78,7 @@ public abstract class OnlineServerEntryMixin {
                                                                int width, int height, int mouseX, int mouseY,
                                                                boolean hovering, float partialTick, CallbackInfo ci) {
         dreamingFishCore$ensureStatusComponents();
-        if (!ModernSelectionScreenUi.isModernSelectionScreen()) {
+        if (!SelectionScreenUi.isActive()) {
             return;
         }
 
@@ -79,7 +86,7 @@ public abstract class OnlineServerEntryMixin {
         dreamingFishCore$ensureServerStatus();
         dreamingFishCore$updateServerIconTexture();
         ResourceLocation texture = this.icon.textureLocation();
-        ModernSelectionScreenUi.renderOnlineServerEntry(guiGraphics, this.serverData, texture, index, top, left, width, height, hovering);
+        SelectionEntryPainter.paintServer(guiGraphics, this, this.serverData, texture, index, top, left, width, height, hovering);
     }
 
     @Unique

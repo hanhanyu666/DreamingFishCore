@@ -10,7 +10,7 @@ import java.util.Set;
 /**
  * 当前客户端玩家可见公告的轻量未读快照。
  *
- * <p>公告终端的完整列表仍由 {@code ServerScreenUI_Screen} 渲染；这个缓存保存未读
+ * <p>公告终端的完整列表由 {@code TerminalData} 保存并在梦屿终端中渲染；这个缓存保存未读
  * ID 以及标题轻量视图，让 HUD 可以直接告诉玩家“哪一条公告”尚未阅读。</p>
  */
 public final class NoticeClientCache {

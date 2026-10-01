@@ -22,6 +22,8 @@ com.hhy.dreamingfishcore/
 
 `server` 表示“服务器服务领域”，不是 Java 物理侧限制。服务器服务如果有界面，应放在对应系统的 `client` 子包中。真正只能在客户端加载的类必须位于带有 `client` 含义的包，并继续使用 Forge 的 `Dist.CLIENT` 限制。
 
+所有界面、HUD 与原版界面改造统一使用 `client/ui/framework`（节点树 + SDF 画布），不再直接用 `GuiGraphics` 拼界面；用法见 [UI_FRAMEWORK_GUIDE.md](UI_FRAMEWORK_GUIDE.md)。原版界面的改造集中在 `client/ui/vanilla`，对应 mixin 只负责把渲染与输入转交过去。
+
 ## 功能模块结构
 
 功能根目录保留现有 Manager 和核心数据类，按需创建子包，不要求为了整齐创建空目录。

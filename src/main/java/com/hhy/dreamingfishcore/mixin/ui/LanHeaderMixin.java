@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryPainter;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,11 +15,10 @@ public abstract class LanHeaderMixin {
     private void dreamingFishCore$renderModernLanHeader(GuiGraphics guiGraphics, int index, int top, int left,
                                                        int width, int height, int mouseX, int mouseY,
                                                        boolean hovering, float partialTick, CallbackInfo ci) {
-        if (!ModernSelectionScreenUi.isModernSelectionScreen()) {
+        if (!SelectionScreenUi.isActive()) {
             return;
         }
-
         ci.cancel();
-        ModernSelectionScreenUi.renderLanHeader(guiGraphics, top, left, width, height);
+        SelectionEntryPainter.paintLanHeader(guiGraphics, top, left, width, height);
     }
 }

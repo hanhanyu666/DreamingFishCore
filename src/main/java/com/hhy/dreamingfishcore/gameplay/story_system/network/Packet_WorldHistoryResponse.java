@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.story_system.network;
 
 import com.hhy.dreamingfishcore.gameplay.story_system.WorldHistoryLog;
-import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI_Screen;
+import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalData;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -155,7 +155,7 @@ public final class Packet_WorldHistoryResponse implements net.minecraft.network.
 
     @OnlyIn(Dist.CLIENT)
     private static void handleClient(Packet_WorldHistoryResponse packet) {
-        ServerScreenUI_Screen.setHistoryData(
+        TerminalData.setHistoryData(
                 packet.entries,
                 packet.totalEventCount,
                 packet.historyLoaded,

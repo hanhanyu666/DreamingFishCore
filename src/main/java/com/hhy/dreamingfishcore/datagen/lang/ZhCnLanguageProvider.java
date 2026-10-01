@@ -15,7 +15,7 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add("key.dreamingfishcore.open_screen_o", "打开信息面板");
         add("key.dreamingfishcore.open_terminal_u", "打开服务器终端");
         add("key.dreamingfishcore.fps_marker", "FPS 标点");
-        add("key.dreamingfishcore.guidance_scroll", "按住并滚动以切换剧情追踪");
+        add("key.dreamingfishcore.guidance_scroll", "按住查看状态详情（滚轮切换剧情追踪）");
         add("key.dreamingfishcore.guidance_next", "追踪下一项剧情行动");
         add("itemGroup.dreamingfishcore.tab", "DreamingfishCore");
         add("itemGroup.blueprint.tab", "梦鱼蓝图");

@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -9,29 +9,39 @@ import net.minecraft.client.gui.screens.worldselection.WorldSelectionList;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/** 世界选择界面交给 {@link SelectionScreenUi}；原版列表与按钮逻辑保持不变。 */
 @Mixin(SelectWorldScreen.class)
 public abstract class SelectWorldScreenMixin extends Screen {
-
     @Shadow
     protected EditBox searchBox;
 
     @Shadow
     private WorldSelectionList list;
 
+    @Unique
+    private SelectionScreenUi dreamingFishCore$ui;
+
     protected SelectWorldScreenMixin(Component title) {
         super(title);
     }
 
+    @Unique
+    private SelectionScreenUi dreamingFishCore$ui() {
+        if (dreamingFishCore$ui == null) {
+            dreamingFishCore$ui = new SelectionScreenUi(this, SelectionScreenUi.Kind.WORLDS, () -> this.list, () -> this.searchBox);
+        }
+        return dreamingFishCore$ui;
+    }
+
     @Inject(method = "init", at = @At("RETURN"))
-    private void dreamingFishCore$layoutAfterInit(CallbackInfo ci) {
-        ModernSelectionScreenUi.resetAnimation(this);
-        ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, true);
-        ModernSelectionScreenUi.applyLayout(this, layout, this.searchBox, this.list, true);
+    private void dreamingFishCore$afterInit(CallbackInfo ci) {
+        dreamingFishCore$ui().hideVanillaWidgets();
     }
 
     @ModifyArg(
@@ -44,38 +54,40 @@ public abstract class SelectWorldScreenMixin extends Screen {
             require = 0
     )
     private int dreamingFishCore$modernWorldRowHeight(int original) {
-        return 56;
+        return 50;
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void dreamingFishCore$customBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    private void dreamingFishCore$render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         ci.cancel();
+        dreamingFishCore$ui().render(guiGraphics, mouseX, mouseY, partialTick);
+    }
 
-        ModernSelectionScreenUi.Layout layout = ModernSelectionScreenUi.calculateLayout(this, true);
-        ModernSelectionScreenUi.applyLayout(this, layout, this.searchBox, this.list, true);
-        ModernSelectionScreenUi.renderBase(guiGraphics, this, layout, ModernSelectionScreenUi.Kind.WORLDS);
-        ModernSelectionScreenUi.prepareTransparentButtons(this);
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return dreamingFishCore$ui().host().mouseClicked(mouseX, mouseY, button) || super.mouseClicked(mouseX, mouseY, button);
+    }
 
-        // In 1.20.1 the world list is registered with addWidget(), so Screen.render()
-        // does not render it. Rendering it explicitly is also what polls the async
-        // level-summary load and replaces the loading row with the actual saves.
-        if (this.list != null) {
-            this.list.render(guiGraphics, mouseX, mouseY, partialTick);
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        boolean handled = dreamingFishCore$ui().host().mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(mouseX, mouseY, button) || handled;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return dreamingFishCore$ui().host().keyPressed(keyCode, scanCode, modifiers) || super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        return dreamingFishCore$ui().host().charTyped(codePoint, modifiers) || super.charTyped(codePoint, modifiers);
+    }
+
+    @Inject(method = "removed", at = @At("HEAD"))
+    private void dreamingFishCore$removed(CallbackInfo ci) {
+        if (dreamingFishCore$ui != null) {
+            dreamingFishCore$ui.host().close();
         }
-
-        ModernSelectionScreenUi.setButtonsVisible(this, false);
-        try {
-            super.render(guiGraphics, mouseX, mouseY, partialTick);
-        } finally {
-            ModernSelectionScreenUi.setButtonsVisible(this, true);
-        }
-        if (this.searchBox != null && this.searchBox.visible) {
-            this.searchBox.render(guiGraphics, mouseX, mouseY, partialTick);
-        }
-
-        int itemCount = this.list == null ? 0 : this.list.children().size();
-        boolean hasSelection = this.list != null && this.list.getSelectedOpt().isPresent();
-        ModernSelectionScreenUi.renderForeground(guiGraphics, this, layout,
-                ModernSelectionScreenUi.Kind.WORLDS, itemCount, hasSelection, mouseX, mouseY);
     }
 }

@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen;
 
+import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalScreen;
 import net.minecraft.client.Minecraft;
 
 public class ServerScreenUI {
@@ -31,9 +32,9 @@ public class ServerScreenUI {
 
         if (SHOW_UI) {
             mc.mouseHandler.releaseMouse();
-            mc.setScreen(new ServerScreenUI_Screen());
+            mc.setScreen(new TerminalScreen());
         } else {
-            if (mc.screen instanceof ServerScreenUI_Screen) {
+            if (mc.screen instanceof TerminalScreen) {
                 mc.setScreen(null);
             }
             mc.mouseHandler.grabMouse();

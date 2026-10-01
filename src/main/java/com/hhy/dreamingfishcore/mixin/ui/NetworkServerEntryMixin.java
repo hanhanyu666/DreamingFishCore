@@ -1,7 +1,7 @@
 package com.hhy.dreamingfishcore.mixin.ui;
 
-import com.hhy.dreamingfishcore.client.ui.util.ModernSelectionScreenUi;
-import net.minecraft.client.Minecraft;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionEntryPainter;
+import com.hhy.dreamingfishcore.client.ui.vanilla.SelectionScreenUi;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.server.LanServer;
 import org.spongepowered.asm.mixin.Final;
@@ -22,12 +22,10 @@ public abstract class NetworkServerEntryMixin {
     private void dreamingFishCore$renderModernNetworkServerEntry(GuiGraphics guiGraphics, int index, int top, int left,
                                                                 int width, int height, int mouseX, int mouseY,
                                                                 boolean hovering, float partialTick, CallbackInfo ci) {
-        if (!ModernSelectionScreenUi.isModernSelectionScreen()) {
+        if (!SelectionScreenUi.isActive()) {
             return;
         }
-
         ci.cancel();
-        boolean hideAddress = Minecraft.getInstance().options.hideServerAddress;
-        ModernSelectionScreenUi.renderLanServerEntry(guiGraphics, this.serverData, index, top, left, width, height, hovering, hideAddress);
+        SelectionEntryPainter.paintLan(guiGraphics, this, serverData, index, top, left, width, height, hovering);
     }
 }

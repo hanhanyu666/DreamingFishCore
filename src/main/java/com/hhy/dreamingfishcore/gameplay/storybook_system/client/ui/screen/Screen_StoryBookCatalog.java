@@ -1,615 +1,489 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen;
 
-import com.hhy.dreamingfishcore.client.ui.util.VirtualCoordinateHelper;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.AnimatedFloat;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.Easing;
+import com.hhy.dreamingfishcore.client.ui.framework.core.UiSounds;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Align;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Box;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Cursor;
+import com.hhy.dreamingfishcore.client.ui.framework.node.EnterEffect;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Justify;
+import com.hhy.dreamingfishcore.client.ui.framework.node.UiNode;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.screen.UiScreen;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextStyle;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.CustomPaint;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Dynamic;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.InteractiveNode;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Responsive;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Text;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Ui;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookEntryViewData;
-import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.network.Packet_UpdateStoryBookOrder;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
-public class Screen_StoryBookCatalog extends Screen {
-    private static final Minecraft MC = Minecraft.getInstance();
+/**
+ * 随记本：摊开的手账。先按章节浏览，再进入章节查看残页卡片；卡片可拖动到另一张卡片上交换顺序，
+ * 轻点卡片阅读。
+ */
+public class Screen_StoryBookCatalog extends UiScreen {
+    static final int PAGE = 0xFFF0DFC1;
+    static final int PAGE_EDGE = 0xFFE3CDA6;
+    static final int INK_TITLE = 0xFF51341D;
+    static final int INK_TEXT = 0xFF6D4A2A;
+    static final int INK_ACCENT = 0xFF8A5B31;
+    static final int PIN = 0xFFC44B36;
+    private static final int COVER = 0xFF6B4B2D;
+    private static final int COVER_DARK = 0xFF4A3119;
+    private static final int PAPER_TEXT = 0xFFF4E7CF;
+    private static final int PAPER_MUTED = 0xFFD6C1A0;
 
-    private static final int BOOK_COLOR = 0xFF6B4B2D;
-    private static final int BOOK_DARK = 0xFF51361F;
-    private static final int PAGE_COLOR = 0xFFF0DFC1;
-    private static final int PAGE_SHADOW = 0x30A0784A;
-    private static final int PAGE_BORDER = 0x80755634;
-    private static final int CARD_PIN = 0xFFC44B36;
-    private static final int CARD_TITLE = 0xFF51341D;
-    private static final int CARD_TEXT = 0xFF6D4A2A;
-    private static final int CARD_BG_A = 0xFFEEDAAE;
-    private static final int CARD_BG_B = 0xFFE7D0A1;
-    private static final int CARD_BG_HOVER = 0xFFF4E5C1;
-    private static final int CHAPTER_BG = 0xFFE8D5AF;
-    private static final int CHAPTER_BG_HOVER = 0xFFF2E3C4;
-    private static final int CHAPTER_ACCENT = 0xFF8A5B31;
-    private static final int BUTTON_TEXT = 0xFF7A5634;
-    private static final int BUTTON_TEXT_HOVER = 0xFF9A6A3B;
-    private static final int BUTTON_TEXT_DISABLED = 0x997B6752;
-    private static final int OVERLAY = 0x7A140D07;
-
-    private static final int CARD_SIDE_PADDING = 14;
-    private static final int CARD_HEIGHT = 88;
-    private static final int CARD_GAP_Y = 16;
-    private static final int ROWS_PER_PAGE = 2;
-    private static final int COLS_PER_SPREAD = 2;
-    private static final int ITEMS_PER_PAGE = ROWS_PER_PAGE * COLS_PER_SPREAD;
-    private static final int NAV_BUTTON_WIDTH = 54;
-    private static final int NAV_BUTTON_HEIGHT = 18;
-    private static final int BACK_BUTTON_WIDTH = 52;
-    private static final int BACK_BUTTON_HEIGHT = 18;
-
-    private final List<StoryCard> allCards = new ArrayList<>();
-    private final List<StoryCard> visibleCards = new ArrayList<>();
-    private final List<ChapterCard> chapterCards = new ArrayList<>();
-
-    private int bookX;
-    private int bookY;
-    private int bookWidth;
-    private int bookHeight;
-    private int leftPageX;
-    private int rightPageX;
-    private int pageY;
-    private int pageWidth;
-    private int pageHeight;
-    private int cardWidth;
-    private final VirtualCoordinateHelper.VirtualSizeResult virtualSize = new VirtualCoordinateHelper.VirtualSizeResult();
-
-    private Integer selectedChapterId;
-    private int currentPage;
-
-    private StoryCard draggingCard;
-    private double dragOffsetX;
-    private double dragOffsetY;
-    private double dragStartMouseX;
-    private double dragStartMouseY;
-    private boolean dirtyOrder;
+    private final List<StoryBookEntryViewData> order = new ArrayList<>();
+    private final AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 360.0F, Easing.EMPHASIZED);
+    private Integer chapter;
+    private int page;
+    private int version;
+    private FragmentCard dragCard;
 
     public Screen_StoryBookCatalog(List<StoryBookEntryViewData> entries) {
         super(Component.literal("随记本"));
-        for (StoryBookEntryViewData entry : entries) {
-            allCards.add(new StoryCard(entry));
-        }
-        rebuildChapterCards();
+        order.addAll(entries);
+        setBackground(Background.NONE);
+    }
+
+    private record Key(Integer chapter, int page, int version, Responsive.Size size) {
     }
 
     @Override
-    protected void init() {
-        updateVirtualSize();
-        layoutBook();
-        refreshVisibleState();
+    protected UiNode<?> build() {
+        reveal.set(1.0F);
+        UiNode<?> book = Responsive.of(size -> Dynamic.of(() -> new Key(chapter, page, version, size), this::spread));
+        Text title = Text.of("随记本").style(TextStyle.HEADLINE).color(PAPER_TEXT).centered().singleLine();
+        Text subtitle = Text.of(() -> Component.literal(chapter == null ? "先翻看章节，再进入该章节的片段"
+                : chapterLabel(chapter) + " · 点击卡片阅读，拖动卡片交换顺序")).style(TextStyle.LABEL).color(PAPER_MUTED).centered()
+                .singleLine();
+        Text footerLeft = Text.of(() -> Component.literal(chapter == null ? "点击章节进入内容" : "拖动卡片到另一张卡片的位置，可交换顺序"))
+                .style(TextStyle.CAPTION).color(PAPER_MUTED).singleLine();
+        Box column = Ui.column(
+                Ui.column(title, subtitle).gap(2.0F),
+                book.grow(1.0F).basis(0.0F).maxWidth(780.0F).enter(EnterEffect.ZOOM),
+                Ui.row(footerLeft, Ui.spacer(), Text.of("ESC 关闭").style(TextStyle.CAPTION).color(PAPER_MUTED).singleLine())
+                        .maxWidth(780.0F)
+        ).gap(Theme.Space.MD).alignItems(Align.STRETCH).padding(Theme.Space.XL, Theme.Space.LG);
+        return Ui.stack(new Overlay(), Ui.row(column.grow(1.0F).maxWidth(800.0F)).justify(Justify.CENTER)
+                        .alignItems(Align.STRETCH))
+                .alignItems(Align.STRETCH);
     }
 
-    private void updateVirtualSize() {
-        VirtualCoordinateHelper.calculateDownscaledVirtualSize(this, virtualSize);
-    }
+    // ==================== 书页 ====================
 
-    private void layoutBook() {
-        bookWidth = Math.min(760, virtualSize.virtualWidth - 70);
-        bookHeight = Math.min(430, virtualSize.virtualHeight - 60);
-        bookX = (virtualSize.virtualWidth - bookWidth) / 2;
-        bookY = (virtualSize.virtualHeight - bookHeight) / 2;
-        pageY = bookY + 24;
-        pageHeight = bookHeight - 48;
-        pageWidth = (bookWidth - 62) / 2;
-        leftPageX = bookX + 20;
-        rightPageX = bookX + bookWidth - pageWidth - 20;
-        cardWidth = pageWidth - CARD_SIDE_PADDING * 2;
-    }
-
-    private void rebuildChapterCards() {
-        Map<Integer, ChapterStats> statsByChapter = new LinkedHashMap<>();
-        for (StoryCard card : allCards) {
-            ChapterStats stats = statsByChapter.computeIfAbsent(card.entry.getChapterId(), key -> new ChapterStats());
-            stats.total++;
-            if (card.entry.isRead()) {
-                stats.read++;
-            }
-        }
-
-        chapterCards.clear();
-        statsByChapter.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> chapterCards.add(new ChapterCard(entry.getKey(), entry.getValue().total, entry.getValue().read)));
-    }
-
-    private void refreshVisibleState() {
-        if (selectedChapterId == null) {
-            layoutChapterCards();
-        } else {
-            layoutStoryCardsForSelectedChapter();
-        }
-    }
-
-    private void layoutChapterCards() {
-        visibleCards.clear();
-        int start = currentPage * ITEMS_PER_PAGE;
-        int end = Math.min(start + ITEMS_PER_PAGE, chapterCards.size());
-        for (int i = 0; i < chapterCards.size(); i++) {
-            ChapterCard chapterCard = chapterCards.get(i);
-            chapterCard.visible = i >= start && i < end;
-            if (!chapterCard.visible) {
-                continue;
-            }
-            int pageIndex = i - start;
-            int column = pageIndex / ROWS_PER_PAGE;
-            int row = pageIndex % ROWS_PER_PAGE;
-            chapterCard.x = getColumnX(column);
-            chapterCard.y = getRowY(row);
-        }
-    }
-
-    private void layoutStoryCardsForSelectedChapter() {
-        visibleCards.clear();
-        List<StoryCard> chapterEntries = getCardsForSelectedChapter();
-        int start = currentPage * ITEMS_PER_PAGE;
-        int end = Math.min(start + ITEMS_PER_PAGE, chapterEntries.size());
-        for (int i = start; i < end; i++) {
-            StoryCard card = chapterEntries.get(i);
-            int pageIndex = i - start;
-            int column = pageIndex / ROWS_PER_PAGE;
-            int row = pageIndex % ROWS_PER_PAGE;
-            int x = getColumnX(column);
-            int y = getRowY(row);
-            card.targetX = x;
-            card.targetY = y;
-            if (card != draggingCard) {
-                card.x = x;
-                card.y = y;
-            }
-            visibleCards.add(card);
-        }
-    }
-
-    private int getColumnX(int column) {
-        return (column == 0 ? leftPageX : rightPageX) + CARD_SIDE_PADDING;
-    }
-
-    private int getRowY(int row) {
-        return pageY + 18 + row * (CARD_HEIGHT + CARD_GAP_Y);
-    }
-
-    private List<StoryCard> getCardsForSelectedChapter() {
-        List<StoryCard> chapterCards = new ArrayList<>();
-        for (StoryCard card : allCards) {
-            if (selectedChapterId != null && card.entry.getChapterId() == selectedChapterId) {
-                chapterCards.add(card);
-            }
-        }
-        return chapterCards;
-    }
-
-    private int getCurrentPageCount() {
-        int itemCount = selectedChapterId == null ? chapterCards.size() : getCardsForSelectedChapter().size();
-        return Math.max(1, (int) Math.ceil(itemCount / (double) ITEMS_PER_PAGE));
-    }
-
-    private void clampCurrentPage() {
-        currentPage = Math.max(0, Math.min(currentPage, getCurrentPageCount() - 1));
-    }
-
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, OVERLAY);
-        updateVirtualSize();
-        layoutBook();
-        clampCurrentPage();
-        refreshVisibleState();
-
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(virtualSize.uiScale, virtualSize.uiScale, 1.0f);
-        int virtualMouseX = (int) (mouseX / virtualSize.uiScale);
-        int virtualMouseY = (int) (mouseY / virtualSize.uiScale);
-
-        renderBook(guiGraphics);
-        renderHeader(guiGraphics);
-
-        if (selectedChapterId == null) {
-            renderChapterView(guiGraphics, virtualMouseX, virtualMouseY);
-        } else {
-            renderChapterContentView(guiGraphics, virtualMouseX, virtualMouseY);
-        }
-
-        renderNavigation(guiGraphics, virtualMouseX, virtualMouseY);
-        renderFooter(guiGraphics);
-        super.render(guiGraphics, virtualMouseX, virtualMouseY, partialTick);
-        guiGraphics.pose().popPose();
-    }
-
-    private void renderBook(GuiGraphics guiGraphics) {
-        guiGraphics.fill(RenderType.gui(), bookX, bookY, bookX + bookWidth, bookY + bookHeight, BOOK_DARK);
-        guiGraphics.fill(RenderType.gui(), bookX + 6, bookY + 6, bookX + bookWidth - 6, bookY + bookHeight - 6, BOOK_COLOR);
-
-        drawPage(guiGraphics, leftPageX, pageY, pageWidth, pageHeight);
-        drawPage(guiGraphics, rightPageX, pageY, pageWidth, pageHeight);
-
-        guiGraphics.fill(RenderType.gui(), bookX + bookWidth / 2 - 12, bookY + 16, bookX + bookWidth / 2 + 12, bookY + bookHeight - 16, BOOK_DARK);
-        guiGraphics.fill(RenderType.gui(), bookX + bookWidth / 2 - 4, bookY + 28, bookX + bookWidth / 2 + 4, bookY + bookHeight - 28, 0x40FFFFFF);
-    }
-
-    private void drawPage(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        guiGraphics.fill(RenderType.gui(), x + 4, y + 6, x + width + 4, y + height + 6, PAGE_SHADOW);
-        guiGraphics.fill(RenderType.gui(), x, y, x + width, y + height, PAGE_COLOR);
-        guiGraphics.fill(RenderType.gui(), x, y, x + width, y + 1, PAGE_BORDER);
-        guiGraphics.fill(RenderType.gui(), x, y + height - 1, x + width, y + height, PAGE_BORDER);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + height, PAGE_BORDER);
-        guiGraphics.fill(RenderType.gui(), x + width - 1, y, x + width, y + height, PAGE_BORDER);
-    }
-
-    private void renderHeader(GuiGraphics guiGraphics) {
-        Component title = Component.literal("随记本");
-        Component subtitle = selectedChapterId == null
-                ? Component.literal("先翻看章节，再进入该章节的片段")
-                : Component.literal(getChapterLabel(selectedChapterId) + " · 点击卡片阅读，拖动卡片交换顺序");
-        guiGraphics.drawCenteredString(MC.font, title, virtualSize.virtualWidth / 2, bookY - 18, 0xFFF4E7CF);
-        guiGraphics.drawCenteredString(MC.font, subtitle, virtualSize.virtualWidth / 2, bookY - 4, 0xFFD6C1A0);
-    }
-
-    private void renderChapterView(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        for (ChapterCard chapterCard : chapterCards) {
-            if (!chapterCard.visible) {
-                continue;
-            }
-            boolean hovered = chapterCard.isMouseOver(mouseX, mouseY, cardWidth);
-            renderChapterCard(guiGraphics, chapterCard, hovered);
-        }
-    }
-
-    private void renderChapterContentView(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        StoryCard hoveredCard = null;
-        for (StoryCard card : visibleCards) {
-            if (card != draggingCard && card.isMouseOver(mouseX, mouseY, cardWidth)) {
-                hoveredCard = card;
-            }
-            if (card != draggingCard) {
-                renderStoryCard(guiGraphics, card, card == hoveredCard);
-            }
-        }
-
-        if (draggingCard != null) {
-            renderStoryCard(guiGraphics, draggingCard, true);
-        }
-    }
-
-    private void renderChapterCard(GuiGraphics guiGraphics, ChapterCard chapterCard, boolean hovered) {
-        int x = chapterCard.x;
-        int y = chapterCard.y;
-        int bgColor = hovered ? CHAPTER_BG_HOVER : CHAPTER_BG;
-
-        guiGraphics.fill(RenderType.gui(), x + 3, y + 5, x + cardWidth + 3, y + CARD_HEIGHT + 5, 0x28160D07);
-        guiGraphics.fill(RenderType.gui(), x, y, x + cardWidth, y + CARD_HEIGHT, bgColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 8, y + CARD_HEIGHT, CHAPTER_ACCENT);
-        guiGraphics.fill(RenderType.gui(), x, y, x + cardWidth, y + 1, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x, y + CARD_HEIGHT - 1, x + cardWidth, y + CARD_HEIGHT, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + CARD_HEIGHT, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x + cardWidth - 1, y, x + cardWidth, y + CARD_HEIGHT, 0x60825D34);
-
-        guiGraphics.drawString(MC.font, getChapterLabel(chapterCard.chapterId), x + 16, y + 14, CARD_TITLE, false);
-        guiGraphics.drawString(MC.font, "已收录片段: " + chapterCard.total, x + 16, y + 33, CARD_TEXT, false);
-        guiGraphics.drawString(MC.font, "已阅读: " + chapterCard.read + " / " + chapterCard.total, x + 16, y + 46, CARD_TEXT, false);
-        guiGraphics.drawString(MC.font, "点击查看本章节内容", x + 16, y + 67, 0xFF86562C, false);
-    }
-
-    private void renderStoryCard(GuiGraphics guiGraphics, StoryCard card, boolean hovered) {
-        int x = card.x;
-        int y = card.y;
-        int bgColor = hovered ? CARD_BG_HOVER : ((card.entry.getFragmentId() & 1) == 0 ? CARD_BG_A : CARD_BG_B);
-
-        guiGraphics.fill(RenderType.gui(), x + 3, y + 5, x + cardWidth + 3, y + CARD_HEIGHT + 5, 0x28160D07);
-        guiGraphics.fill(RenderType.gui(), x, y, x + cardWidth, y + CARD_HEIGHT, bgColor);
-        guiGraphics.fill(RenderType.gui(), x, y, x + cardWidth, y + 1, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x, y + CARD_HEIGHT - 1, x + cardWidth, y + CARD_HEIGHT, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x, y, x + 1, y + CARD_HEIGHT, 0x60825D34);
-        guiGraphics.fill(RenderType.gui(), x + cardWidth - 1, y, x + cardWidth, y + CARD_HEIGHT, 0x60825D34);
-
-        guiGraphics.fill(RenderType.gui(), x + cardWidth / 2 - 5, y - 4, x + cardWidth / 2 + 5, y + 6, CARD_PIN);
-        guiGraphics.fill(RenderType.gui(), x + cardWidth / 2 - 2, y - 1, x + cardWidth / 2 + 2, y + 3, 0x7AFFFFFF);
-
-        guiGraphics.drawString(MC.font, card.entry.getTitle(), x + 10, y + 12, CARD_TITLE, false);
-        guiGraphics.drawString(MC.font, "记录者: " + card.entry.getAuthorName(), x + 10, y + 29, CARD_TEXT, false);
-        guiGraphics.drawString(MC.font, "时间: " + card.entry.getTime(), x + 10, y + 42, CARD_TEXT, false);
-        guiGraphics.drawString(MC.font, "阶段 " + card.entry.getStageId() + " · 片段 " + card.entry.getFragmentId(), x + 10, y + 55, CARD_TEXT, false);
-        guiGraphics.drawString(MC.font, card.entry.isRead() ? "已阅读" : "未阅读", x + 10, y + 68, card.entry.isRead() ? 0xFF6C5A43 : 0xFFA5462C, false);
-    }
-
-    private void renderNavigation(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        int footerY = bookY + bookHeight - 26;
-        int leftButtonX = leftPageX + CARD_SIDE_PADDING;
-        int rightButtonX = rightPageX + pageWidth - CARD_SIDE_PADDING - NAV_BUTTON_WIDTH;
-
-        boolean prevHovered = isInside(mouseX, mouseY, leftButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT);
-        boolean nextHovered = isInside(mouseX, mouseY, rightButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT);
-        boolean canPrev = currentPage > 0;
-        boolean canNext = currentPage < getCurrentPageCount() - 1;
-
-        renderTextButton(guiGraphics, leftButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT, "< 上页", prevHovered && canPrev, canPrev);
-        renderTextButton(guiGraphics, rightButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT, "下页 >", nextHovered && canNext, canNext);
-
-        String pageText = (currentPage + 1) + " / " + getCurrentPageCount();
-        guiGraphics.drawCenteredString(MC.font, pageText, virtualSize.virtualWidth / 2, footerY + 5, 0xFF7A5634);
-
-        if (selectedChapterId != null) {
-            int backX = leftPageX + CARD_SIDE_PADDING;
-            int backY = bookY + 6;
-            boolean hovered = isInside(mouseX, mouseY, backX, backY, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT);
-            renderTextButton(guiGraphics, backX, backY, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "返回", hovered, true);
-        }
-    }
-
-    private void renderTextButton(GuiGraphics guiGraphics, int x, int y, int width, int height, String text, boolean hovered, boolean enabled) {
-        int textColor = !enabled ? BUTTON_TEXT_DISABLED : hovered ? BUTTON_TEXT_HOVER : BUTTON_TEXT;
-        int textY = y + (height - MC.font.lineHeight) / 2;
-        guiGraphics.drawCenteredString(MC.font, text, x + width / 2, textY, textColor);
-
-        if (enabled && hovered) {
-            int lineWidth = MC.font.width(text);
-            int lineX = x + (width - lineWidth) / 2;
-            int lineY = textY + MC.font.lineHeight + 1;
-            guiGraphics.fill(RenderType.gui(), lineX, lineY, lineX + lineWidth, lineY + 1, 0x887A5634);
-        }
-    }
-
-    private void renderFooter(GuiGraphics guiGraphics) {
-        Component leftHint = selectedChapterId == null
-                ? Component.literal("点击章节进入内容")
-                : Component.literal("拖动卡片到另一张卡片的位置，可交换顺序");
-        Component rightHint = Component.literal("ESC 关闭");
-        int footerY = bookY + bookHeight + 10;
-
-        guiGraphics.drawString(MC.font, leftHint, bookX, footerY, 0xFFD6C1A0, false);
-        guiGraphics.drawString(MC.font, rightHint, bookX + bookWidth - MC.font.width(rightHint), footerY, 0xFFD6C1A0, false);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        updateVirtualSize();
-        layoutBook();
-        mouseX /= virtualSize.uiScale;
-        mouseY /= virtualSize.uiScale;
-
-        if (button != 0) {
-            return super.mouseClicked(mouseX, mouseY, button);
-        }
-
-        if (selectedChapterId != null && isInside(mouseX, mouseY, leftPageX + CARD_SIDE_PADDING, bookY + 6, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT)) {
-            selectedChapterId = null;
-            currentPage = 0;
-            draggingCard = null;
-            refreshVisibleState();
-            return true;
-        }
-
-        if (handlePageButtonClick(mouseX, mouseY)) {
-            return true;
-        }
-
-        if (selectedChapterId == null) {
-            for (ChapterCard chapterCard : chapterCards) {
-                if (chapterCard.visible && chapterCard.isMouseOver(mouseX, mouseY, cardWidth)) {
-                    selectedChapterId = chapterCard.chapterId;
-                    currentPage = 0;
-                    refreshVisibleState();
-                    return true;
+    private UiNode<?> spread(Key key) {
+        boolean single = key.size() == Responsive.Size.COMPACT;
+        int perPage = 2;
+        int perSpread = single ? perPage : perPage * 2;
+        List<UiNode<?>> items = new ArrayList<>();
+        int total;
+        if (chapter == null) {
+            Map<Integer, int[]> chapters = chapterStats();
+            total = chapters.size();
+            int start = page * perSpread;
+            int index = 0;
+            for (Map.Entry<Integer, int[]> entry : chapters.entrySet()) {
+                if (index >= start && index < start + perSpread) {
+                    items.add(chapterCard(entry.getKey(), entry.getValue()[0], entry.getValue()[1]));
                 }
+                index++;
             }
-            return super.mouseClicked(mouseX, mouseY, button);
-        }
-
-        for (int i = visibleCards.size() - 1; i >= 0; i--) {
-            StoryCard card = visibleCards.get(i);
-            if (card.isMouseOver(mouseX, mouseY, cardWidth)) {
-                draggingCard = card;
-                dragOffsetX = mouseX - card.x;
-                dragOffsetY = mouseY - card.y;
-                dragStartMouseX = mouseX;
-                dragStartMouseY = mouseY;
-                return true;
+        } else {
+            List<StoryBookEntryViewData> cards = chapterEntries();
+            total = cards.size();
+            for (int i = page * perSpread; i < Math.min(total, page * perSpread + perSpread); i++) {
+                items.add(new FragmentCard(cards.get(i)));
             }
         }
-
-        return super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    private boolean handlePageButtonClick(double mouseX, double mouseY) {
-        int footerY = bookY + bookHeight - 26;
-        int leftButtonX = leftPageX + CARD_SIDE_PADDING;
-        int rightButtonX = rightPageX + pageWidth - CARD_SIDE_PADDING - NAV_BUTTON_WIDTH;
-
-        if (isInside(mouseX, mouseY, leftButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT) && currentPage > 0) {
-            currentPage--;
-            draggingCard = null;
-            refreshVisibleState();
-            return true;
+        int pages = Math.max(1, (int) Math.ceil(total / (double) perSpread));
+        if (page >= pages) {
+            page = pages - 1;
         }
 
-        if (isInside(mouseX, mouseY, rightButtonX, footerY, NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT) && currentPage < getCurrentPageCount() - 1) {
-            currentPage++;
-            draggingCard = null;
-            refreshVisibleState();
-            return true;
+        Box left = pageColumn(items, 0, perPage);
+        Box body;
+        if (single) {
+            body = Ui.row(left.grow(1.0F).basis(0.0F)).alignItems(Align.STRETCH);
+        } else {
+            Box right = pageColumn(items, perPage, perPage);
+            body = Ui.row(left.grow(1.0F).basis(0.0F), new Spine().width(20.0F), right.grow(1.0F).basis(0.0F))
+                    .alignItems(Align.STRETCH);
         }
 
-        return false;
-    }
+        Box nav = Ui.row(
+                new PaperButton("‹ 上页", page > 0, () -> {
+                    page--;
+                }),
+                Ui.spacer(),
+                Text.of((page + 1) + " / " + pages).style(TextStyle.LABEL).color(PAPER_MUTED).singleLine(),
+                Ui.spacer(),
+                new PaperButton("下页 ›", page < pages - 1, () -> {
+                    page++;
+                })
+        ).alignItems(Align.CENTER).padding(Theme.Space.LG, 0.0F);
 
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        updateVirtualSize();
-        layoutBook();
-        mouseX /= virtualSize.uiScale;
-        mouseY /= virtualSize.uiScale;
-        dragX /= virtualSize.uiScale;
-        dragY /= virtualSize.uiScale;
-
-        if (button == 0 && draggingCard != null) {
-            draggingCard.x = (int) Math.round(mouseX - dragOffsetX);
-            draggingCard.y = (int) Math.round(mouseY - dragOffsetY);
-            return true;
+        Box book = new BookFrame().column().alignItems(Align.STRETCH).padding(14.0F, 12.0F, 14.0F, 8.0F).gap(Theme.Space.SM);
+        if (chapter != null) {
+            book.add(Ui.row(new PaperButton("‹ 返回章节", true, () -> {
+                chapter = null;
+                page = 0;
+            })).padding(Theme.Space.LG, 0.0F));
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        book.add(body.grow(1.0F).basis(0.0F), nav);
+        return book;
     }
 
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        updateVirtualSize();
-        layoutBook();
-        mouseX /= virtualSize.uiScale;
-        mouseY /= virtualSize.uiScale;
-
-        if (button == 0 && draggingCard != null) {
-            StoryCard releasedCard = draggingCard;
-            draggingCard = null;
-
-            double moved = Math.hypot(mouseX - dragStartMouseX, mouseY - dragStartMouseY);
-            if (moved < 6.0D) {
-                this.minecraft.setScreen(new Screen_StoryFragment(
-                        releasedCard.entry.getFragmentId(),
-                        releasedCard.entry.getStageId(),
-                        releasedCard.entry.getChapterId(),
-                        releasedCard.entry.getTitle(),
-                        releasedCard.entry.getContent(),
-                        releasedCard.entry.getTime(),
-                        releasedCard.entry.getAuthorName()
-                ));
-                refreshVisibleState();
-                return true;
-            }
-
-            StoryCard swapTarget = findSwapTarget(releasedCard, mouseX, mouseY);
-            if (swapTarget != null && swapTarget != releasedCard) {
-                swapCardsInGlobalOrder(releasedCard, swapTarget);
-                dirtyOrder = true;
-                sendOrderUpdate();
-            } else {
-                releasedCard.x = releasedCard.targetX;
-                releasedCard.y = releasedCard.targetY;
-            }
-
-            refreshVisibleState();
-            return true;
+    private static Box pageColumn(List<UiNode<?>> items, int from, int count) {
+        Box column = new PageSheet().column().alignItems(Align.STRETCH).gap(Theme.Space.LG)
+                .padding(Theme.Space.LG, Theme.Space.XL);
+        if (from >= items.size()) {
+            // 空白页：只留一行淡淡的页脚字
+            column.justify(Justify.CENTER).add(Text.of("— 此页尚无记录 —").style(TextStyle.LABEL).color(0x805A3D1E).centered());
+            return column;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        for (int i = from; i < from + count; i++) {
+            // 不足一页时用空位占住，卡片保持统一高度
+            column.add(i < items.size() ? items.get(i).enter(EnterEffect.FADE_UP.delayed((i - from) * 50.0F))
+                    : Ui.stack().grow(1.0F).basis(0.0F));
+        }
+        return column;
     }
 
-    private StoryCard findSwapTarget(StoryCard draggedCard, double mouseX, double mouseY) {
-        int centerX = draggedCard.x + cardWidth / 2;
-        int centerY = draggedCard.y + CARD_HEIGHT / 2;
-
-        for (StoryCard target : visibleCards) {
-            if (target == draggedCard) {
-                continue;
-            }
-
-            boolean mouseInside = target.isMouseOver(mouseX, mouseY, cardWidth);
-            boolean centerInside = centerX >= target.targetX && centerX <= target.targetX + cardWidth
-                    && centerY >= target.targetY && centerY <= target.targetY + CARD_HEIGHT;
-            if (mouseInside || centerInside) {
-                return target;
+    private Map<Integer, int[]> chapterStats() {
+        Map<Integer, int[]> stats = new TreeMap<>();
+        for (StoryBookEntryViewData entry : order) {
+            int[] value = stats.computeIfAbsent(entry.getChapterId(), key -> new int[2]);
+            value[0]++;
+            if (entry.isRead()) {
+                value[1]++;
             }
         }
-
-        return null;
+        return new LinkedHashMap<>(stats);
     }
 
-    private void swapCardsInGlobalOrder(StoryCard first, StoryCard second) {
-        int index1 = allCards.indexOf(first);
-        int index2 = allCards.indexOf(second);
-        if (index1 < 0 || index2 < 0) {
-            return;
-        }
-        allCards.set(index1, second);
-        allCards.set(index2, first);
-    }
-
-    private void sendOrderUpdate() {
-        if (!dirtyOrder) {
-            return;
-        }
-        List<Integer> orderedIds = new ArrayList<>();
-        for (StoryCard card : allCards) {
-            orderedIds.add(card.entry.getFragmentId());
-        }
-        DreamingFishCore_NetworkManager.sendToServer(new Packet_UpdateStoryBookOrder(orderedIds));
-        dirtyOrder = false;
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            if (selectedChapterId != null) {
-                selectedChapterId = null;
-                currentPage = 0;
-                draggingCard = null;
-                refreshVisibleState();
-                return true;
+    private List<StoryBookEntryViewData> chapterEntries() {
+        List<StoryBookEntryViewData> result = new ArrayList<>();
+        for (StoryBookEntryViewData entry : order) {
+            if (chapter != null && entry.getChapterId() == chapter) {
+                result.add(entry);
             }
-            onClose();
-            return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return result;
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
+    /** 直接打开某一章节的片段列表。 */
+    public void openChapter(int chapterId) {
+        chapter = chapterId;
+        page = 0;
     }
 
-    private String getChapterLabel(int chapterId) {
+    static String chapterLabel(int chapterId) {
         return chapterId <= 0 ? "序章" : "第 " + chapterId + " 章";
     }
 
-    private boolean isInside(double mouseX, double mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
+    private UiNode<?> chapterCard(int chapterId, int total, int read) {
+        PaperCard card = new PaperCard(true);
+        float ratio = total <= 0 ? 0.0F : read / (float) total;
+        card.add(Text.of(chapterLabel(chapterId)).style(TextStyle.TITLE).color(INK_TITLE).singleLine(),
+                Text.of("已收录片段 " + total + " · 已阅读 " + read + " / " + total).style(TextStyle.LABEL).color(INK_TEXT).singleLine(),
+                Ui.spacer(),
+                CustomPaint.of((canvas, w, h) -> {
+                    canvas.shape(0.0F, 0.0F, w, h).radius(h * 0.5F).fill(0x305A3D1E).draw();
+                    if (ratio > 0.0F) {
+                        canvas.shape(0.0F, 0.0F, Math.max(h, w * ratio), h).radius(h * 0.5F).fill(INK_ACCENT).draw();
+                    }
+                }).height(3.0F).margin(0.0F, 0.0F, 0.0F, 4.0F),
+                Text.of("点击查看本章节内容 ›").style(TextStyle.LABEL).color(0xFF86562C).singleLine());
+        card.onClick(() -> openChapter(chapterId));
+        return card.grow(1.0F).basis(0.0F);
     }
 
-    private static class ChapterStats {
-        private int total;
-        private int read;
+    private void swap(StoryBookEntryViewData first, StoryBookEntryViewData second) {
+        int a = order.indexOf(first);
+        int b = order.indexOf(second);
+        if (a < 0 || b < 0 || a == b) {
+            return;
+        }
+        order.set(a, second);
+        order.set(b, first);
+        List<Integer> ids = new ArrayList<>();
+        for (StoryBookEntryViewData entry : order) {
+            ids.add(entry.getFragmentId());
+        }
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_UpdateStoryBookOrder(ids));
+        version++;
     }
 
-    private static class ChapterCard {
-        private final int chapterId;
-        private final int total;
-        private final int read;
-        private int x;
-        private int y;
-        private boolean visible;
+    private void open(StoryBookEntryViewData entry) {
+        Minecraft.getInstance().setScreen(new Screen_StoryFragment(entry.getFragmentId(), entry.getStageId(),
+                entry.getChapterId(), entry.getTitle(), entry.getContent(), entry.getTime(), entry.getAuthorName()));
+    }
 
-        private ChapterCard(int chapterId, int total, int read) {
-            this.chapterId = chapterId;
-            this.total = total;
-            this.read = read;
+    @Override
+    protected boolean onEscape() {
+        if (chapter != null) {
+            chapter = null;
+            page = 0;
+            return true;
+        }
+        return false;
+    }
+
+    // ==================== 部件 ====================
+
+    private final class Overlay extends UiNode<Overlay> {
+        Overlay() {
+            pointerEvents(false);
         }
 
-        private boolean isMouseOver(double mouseX, double mouseY, int width) {
-            return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + CARD_HEIGHT;
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            canvas.fill(0.0F, 0.0F, width(), height(), UiColor.multiplyAlpha(0xB0140D07, reveal.get()));
+            canvas.shape(0.0F, 0.0F, width(), height())
+                    .radial(0x00000000, UiColor.multiplyAlpha(0x88000000, reveal.get()), width() * 0.5F, height() * 0.5F,
+                            (float) Math.hypot(width(), height()) * 0.55F).draw();
         }
     }
 
-    private static class StoryCard {
+    /** 书的封皮：深棕皮革，带内阴影与压边；拖动中的卡片画在最上层。 */
+    private final class BookFrame extends Box {
+        @Override
+        protected void paintChildren(UiCanvas canvas) {
+            super.paintChildren(canvas);
+            FragmentCard card = dragCard;
+            if (card == null) {
+                return;
+            }
+            float ox = 0.0F;
+            float oy = 0.0F;
+            for (UiNode<?> node = card.parent(); node != null && node != this; node = node.parent()) {
+                ox += node.x();
+                oy += node.y();
+            }
+            canvas.newLayer();
+            canvas.push();
+            canvas.translate(ox, oy);
+            card.opacity(1.0F);
+            card.paint(canvas);
+            card.opacity(0.0F);
+            canvas.pop();
+            canvas.newLayer();
+        }
+
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            canvas.shape(0.0F, 0.0F, w, h).radius(Theme.Radius.LG).verticalGradient(COVER, COVER_DARK)
+                    .border(1.0F, 0xFF2E1E0F).shadow(new Theme.Shadow(0.0F, 10.0F, 28.0F, 0.0F, 0xAA000000))
+                    .innerShadow(new Theme.Shadow(0.0F, 0.0F, 10.0F, 0.0F, 0x66000000)).draw();
+            canvas.shape(5.0F, 5.0F, w - 10.0F, h - 10.0F).radius(Theme.Radius.MD).fill(0)
+                    .border(1.0F, 0x33FFD9A0).draw();
+        }
+    }
+
+    /** 纸页：暖色纸张渐变与细边。 */
+    private static final class PageSheet extends Box {
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            canvas.shape(0.0F, 0.0F, w, h).radius(3.0F).verticalGradient(PAGE, PAGE_EDGE)
+                    .border(1.0F, 0x80755634).shadow(new Theme.Shadow(2.0F, 4.0F, 6.0F, 0.0F, 0x40000000)).draw();
+            // 手账横线与页边红线
+            for (float y = 26.0F; y < h - 8.0F; y += 14.0F) {
+                canvas.fill(10.0F, y, w - 20.0F, 0.5F, 0x1C5A3D1E);
+            }
+            canvas.fill(14.0F, 6.0F, 0.75F, h - 12.0F, 0x30C44B36);
+        }
+    }
+
+    /** 书脊：两页之间的阴影折痕。 */
+    private static final class Spine extends UiNode<Spine> {
+        Spine() {
+            pointerEvents(false);
+        }
+
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            canvas.shape(w * 0.5F - 8.0F, 6.0F, 16.0F, h - 12.0F).radius(4.0F)
+                    .horizontalGradient(0x66000000, 0x00000000).draw();
+            canvas.shape(w * 0.5F - 2.0F, 14.0F, 4.0F, h - 28.0F).radius(2.0F).fill(0x30FFFFFF).draw();
+        }
+    }
+
+    /** 纸质按钮：墨水色文字，悬停时下划线。 */
+    private final class PaperButton extends InteractiveNode<PaperButton> {
+        private final Text label;
+        private final boolean enabled;
+
+        PaperButton(String text, boolean enabled, Runnable action) {
+            this.enabled = enabled;
+            label = Text.of(text).style(TextStyle.LABEL_STRONG).singleLine();
+            add(label);
+            padding(4.0F, 3.0F);
+            if (enabled) {
+                cursor(Cursor.POINTER);
+                onClick(action);
+            }
+        }
+
+        @Override
+        protected void update() {
+            label.color(!enabled ? 0x66D6C1A0 : UiColor.lerp(PAPER_MUTED, 0xFFFFE2A8, hover()));
+        }
+
+        @Override
+        protected void paintOverlay(UiCanvas canvas) {
+            float h = hover();
+            if (enabled && h > 0.01F) {
+                float w = (width() - 8.0F) * h;
+                canvas.fill(4.0F + (width() - 8.0F - w) * 0.5F, height() - 2.0F, w, 1.0F, 0x88FFE2A8);
+            }
+        }
+    }
+
+    /** 纸质卡片（章节）。 */
+    static class PaperCard extends InteractiveNode<PaperCard> {
+        private final boolean chapterStyle;
+
+        PaperCard(boolean chapterStyle) {
+            this.chapterStyle = chapterStyle;
+            column().gap(Theme.Space.XS).padding(Theme.Space.LG, Theme.Space.MD);
+            minHeight(64.0F).maxHeight(118.0F);
+        }
+
+        @Override
+        protected void onStateChanged() {
+            super.onStateChanged();
+            if (onClickHandler() != null) {
+                animateTranslate(0.0F, isHovered() ? -1.5F : 0.0F);
+            }
+        }
+
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float h = hover();
+            int fill = UiColor.lerp(chapterStyle ? 0xFFE8D5AF : 0xFFEEDAAE, 0xFFF4E5C1, h);
+            canvas.shape(0.0F, 0.0F, width(), height()).radius(3.0F).fill(fill).border(1.0F, 0x60825D34)
+                    .shadow(new Theme.Shadow(2.0F, 3.0F + h * 3.0F, 5.0F + h * 6.0F, 0.0F, 0x40160D07)).draw();
+            if (chapterStyle) {
+                canvas.shape(0.0F, 0.0F, 6.0F, height()).radius(3.0F, 0.0F, 0.0F, 3.0F).fill(INK_ACCENT).draw();
+            }
+        }
+    }
+
+    /** 残页卡片：图钉 + 标题 + 记录信息；可拖动交换顺序，轻点阅读。 */
+    private final class FragmentCard extends PaperCard {
         private final StoryBookEntryViewData entry;
-        private int x;
-        private int y;
-        private int targetX;
-        private int targetY;
+        private double pressX;
+        private double pressY;
+        private boolean dragging;
 
-        private StoryCard(StoryBookEntryViewData entry) {
+        FragmentCard(StoryBookEntryViewData entry) {
+            super(false);
             this.entry = entry;
+            cursor(Cursor.GRAB);
+            add(Text.of(entry.getTitle()).style(TextStyle.SUBTITLE).color(INK_TITLE).singleLine(),
+                    Text.of("记录者 · " + entry.getAuthorName()).style(TextStyle.CAPTION).color(INK_TEXT).singleLine(),
+                    Text.of("时间 · " + entry.getTime()).style(TextStyle.CAPTION).color(INK_TEXT).singleLine(),
+                    Ui.row(Text.of("阶段 " + entry.getStageId() + " · 片段 " + entry.getFragmentId()).style(TextStyle.CAPTION)
+                                    .color(INK_TEXT).singleLine(), Ui.spacer(),
+                            Text.of(entry.isRead() ? "已阅读" : "未阅读").style(TextStyle.CAPTION_STRONG)
+                                    .color(entry.isRead() ? 0xFF6C5A43 : 0xFFA5462C).singleLine()));
+            grow(1.0F).basis(0.0F);
         }
 
-        private boolean isMouseOver(double mouseX, double mouseY, int width) {
-            return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + CARD_HEIGHT;
+        @Override
+        protected boolean onMouseDown(double guiX, double guiY, int button) {
+            if (button != 0) {
+                return false;
+            }
+            pressX = guiX;
+            pressY = guiY;
+            dragging = false;
+            return true;
+        }
+
+        @Override
+        protected boolean onMouseDrag(double guiX, double guiY, int button, double dragX, double dragY) {
+            float scale = width() > 0.0F ? (guiRight() - guiLeft()) / width() : 1.0F;
+            double dx = (guiX - pressX) / scale;
+            double dy = (guiY - pressY) / scale;
+            if (!dragging && Math.hypot(dx, dy) >= 6.0) {
+                dragging = true;
+                dragCard = this;
+                opacity(0.0F);
+            }
+            if (dragging) {
+                translate((float) dx, (float) dy);
+                scale(1.03F);
+            }
+            return true;
+        }
+
+        @Override
+        protected void onMouseUp(double guiX, double guiY, int button, boolean inside) {
+            if (!dragging) {
+                UiSounds.click();
+                open(entry);
+                return;
+            }
+            dragging = false;
+            dragCard = null;
+            opacity(1.0F);
+            FragmentCard target = findTarget(guiX, guiY);
+            if (target != null) {
+                UiSounds.soft();
+                translate(0.0F, 0.0F).scale(1.0F);
+                swap(entry, target.entry);
+            } else {
+                animateTranslate(0.0F, 0.0F);
+                animateScale(1.0F);
+            }
+        }
+
+        private FragmentCard findTarget(double guiX, double guiY) {
+            UiNode<?> rootContent = ui().content();
+            return rootContent == null ? null : search(rootContent, guiX, guiY);
+        }
+
+        private FragmentCard search(UiNode<?> node, double guiX, double guiY) {
+            if (node instanceof FragmentCard card && card != this && card.containsPoint(guiX, guiY)) {
+                return card;
+            }
+            for (UiNode<?> child : node.children()) {
+                FragmentCard found = search(child, guiX, guiY);
+                if (found != null) {
+                    return found;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void paintOverlay(UiCanvas canvas) {
+            float cx = width() * 0.5F;
+            canvas.circle(cx, 1.0F, 4.5F, PIN);
+            canvas.circle(cx - 1.2F, -0.2F, 1.5F, 0x7AFFFFFF);
         }
     }
 }

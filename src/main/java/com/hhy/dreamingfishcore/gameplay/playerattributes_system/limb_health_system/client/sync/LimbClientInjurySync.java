@@ -50,6 +50,17 @@ public class LimbClientInjurySync {
     }
 
     /**
+     * 获取指定部位最近一次受伤的时间戳，没有记录时返回 0
+     */
+    public static long getInjuryTime(Player player, LimbType limbType) {
+        if (player == null) return 0;
+        Map<String, Long> injuries = PLAYER_INJURIES.get(player.getUUID());
+        if (injuries == null) return 0;
+        Long injuryTime = injuries.get(limbType.name());
+        return injuryTime == null ? 0 : injuryTime;
+    }
+
+    /**
      * 获取最新受伤的部位（用于闪烁效果）
      * @return 最新受伤的部位，如果没有则返回null
      */

@@ -1,411 +1,153 @@
 package com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.ui.screen;
 
-import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.AnimatedFloat;
+import com.hhy.dreamingfishcore.client.ui.framework.anim.Easing;
+import com.hhy.dreamingfishcore.client.ui.framework.core.UiClock;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Align;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Box;
+import com.hhy.dreamingfishcore.client.ui.framework.node.EnterEffect;
+import com.hhy.dreamingfishcore.client.ui.framework.node.Justify;
+import com.hhy.dreamingfishcore.client.ui.framework.node.UiNode;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.screen.UiScreen;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextStyle;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Button;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Icon;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Icons;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.ItemIcon;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.ScrollView;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Text;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.TextField;
+import com.hhy.dreamingfishcore.client.ui.framework.widget.Ui;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.network.Packet_RevivalRequest;
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
+import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * 重生锦鲤 GUI - 金色神圣风格
- * 输入被封禁玩家名称进行复活
- *
- * 使用虚拟坐标系统（参考 ServerScreenUI 和 DeathScreenMixin）
- * 虚拟基准尺寸：640×400（对应 2560×1600 四缩放）
+ * 重生锦鲤：输入被封禁玩家的名称，用自己的余量复苏对方。金色神圣风格。
  */
-public class Screen_RevivalCharm extends Screen {
+public class Screen_RevivalCharm extends UiScreen {
+    private static final int GOLD = 0xFFFFCC33;
+    private static final int GOLD_SOFT = 0xFFD4AF37;
+    private static final int PANEL_TOP = 0xF41E1A0A;
+    private static final int PANEL_BOTTOM = 0xF40E0C05;
+    private static final int TEXT = 0xFFF4EBD2;
+    private static final int MUTED = 0xFFB9AE8C;
+    private static final int WARN = 0xFFFF7A6E;
 
-    // ==================== 虚拟基准尺寸 ====================
-    private static final int BASE_WIDTH = 640;
-    private static final int BASE_HEIGHT = 400;
-
-    // ==================== 面板尺寸（虚拟坐标）====================
-    private static final int PANEL_WIDTH = 460;
-    private static final int PANEL_HEIGHT = 210; // 整体面板高度保持不变
-
-    // ==================== 边距（虚拟坐标）====================
-    private static final int PADDING = 12;
-    private static final int MARGIN_LARGE = 24;
-
-    // ==================== 元素尺寸（虚拟坐标）====================
-    // 布局规则：按钮宽度×2 + 间距 = 输入框宽度，且 间距 = 按钮底部到面板底部的距离
-    private static final int INPUT_WIDTH = 320;
-    private static final int INPUT_HEIGHT = 26;
-    private static final int BUTTON_SPACING = 8;
-    private static final int BUTTON_WIDTH = (INPUT_WIDTH - BUTTON_SPACING) / 2;  // 156
-    private static final int BUTTON_HEIGHT = 22;
-
-    private static final int ICON_SIZE = 28;
-
-    // ==================== Y 坐标位置（相对于面板）- 仅修改输入框Y坐标，轻微上挪 ====================
-    private static final int Y_ICON = 16;
-    private static final int Y_TITLE = 18;
-    private static final int Y_SEPARATOR = 48;
-    private static final int Y_HINT_LINE_1 = 58;
-    private static final int Y_HINT_LINE_2 = 72;
-    private static final int Y_WARNING = 118;
-    private static final int Y_INPUT = 134;          // 核心修改：136→134，输入框轻微上挪2个虚拟单位
-    private static final int Y_BUTTON = 168;
-
-    // ==================== 颜色定义 ====================
-    private static final int BG_OUTER = 0xDD0A0A00;
-    private static final int BG_INNER = 0xEE1A1A05;
-    private static final int BORDER_DARK = 0xFF3D3D00;
-    private static final int BORDER_GLOW = 0xFFFFCC00;
-    private static final int ACCENT_GOLD = 0xFFD4AF37;
-
-    // ==================== 虚拟坐标系统变量 ====================
-    private float uiScale;
-    private int virtualWidth;
-    private int virtualHeight;
-    private int panelX;
-    private int panelY;
-    private int centerX;
-    private int centerY;
-
-    private Button confirmButton;
-    private Button cancelButton;
-    private String playerName = "";
-
-    private static final Minecraft mc = Minecraft.getInstance();
+    private final AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 380.0F, Easing.EMPHASIZED);
+    private final Text feedback = Text.of("").style(TextStyle.LABEL).color(WARN).centered().visible(false);
+    private TextField nameField;
 
     public Screen_RevivalCharm() {
         super(Component.literal("重生锦鲤"));
+        setBackground(Background.NONE);
     }
 
     @Override
-    protected void init() {
-        calculateVirtualSize();
-        createButtons();
-    }
+    protected UiNode<?> build() {
+        reveal.set(1.0F);
+        Box header = Ui.row(
+                Ui.stack(ItemIcon.of(new ItemStack(Items.TOTEM_OF_UNDYING)).iconSize(24.0F).noTooltip()).alignItems(Align.CENTER)
+                        .size(38.0F, 38.0F).radius(Theme.Radius.LG).background(UiColor.withAlpha(GOLD, 0.12F))
+                        .border(1.0F, UiColor.withAlpha(GOLD, 0.45F)),
+                Ui.column(Text.of("重生锦鲤").style(TextStyle.HEADLINE).color(GOLD).singleLine(),
+                        Text.of("SACRED REVIVAL · 以你的能量复苏同伴").style(TextStyle.CAPTION).color(MUTED).singleLine())
+                        .gap(2.0F).grow(1.0F)
+        ).gap(Theme.Space.LG).alignItems(Align.CENTER);
 
-    private void calculateVirtualSize() {
-        float scaleX = (float) this.width / BASE_WIDTH;
-        float scaleY = (float) this.height / BASE_HEIGHT;
-        uiScale = Math.min(scaleX, scaleY);
+        nameField = TextField.of("输入被封禁玩家的名称…").icon(Icons.USER).maxLength(16).accentColor(GOLD)
+                .onSubmit(this::confirm);
+        nameField.height(26.0F);
 
-        virtualWidth = (int) (this.width / uiScale);
-        virtualHeight = (int) (this.height / uiScale);
+        Box warning = Ui.row(Icon.of(Icons.WARNING, 11.0F).color(WARN),
+                Text.of("成功复活后，你的模板重建余量会扣除一半；被复活者的感染情况与你相同。")
+                        .style(TextStyle.LABEL).color(0xFFFFB3A8).grow(1.0F).shrink(1.0F))
+                .gap(Theme.Space.SM).alignItems(Align.START).padding(Theme.Space.MD, Theme.Space.SM)
+                .radius(Theme.Radius.MD).background(0x1FFF6A5F).border(1.0F, 0x40FF6A5F);
 
-        centerX = virtualWidth / 2;
-        centerY = virtualHeight / 2;
+        Box actions = Ui.row(
+                Button.of("复活").leadingIcon(Icons.SPARKLE).accentColor(GOLD_SOFT).large().grow(1.0F).basis(0.0F)
+                        .onClick(this::confirm),
+                Button.of("取消").ghost().large().grow(1.0F).basis(0.0F).onClick(this::onClose)
+        ).gap(Theme.Space.MD);
 
-        panelX = centerX - PANEL_WIDTH / 2;
-        panelY = centerY - PANEL_HEIGHT / 2;
-    }
+        Box panel = new SacredPanel().column().alignItems(Align.STRETCH).gap(Theme.Space.LG).padding(Theme.Space.XL);
+        panel.add(header, new GoldDivider().height(3.0F),
+                Text.of("输入被封禁玩家的名称，用你的能量复苏他们。").style(TextStyle.BODY).color(TEXT),
+                nameField, feedback, warning, actions);
+        panel.width(380.0F).maxWidth(440.0F).enter(EnterEffect.POP);
 
-    private void createButtons() {
-        int btnY = v2s(panelY + Y_BUTTON);
-        int btnW = s2s(BUTTON_WIDTH);
-        int btnH = s2s(BUTTON_HEIGHT);
-
-        int panelCenterScreen = v2s(centerX);
-        int spacingScreen = s2s(BUTTON_SPACING);
-
-        int btnConfirmX = panelCenterScreen - btnW - spacingScreen / 2;
-        int btnCancelX = panelCenterScreen + spacingScreen / 2;
-
-        confirmButton = new CustomButton(
-                btnConfirmX, btnY, btnW, btnH,
-                Component.literal("§e§l复活"),
-                true,
-                btn -> confirmRevival()
-        );
-        this.addRenderableWidget(confirmButton);
-
-        cancelButton = new CustomButton(
-                btnCancelX, btnY, btnW, btnH,
-                Component.literal("§7取消"),
-                false,
-                btn -> onClose()
-        );
-        this.addRenderableWidget(cancelButton);
-    }
-
-    private int v2s(int v) {
-        return (int) (v * uiScale);
-    }
-
-    private int s2s(int v) {
-        return (int) (v * uiScale);
+        Box center = Ui.column(panel).alignItems(Align.CENTER).justify(Justify.CENTER).padding(Theme.Space.LG);
+        return Ui.stack(new Glow(), ScrollView.of(center).justify(Justify.CENTER).alignItems(Align.CENTER))
+                .alignItems(Align.STRETCH);
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        calculateVirtualSize();
-        updateButtonPositions();
+    protected void onOpened() {
+        ui().focus(nameField);
+    }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-
-        // 背景
-        guiGraphics.fillGradient(0, 0, this.width, this.height, BG_OUTER, BG_INNER);
-
-        // 应用虚拟坐标缩放
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(uiScale, uiScale, 1.0f);
-
-        renderPanel(guiGraphics);
-        renderContent(guiGraphics);
-
-        guiGraphics.pose().popPose();
-
-        // 渲染按钮
-        if (confirmButton != null) {
-            confirmButton.render(guiGraphics, mouseX, mouseY, partialTick);
+    private void confirm() {
+        String name = nameField.value().trim();
+        if (name.isEmpty()) {
+            feedback.text("请输入玩家名称！").visible(true);
+            ui().focus(nameField);
+            return;
         }
-        if (cancelButton != null) {
-            cancelButton.render(guiGraphics, mouseX, mouseY, partialTick);
+        DreamingFishCore_NetworkManager.sendToServer(new Packet_RevivalRequest(name));
+        if (minecraft != null) {
+            minecraft.setScreen(null);
         }
     }
 
-    private void renderPanel(GuiGraphics guiGraphics) {
-        int outerBorder = 4;
-        int innerBorder = 2;
-
-        UiPanelRenderer.smoothRoundedRect(guiGraphics,
-                panelX - outerBorder, panelY - outerBorder,
-                PANEL_WIDTH + outerBorder * 2, PANEL_HEIGHT + outerBorder * 2,
-                8, BORDER_DARK, 0);
-        UiPanelRenderer.smoothRoundedRect(guiGraphics,
-                panelX - innerBorder, panelY - innerBorder,
-                PANEL_WIDTH + innerBorder * 2, PANEL_HEIGHT + innerBorder * 2,
-                6, BORDER_GLOW, 0);
-        UiPanelRenderer.smoothRoundedRect(guiGraphics,
-                panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, 4, BG_INNER, 0);
-    }
-
-    private void renderContent(GuiGraphics guiGraphics) {
-        PoseStack poseStack = guiGraphics.pose();
-
-        // ========== 不死图腾图标 ==========
-        poseStack.pushPose();
-        poseStack.translate(panelX + MARGIN_LARGE - 2, panelY + Y_ICON, 0);
-        poseStack.scale(ICON_SIZE / 16.0f, ICON_SIZE / 16.0f, 1.0f);
-        guiGraphics.renderItem(new net.minecraft.world.item.ItemStack(Items.TOTEM_OF_UNDYING), 0, 0);
-        poseStack.popPose();
-
-        // ========== 标题：重生锦鲤 ==========
-        poseStack.pushPose();
-        float titleScale = 2.0f;
-        poseStack.scale(titleScale, titleScale, 1.0f);
-        String titleText = "§e§l重生锦鲤";
-        int titleX = (int) ((centerX + 6) / titleScale - mc.font.width(titleText) / 2.0f);
-        int titleY = (int) ((panelY + Y_TITLE) / titleScale);
-        guiGraphics.drawString(mc.font, titleText, titleX, titleY, 0xFFFFFFFF, false);
-        poseStack.popPose();
-
-        // ========== 右上角品牌名 ==========
-        String brandText = "§b§lDreaming§d§lFish";
-        int brandX = panelX + PANEL_WIDTH - PADDING - mc.font.width(brandText);
-        int brandY = panelY + PADDING;
-        guiGraphics.drawString(mc.font, brandText, brandX, brandY, 0xFFFFFFFF, false);
-
-        // ========== 分隔线 ==========
-        int sepY = panelY + Y_SEPARATOR;
-        guiGraphics.fill(panelX + PADDING, sepY, panelX + PANEL_WIDTH - PADDING, sepY + 2, ACCENT_GOLD);
-        guiGraphics.fill(panelX + PADDING, sepY + 4, panelX + PANEL_WIDTH - PADDING, sepY + 5, 0xAA666600);
-
-        // ========== 提示文字（左对齐）==========
-        String hintLine1 = "§7输入被封禁玩家的名称";
-        String hintLine2 = "§7用你的能量复苏他们！";
-
-        poseStack.pushPose();
-        float hintScale = 1.1f;
-        poseStack.scale(hintScale, hintScale, 1.0f);
-        int hintX = (int) ((panelX + PADDING + 4) / hintScale);
-        int hintY1 = (int) ((panelY + Y_HINT_LINE_1) / hintScale);
-        int hintY2 = (int) ((panelY + Y_HINT_LINE_2) / hintScale);
-        guiGraphics.drawString(mc.font, hintLine1, hintX, hintY1, 0xFFFFFFFF, false);
-        guiGraphics.drawString(mc.font, hintLine2, hintX, hintY2, 0xFFFFFFFF, false);
-        poseStack.popPose();
-
-        // ========== 警告文字（红色）==========
-        poseStack.pushPose();
-        float warnScale = 0.95f;
-        poseStack.scale(warnScale, warnScale, 1.0f);
-        String warnText = "§c成功复活该玩家后，您的复活点数会扣除一半，被复活者感染情况与您相同";
-        int warnX = (int) ((centerX) / warnScale - mc.font.width(warnText) / 2.0f);
-        int warnY = (int) ((panelY + Y_WARNING) / warnScale);
-        guiGraphics.drawString(mc.font, warnText, warnX, warnY, 0xFFFFFFFF, false);
-        poseStack.popPose();
-
-        // ========== 输入框 ==========
-        int inputX = centerX - INPUT_WIDTH / 2;
-        int inputY = panelY + Y_INPUT;
-
-        // 输入框外发光效果
-        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX - 3, inputY - 3,
-                INPUT_WIDTH + 6, INPUT_HEIGHT + 6, 6, 0x40FFCC00, 0);
-        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX - 2, inputY - 2,
-                INPUT_WIDTH + 4, INPUT_HEIGHT + 4, 5, BORDER_GLOW, 0);
-        UiPanelRenderer.smoothRoundedRect(guiGraphics, inputX, inputY,
-                INPUT_WIDTH, INPUT_HEIGHT, 3, 0xDD000000, 0);
-
-        // 输入文字
-        String displayText = playerName.isEmpty() ? "§7输入玩家名称..." : "§e" + playerName;
-        if (playerName.isEmpty() && (System.currentTimeMillis() / 500) % 2 == 0) {
-            displayText = "§8输入玩家名称...";
-        }
-        poseStack.pushPose();
-        float inputScale = 1.05f;
-        poseStack.scale(inputScale, inputScale, 1.0f);
-        int inputTextY = (int) ((inputY + INPUT_HEIGHT / 2 - 4) / inputScale);
-        guiGraphics.drawCenteredString(mc.font, displayText, (int) (centerX / inputScale), inputTextY, 0xFFFFFF);
-        poseStack.popPose();
-
-        // 光标
-        if (!playerName.isEmpty() && (System.currentTimeMillis() / 500) % 2 == 0) {
-            int textWidth = mc.font.width(playerName);
-            int cursorX = centerX + textWidth / 2 + 3;
-            guiGraphics.fill(cursorX, inputY + 5, cursorX + 2, inputY + INPUT_HEIGHT - 5, 0xFFFFD700);
-        }
-
-        // ========== 装饰性角落（输入框两侧）==========
-        int cornerSize = 6;
-        int cornerY = inputY + INPUT_HEIGHT / 2 - cornerSize / 2;
-        // 左侧金色装饰
-        guiGraphics.fill(inputX - 8, cornerY, inputX - 6, cornerY + cornerSize, BORDER_GLOW);
-        // 右侧金色装饰
-        guiGraphics.fill(inputX + INPUT_WIDTH + 6, cornerY, inputX + INPUT_WIDTH + 8, cornerY + cornerSize, BORDER_GLOW);
-    }
-
-    private void updateButtonPositions() {
-        int btnY = v2s(panelY + Y_BUTTON);
-        int btnW = s2s(BUTTON_WIDTH);
-        int btnH = s2s(BUTTON_HEIGHT);
-
-        int panelCenterScreen = v2s(centerX);
-        int spacingScreen = s2s(BUTTON_SPACING);
-
-        int btnConfirmX = panelCenterScreen - btnW - spacingScreen / 2;
-        int btnCancelX = panelCenterScreen + spacingScreen / 2;
-
-        if (confirmButton != null) {
-            confirmButton.setX(btnConfirmX);
-            confirmButton.setY(btnY);
-            confirmButton.setWidth(btnW);
-            confirmButton.setHeight(btnH);
-        }
-        if (cancelButton != null) {
-            cancelButton.setX(btnCancelX);
-            cancelButton.setY(btnY);
-            cancelButton.setWidth(btnW);
-            cancelButton.setHeight(btnH);
-        }
-    }
-
-    @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (playerName.length() < 16) {
-            playerName += codePoint;
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) {
-            onClose();
-            return true;
-        }
-        if (keyCode == 257 || keyCode == 335) {
-            confirmRevival();
-            return true;
-        }
-        if (keyCode == 261) {
-            playerName = "";
-            return true;
-        }
-        if (keyCode == 259) {
-            if (!playerName.isEmpty()) {
-                playerName = playerName.substring(0, playerName.length() - 1);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    private void confirmRevival() {
-        String name = playerName.trim();
-        if (!name.isEmpty()) {
-            DreamingFishCore_NetworkManager.sendToServer(new Packet_RevivalRequest(name));
-            this.minecraft.setScreen(null);
-        } else {
-            this.minecraft.player.sendSystemMessage(Component.literal("§c请输入玩家名称！"));
-        }
-    }
-
-    private static class CustomButton extends Button {
-        private final boolean isPrimary;
-
-        public CustomButton(int x, int y, int width, int height, Component message,
-                            boolean isPrimary, OnPress onPress) {
-            super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
-            this.isPrimary = isPrimary;
+    /** 背景：暗色遮罩与中心金色光晕，光晕缓慢呼吸。 */
+    private final class Glow extends UiNode<Glow> {
+        Glow() {
+            pointerEvents(false);
         }
 
         @Override
-        public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = isHovered();
+        protected void paintContent(UiCanvas canvas) {
+            float p = reveal.get();
+            float w = width();
+            float h = height();
+            canvas.fill(0.0F, 0.0F, w, h, UiColor.multiplyAlpha(0xDD0A0A00, p));
+            float breath = (float) (0.85 + 0.15 * Math.sin(UiClock.now() / 900.0));
+            canvas.shape(0.0F, 0.0F, w, h).radial(UiColor.withAlpha(GOLD, 0.16F * p * breath), 0x00000000,
+                    w * 0.5F, h * 0.5F, Math.min(w, h) * 0.6F).draw();
+        }
+    }
 
-            int topColor, bottomColor, borderColor, glowColor;
-            if (isPrimary) {
-                // 金色主题（复活按钮）
-                if (hovered) {
-                    topColor = 0xFFDDAA00;
-                    bottomColor = 0xCC886600;
-                    borderColor = 0xFFFFEE00;
-                    glowColor = 0x30FFCC00;
-                } else {
-                    topColor = 0xFFCC9900;
-                    bottomColor = 0xCC774400;
-                    borderColor = 0xFFCC8800;
-                    glowColor = 0x20CC8800;
-                }
-            } else {
-                // 灰色主题（取消按钮）
-                if (hovered) {
-                    topColor = 0xFF777777;
-                    bottomColor = 0xCC444444;
-                    borderColor = 0xFF999999;
-                    glowColor = 0x20555555;
-                } else {
-                    topColor = 0xFF666666;
-                    bottomColor = 0xCC333333;
-                    borderColor = 0xCC666666;
-                    glowColor = 0x10333333;
-                }
-            }
+    /** 金色描边的面板，外圈柔光。 */
+    private static final class SacredPanel extends Box {
+        @Override
+        protected void paintBackground(UiCanvas canvas) {
+            float w = width();
+            float h = height();
+            canvas.shape(0.0F, 0.0F, w, h).radius(Theme.Radius.XL).verticalGradient(PANEL_TOP, PANEL_BOTTOM)
+                    .border(1.5F, UiColor.withAlpha(GOLD, 0.75F))
+                    .shadow(new Theme.Shadow(0.0F, 0.0F, 26.0F, 0.0F, UiColor.withAlpha(GOLD, 0.28F))).draw();
+            canvas.shape(4.0F, 4.0F, w - 8.0F, h - 8.0F).radius(Theme.Radius.LG).fill(0)
+                    .border(1.0F, UiColor.withAlpha(GOLD, 0.18F)).draw();
+        }
+    }
 
-            int x = getX(), y = getY(), w = width, h = height;
+    /** 双线金色分隔。 */
+    private static final class GoldDivider extends UiNode<GoldDivider> {
+        GoldDivider() {
+            pointerEvents(false);
+        }
 
-            // 外发光（仅主按钮悬停时）
-            if (isPrimary && hovered) {
-                UiPanelRenderer.smoothRoundedRect(guiGraphics, x - 2, y - 2,
-                        w + 4, h + 4, 6, glowColor, 0);
-            }
-
-            UiPanelRenderer.smoothRoundedRect(guiGraphics, x, y, w, h,
-                    4, topColor, borderColor);
-            guiGraphics.fill(x + 4, y + h - 2, x + w - 4, y + h - 1, bottomColor);
-
-            // 主按钮高光效果
-            if (isPrimary) {
-                guiGraphics.fill(x + 4, y + 2, x + w - 4, y + 3, 0x40FFFFFF);
-            }
-
-            // 文字
-            String text = getMessage().getString();
-            int textX = x + w / 2 - Minecraft.getInstance().font.width(text) / 2;
-            int textY = y + (h - 8) / 2;
-            guiGraphics.drawString(mc.font, text, textX, textY, 0xFFFFFF, false);
+        @Override
+        protected void paintContent(UiCanvas canvas) {
+            float w = width();
+            canvas.shape(0.0F, 0.0F, w, 1.5F).horizontalGradient(UiColor.withAlpha(GOLD_SOFT, 0.1F), GOLD_SOFT).draw();
+            canvas.shape(0.0F, 2.5F, w, 0.5F).horizontalGradient(0x00666600, 0xAA666600).draw();
         }
     }
 }

@@ -49,6 +49,8 @@ public record Packet_OrganizationActionResult(boolean success, String message)
 
     @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
     private static void handleClient(Packet_OrganizationActionResult packet) {
+        com.hhy.dreamingfishcore.gameplay.organization_system.client.cache.OrganizationClientCache
+                .setLastResult(packet.success(), packet.message());
         net.minecraft.client.Minecraft.getInstance().player.sendSystemMessage(
                 net.minecraft.network.chat.Component.literal(
                         (packet.success() ? "§a[组织] §f" : "§c[组织] §f") + packet.message()));

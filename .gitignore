@@ -66,3 +66,6 @@ repo/
 /.agents/
 /.ai-bridge/
 /.claude/
+
+### UI 截图验证工具的独立运行目录 ###
+/run-harness/

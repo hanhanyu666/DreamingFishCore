@@ -101,12 +101,12 @@
 
 ## 终端页面
 
-- `OrganizationTerminalPage`（`server_ui_system/client/serverscreen/`）——页面的渲染与交互全部在这里，
-  终端主类只负责传虚拟坐标和转发鼠标事件，避免继续膨胀那个数千行的 `ServerScreenUI_Screen`。
-- `Screen_OrganizationPrompt`（`organization_system/client/`）——输入 / 确认弹窗。
-  终端本体全部自绘、没有原版控件，而建会、改名、写公告、邀请需要真实文本输入，
-  所以按项目既有的「子屏幕」范式（同 `Screen_NoticeDetail`）单独开一个 `Screen`，
-  用 `HighLevelTextField` 承载键盘输入；关闭后重建终端并回到组织页。
+- `OrganizationPage`（`server_ui_system/client/terminal/`）——终端底部 Dock 的「组织」模块，基于 UI 框架：
+  左侧组织名录（实时搜索、创建组织），右侧组织详情（公告、资金与领地、入会申请、成员管理）；
+  紧凑布局下点组织进入单独的详情页。组件与弹窗动作在 `OrganizationViews` 里。
+- 建会、改名、写公告、邀请、捐款与各类确认通过 `TerminalPrompt` 弹出，直接浮在终端上，
+  不切换界面，关闭后玩家仍停留在组织页。
+- 操作结果除了进聊天栏，也会写入 `OrganizationClientCache.lastResult()`，组织页底部显示几秒提示（终端挡住了聊天栏）。
 - 客户端只读缓存 `OrganizationClientCache`；玩家断开连接时由 `ClientCacheManager.clear()` 一并清空。
 
 ## 命令

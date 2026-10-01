@@ -67,8 +67,9 @@ public class Packet_SyncLimbInjury implements net.minecraft.network.protocol.com
             Player player = minecraft.player;
             if (player == null) return;
 
-            // 更新客户端受伤数据
-            LimbClientInjurySync.recordInjury(player, limbTypeName, injuryTime);
+            // 更新客户端受伤数据。显示时长按客户端收到的时刻计算，
+            // 服务器与客户端时钟不一致时受击提示也不会提前消失或滞留。
+            LimbClientInjurySync.recordInjury(player, limbTypeName, System.currentTimeMillis());
         }
     }
 

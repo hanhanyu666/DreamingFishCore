@@ -9,7 +9,7 @@ import com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -41,21 +41,15 @@ public final class SystemMessageDisplay {
         NotificationManager.clear(NotificationPosition.TOP_RIGHT);
     }
 
-    public static void renderSystemMessages(GuiGraphics guiGraphics, Font font, int rightEdge,
-                                            int playerInfoBoxY, int playerInfoBoxHeight) {
-        NotificationRenderer.renderTopRight(
-                guiGraphics, font, rightEdge, playerInfoBoxY, playerInfoBoxHeight);
-    }
-
     public static List<NotificationManager.ActiveNotification> getActiveMessages() {
         return NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
     }
 
     public static void renderSystemMessages(
-            GuiGraphics guiGraphics, Font font, int rightEdge,
+            UiCanvas canvas, Font font, int rightEdge,
             int playerInfoBoxY, int playerInfoBoxHeight,
             List<NotificationManager.ActiveNotification> entries) {
-        NotificationRenderer.renderTopRight(guiGraphics, font, rightEdge,
+        NotificationRenderer.renderTopRight(canvas, font, rightEdge,
                 playerInfoBoxY, playerInfoBoxHeight, entries);
     }
 

@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.client.ui.render.PlayerFaceBatchRenderer;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.server.title_system.network.Packet_QuotedChatMessage;
 import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
@@ -128,12 +128,6 @@ public final class ImmersiveChatManager {
     private static final List<HitLine> HIT_LINES = new ArrayList<>();
     private static final List<HitAvatar> HIT_AVATARS = new ArrayList<>();
     private static final List<HitPlayerMessage> HIT_PLAYER_MESSAGES = new ArrayList<>();
-    private static ResourceLocation[] queuedHeadSkins = new ResourceLocation[16];
-    private static int[] queuedHeadX = new int[16];
-    private static int[] queuedHeadY = new int[16];
-    private static int[] queuedHeadSize = new int[16];
-    private static float[] queuedHeadAlpha = new float[16];
-    private static int queuedHeadCount;
     private static String activeSessionKey = "";
     private static String activeSafeSessionKey = "";
     private static boolean sessionIdentityInitialized;
@@ -303,21 +297,16 @@ public final class ImmersiveChatManager {
             scrollOffsetPx = Math.max(0, Math.min(scrollOffsetPx, maxScrollPx));
         }
         final int totalHeight = calculatedTotalHeight;
-        queuedHeadCount = 0;
 
-        // Render the complete chat pass as one managed batch.  GuiGraphics
-        // otherwise flushes after every text/fill primitive while the chat
-        // component is called from the unmanaged HUD event.  The scissor
-        // transitions used by the reveal animation still flush when needed,
-        // but ordinary rows and rounded panels now share one submission.
-        graphics.drawManaged(() -> {
+        // 整个聊天窗画在一块框架画布上：面板、文字与头像各自合批，入场展开用画布裁剪。
+        HudCanvas.paintNow(graphics, canvas -> {
             if (focused) {
-                drawFocusedPanel(graphics, layout);
+                drawFocusedPanel(canvas, layout);
             } else {
-                drawUnfocusedPanel(graphics, layouts, viewportX, viewportY, viewportWidth, viewportBottom, now);
+                drawUnfocusedPanel(canvas, layouts, viewportX, viewportY, viewportWidth, viewportBottom, now);
             }
 
-            graphics.enableScissor(layout.x(), layout.y(), layout.right(), layout.bottom());
+            canvas.pushClip(layout.x(), layout.y(), layout.width(), layout.height(), 0.0F);
             int cursorBottom = viewportBottom + (focused ? scrollOffsetPx : 0);
 
             for (int index = layouts.size() - 1; index >= 0; index--) {
@@ -334,13 +323,14 @@ public final class ImmersiveChatManager {
                     boolean reveal = !focused && visibility < 0.999f;
                     if (reveal) {
                         int revealRight = viewportX + Math.max(1, Math.round(viewportWidth * visibility));
-                        graphics.enableScissor(viewportX, Math.max(viewportY, entryTop),
-                                revealRight, Math.min(viewportBottom, cursorBottom));
+                        int clipTop = Math.max(viewportY, entryTop);
+                        canvas.pushClip(viewportX, clipTop, revealRight - viewportX,
+                                Math.min(viewportBottom, cursorBottom) - clipTop, 0.0F);
                     }
-                    drawEntry(graphics, font, entryLayout, viewportX, entryTop,
-                            viewportWidth, renderAlpha, focused, !reveal);
+                    drawEntry(canvas, font, entryLayout, viewportX, entryTop,
+                            viewportWidth, renderAlpha, focused);
                     if (reveal) {
-                        graphics.disableScissor();
+                        canvas.popClip();
                     }
                 }
                 cursorBottom = entryTop - ENTRY_GAP;
@@ -352,23 +342,13 @@ public final class ImmersiveChatManager {
                     break;
                 }
             }
-            if (queuedHeadCount > 0) {
-                // Submit every buffered chat primitive once, then draw all
-                // visible heads in one submission per distinct skin. This
-                // replaces two setColor flushes and two blits per message.
-                graphics.flush();
-                PlayerFaceBatchRenderer.drawMany(graphics,
-                        queuedHeadSkins, queuedHeadX, queuedHeadY,
-                        queuedHeadSize, queuedHeadAlpha, queuedHeadCount);
-                queuedHeadCount = 0;
-            }
-            graphics.disableScissor();
+            canvas.popClip();
 
         if (focused) {
-            drawScrollbar(graphics, layout, viewportY, viewportHeight, totalHeight);
-            drawResizeHandle(graphics, layout);
-            drawClearConfirmation(graphics, mc.font, layout);
-            drawQuotePreview(graphics, mc.font, screenWidth, screenHeight);
+            drawScrollbar(canvas, layout, viewportY, viewportHeight, totalHeight);
+            drawResizeHandle(canvas, layout);
+            drawClearConfirmation(canvas, mc.font, layout);
+            drawQuotePreview(canvas, mc.font, screenWidth, screenHeight);
         } else {
             scrollbarMetrics = null;
             quotePreviewMetrics = null;
@@ -415,8 +395,8 @@ public final class ImmersiveChatManager {
         int height = INPUT_PANEL_HEIGHT;
 
         // One background and one quiet border: no top accent, shadow, or inset frame.
-        UiPanelRenderer.smoothRoundedRect(graphics, x, y, width, height,
-                INPUT_PANEL_RADIUS, 0xB80A0C0E, 0x426B7276);
+        HudCanvas.paintNow(graphics, canvas -> panel(canvas, x, y, width, height,
+                INPUT_PANEL_RADIUS, 0xB80A0C0E, 0x426B7276));
     }
 
     /** Clears the pending message quote when the chat screen closes. */
@@ -747,7 +727,7 @@ public final class ImmersiveChatManager {
                 REPEAT_LABEL_PREFIX + entry.repeatCount() + REPEAT_LABEL_SUFFIX));
     }
 
-    private static void drawUnfocusedPanel(GuiGraphics graphics, List<EntryLayout> layouts,
+    private static void drawUnfocusedPanel(UiCanvas canvas, List<EntryLayout> layouts,
                                            int viewportX, int viewportY, int viewportWidth,
                                            int viewportBottom, long now) {
         int cursorBottom = viewportBottom;
@@ -789,10 +769,10 @@ public final class ImmersiveChatManager {
         if (revealPanel) {
             int panelWidth = viewportWidth + 10;
             int revealRight = viewportX - 5 + Math.max(1, Math.round(panelWidth * panelVisibility));
-            graphics.enableScissor(viewportX - 5, backgroundTop, revealRight, backgroundBottom);
+            canvas.pushClip(viewportX - 5, backgroundTop, revealRight - (viewportX - 5), backgroundBottom - backgroundTop, 0.0F);
         }
-        UiPanelRenderer.smoothRoundedRectBatched(
-                graphics,
+        panel(
+                canvas,
                 viewportX - 5,
                 backgroundTop,
                 viewportWidth + 10,
@@ -802,32 +782,31 @@ public final class ImmersiveChatManager {
                 0x00000000
         );
         if (revealPanel) {
-            graphics.disableScissor();
+            canvas.popClip();
         }
     }
 
-    private static void drawEntry(GuiGraphics graphics, Font font, EntryLayout layout,
-                                  int x, int y, int width, int alpha, boolean focused,
-                                  boolean batchHead) {
+    private static void drawEntry(UiCanvas canvas, Font font, EntryLayout layout,
+                                  int x, int y, int width, int alpha, boolean focused) {
         if (layout.entry().kind() == EntryKind.PLAYER) {
-            drawPlayerEntry(graphics, font, layout, x, y, width, alpha, focused, batchHead);
+            drawPlayerEntry(canvas, font, layout, x, y, width, alpha, focused);
         } else {
-            drawSystemEntry(graphics, font, layout, x, y, width, alpha, focused);
+            drawSystemEntry(canvas, font, layout, x, y, width, alpha, focused);
         }
     }
 
-    private static void drawPlayerEntry(GuiGraphics graphics, Font font, EntryLayout layout, int x, int y,
-                                        int width, int alpha, boolean focused, boolean batchHead) {
+    private static void drawPlayerEntry(UiCanvas canvas, Font font, EntryLayout layout, int x, int y,
+                                        int width, int alpha, boolean focused) {
         ChatEntry entry = layout.entry();
 
         if (layout.mentioned()) {
             int highlightAlpha = focused ? 154 : Math.min(138, Math.round(alpha * 0.68f));
-            UiPanelRenderer.smoothRoundedRectBatched(graphics, x - 4, y - 1, width + 8, layout.height() + 2,
+            panel(canvas, x - 4, y - 1, width + 8, layout.height() + 2,
                     4, withAlpha(MENTION_HIGHLIGHT_BG, highlightAlpha), 0x00000000);
         }
 
         int headY = y + 2;
-        drawPlayerHead(graphics, entry, x, headY, alpha, batchHead);
+        drawPlayerHead(canvas, entry, x, headY, alpha);
         if (focused && !entry.playerName().isBlank()) {
             String quoteBody = entry.body().getString();
             HIT_AVATARS.add(new HitAvatar(x, headY, PLAYER_HEAD_SIZE, entry.playerName(), quoteBody));
@@ -837,46 +816,35 @@ public final class ImmersiveChatManager {
         int contentX = x + PLAYER_HEAD_SIZE + PLAYER_HEAD_GAP;
         int contentWidth = Math.max(42, width - PLAYER_HEAD_SIZE - PLAYER_HEAD_GAP);
         boolean wrappedHeader = layout.wrappedHeader();
-        drawPlayerHeader(graphics, font, entry, contentX, y + 1, contentWidth, alpha,
+        drawPlayerHeader(canvas, font, entry, contentX, y + 1, contentWidth, alpha,
                 layout.mentioned(), wrappedHeader);
 
         int headerHeight = wrappedHeader ? HEADER_HEIGHT * 2 : HEADER_HEIGHT;
         int bodyY = y + headerHeight + 2;
         if (layout.quoteHeight() > 0) {
             int quoteHeight = layout.quoteHeight();
-            UiPanelRenderer.smoothRoundedRectBatched(graphics, contentX, bodyY, contentWidth, quoteHeight,
+            panel(canvas, contentX, bodyY, contentWidth, quoteHeight,
                     2, withAlpha(0xFF242A2E, Math.min(alpha, 190)), 0x00000000);
-            graphics.fill(contentX + 2, bodyY + 3, contentX + 3, bodyY + quoteHeight - 3,
+            fillRect(canvas, contentX + 2, bodyY + 3, contentX + 3, bodyY + quoteHeight - 3,
                     withAlpha(0xFF8C989D, alpha));
-            graphics.pose().pushPose();
-            graphics.pose().translate(contentX + 6, bodyY + 2, 0.0F);
-            graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
             int quoteIndex = 0;
             for (FormattedCharSequence line : layout.quoteLines()) {
                 if (quoteIndex >= 2) break;
-                graphics.drawString(font, line, 0, Math.round(quoteIndex * BODY_LINE_HEIGHT / CHAT_TEXT_SCALE),
-                        withAlpha(0xFFB8C0C2, alpha), true);
+                canvas.text(line, contentX + 6, bodyY + 2 + quoteIndex * BODY_LINE_HEIGHT,
+                        withAlpha(0xFFB8C0C2, alpha), CHAT_TEXT_SCALE, true);
                 quoteIndex++;
             }
-            graphics.pose().popPose();
             bodyY += quoteHeight + 2;
         }
         int lineColor = withAlpha(BODY_COLOR, Math.min(255, alpha));
-        graphics.pose().pushPose();
-        graphics.pose().translate(contentX, bodyY, 0.0F);
-        graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
-        int lineIndex = 0;
         for (FormattedCharSequence line : layout.bodyLines()) {
-            graphics.drawString(font, line, 0, Math.round(lineIndex * BODY_LINE_HEIGHT / CHAT_TEXT_SCALE),
-                    lineColor, true);
+            canvas.text(line, contentX, bodyY, lineColor, CHAT_TEXT_SCALE, true);
             if (focused) {
                 int hitWidth = Math.min(contentWidth, Math.max(1, scaledTextWidth(font, line)));
                 HIT_LINES.add(new HitLine(contentX, bodyY, hitWidth, BODY_LINE_HEIGHT, line));
             }
             bodyY += BODY_LINE_HEIGHT;
-            lineIndex++;
         }
-        graphics.pose().popPose();
     }
 
     private static boolean shouldWrapPlayerHeader(Font font, ChatEntry entry, int width, boolean mentioned) {
@@ -890,7 +858,7 @@ public final class ImmersiveChatManager {
         return rankWidth + titleWidth + nameWidth + gaps * 3 > width;
     }
 
-    private static void drawPlayerHeader(GuiGraphics graphics, Font font, ChatEntry entry, int x, int y,
+    private static void drawPlayerHeader(UiCanvas canvas, Font font, ChatEntry entry, int x, int y,
                                          int width, int alpha, boolean mentioned, boolean wrapped) {
         boolean hasRank = !isEmptyRank(entry.rank());
         boolean hasTitle = !entry.title().isBlank();
@@ -906,17 +874,17 @@ public final class ImmersiveChatManager {
         if (!wrapped) {
             int currentX = x;
             if (hasRank) {
-                drawChip(graphics, font, entry.rank(), currentX, y, rankNaturalWidth, entry.rankColor(), alpha);
+                drawChip(canvas, font, entry.rank(), currentX, y, rankNaturalWidth, entry.rankColor(), alpha);
                 currentX += rankNaturalWidth + 3;
             }
             if (hasTitle) {
-                drawChip(graphics, font, entry.title(), currentX, y, titleNaturalWidth, entry.titleColor(), alpha);
+                drawChip(canvas, font, entry.title(), currentX, y, titleNaturalWidth, entry.titleColor(), alpha);
                 currentX += titleNaturalWidth + 3;
             }
-            drawScaledString(graphics, font, entry.playerName(), currentX, y + 1,
+            drawScaledString(canvas, font, entry.playerName(), currentX, y + 1,
                     withAlpha(nameColor, alpha), true);
             if (mentioned) {
-                drawScaledString(graphics, font, MENTION_LABEL, currentX + nameNaturalWidth + 3, y + 1,
+                drawScaledString(canvas, font, MENTION_LABEL, currentX + nameNaturalWidth + 3, y + 1,
                         withAlpha(MENTION_LABEL_COLOR, alpha), true);
             }
             return;
@@ -929,70 +897,63 @@ public final class ImmersiveChatManager {
 
         if (hasRank && remainingFirstRow >= 16) {
             int rankWidth = Math.min(rankNaturalWidth, remainingFirstRow);
-            drawChip(graphics, font, entry.rank(), currentX, y, rankWidth, entry.rankColor(), alpha);
+            drawChip(canvas, font, entry.rank(), currentX, y, rankWidth, entry.rankColor(), alpha);
             currentX += rankWidth + 3;
             remainingFirstRow = Math.max(0, remainingFirstRow - rankWidth - 3);
         }
 
         if (hasTitle && remainingFirstRow >= 16) {
             int titleWidth = Math.min(titleNaturalWidth, remainingFirstRow);
-            drawChip(graphics, font, entry.title(), currentX, y, titleWidth, entry.titleColor(), alpha);
+            drawChip(canvas, font, entry.title(), currentX, y, titleWidth, entry.titleColor(), alpha);
         }
 
         int reservedMentionWidth = mentioned ? mentionLabelWidth + 3 : 0;
         int nameWidth = Math.min(nameNaturalWidth, Math.max(0, width - reservedMentionWidth));
         if (nameWidth > 0) {
             String displayName = trimToScaledWidth(font, entry.playerName(), nameWidth);
-            drawScaledString(graphics, font, displayName, x, y + HEADER_HEIGHT + 1,
+            drawScaledString(canvas, font, displayName, x, y + HEADER_HEIGHT + 1,
                     withAlpha(nameColor, alpha), true);
             if (mentioned) {
                 int labelX = x + scaledTextWidth(font, displayName) + 3;
-                drawScaledString(graphics, font, MENTION_LABEL, labelX, y + HEADER_HEIGHT + 1,
+                drawScaledString(canvas, font, MENTION_LABEL, labelX, y + HEADER_HEIGHT + 1,
                         withAlpha(MENTION_LABEL_COLOR, alpha), true);
             }
         }
     }
 
-    private static void drawChip(GuiGraphics graphics, Font font, String text, int x, int y, int width,
+    private static void drawChip(UiCanvas canvas, Font font, String text, int x, int y, int width,
                                  int rgbColor, int alpha) {
         int color = 0xFF000000 | (rgbColor & 0x00FFFFFF);
         int background = withAlpha(color, Math.min(110, Math.round(alpha * 0.35f)));
         int border = withAlpha(color, Math.min(190, Math.round(alpha * 0.68f)));
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, x, y, width, 9,
+        panel(canvas, x, y, width, 9,
                 3, background, border);
         String clipped = trimToScaledWidth(font, text, Math.max(4, width - 6));
-        drawScaledString(graphics, font, clipped, x + 3, y + 1,
+        drawScaledString(canvas, font, clipped, x + 3, y + 1,
                 withAlpha(blendWithWhite(color, 0.34f), alpha), false);
     }
 
-    private static void drawSystemEntry(GuiGraphics graphics, Font font, EntryLayout layout, int x, int y,
+    private static void drawSystemEntry(UiCanvas canvas, Font font, EntryLayout layout, int x, int y,
                                         int width, int alpha, boolean focused) {
         // System lines share the same single chat surface; only the vertical rule distinguishes them.
-        graphics.fill(x + 1, y + 2, x + 3, y + layout.height() - 2,
+        fillRect(canvas, x + 1, y + 2, x + 3, y + layout.height() - 2,
                 withAlpha(MUTED_COLOR, Math.min(145, alpha)));
         int textX = x + 8;
         int textY = y + 4;
         int contentWidth = Math.max(40, width - 11);
         int lineColor = withAlpha(MUTED_COLOR, alpha);
-        graphics.pose().pushPose();
-        graphics.pose().translate(textX, textY, 0.0F);
-        graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
-        int lineIndex = 0;
         for (FormattedCharSequence line : layout.bodyLines()) {
-            graphics.drawString(font, line, 0, Math.round(lineIndex * SYSTEM_LINE_HEIGHT / CHAT_TEXT_SCALE),
-                    lineColor, true);
+            canvas.text(line, textX, textY, lineColor, CHAT_TEXT_SCALE, true);
             if (focused) {
                 int hitWidth = Math.min(contentWidth, Math.max(1, scaledTextWidth(font, line)));
                 HIT_LINES.add(new HitLine(textX, textY, hitWidth, SYSTEM_LINE_HEIGHT, line));
             }
             textY += SYSTEM_LINE_HEIGHT;
-            lineIndex++;
         }
-        graphics.pose().popPose();
     }
 
-    private static void drawPlayerHead(GuiGraphics graphics, ChatEntry entry,
-                                       int x, int y, int alpha, boolean batch) {
+    private static void drawPlayerHead(UiCanvas canvas, ChatEntry entry,
+                                       int x, int y, int alpha) {
         Minecraft mc = Minecraft.getInstance();
         UUID playerId = entry.playerId();
         PlayerInfo playerInfo = playerId == null ? null : CACHED_PLAYER_INFO.get(playerId);
@@ -1006,39 +967,31 @@ public final class ImmersiveChatManager {
             // Resolve the skin from the cached PlayerInfo so an asynchronously
             // downloaded texture can still replace its temporary default.
             ResourceLocation skin = playerInfo.getSkin().texture();
-            if (batch) {
-                queuePlayerHead(skin, x, y, PLAYER_HEAD_SIZE, alpha / 255.0F);
-            } else {
-                // Keep the per-entry reveal scissor exact during the short
-                // intro/outro. Stable rows take the shared face batch below.
-                graphics.flush();
-                PlayerFaceBatchRenderer.drawOne(
-                        graphics, skin, x, y, PLAYER_HEAD_SIZE, alpha / 255.0F);
-            }
+            canvas.playerFace(skin, x, y, PLAYER_HEAD_SIZE, 2.0F, withAlpha(0xFFFFFFFF, Math.min(255, alpha)));
             return;
         }
 
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, x, y, PLAYER_HEAD_SIZE, PLAYER_HEAD_SIZE,
+        panel(canvas, x, y, PLAYER_HEAD_SIZE, PLAYER_HEAD_SIZE,
                 4, withAlpha(0xFF242A2E, Math.min(alpha, 210)), 0x00000000);
         String initial = entry.playerName().isBlank()
                 ? "?"
                 : entry.playerName().substring(0, 1).toUpperCase(Locale.ROOT);
         int textX = x + (PLAYER_HEAD_SIZE - scaledTextWidth(mc.font, initial)) / 2;
-        drawScaledString(graphics, mc.font, initial, textX, y + 4,
+        drawScaledString(canvas, mc.font, initial, textX, y + 4,
                 withAlpha(NAME_COLOR, alpha), false);
     }
 
-    private static void drawFocusedPanel(GuiGraphics graphics, ImmersiveChatConfig.Layout layout) {
+    private static void drawFocusedPanel(UiCanvas canvas, ImmersiveChatConfig.Layout layout) {
         // Exactly one deep-gray translucent surface. No border, inset, shadow, or per-entry card.
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, layout.x(), layout.y(), layout.width(), layout.height(),
+        panel(canvas, layout.x(), layout.y(), layout.width(), layout.height(),
                 FOCUSED_PANEL_RADIUS, PANEL_BG, 0x00000000);
 
         int handleWidth = Math.min(34, Math.max(18, layout.width() / 9));
         int handleX = layout.x() + (layout.width() - handleWidth) / 2;
-        graphics.fill(handleX, layout.y() + 3, handleX + handleWidth, layout.y() + 4, 0x667F888C);
+        fillRect(canvas, handleX, layout.y() + 3, handleX + handleWidth, layout.y() + 4, 0x667F888C);
     }
 
-    private static void drawClearConfirmation(GuiGraphics graphics, Font font,
+    private static void drawClearConfirmation(UiCanvas canvas, Font font,
                                               ImmersiveChatConfig.Layout layout) {
         if (System.currentTimeMillis() > clearConfirmationUntilMs) {
             return;
@@ -1053,13 +1006,13 @@ public final class ImmersiveChatManager {
         int boxHeight = 15;
         int boxX = layout.x() + (layout.width() - boxWidth) / 2;
         int boxY = layout.y() + DRAG_HANDLE_HEIGHT + 3;
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, boxX, boxY, boxWidth, boxHeight,
+        panel(canvas, boxX, boxY, boxWidth, boxHeight,
                 4, 0xEC2A2621, 0xC4FFD54A);
-        drawScaledString(graphics, font, displayText, boxX + 6, boxY + 3,
+        drawScaledString(canvas, font, displayText, boxX + 6, boxY + 3,
                 0xFFFFD54A, true);
     }
 
-    private static void drawQuotePreview(GuiGraphics graphics, Font font, int screenWidth, int screenHeight) {
+    private static void drawQuotePreview(UiCanvas canvas, Font font, int screenWidth, int screenHeight) {
         QuoteTarget quote = quotedMessage;
         if (quote == null || quote.playerName().isBlank()) {
             quotePreviewMetrics = null;
@@ -1070,52 +1023,52 @@ public final class ImmersiveChatManager {
         int boxX = QUOTE_PREVIEW_MARGIN_X;
         int boxWidth = Math.max(80, screenWidth - QUOTE_PREVIEW_MARGIN_X * 2);
         int boxY = inputTop - QUOTE_PREVIEW_GAP - QUOTE_PREVIEW_HEIGHT;
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, boxX, boxY, boxWidth, QUOTE_PREVIEW_HEIGHT,
+        panel(canvas, boxX, boxY, boxWidth, QUOTE_PREVIEW_HEIGHT,
                 4, 0xE51A1E22, 0x9A68747A);
-        graphics.fill(boxX + 3, boxY + 4, boxX + 5, boxY + QUOTE_PREVIEW_HEIGHT - 4, 0xFF6EB6D8);
+        fillRect(canvas, boxX + 3, boxY + 4, boxX + 5, boxY + QUOTE_PREVIEW_HEIGHT - 4, 0xFF6EB6D8);
 
         String header = "引用 " + quote.playerName();
-        drawScaledString(graphics, font, trimToScaledWidth(font, header, boxWidth - 28),
+        drawScaledString(canvas, font, trimToScaledWidth(font, header, boxWidth - 28),
                 boxX + 10, boxY + 4, 0xFFE4E8E8, true);
         String body = quote.body().isBlank() ? "（空消息）" : quote.body();
         String clippedBody = trimToScaledWidth(font, body, boxWidth - 28);
-        drawScaledString(graphics, font, clippedBody, boxX + 10, boxY + 15, 0xFFB8C0C2, false);
+        drawScaledString(canvas, font, clippedBody, boxX + 10, boxY + 15, 0xFFB8C0C2, false);
 
         int closeX = boxX + boxWidth - QUOTE_PREVIEW_CLOSE_SIZE - 4;
         int closeY = boxY + (QUOTE_PREVIEW_HEIGHT - QUOTE_PREVIEW_CLOSE_SIZE) / 2;
         int closeColor = 0xFF9BA5A8;
-        graphics.fill(closeX + 2, closeY, closeX + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeY + 1, closeColor);
-        graphics.fill(closeX + 2, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 1,
+        fillRect(canvas, closeX + 2, closeY, closeX + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeY + 1, closeColor);
+        fillRect(canvas, closeX + 2, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 1,
                 closeX + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeY + QUOTE_PREVIEW_CLOSE_SIZE, closeColor);
-        graphics.fill(closeX, closeY + 2, closeX + 1, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeColor);
-        graphics.fill(closeX + QUOTE_PREVIEW_CLOSE_SIZE - 1, closeY + 2,
+        fillRect(canvas, closeX, closeY + 2, closeX + 1, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeColor);
+        fillRect(canvas, closeX + QUOTE_PREVIEW_CLOSE_SIZE - 1, closeY + 2,
                 closeX + QUOTE_PREVIEW_CLOSE_SIZE, closeY + QUOTE_PREVIEW_CLOSE_SIZE - 2, closeColor);
         quotePreviewMetrics = new QuotePreviewMetrics(closeX, closeY, QUOTE_PREVIEW_CLOSE_SIZE);
     }
 
-    private static void drawResizeHandle(GuiGraphics graphics, ImmersiveChatConfig.Layout layout) {
+    private static void drawResizeHandle(UiCanvas canvas, ImmersiveChatConfig.Layout layout) {
         int color = 0x8F8A9499;
         int right = layout.right() - 3;
         int top = layout.y() + 3;
         int bottom = layout.bottom() - 3;
 
         // Top-right corner: width + height resize.
-        graphics.fill(right - 7, top, right, top + 1, color);
-        graphics.fill(right - 4, top + 3, right, top + 4, color);
-        graphics.fill(right - 1, top + 6, right, top + 7, color);
+        fillRect(canvas, right - 7, top, right, top + 1, color);
+        fillRect(canvas, right - 4, top + 3, right, top + 4, color);
+        fillRect(canvas, right - 1, top + 6, right, top + 7, color);
 
         // Bottom edge: vertical resize from anywhere along the lower strip; this centered mark is only a hint.
         int bottomHandleWidth = Math.min(34, Math.max(18, layout.width() / 8));
         int bottomHandleX = layout.x() + (layout.width() - bottomHandleWidth) / 2;
-        graphics.fill(bottomHandleX, bottom, bottomHandleX + bottomHandleWidth, bottom + 1, color);
+        fillRect(canvas, bottomHandleX, bottom, bottomHandleX + bottomHandleWidth, bottom + 1, color);
 
         // Bottom-right corner: width + height resize.
-        graphics.fill(right - 7, bottom - 1, right, bottom, color);
-        graphics.fill(right - 4, bottom - 4, right, bottom - 3, color);
-        graphics.fill(right - 1, bottom - 7, right, bottom - 6, color);
+        fillRect(canvas, right - 7, bottom - 1, right, bottom, color);
+        fillRect(canvas, right - 4, bottom - 4, right, bottom - 3, color);
+        fillRect(canvas, right - 1, bottom - 7, right, bottom - 6, color);
     }
 
-    private static void drawScrollbar(GuiGraphics graphics, ImmersiveChatConfig.Layout layout,
+    private static void drawScrollbar(UiCanvas canvas, ImmersiveChatConfig.Layout layout,
                                       int viewportY, int viewportHeight, int totalHeight) {
         if (totalHeight <= viewportHeight || maxScrollPx <= 0) {
             scrollbarMetrics = null;
@@ -1126,8 +1079,8 @@ public final class ImmersiveChatManager {
         int travel = Math.max(1, viewportHeight - thumbHeight);
         float progress = scrollOffsetPx / (float) maxScrollPx;
         int thumbY = viewportY + travel - Math.round(progress * travel);
-        graphics.fill(trackX, viewportY, trackX + 1, viewportY + viewportHeight, 0x3AFFFFFF);
-        graphics.fill(trackX - 1, thumbY, trackX + 2, thumbY + thumbHeight, 0x86C4C8C7);
+        fillRect(canvas, trackX, viewportY, trackX + 1, viewportY + viewportHeight, 0x3AFFFFFF);
+        fillRect(canvas, trackX - 1, thumbY, trackX + 2, thumbY + thumbHeight, 0x86C4C8C7);
         scrollbarMetrics = new ScrollbarMetrics(trackX, viewportY, viewportHeight, thumbY, thumbHeight);
     }
 
@@ -1264,24 +1217,6 @@ public final class ImmersiveChatManager {
         maxScrollPx = 0;
         unfocusedVisibleUntilMs = 0L;
         loadHistory();
-    }
-
-    private static void queuePlayerHead(ResourceLocation skin, int x, int y,
-                                        int size, float alpha) {
-        if (queuedHeadCount == queuedHeadSkins.length) {
-            int newCapacity = queuedHeadSkins.length * 2;
-            queuedHeadSkins = java.util.Arrays.copyOf(queuedHeadSkins, newCapacity);
-            queuedHeadX = java.util.Arrays.copyOf(queuedHeadX, newCapacity);
-            queuedHeadY = java.util.Arrays.copyOf(queuedHeadY, newCapacity);
-            queuedHeadSize = java.util.Arrays.copyOf(queuedHeadSize, newCapacity);
-            queuedHeadAlpha = java.util.Arrays.copyOf(queuedHeadAlpha, newCapacity);
-        }
-        queuedHeadSkins[queuedHeadCount] = skin;
-        queuedHeadX[queuedHeadCount] = x;
-        queuedHeadY[queuedHeadCount] = y;
-        queuedHeadSize[queuedHeadCount] = size;
-        queuedHeadAlpha[queuedHeadCount] = Math.max(0.0F, Math.min(1.0F, alpha));
-        queuedHeadCount++;
     }
 
     private static String getSessionKey(Minecraft mc) {
@@ -1430,22 +1365,26 @@ public final class ImmersiveChatManager {
         return trimToWidth(font, text, unscaledWidth(maxWidth));
     }
 
-    private static void drawScaledString(GuiGraphics graphics, Font font, String text, int x, int y,
+    private static void drawScaledString(UiCanvas canvas, Font font, String text, int x, int y,
                                          int color, boolean shadow) {
-        graphics.pose().pushPose();
-        graphics.pose().translate(x, y, 0.0F);
-        graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
-        graphics.drawString(font, text, 0, 0, color, shadow);
-        graphics.pose().popPose();
+        canvas.text(text, x, y, color, CHAT_TEXT_SCALE, shadow);
     }
 
-    private static void drawScaledString(GuiGraphics graphics, Font font, FormattedCharSequence text, int x, int y,
-                                         int color, boolean shadow) {
-        graphics.pose().pushPose();
-        graphics.pose().translate(x, y, 0.0F);
-        graphics.pose().scale(CHAT_TEXT_SCALE, CHAT_TEXT_SCALE, 1.0F);
-        graphics.drawString(font, text, 0, 0, color, shadow);
-        graphics.pose().popPose();
+    /** 圆角面板；{@code border} 透明时不描边。 */
+    private static void panel(UiCanvas canvas, int x, int y, int width, int height, int radius, int fill, int border) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        var shape = canvas.shape(x, y, width, height).radius(radius).fill(fill);
+        if ((border >>> 24) != 0) {
+            shape.border(1.0F, border);
+        }
+        shape.draw();
+    }
+
+    /** 与 {@code GuiGraphics#fill} 相同的两点坐标。 */
+    private static void fillRect(UiCanvas canvas, int x0, int y0, int x1, int y1, int color) {
+        canvas.fill(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), color);
     }
 
     private static String trimToWidth(Font font, String text, int maxWidth) {

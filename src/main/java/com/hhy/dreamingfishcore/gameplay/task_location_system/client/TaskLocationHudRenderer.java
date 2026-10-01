@@ -1,11 +1,13 @@
 package com.hhy.dreamingfishcore.gameplay.task_location_system.client;
 
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextFit;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 
 /** Compact bottom-right task-location mode label. */
 public final class TaskLocationHudRenderer {
@@ -25,6 +27,27 @@ public final class TaskLocationHudRenderer {
     private static final int PROTECTED_ACCENT = 0xFFE2B06C;
     private static final int PANEL_BACKGROUND = 0xC4141D28;
     private static final int TITLE_COLOR = 0xFFF0F4F8;
+
+    /** 右下角保护区卡片在统一 HUD 画布中的区域。 */
+    public static final HudLayer LAYER = new HudLayer() {
+        @Override
+        public int order() {
+            return 20;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            return shouldRenderHud(minecraft);
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            TaskLocationClientState.Snapshot snapshot = TaskLocationClientState.get();
+            if (snapshot != null) {
+                render(frame.canvas(), frame.minecraft(), snapshot);
+            }
+        }
+    };
 
     private static TaskLocationClientState.Snapshot cachedSnapshot;
     private static Font cachedFont;
@@ -49,24 +72,7 @@ public final class TaskLocationHudRenderer {
                 && TaskLocationClientState.get() != null;
     }
 
-    /** Draws into the shared managed HUD pass. */
-    public static void renderBatched(GuiGraphics graphics, Minecraft minecraft) {
-        if (minecraft.player == null || minecraft.level == null
-                || minecraft.options.hideGui
-                || minecraft.getDebugOverlay().showDebugScreen()
-                || minecraft.screen != null) {
-            return;
-        }
-
-        TaskLocationClientState.Snapshot snapshot = TaskLocationClientState.get();
-        if (snapshot == null) {
-            return;
-        }
-
-        render(graphics, minecraft, snapshot);
-    }
-
-    private static void render(GuiGraphics graphics, Minecraft minecraft,
+    private static void render(UiCanvas canvas, Minecraft minecraft,
                                TaskLocationClientState.Snapshot snapshot) {
         Font font = minecraft.font;
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
@@ -80,21 +86,15 @@ public final class TaskLocationHudRenderer {
         int y = screenHeight - panelHeight - BOTTOM_MARGIN;
         int accent = accentFor(snapshot.mode());
 
-        UiPanelRenderer.smoothRoundedRectBatched(graphics, x, y,
-                panelWidth, panelHeight, PANEL_RADIUS, PANEL_BACKGROUND,
-                UiPanelRenderer.withAlpha(accent, 118));
-        UiPanelRenderer.roundedRect(graphics, x + LEFT_PADDING, y + VERTICAL_PADDING,
-                ACCENT_WIDTH, panelHeight - VERTICAL_PADDING * 2, 1,
-                UiPanelRenderer.withAlpha(accent, 224));
+        canvas.shape(x, y, panelWidth, panelHeight).radius(PANEL_RADIUS).fill(PANEL_BACKGROUND)
+                .border(1.0F, UiColor.withAlpha(accent, 118)).draw();
+        canvas.shape(x + LEFT_PADDING, y + VERTICAL_PADDING, ACCENT_WIDTH, panelHeight - VERTICAL_PADDING * 2)
+                .radius(1.0F).fill(UiColor.withAlpha(accent, 224)).draw();
         int textX = x + LEFT_PADDING + ACCENT_WIDTH + ACCENT_GAP;
         int textY = y + (panelHeight - layout.scaledTextHeight()) / 2;
-        graphics.pose().pushPose();
-        graphics.pose().translate(textX, textY, 0.0f);
-        graphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0f);
-        graphics.drawString(font, layout.locationName(), 0, 0, TITLE_COLOR, false);
-        graphics.drawString(font, layout.modeLabel(), 0, layout.rawLineStep(),
-                UiPanelRenderer.withAlpha(accent, 222), false);
-        graphics.pose().popPose();
+        canvas.text(layout.locationName(), textX, textY, TITLE_COLOR, TEXT_SCALE, false);
+        canvas.text(layout.modeLabel(), textX, textY + layout.rawLineStep() * TEXT_SCALE,
+                UiColor.withAlpha(accent, 222), TEXT_SCALE, false);
     }
 
     private static LocationLayout getLayout(Font font, TaskLocationClientState.Snapshot snapshot,
@@ -107,8 +107,7 @@ public final class TaskLocationHudRenderer {
         int chromeWidth = LEFT_PADDING + ACCENT_WIDTH + ACCENT_GAP + RIGHT_PADDING;
         int maxRawTextWidth = Math.max(24,
                 (int) ((panelMaxWidth - chromeWidth) / TEXT_SCALE));
-        String locationName = LoadingScreenUi.trimToWidth(
-                snapshot.locationName(), font, maxRawTextWidth);
+        String locationName = TextFit.trim(snapshot.locationName(), font, maxRawTextWidth);
         String modeLabel = labelFor(snapshot.mode());
         int rawTextWidth = Math.max(font.width(locationName), font.width(modeLabel));
         int panelWidth = Math.min(panelMaxWidth,

@@ -14,6 +14,11 @@ public final class OrganizationClientCache {
     private static volatile OrganizationViewData.Snapshot snapshot = empty();
     private static volatile boolean loaded;
     private static volatile long version;
+    private static volatile ActionResult lastResult;
+
+    /** 最近一次组织操作的结果，供终端在页面内提示（聊天栏被终端挡住时玩家也能看到）。 */
+    public record ActionResult(boolean success, String message, long timeMillis) {
+    }
 
     private OrganizationClientCache() {
     }
@@ -45,5 +50,14 @@ public final class OrganizationClientCache {
 
     public static long version() {
         return version;
+    }
+
+    public static void setLastResult(boolean success, String message) {
+        lastResult = new ActionResult(success, message == null ? "" : message, net.minecraft.Util.getMillis());
+    }
+
+    /** 没有结果时为 null。 */
+    public static ActionResult lastResult() {
+        return lastResult;
     }
 }

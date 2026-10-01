@@ -1,24 +1,25 @@
 package com.hhy.dreamingfishcore.client.ui.notification;
 
-import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.client.ui.components.UiPanelRenderer;
-import com.hhy.dreamingfishcore.client.ui.loading.LoadingScreenUi;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
+import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.framework.text.TextFit;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
+import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-@EventBusSubscriber(modid = DreamingFishCore.MODID, value = Dist.CLIENT)
+/**
+ * 通知的三种位置：屏幕上方居中的横幅、左上角的提示卡片与右上角读数下方的系统消息。
+ * 全部画在统一 HUD 画布上；出入场时卡片按宽度展开/收起（画布裁剪）。
+ */
 public final class NotificationRenderer {
     private static final int LEFT_MARGIN = 5;
     private static final int TOP_MARGIN = 5;
@@ -50,63 +51,58 @@ public final class NotificationRenderer {
     private static Font lineCacheFont;
     private static volatile boolean lineCachesDirty;
 
+    /** 屏幕上方居中的横幅。 */
+    public static final HudLayer CENTER_LAYER = new HudLayer() {
+        @Override
+        public int order() {
+            return 60;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            return hudVisible(minecraft) && !NotificationManager.getActive(NotificationPosition.CENTER_TOP).isEmpty();
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            renderCenterTop(frame.canvas(), frame.minecraft(), NotificationManager.getActive(NotificationPosition.CENTER_TOP));
+        }
+    };
+
+    /**
+     * 左上角提示卡片。放在 HUD 的最后一刻绘制：Xaero 小地图在 {@code Gui#render} 返回时才画，
+     * 在那之后绘制才不会被小地图盖住。
+     */
+    public static final HudLayer TOP_LEFT_LAYER = new HudLayer() {
+        @Override
+        public Pass pass() {
+            return Pass.OVERLAY;
+        }
+
+        @Override
+        public boolean visible(Minecraft minecraft) {
+            return hudVisible(minecraft) && !NotificationManager.getActive(NotificationPosition.TOP_LEFT).isEmpty();
+        }
+
+        @Override
+        public void paint(HudFrame frame) {
+            renderTopLeft(frame.canvas(), frame.minecraft(), NotificationManager.getActive(NotificationPosition.TOP_LEFT));
+        }
+    };
+
     private NotificationRenderer() {
     }
 
-    @SubscribeEvent
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
-            return;
-        }
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.CENTER_TOP);
-        if (entries.isEmpty()) {
-            return;
-        }
-
-        GuiGraphics guiGraphics = event.getGuiGraphics();
-        // Notification panels are part of the HUD and can contain many translucent
-        // primitives. Batch them for one buffer submission per notification pass.
-        guiGraphics.drawManaged(() -> renderCenterTop(guiGraphics, mc, entries));
+    private static boolean hudVisible(Minecraft mc) {
+        return mc.player != null && !mc.options.hideGui && !mc.getDebugOverlay().showDebugScreen() && mc.screen == null;
     }
 
-    /**
-     * Draw the top-left notification pass after the complete vanilla HUD and
-     * late HUD integrations have finished.  Xaero's minimap deliberately
-     * injects its final overlay at the return of {@code Gui#render}, which is
-     * after {@link RenderGuiEvent.Post}; keeping this pass separate prevents
-     * the minimap from covering notifications without changing their layout.
-     */
-    public static void renderTopLeftAfterHud(GuiGraphics guiGraphics) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen() || mc.screen != null) {
-            return;
-        }
-        // Avoid opening a managed draw pass on frames where there is nothing to
-        // render.  This keeps the late-HUD hook effectively free while idle.
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.TOP_LEFT);
-        if (entries.isEmpty()) {
-            return;
-        }
+    // ==================== 右上角系统消息 ====================
 
-        guiGraphics.drawManaged(() -> renderTopLeft(guiGraphics, mc, entries));
-    }
-
-    public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,
-                                      int anchorY, int anchorHeight) {
-        List<NotificationManager.ActiveNotification> entries =
-                NotificationManager.getActive(NotificationPosition.TOP_RIGHT);
-        renderTopRight(guiGraphics, font, rightEdge, anchorY, anchorHeight, entries);
-    }
-
-    public static void renderTopRight(GuiGraphics guiGraphics, Font font, int rightEdge,
-                                      int anchorY, int anchorHeight,
+    public static void renderTopRight(UiCanvas canvas, Font font, int rightEdge, int anchorY, int anchorHeight,
                                       List<NotificationManager.ActiveNotification> entries) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()
-                || mc.screen != null || entries.isEmpty()) {
+        if (!hudVisible(mc) || entries.isEmpty()) {
             return;
         }
 
@@ -115,14 +111,7 @@ public final class NotificationRenderer {
         for (int index = entries.size() - 1; index >= 0; index--) {
             NotificationManager.ActiveNotification entry = entries.get(index);
             Notification notification = entry.notification();
-            long animationMs = Math.min(SIDE_NOTIFICATION_ANIMATION_MS, notification.durationMs() / 3L);
-            long outroStart = Math.max(animationMs, notification.durationMs() - animationMs);
-            long age = entry.ageMs(now);
-            float intro = easeOutCubic(clamp01(age / (float) Math.max(1L, animationMs)));
-            float outro = age > outroStart
-                    ? easeInCubic(clamp01((age - outroStart) / (float) Math.max(1L, animationMs)))
-                    : 0.0f;
-            float visibility = intro * (1.0f - outro);
+            float visibility = visibility(entry, notification, now);
             int alpha = Math.round(visibility * 255.0f);
             if (alpha <= 0) {
                 continue;
@@ -134,8 +123,7 @@ public final class NotificationRenderer {
                     (int) ((TOP_RIGHT_MAX_WIDTH - chromeWidth) / TOP_RIGHT_TEXT_SCALE));
             CachedLines cachedLines = splitTopRightLines(font, notification, maxTextWidth);
             List<FormattedCharSequence> displayLines = cachedLines.lines();
-            int rawTextWidth = cachedLines.maxWidth();
-            int textWidth = Math.round(rawTextWidth * TOP_RIGHT_TEXT_SCALE);
+            int textWidth = Math.round(cachedLines.maxWidth() * TOP_RIGHT_TEXT_SCALE);
             int boxWidth = Math.min(TOP_RIGHT_MAX_WIDTH, chromeWidth + textWidth);
             int rawLineStep = font.lineHeight + TOP_RIGHT_LINE_GAP;
             int rawTextHeight = font.lineHeight + Math.max(0, displayLines.size() - 1) * rawLineStep;
@@ -147,48 +135,39 @@ public final class NotificationRenderer {
             boolean clipAnimation = visibility < 0.999f;
             if (clipAnimation) {
                 int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
-                guiGraphics.enableScissor(boxRight - animatedWidth, currentY, boxRight, currentY + boxHeight);
+                canvas.pushClip(boxRight - animatedWidth, currentY, animatedWidth, boxHeight, 0.0F);
             }
-            drawTopRightPanel(guiGraphics, boxX, currentY, boxWidth, boxHeight, notification, alpha);
+            drawTopRightPanel(canvas, boxX, currentY, boxWidth, boxHeight, notification, alpha);
 
-            int textX = boxX + TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH + TOP_RIGHT_ACCENT_GAP;
-            int textY = currentY + (boxHeight - scaledTextHeight) / 2;
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(textX, textY, 0.0f);
-            guiGraphics.pose().scale(TOP_RIGHT_TEXT_SCALE, TOP_RIGHT_TEXT_SCALE, 1.0f);
-            int lineY = 0;
-            int textColor = scaledColor(notification.theme().textColor(), alpha);
+            float textX = boxX + TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH + TOP_RIGHT_ACCENT_GAP;
+            float textY = currentY + (boxHeight - scaledTextHeight) / 2.0F;
+            int textColor = scaleAlpha(notification.theme().textColor(), alpha);
             for (FormattedCharSequence line : displayLines) {
-                guiGraphics.drawString(font, line, 0, lineY, textColor, false);
-                lineY += rawLineStep;
+                canvas.text(line, textX, textY, textColor, TOP_RIGHT_TEXT_SCALE, false);
+                textY += rawLineStep * TOP_RIGHT_TEXT_SCALE;
             }
-            guiGraphics.pose().popPose();
             if (clipAnimation) {
-                guiGraphics.disableScissor();
+                canvas.popClip();
             }
             currentY += boxHeight + TOP_RIGHT_STACK_GAP;
         }
     }
 
-    private static void drawTopRightPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
+    private static void drawTopRightPanel(UiCanvas canvas, int x, int y, int width, int height,
                                           Notification notification, int alpha) {
         NotificationTheme theme = notification.theme();
         int accent = notification.effectiveAccentColor();
         int border = notification.accentColor() >= 0 ? accent : theme.borderColor();
-        UiPanelRenderer.roundedRect(guiGraphics, x, y, width, height, TOP_RIGHT_RADIUS,
-                scaleAlpha(theme.backgroundColor(), Math.round(alpha * 0.78f)));
-        UiPanelRenderer.roundedBorder(guiGraphics, x, y, width, height, TOP_RIGHT_RADIUS,
-                scaleAlpha(border, Math.round(alpha * 0.62f)));
-
-        int accentX = x + TOP_RIGHT_LEFT_PADDING;
-        int accentY = y + 3;
-        int accentHeight = Math.max(2, height - 6);
-        UiPanelRenderer.roundedRect(guiGraphics, accentX, accentY, ACCENT_WIDTH, accentHeight, 1,
-                scaleAlpha(accent, Math.round(alpha * 0.88f)));
+        canvas.shape(x, y, width, height).radius(TOP_RIGHT_RADIUS)
+                .fill(scaleAlpha(theme.backgroundColor(), Math.round(alpha * 0.78f)))
+                .border(1.0F, scaleAlpha(border, Math.round(alpha * 0.62f))).draw();
+        canvas.shape(x + TOP_RIGHT_LEFT_PADDING, y + 3, ACCENT_WIDTH, Math.max(2, height - 6)).radius(1.0F)
+                .fill(scaleAlpha(accent, Math.round(alpha * 0.88f))).draw();
     }
 
-    private static void renderTopLeft(GuiGraphics guiGraphics, Minecraft mc,
-                                      List<NotificationManager.ActiveNotification> entries) {
+    // ==================== 左上角提示 ====================
+
+    private static void renderTopLeft(UiCanvas canvas, Minecraft mc, List<NotificationManager.ActiveNotification> entries) {
         int currentY = TOP_MARGIN;
         long now = System.currentTimeMillis();
         for (NotificationManager.ActiveNotification entry : entries) {
@@ -199,45 +178,49 @@ public final class NotificationRenderer {
                 continue;
             }
 
-            int maxWidth = cachedLines.maxWidth();
-            int boxWidth = maxWidth + INNER_PADDING * 2 + ACCENT_WIDTH + 4;
+            int boxWidth = cachedLines.maxWidth() + INNER_PADDING * 2 + ACCENT_WIDTH + 4;
             int boxHeight = INNER_PADDING * 2 + lines.size() * (mc.font.lineHeight + 3) - 3;
-            long age = entry.ageMs(now);
-            long animationMs = Math.min(SIDE_NOTIFICATION_ANIMATION_MS, notification.durationMs() / 3L);
-            long outroStart = Math.max(animationMs, notification.durationMs() - animationMs);
-            float intro = easeOutCubic(clamp01(age / (float) Math.max(1L, animationMs)));
-            float outro = age > outroStart
-                    ? easeInCubic(clamp01((age - outroStart) / (float) Math.max(1L, animationMs)))
-                    : 0.0f;
-            float visibility = intro * (1.0f - outro);
+            float visibility = visibility(entry, notification, now);
             int alpha = Math.round(visibility * 255.0f);
             if (alpha <= 0) {
                 continue;
             }
             boolean clipAnimation = visibility < 0.999f;
             if (clipAnimation) {
-                int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
-                guiGraphics.enableScissor(LEFT_MARGIN, currentY,
-                        LEFT_MARGIN + animatedWidth, currentY + boxHeight);
+                int animatedWidth = Math.max(1, Math.round((boxWidth + 4) * visibility));
+                canvas.pushClip(LEFT_MARGIN - 2, currentY - 2, animatedWidth, boxHeight + 6, 0.0F);
             }
-            drawPanel(guiGraphics, LEFT_MARGIN, currentY, boxWidth, boxHeight, notification, alpha, 3);
+            drawPanel(canvas, LEFT_MARGIN, currentY, boxWidth, boxHeight, notification, alpha);
 
-            int textX = LEFT_MARGIN + INNER_PADDING + ACCENT_WIDTH + 5;
-            int textY = currentY + INNER_PADDING;
+            float textX = LEFT_MARGIN + INNER_PADDING + ACCENT_WIDTH + 5;
+            float textY = currentY + INNER_PADDING;
+            int textColor = scaleAlpha(notification.theme().textColor(), alpha);
             for (FormattedCharSequence line : lines) {
-                guiGraphics.drawString(mc.font, line, textX, textY,
-                        scaledColor(notification.theme().textColor(), alpha), true);
+                canvas.text(line, textX, textY, textColor, 1.0F, true);
                 textY += mc.font.lineHeight + 3;
             }
             if (clipAnimation) {
-                guiGraphics.disableScissor();
+                canvas.popClip();
             }
             currentY += boxHeight + 4;
         }
     }
 
-    private static void renderCenterTop(GuiGraphics guiGraphics, Minecraft mc,
-                                        List<NotificationManager.ActiveNotification> entries) {
+    private static void drawPanel(UiCanvas canvas, int x, int y, int width, int height,
+                                  Notification notification, int alpha) {
+        NotificationTheme theme = notification.theme();
+        int accent = notification.effectiveAccentColor();
+        canvas.shape(x, y, width, height).radius(3.0F)
+                .fill(scaleAlpha(theme.backgroundColor(), alpha))
+                .border(1.0F, scaleAlpha(notification.accentColor() >= 0 ? accent : theme.borderColor(), alpha))
+                .shadow(new Theme.Shadow(0.0F, 1.0F, 6.0F, 0.0F, scaleAlpha(theme.glowColor(), alpha))).draw();
+        canvas.shape(x + INNER_PADDING - 2, y + INNER_PADDING, ACCENT_WIDTH, Math.max(1, height - INNER_PADDING * 2))
+                .radius(1.0F).fill(scaleAlpha(accent, alpha)).draw();
+    }
+
+    // ==================== 居中横幅 ====================
+
+    private static void renderCenterTop(UiCanvas canvas, Minecraft mc, List<NotificationManager.ActiveNotification> entries) {
         NotificationManager.ActiveNotification entry = entries.get(0);
         Notification notification = entry.notification();
         long elapsed = entry.ageMs(System.currentTimeMillis());
@@ -257,31 +240,82 @@ public final class NotificationRenderer {
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int maxPanelWidth = Math.max(CENTER_MIN_WIDTH, screenWidth - CENTER_SIDE_MARGIN * 2);
         CenterLayout layout = getCenterLayout(font, notification, maxPanelWidth);
-        String title = layout.title();
-        String detail = layout.detail();
         int panelWidth = layout.panelWidth();
-        boolean hasDetail = layout.hasDetail();
         int panelHeight = layout.panelHeight();
         int animatedWidth = Math.max(24, Math.round(panelWidth * (0.86f + intro * 0.14f)));
         int y = 16 - Math.round((1.0f - intro) * 26.0f) - Math.round(outro * 10.0f);
         int x = (screenWidth - animatedWidth) / 2;
         int alpha255 = Math.round(alpha * 255.0f);
 
-        drawCenterPanel(guiGraphics, x, y, animatedWidth, panelHeight,
-                notification, alpha255, intro, elapsed);
-        int centerX = screenWidth / 2;
-        drawCenteredScaledString(guiGraphics, font, title, centerX,
-                y + (hasDetail ? 7 : 9), 1.16f,
-                UiPanelRenderer.withAlpha(notification.theme().textColor(), alpha255));
-        if (hasDetail) {
-            drawCenteredScaledString(guiGraphics, font, detail, centerX, y + 26, 0.76f,
-                    UiPanelRenderer.withAlpha(notification.theme().secondaryTextColor(),
-                            Math.round(alpha255 * 0.82f)));
+        drawCenterPanel(canvas, x, y, animatedWidth, panelHeight, notification, alpha255, intro, elapsed);
+        float centerX = screenWidth / 2.0F;
+        drawCenteredScaledString(canvas, font, layout.title(), centerX, y + (layout.hasDetail() ? 7 : 9), 1.16f,
+                UiColor.withAlpha(notification.theme().textColor(), alpha255));
+        if (layout.hasDetail()) {
+            drawCenteredScaledString(canvas, font, layout.detail(), centerX, y + 26, 0.76f,
+                    UiColor.withAlpha(notification.theme().secondaryTextColor(), Math.round(alpha255 * 0.82f)));
         }
         int glyphColor = notification.theme().borderColor();
-        drawSideGlyph(guiGraphics, x + 12, y + panelHeight / 2, glyphColor, alpha255, intro);
-        drawSideGlyph(guiGraphics, x + animatedWidth - 12, y + panelHeight / 2,
-                glyphColor, alpha255, intro);
+        drawSideGlyph(canvas, x + 12, y + panelHeight / 2.0F, glyphColor, alpha255, intro);
+        drawSideGlyph(canvas, x + animatedWidth - 12, y + panelHeight / 2.0F, glyphColor, alpha255, intro);
+    }
+
+    private static void drawCenterPanel(UiCanvas canvas, int x, int y, int width, int height,
+                                        Notification notification, int alpha, float intro, long elapsed) {
+        NotificationTheme theme = notification.theme();
+        int bottom = y + height;
+        float streakWidth = Math.max(0, (width - 28) * intro);
+        float streakX = x + (width - streakWidth) / 2.0F;
+        float shimmer = 0.5f + 0.5f * (float) Math.sin(elapsed / 360.0f);
+
+        canvas.shape(x, y, width, height).radius(PANEL_RADIUS)
+                .fill(UiColor.withAlpha(theme.backgroundColor(), alpha))
+                .border(1.0F, UiColor.withAlpha(theme.borderColor(), alpha))
+                .shadow(new Theme.Shadow(0.0F, 3.0F, 10.0F, 0.0F, UiColor.withAlpha(0xFF000000, Math.min(110, alpha / 2))))
+                .draw();
+        canvas.shape(x - 1, y - 1, width + 2, height + 2).radius(PANEL_RADIUS + 1).fill(0)
+                .shadow(new Theme.Shadow(0.0F, 0.0F, 8.0F, 0.0F, UiColor.withAlpha(theme.glowColor(), Math.min(72, alpha / 3))))
+                .draw();
+        canvas.shape(x + 4, y + 4, width - 8, height - 8).radius(PANEL_RADIUS - 2)
+                .fill(UiColor.withAlpha(CENTER_INNER_COLOR, Math.round(alpha * 0.56f))).draw();
+        // 顶边流光：两端淡出
+        int streak = UiColor.withAlpha(blendColor(theme.borderColor(), 0xFFFFFFFF, 0.28f),
+                Math.round(alpha * (0.28f + shimmer * 0.18f)));
+        canvas.shape(streakX, y + 2, streakWidth * 0.5F, 1).horizontalGradient(UiColor.withAlpha(streak, 0), streak).draw();
+        canvas.shape(streakX + streakWidth * 0.5F, y + 2, streakWidth * 0.5F, 1)
+                .horizontalGradient(streak, UiColor.withAlpha(streak, 0)).draw();
+        canvas.fill(x + 12, bottom - 4, width - 24, 1, UiColor.withAlpha(CENTER_DARK_BORDER_COLOR, Math.round(alpha * 0.55f)));
+    }
+
+    private static void drawCenteredScaledString(UiCanvas canvas, Font font, String text, float centerX, float y,
+                                                 float scale, int color) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        float x = centerX - font.width(text) * scale / 2.0F;
+        canvas.text(text, x + scale, y + scale, UiColor.withAlpha(0xFF000000, (color >>> 24) / 2), scale, false);
+        canvas.text(text, x, y, color, scale, false);
+    }
+
+    /** 两侧的十字准星标记，随入场展开。 */
+    private static void drawSideGlyph(UiCanvas canvas, float centerX, float centerY, int accentColor, int alpha, float intro) {
+        float size = 4.0f + intro * 2.0f;
+        int color = UiColor.withAlpha(accentColor, Math.round(alpha * 0.76f));
+        canvas.line(centerX - size, centerY + 0.5F, centerX + size + 1.0F, centerY + 0.5F, 1.0F, color, false);
+        canvas.line(centerX + 0.5F, centerY - size, centerX + 0.5F, centerY + size + 1.0F, 1.0F, color, false);
+    }
+
+    // ==================== 排版缓存 ====================
+
+    private static float visibility(NotificationManager.ActiveNotification entry, Notification notification, long now) {
+        long animationMs = Math.min(SIDE_NOTIFICATION_ANIMATION_MS, notification.durationMs() / 3L);
+        long outroStart = Math.max(animationMs, notification.durationMs() - animationMs);
+        long age = entry.ageMs(now);
+        float intro = easeOutCubic(clamp01(age / (float) Math.max(1L, animationMs)));
+        float outro = age > outroStart
+                ? easeInCubic(clamp01((age - outroStart) / (float) Math.max(1L, animationMs)))
+                : 0.0f;
+        return intro * (1.0f - outro);
     }
 
     private static CachedLines splitLines(Font font, Notification notification) {
@@ -303,8 +337,7 @@ public final class NotificationRenderer {
         });
     }
 
-    private static CachedLines splitTopRightLines(Font font, Notification notification,
-                                                   int maxTextWidth) {
+    private static CachedLines splitTopRightLines(Font font, Notification notification, int maxTextWidth) {
         ensureLineCacheFont(font);
         // The top-right width is fixed by the HUD constants, so the first
         // computed split remains valid for the notification's lifetime.
@@ -317,23 +350,19 @@ public final class NotificationRenderer {
         });
     }
 
-    private static CenterLayout getCenterLayout(Font font, Notification notification,
-                                                int maxPanelWidth) {
+    private static CenterLayout getCenterLayout(Font font, Notification notification, int maxPanelWidth) {
         ensureLineCacheFont(font);
         CenterLayout cached = CENTER_LAYOUT_CACHE.get(notification);
         if (cached != null && cached.maxPanelWidth() == maxPanelWidth) {
             return cached;
         }
 
-        String title = LoadingScreenUi.trimToWidth(
-                notification.title().getString(), font, maxPanelWidth - 52);
-        String detail = LoadingScreenUi.trimToWidth(
-                notification.message().getString(), font, maxPanelWidth - 52);
+        String title = TextFit.trim(notification.title().getString(), font, maxPanelWidth - 52);
+        String detail = TextFit.trim(notification.message().getString(), font, maxPanelWidth - 52);
         int contentWidth = Math.max(font.width(title), detail.isEmpty() ? 0 : font.width(detail)) + 52;
         int panelWidth = Math.max(CENTER_MIN_WIDTH, Math.min(maxPanelWidth, contentWidth));
         boolean hasDetail = !detail.isEmpty();
-        CenterLayout result = new CenterLayout(
-                title, detail, panelWidth, hasDetail ? 38 : 29, hasDetail, maxPanelWidth);
+        CenterLayout result = new CenterLayout(title, detail, panelWidth, hasDetail ? 38 : 29, hasDetail, maxPanelWidth);
         CENTER_LAYOUT_CACHE.put(notification, result);
         return result;
     }
@@ -362,83 +391,8 @@ public final class NotificationRenderer {
         lineCachesDirty = true;
     }
 
-    private static void drawPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                  Notification notification, int alpha, int radius) {
-        NotificationTheme theme = notification.theme();
-        int accent = notification.effectiveAccentColor();
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 1, y - 1, width + 2, height + 2,
-                radius + 1, scaleAlpha(theme.glowColor(), alpha), 0);
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height, radius,
-                scaleAlpha(theme.backgroundColor(), alpha),
-                scaleAlpha(notification.accentColor() >= 0 ? accent : theme.borderColor(), alpha));
-
-        int accentAlpha = scaleAlpha(accent, alpha);
-        int accentX = x + INNER_PADDING - 2;
-        int accentY = y + INNER_PADDING;
-        int accentHeight = Math.max(1, height - INNER_PADDING * 2);
-        guiGraphics.fill(accentX, accentY, accentX + ACCENT_WIDTH, accentY + accentHeight, accentAlpha);
-    }
-
-    private static void drawCenterPanel(GuiGraphics guiGraphics, int x, int y, int width, int height,
-                                        Notification notification, int alpha, float intro, long elapsed) {
-        NotificationTheme theme = notification.theme();
-        int right = x + width;
-        int bottom = y + height;
-        int shadowAlpha = Math.min(90, alpha / 3);
-        int glowAlpha = Math.min(72, alpha / 3);
-        int streakWidth = Math.max(0, Math.round((width - 28) * intro));
-        int streakX = x + (width - streakWidth) / 2;
-        float shimmer = 0.5f + 0.5f * (float) Math.sin(elapsed / 360.0f);
-
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 2, y + 3, width + 4, height + 3,
-                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(0xFF000000, shadowAlpha), 0);
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x - 1, y - 1, width + 2, height + 2,
-                PANEL_RADIUS + 1, UiPanelRenderer.withAlpha(theme.glowColor(), glowAlpha), 0);
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x, y, width, height, PANEL_RADIUS,
-                UiPanelRenderer.withAlpha(theme.backgroundColor(), alpha),
-                UiPanelRenderer.withAlpha(theme.borderColor(), alpha));
-        UiPanelRenderer.smoothRoundedRectBatched(guiGraphics, x + 4, y + 4, width - 8, height - 8,
-                PANEL_RADIUS - 2, UiPanelRenderer.withAlpha(CENTER_INNER_COLOR, Math.round(alpha * 0.56f)), 0);
-        guiGraphics.fill(streakX, y + 2, streakX + streakWidth, y + 3,
-                UiPanelRenderer.withAlpha(blendColor(theme.borderColor(), 0xFFFFFFFF, 0.28f),
-                        Math.round(alpha * (0.28f + shimmer * 0.18f))));
-        guiGraphics.fill(x + 12, bottom - 4, right - 12, bottom - 3,
-                UiPanelRenderer.withAlpha(CENTER_DARK_BORDER_COLOR, Math.round(alpha * 0.55f)));
-    }
-
-    private static void drawCenteredScaledString(GuiGraphics guiGraphics, Font font, String text,
-                                                 int centerX, int y, float scale, int color) {
-        if (text == null || text.isEmpty()) {
-            return;
-        }
-
-        int textWidth = font.width(text);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(scale, scale, 1.0f);
-        int scaledX = Math.round((centerX - textWidth * scale / 2.0f) / scale);
-        int scaledY = Math.round(y / scale);
-        guiGraphics.drawString(font, text, scaledX + 1, scaledY + 1,
-                UiPanelRenderer.withAlpha(0xFF000000, (color >>> 24) / 2), false);
-        guiGraphics.drawString(font, text, scaledX, scaledY, color, false);
-        guiGraphics.pose().popPose();
-    }
-
-    private static void drawSideGlyph(GuiGraphics guiGraphics, int centerX, int centerY,
-                                      int accentColor, int alpha, float intro) {
-        int size = Math.max(2, Math.round(4.0f + intro * 2.0f));
-        int color = UiPanelRenderer.withAlpha(accentColor, Math.round(alpha * 0.76f));
-        guiGraphics.fill(centerX - size, centerY, centerX, centerY + 1, color);
-        guiGraphics.fill(centerX, centerY - size, centerX + 1, centerY, color);
-        guiGraphics.fill(centerX, centerY + 1, centerX + 1, centerY + size + 1, color);
-        guiGraphics.fill(centerX + 1, centerY, centerX + size + 1, centerY + 1, color);
-    }
-
-    private static int scaledColor(int color, int alpha) {
-        return UiPanelRenderer.withAlpha(color, Math.round((color >>> 24) * (alpha / 255.0f)));
-    }
-
     private static int scaleAlpha(int color, int alpha) {
-        return UiPanelRenderer.withAlpha(color, Math.round((color >>> 24) * (alpha / 255.0f)));
+        return UiColor.withAlpha(color, Math.round((color >>> 24) * (alpha / 255.0f)));
     }
 
     private static float clamp01(float value) {
@@ -455,17 +409,7 @@ public final class NotificationRenderer {
     }
 
     private static int blendColor(int colorA, int colorB, float value) {
-        float mix = clamp01(value);
-        int ar = (colorA >> 16) & 0xFF;
-        int ag = (colorA >> 8) & 0xFF;
-        int ab = colorA & 0xFF;
-        int br = (colorB >> 16) & 0xFF;
-        int bg = (colorB >> 8) & 0xFF;
-        int bb = colorB & 0xFF;
-        int red = Math.round(ar + (br - ar) * mix);
-        int green = Math.round(ag + (bg - ag) * mix);
-        int blue = Math.round(ab + (bb - ab) * mix);
-        return 0xFF000000 | (red << 16) | (green << 8) | blue;
+        return UiColor.lerp(colorA | 0xFF000000, colorB | 0xFF000000, clamp01(value));
     }
 
     private record CachedLines(List<FormattedCharSequence> lines, int maxWidth) {
