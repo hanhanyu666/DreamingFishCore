@@ -438,6 +438,45 @@ public final class TaskLocationManager {
         return location != null && removeLocation(location.getId());
     }
 
+    /**
+     * 切换某个地点的尸潮开关（尸潮区域）。
+     *
+     * <p>地点字段本来只允许改 JSON 后热重载；这是第一个"运行时可改"的字段，
+     * 所以按 {@link #removeLocation(String)} 的写法走同一套校验 + 立即写盘 + 失败回滚。</p>
+     *
+     * @return 切换后的开关值；地点不存在时返回 empty
+     */
+    public static synchronized java.util.Optional<Boolean> setHordeByName(
+            String locationName, boolean horde) {
+        ensureWritable();
+        TaskLocationDefinition location = getLocationByName(locationName).orElse(null);
+        if (location == null) {
+            return java.util.Optional.empty();
+        }
+        boolean previous = location.hasHordeFlag();
+        if (previous == horde) {
+            return java.util.Optional.of(horde);
+        }
+        location.setHordeFlag(horde);
+        try {
+            writeDocument();
+        } catch (RuntimeException exception) {
+            location.setHordeFlag(previous);
+            throw exception;
+        }
+        return java.util.Optional.of(horde);
+    }
+
+    /** 某个位置是否落在开启尸潮开关的地点内（刷怪箱的启用条件之一）。 */
+    public static boolean isHordeArea(Level level, BlockPos position) {
+        if (level == null || position == null) {
+            return false;
+        }
+        return findLocationAt(level, position)
+                .map(TaskLocationDefinition::isHorde)
+                .orElse(false);
+    }
+
     private static void upsert(TaskLocationDefinition definition) {
         definition.validate();
         for (TaskLocationDefinition existing : LOCATIONS.values()) {

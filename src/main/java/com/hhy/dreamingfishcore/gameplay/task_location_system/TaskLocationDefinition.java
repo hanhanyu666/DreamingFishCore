@@ -33,6 +33,13 @@ public final class TaskLocationDefinition {
     private boolean enabled = true;
     /** 地点运行模式；旧配置缺少该字段时保持原有的强制保护行为。 */
     private String mode = TaskLocationMode.PROTECTED.name();
+    /**
+     * 尸潮开关：开启后这个区域算「尸潮区域」，区域内的刷怪箱可以工作。
+     *
+     * <p>刻意不做成第三种 mode：尸潮区域要的保护与圈地规则和可建造地点完全一样，
+     * 多一个模式只会让每个按 mode 分支的地方都要再判一次。旧配置缺少该字段时为 false。</p>
+     */
+    private boolean horde;
 
     /** Gson 反序列化需要无参构造方法。 */
     public TaskLocationDefinition() {
@@ -157,6 +164,29 @@ public final class TaskLocationDefinition {
     /** NPCs and authored decorations remain protected in both active modes. */
     public boolean protectsEntities() {
         return isEnabled();
+    }
+
+    /**
+     * 尸潮区域：启用中且开着尸潮开关的地点。区域内的刷怪箱会启用，
+     * 且只有刷怪箱的生成被放行（自然刷怪与增援仍被既有规则拦下）。
+     */
+    public boolean isHorde() {
+        return isEnabled() && horde;
+    }
+
+    /** 开关本身是否打开（不看 enabled），供命令与配置显示使用。 */
+    public boolean hasHordeFlag() {
+        return horde;
+    }
+
+    /**
+     * 修改尸潮开关。
+     *
+     * <p>只有 {@link TaskLocationManager} 调用：它是唯一负责校验与写盘的入口，
+     * 改完立刻落盘，失败时由调用方回滚。</p>
+     */
+    void setHordeFlag(boolean value) {
+        this.horde = value;
     }
 
     /**

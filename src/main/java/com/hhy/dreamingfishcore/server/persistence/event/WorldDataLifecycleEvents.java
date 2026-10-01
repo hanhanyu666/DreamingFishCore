@@ -74,6 +74,8 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载公告已读状态", () -> PlayerNoticeDataManager.loadWorldData(server));
         runSafely("加载玩家组织", () -> OrganizationManager.loadWorldData(server));
         runSafely("加载聚居地设备", () -> SettlementFilterRegistry.loadWorldData(server));
+        runSafely("加载刷怪箱", () -> com.hhy.dreamingfishcore.gameplay.spawner_system
+                .SpawnerRegistry.loadWorldData(server));
         // 组织领地登记要等经济服务（领地数据）与组织数据都就绪后再校验，
         // 因此放在加载序列的最后一步：摘除失效登记（经济读不到时会直接跳过）。
         runSafely("校验组织领地登记", () -> OrganizationManager.reconcileTerritories(server));
@@ -89,6 +91,8 @@ public final class WorldDataLifecycleEvents {
         StoryManager.tickActiveTime(event.getServer());
         // 聚居地过滤装置的维护周期（自带节流，且活动时钟不可用时会跳过）。
         SettlementFilterService.tick(event.getServer());
+        // 刷怪箱的启用判定与批次刷怪（自带每秒节流）。
+        com.hhy.dreamingfishcore.gameplay.spawner_system.SpawnerService.tick(event.getServer());
         PlayerInfectionManager.tickTreatmentWindows(event.getServer());
         // 传播复发到期自动结束：不依赖玩家主动处理，避免永久保留传播能力。
         InfectionTreatmentService.tickRelapseWindows(event.getServer());
@@ -146,6 +150,8 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存公告已读状态", () -> PlayerNoticeDataManager.saveIfDirty(server));
         saved &= runSaveSafely("保存玩家组织", () -> OrganizationManager.saveIfDirty(server));
         saved &= runSaveSafely("保存聚居地设备", () -> SettlementFilterRegistry.saveIfDirty(server));
+        saved &= runSaveSafely("保存刷怪箱", () -> com.hhy.dreamingfishcore.gameplay.spawner_system
+                .SpawnerRegistry.saveIfDirty(server));
         // StoryManager 已经保存统一的剧情事实；内容包管理器只负责文案配置，
         // 不再拥有第二份阶段状态。
         return saved;
@@ -170,6 +176,8 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理公告已读缓存", PlayerNoticeDataManager::clearWorldCache);
         runSafely("清理玩家组织缓存", OrganizationManager::clearWorldCache);
         runSafely("清理聚居地设备缓存", SettlementFilterRegistry::clearWorldCache);
+        runSafely("清理刷怪箱缓存",
+                com.hhy.dreamingfishcore.gameplay.spawner_system.SpawnerRegistry::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

@@ -35,9 +35,10 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /** Central registration and dispatch point for all client/server payloads. */
 public final class DreamingFishCore_NetworkManager {
-    // 数据驱动剧情/任务状态、感染身份（含传播复发标记）、玩家组织（新增领地联动与资金池字段、
-    // 动作包新增金额字段）、服务器状态 TPS 的同步契约均已变更，旧客户端必须在握手阶段明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.27.0";
+    // 数据驱动剧情/任务状态、感染身份（含传播复发标记）、玩家组织（领地联动与资金池字段）、
+    // 刷怪箱配置（尸潮功能，含"为什么不在尸潮区域内"的说明字段）、服务器状态 TPS 的同步契约均已变更，
+    // 旧客户端必须在握手阶段明确拒绝连接。
+    private static final String PROTOCOL_VERSION = "0.28.2";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -99,6 +100,23 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(Packet_OrganizationActionResult.TYPE, Packet_OrganizationActionResult.STREAM_CODEC, Packet_OrganizationActionResult::handle);
         registrar.playToClient(Packet_OpenRevivalCharmGUI.TYPE, Packet_OpenRevivalCharmGUI.STREAM_CODEC, Packet_OpenRevivalCharmGUI::handle);
         registrar.playToServer(Packet_RevivalRequest.TYPE, Packet_RevivalRequest.STREAM_CODEC, authenticated(Packet_RevivalRequest::handle));
+
+        // 刷怪箱配置（尸潮功能）：打开请求 + 快照 + 修改请求 + 结果 + 开屏。
+        registrar.playToServer(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerOpenRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerOpenRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerOpenRequest::handle));
+        registrar.playToClient(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerSnapshotResponse.TYPE,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerSnapshotResponse.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerSnapshotResponse::handle);
+        registrar.playToServer(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerConfigRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerConfigRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerConfigRequest::handle));
+        registrar.playToClient(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerActionResult.TYPE,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerActionResult.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerActionResult::handle);
+        registrar.playToClient(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI.TYPE,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI::handle);
 
         registrar.playToClient(Packet_PlayerLoginRequest.TYPE, Packet_PlayerLoginRequest.STREAM_CODEC, Packet_PlayerLoginRequest::handle);
         registrar.playToServer(Packet_PlayerLoginResponse.TYPE, Packet_PlayerLoginResponse.STREAM_CODEC, Packet_PlayerLoginResponse::handle);
