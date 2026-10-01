@@ -91,6 +91,8 @@ public final class WorldDataLifecycleEvents {
         StoryManager.tickActiveTime(event.getServer());
         // 聚居地过滤装置的维护周期（自带节流，且活动时钟不可用时会跳过）。
         SettlementFilterService.tick(event.getServer());
+        // 刷怪箱的启用判定与批次刷怪（自带每秒节流）。
+        com.hhy.dreamingfishcore.gameplay.spawner_system.SpawnerService.tick(event.getServer());
         PlayerInfectionManager.tickTreatmentWindows(event.getServer());
         // 传播复发到期自动结束：不依赖玩家主动处理，避免永久保留传播能力。
         InfectionTreatmentService.tickRelapseWindows(event.getServer());

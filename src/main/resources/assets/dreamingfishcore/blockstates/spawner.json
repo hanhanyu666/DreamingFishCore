@@ -1,0 +1,52 @@
+{
+  "variants": {
+    "active=false,powered=false,skin=0": {
+      "model": "dreamingfishcore:block/spawner_skin0"
+    },
+    "active=false,powered=false,skin=1": {
+      "model": "dreamingfishcore:block/spawner_skin1"
+    },
+    "active=false,powered=false,skin=2": {
+      "model": "dreamingfishcore:block/spawner_skin2"
+    },
+    "active=false,powered=false,skin=3": {
+      "model": "dreamingfishcore:block/spawner_skin3"
+    },
+    "active=false,powered=true,skin=0": {
+      "model": "dreamingfishcore:block/spawner_skin0"
+    },
+    "active=false,powered=true,skin=1": {
+      "model": "dreamingfishcore:block/spawner_skin1"
+    },
+    "active=false,powered=true,skin=2": {
+      "model": "dreamingfishcore:block/spawner_skin2"
+    },
+    "active=false,powered=true,skin=3": {
+      "model": "dreamingfishcore:block/spawner_skin3"
+    },
+    "active=true,powered=false,skin=0": {
+      "model": "dreamingfishcore:block/spawner_skin0"
+    },
+    "active=true,powered=false,skin=1": {
+      "model": "dreamingfishcore:block/spawner_skin1"
+    },
+    "active=true,powered=false,skin=2": {
+      "model": "dreamingfishcore:block/spawner_skin2"
+    },
+    "active=true,powered=false,skin=3": {
+      "model": "dreamingfishcore:block/spawner_skin3"
+    },
+    "active=true,powered=true,skin=0": {
+      "model": "dreamingfishcore:block/spawner_skin0"
+    },
+    "active=true,powered=true,skin=1": {
+      "model": "dreamingfishcore:block/spawner_skin1"
+    },
+    "active=true,powered=true,skin=2": {
+      "model": "dreamingfishcore:block/spawner_skin2"
+    },
+    "active=true,powered=true,skin=3": {
+      "model": "dreamingfishcore:block/spawner_skin3"
+    }
+  }
+}

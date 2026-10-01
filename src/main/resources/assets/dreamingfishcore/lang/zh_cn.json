@@ -44,5 +44,6 @@
   "effect.dreamingfishcore.infection": "感染",
   "effect.dreamingfishcore.fear": "害怕",
   "effect.dreamingfishcore.courage": "勇气",
-  "block.dreamingfishcore.settlement_filter": "聚居地过滤装置"
+  "block.dreamingfishcore.settlement_filter": "聚居地过滤装置",
+  "block.dreamingfishcore.spawner": "刷怪箱"
 }

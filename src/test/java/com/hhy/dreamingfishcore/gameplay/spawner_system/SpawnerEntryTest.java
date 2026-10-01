@@ -128,9 +128,13 @@ class SpawnerEntryTest {
 
     @Test
     void firstBatchSpawnsImmediatelyAndLaterBatchesWaitForClearThenCooldown() {
-        // 第一批：只要还没刷过就立刻刷，不管 CD。
+        // 全新的一台：只要还没刷过就立刻刷，不管 CD（nextBatchAtTick 还是 -1）。
         assertTrue(SpawnerEntry.nextBatchDue(0, 3, false, -1L, 0L));
         assertTrue(SpawnerEntry.nextBatchDue(0, 3, true, -1L, 0L));
+
+        // 上一轮刚结算完（批次归零 + 已排轮次 CD）：要等 CD 到，否则会无缝接下一轮。
+        assertFalse(SpawnerEntry.nextBatchDue(0, 3, true, 5_000L, 4_999L));
+        assertTrue(SpawnerEntry.nextBatchDue(0, 3, true, 5_000L, 5_000L));
 
         // 第二批：场上还有怪就不刷（CD 从"上一批全死"开始算）。
         assertFalse(SpawnerEntry.nextBatchDue(1, 3, false, -1L, 10_000L));
@@ -179,11 +183,14 @@ class SpawnerEntryTest {
         // 重置一轮时保留已领名单：否则同一台箱子可以被反复刷奖励。
         entry.markBatchSpawned();
         entry.markCompleted();
-        entry.resetRound();
+        entry.resetRound(1_000L);
         assertTrue(entry.hasRewarded(player), "重置一轮不应清空已领名单");
         assertEquals(0, entry.batchesSpawned());
         assertFalse(entry.completed());
         assertTrue(entry.aliveEntityIds().isEmpty());
+        // 轮次之间仍要等 CD：重置后立刻应该"还没到点"。
+        assertFalse(SpawnerEntry.nextBatchDue(0, entry.batches(), true,
+                entry.nextBatchAtTick(), 1_000L));
     }
 
     @Test
@@ -195,7 +202,7 @@ class SpawnerEntryTest {
         assertEquals(1, entry.aliveEntityIds().size(), "null 不该被记进去");
         assertEquals(spawned.toString(), entry.aliveEntityIds().get(0));
 
-        entry.resetRound();
+        entry.resetRound(0L);
         assertTrue(entry.aliveEntityIds().isEmpty());
     }
 

@@ -160,6 +160,12 @@ public class DreamingFishCore_Items {
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SETTLEMENT_FILTER.get(),
                     new Item.Properties().rarity(Rarity.RARE)));
 
+    // 刷怪箱：放在开启尸潮开关的任务地点内，按批刷怪并在剿灭后结算奖励。
+    public static final DeferredHolder<Item, BlockItem> SPAWNER = ITEMS.register("spawner",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SPAWNER.get(),
+                    new Item.Properties().rarity(Rarity.EPIC)));
+
     private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
         EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);
         for (ArmorItem.Type type : ArmorItem.Type.values()) {

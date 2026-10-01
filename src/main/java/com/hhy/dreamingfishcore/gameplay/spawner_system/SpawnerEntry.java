@@ -247,8 +247,8 @@ public final class SpawnerEntry {
     /**
      * 现在该不该刷下一批。
      *
-     * <p>规则：第一批在启用时立刻刷；之后必须等**上一批全部死亡**才开始算 CD，
-     * CD 到了才刷下一批。这样节奏由玩家清怪决定，而不是固定间隔连刷。</p>
+     * <p>规则：全新的一台刷怪箱在启用时立刻刷；之后的每一批都必须等**上一批全部死亡**
+     * 才开始算 CD，CD 到了才刷。这样节奏由玩家清怪决定，而不是固定间隔连刷。</p>
      */
     static boolean nextBatchDue(int batchesSpawned, int batches, boolean fieldCleared,
                                long nextBatchAtTick, long now) {
@@ -256,7 +256,8 @@ public final class SpawnerEntry {
             return false;
         }
         if (batchesSpawned == 0) {
-            return true;
+            // 全新：立刻开刷（nextBatchAtTick 还没排过）；刚结算完上一轮的：等轮次 CD。
+            return nextBatchAtTick < 0L || now >= nextBatchAtTick;
         }
         if (!fieldCleared) {
             return false;
@@ -459,11 +460,12 @@ public final class SpawnerEntry {
      * 重置为一轮新的尸潮（已经结算过、且不自毁时使用）。
      *
      * <p>刻意保留 {@code rewardedPlayerIds}：每台刷怪箱对每个玩家只发一次奖励，
-     * 否则玩家可以反复刷同一台箱子领奖励。</p>
+     * 否则玩家可以反复刷同一台箱子领奖励。轮次之间仍然要等一个 CD，
+     * 不然玩家一清完就会立刻接上下一轮。</p>
      */
-    public void resetRound() {
+    public void resetRound(long now) {
         batchesSpawned = 0;
-        nextBatchAtTick = -1L;
+        nextBatchAtTick = now + cooldownTicks;
         aliveEntityIds().clear();
         completed = false;
     }

@@ -44,5 +44,6 @@
   "effect.dreamingfishcore.infection": "Infection",
   "effect.dreamingfishcore.fear": "Fear",
   "effect.dreamingfishcore.courage": "Courage",
-  "block.dreamingfishcore.settlement_filter": "Settlement Filter"
+  "block.dreamingfishcore.settlement_filter": "Settlement Filter",
+  "block.dreamingfishcore.spawner": "Horde Spawner"
 }

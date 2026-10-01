@@ -23,6 +23,11 @@ public final class DreamingFishCore_Blocks {
             BLOCKS.register("settlement_filter",
                     () -> new SettlementFilterBlock(SettlementFilterBlock.defaultProperties()));
 
+    /** 刷怪箱：尸潮区域里按批刷怪的可配置设备。 */
+    public static final DeferredHolder<Block, SpawnerBlock> SPAWNER =
+            BLOCKS.register("spawner",
+                    () -> new SpawnerBlock(SpawnerBlock.defaultProperties()));
+
     private DreamingFishCore_Blocks() {
     }
 
