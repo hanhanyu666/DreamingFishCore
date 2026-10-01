@@ -64,6 +64,19 @@ final class UiHarnessScenarios {
         UiHarness.register("title", minecraft -> minecraft.setScreen(new TitleScreen()));
         UiHarness.register("pause", minecraft -> minecraft.setScreen(new PauseScreen(true)));
         UiHarness.register("chat", minecraft -> minecraft.setScreen(new ChatScreen("")));
+        UiHarness.register("chat_busy", minecraft -> {
+            minecraft.setScreen(null);
+            var chat = com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.class;
+            java.util.UUID self = minecraft.player != null ? minecraft.player.getUUID() : java.util.UUID.randomUUID();
+            long now = System.currentTimeMillis();
+            minecraft.gui.getChat().addMessage(Component.literal("§7[系统] 海岸医院的发电机重新启动了"));
+            com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(self, "OPERATOR", 0xFF5555,
+                    "萌新鱼友", 0x9FD46C, "Dev", "有人看到灯塔那边的白色弧线了吗？", now);
+            com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(java.util.UUID.randomUUID(),
+                    "FISH+", 0x55FFFF, "逐光会", 0xFFC857, "Lighthouse", "看到了，@Dev 我们在医院门口集合，带上抑制剂。", now,
+                    "Dev", "有人看到灯塔那边的白色弧线了吗？");
+            chat.getName();
+        });
         UiHarness.register("death", minecraft -> {
             var player = minecraft.player;
             com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.cache.DeathScreenDataStorage.setData(
