@@ -218,7 +218,7 @@ public final class TitleScreenUi {
         List<AbstractWidget> result = new ArrayList<>();
         for (GuiEventListener child : screen.children()) {
             if (child instanceof AbstractWidget widget && widget.visible && !(widget instanceof PlainTextButton)
-                    && !PRIMARY_KEYS.contains(translationKey(widget.getMessage()))) {
+                    && !isPrimaryMessage(widget.getMessage())) {
                 result.add(widget);
             }
         }
@@ -295,6 +295,12 @@ public final class TitleScreenUi {
             }
         }
         return null;
+    }
+
+    static boolean isPrimaryMessage(Component component) {
+        String key = translationKey(component);
+        // 其他模组的按钮可以使用纯文本或空标题；Set.of 创建的集合不接受 null 查询。
+        return key != null && PRIMARY_KEYS.contains(key);
     }
 
     private static String translationKey(Component component) {
