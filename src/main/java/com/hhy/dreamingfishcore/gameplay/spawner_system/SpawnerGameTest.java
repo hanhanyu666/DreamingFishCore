@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.spawner_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntity;
 import com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_SpawnerSnapshotResponse;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationMode;
@@ -15,7 +16,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -73,7 +73,11 @@ public class SpawnerGameTest {
 
             entry.setBatches(1);
             entry.setSpawnCount(2);
-            entry.setEntityId("minecraft:zombie");
+            // 刻意不指定实体：默认就是 dreamingfishcore:siege_zombie，这条默认路径才是玩家真正会用的。
+            // 攻城丧尸的运行时能力（挖墙/开门/搭桥）是在 finalizeSpawn 里装配的，
+            // 用原版僵尸测会漏掉这一段。
+            helper.assertTrue(SpawnerEntry.DEFAULT_ENTITY_ID.equals(entry.entityId()),
+                    "默认实体应当是攻城丧尸，实际 " + entry.entityId());
             entry.setRewardCoins(7);
             entry.setSelfDestructWhenCleared(false);
 
@@ -89,12 +93,15 @@ public class SpawnerGameTest {
             SpawnerService.tickNow(helper.getLevel().getServer());
             helper.assertTrue(entry.batchesSpawned() == 1,
                     "第一批应当立刻刷出，实际批次 " + entry.batchesSpawned());
-            List<Zombie> zombies = level.getEntitiesOfClass(Zombie.class,
+            List<SiegeZombieEntity> zombies = level.getEntitiesOfClass(SiegeZombieEntity.class,
                     player.getBoundingBox().inflate(32.0D));
-            helper.assertFalse(zombies.isEmpty(), "结构附近应当出现僵尸");
+            helper.assertFalse(zombies.isEmpty(),
+                    "结构附近应当出现默认的攻城丧尸（默认生成路径未被地点刷怪禁令拦下）");
+            // 攻城丧尸的能力在 finalizeSpawn 里装配，这里顺带确认它真的完成了初始化。
+            helper.assertTrue(zombies.get(0).isAlive(), "生成的攻城丧尸应当是活的");
 
             // 清场后再次判定：应当结算奖励。
-            for (Zombie zombie : zombies) {
+            for (SiegeZombieEntity zombie : zombies) {
                 zombie.discard();
             }
             SpawnerService.tickNow(helper.getLevel().getServer());
