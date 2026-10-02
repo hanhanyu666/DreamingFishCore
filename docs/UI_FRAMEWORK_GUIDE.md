@@ -121,6 +121,7 @@ AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 380.0F, Easing.EMPHASIZED);
 | 梦屿终端 | `server_ui_system/client/terminal`：`TerminalUi`、`TerminalChrome`、`TerminalWidgets` | 深色玻璃、青色主色，等高线地图背景、灯塔光束、四角取景括号 |
 | 原版界面 | `client/ui/vanilla/VanillaChrome` | 标题、世界选择、服务器列表、加载与断开界面共用的玻璃面板与徽章 |
 | HUD | `gameplay/playerattributes_system/client/ui/hud/HudDraw` 等 | 半透明面板与数值条，尽量少遮挡画面 |
+| 区域明信片 | `client/ui/notification/RegionPostcard` | 上方居中横幅：按群系、时间、天气变化的分层风景剪影，入场像立体书依次弹起 |
 
 新界面优先复用对应风格里的组件（如 `TerminalUi.card()`、`TerminalUi.header(...)`、`VanillaChrome.glassPanel()`），
 颜色取各自的常量，不要散落新的色值。
@@ -149,3 +150,8 @@ death gui=2 wait=80 as=death
   与生成脚本 `tools/generate_startup_lighthouse.py`。
 - `title_mod_buttons`：标题界面加入几个模拟的其他模组按钮（带提示的图标按钮、无文字按钮、纯文本按钮），
   检查辅助按钮的命名。
+- `postcard:<场景>:<day|dusk|night>[:rain]`：上方居中的区域明信片（场景名见 `RegionPostcard.Scene`，如
+  `postcard:cherry:dusk`）；`postcard_plain:` 为再次进入（只有地名）；`postcard_anim:` 只显示 3.4 秒，
+  用不同的 `wait` 连续截图可以拼出入场与退场动画；`postcard_biome:minecraft:dark_forest` 按真实群系走一遍
+  判定（群系标签 + 群系颜色 + 世界当前时间）。风景剪影由 `tools/generate_region_scenes.py` 生成，
+  中景里风车、烟囱、灯塔的位置写在 `tools/region_scene_anchors.json`，改图后要同步到 `RegionPostcard`。

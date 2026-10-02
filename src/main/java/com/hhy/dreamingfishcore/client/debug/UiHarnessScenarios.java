@@ -24,8 +24,63 @@ final class UiHarnessScenarios {
     private UiHarnessScenarios() {
     }
 
+    private static final java.util.Map<String, String> POSTCARD_NAMES = java.util.Map.ofEntries(
+            java.util.Map.entry("forest", "繁花森林"), java.util.Map.entry("pines", "针叶林"),
+            java.util.Map.entry("mountains", "裸岩山峰"), java.util.Map.entry("snowy", "积雪的针叶林"),
+            java.util.Map.entry("cherry", "樱花树林"), java.util.Map.entry("village", "平原"),
+            java.util.Map.entry("desert", "沙漠"), java.util.Map.entry("badlands", "恶地"),
+            java.util.Map.entry("coast", "沙滩"), java.util.Map.entry("river", "河流"),
+            java.util.Map.entry("swamp", "沼泽"), java.util.Map.entry("jungle", "丛林"),
+            java.util.Map.entry("savanna", "热带草原"), java.util.Map.entry("mushroom", "蘑菇岛"),
+            java.util.Map.entry("cave", "繁茂洞穴"), java.util.Map.entry("nether", "下界荒地"),
+            java.util.Map.entry("end", "末地"));
+
+    private static void showPostcard(net.minecraft.client.Minecraft minecraft, String scene, String time, boolean rain,
+                                     boolean first, long durationMs) {
+        minecraft.setScreen(null);
+        com.hhy.dreamingfishcore.client.ui.notification.RegionPostcard.preview(scene, time, rain);
+        com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.show(
+                com.hhy.dreamingfishcore.client.ui.notification.Notification.builder()
+                        .title(Component.literal(POSTCARD_NAMES.getOrDefault(scene, scene)))
+                        .message(Component.literal(first ? "首次发现  ·  + 120 经验  ·  已探索 14" : ""))
+                        .position(com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition.CENTER_TOP)
+                        .theme(com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme.GOLD)
+                        .queuePolicy(com.hhy.dreamingfishcore.client.ui.notification.NotificationQueuePolicy.REPLACE)
+                        .durationMs(durationMs).build());
+    }
+
     static void registerAll() {
         UiHarness.register("hud", minecraft -> minecraft.setScreen(null));
+        // 上方居中的区域明信片：postcard:<场景>:<day|dusk|night>[:rain]，postcard_plain 为再次进入（只有地名），
+        // postcard_anim 只显示 3.4 秒，按不同等待时间连续截图可拼出入场与退场动画
+        // 按真实群系走一遍判定（群系标签 + 群系颜色 + 世界当前时间），例如 postcard_biome:minecraft:dark_forest
+        for (String biome : List.of("minecraft:forest", "minecraft:birch_forest", "minecraft:dark_forest",
+                "minecraft:flower_forest", "minecraft:swamp", "minecraft:cherry_grove", "minecraft:badlands",
+                "minecraft:snowy_slopes", "minecraft:lush_caves", "minecraft:plains")) {
+            UiHarness.register("postcard_biome:" + biome, minecraft -> {
+                minecraft.setScreen(null);
+                com.hhy.dreamingfishcore.client.ui.notification.RegionPostcard.preview(null, null, false);
+                net.minecraft.resources.ResourceLocation id = net.minecraft.resources.ResourceLocation.parse(biome);
+                com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.show(
+                        com.hhy.dreamingfishcore.client.ui.notification.Notification.builder()
+                                .title(Component.translatable(id.toLanguageKey("biome")))
+                                .message(Component.literal("首次发现  ·  + 120 经验  ·  已探索 14"))
+                                .position(com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition.CENTER_TOP)
+                                .theme(com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme.GOLD)
+                                .queuePolicy(com.hhy.dreamingfishcore.client.ui.notification.NotificationQueuePolicy.REPLACE)
+                                .biome(biome)
+                                .durationMs(20_000L).build());
+            });
+        }
+        for (String scene : com.hhy.dreamingfishcore.client.ui.notification.RegionPostcard.sceneNames()) {
+            for (String time : List.of("day", "dusk", "night")) {
+                String id = scene + ":" + time;
+                UiHarness.register("postcard:" + id, minecraft -> showPostcard(minecraft, scene, time, false, true, 20_000L));
+                UiHarness.register("postcard:" + id + ":rain", minecraft -> showPostcard(minecraft, scene, time, true, true, 20_000L));
+                UiHarness.register("postcard_plain:" + id, minecraft -> showPostcard(minecraft, scene, time, false, false, 20_000L));
+                UiHarness.register("postcard_anim:" + id, minecraft -> showPostcard(minecraft, scene, time, false, true, 3_400L));
+            }
+        }
         UiHarness.register("hud_busy", minecraft -> {
             minecraft.setScreen(null);
             var notifications = com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.class;

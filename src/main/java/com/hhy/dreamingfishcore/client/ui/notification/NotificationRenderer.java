@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.client.ui.notification;
 
 import com.hhy.dreamingfishcore.client.ui.framework.hud.HudFrame;
 import com.hhy.dreamingfishcore.client.ui.framework.hud.HudLayer;
+import com.hhy.dreamingfishcore.client.ui.framework.render.SdfRenderer;
 import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.client.ui.framework.text.TextFit;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.Theme;
@@ -17,7 +18,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 通知的三种位置：屏幕上方居中的横幅、左上角的提示卡片与右上角读数下方的系统消息。
+ * 通知的三种位置：屏幕上方居中的横幅（区域提示，见 {@link RegionPostcard}）、左上角的提示卡片与右上角读数下方的系统消息。
  * 全部画在统一 HUD 画布上；出入场时卡片按宽度展开/收起（画布裁剪）。
  */
 public final class NotificationRenderer {
@@ -222,6 +223,11 @@ public final class NotificationRenderer {
 
     private static void renderCenterTop(UiCanvas canvas, Minecraft mc, List<NotificationManager.ActiveNotification> entries) {
         NotificationManager.ActiveNotification entry = entries.get(0);
+        // 正常情况下画成风景明信片；界面着色器不可用时退回原来的面板样式
+        if (SdfRenderer.available()) {
+            RegionPostcard.render(canvas, mc, entry);
+            return;
+        }
         Notification notification = entry.notification();
         long elapsed = entry.ageMs(System.currentTimeMillis());
         long introMs = Math.min(620L, notification.durationMs() / 3L);

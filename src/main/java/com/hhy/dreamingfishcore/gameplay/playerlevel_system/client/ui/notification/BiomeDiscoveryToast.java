@@ -27,6 +27,7 @@ public final class BiomeDiscoveryToast {
                 .title(displayName)
                 .message(detail)
                 .position(NotificationPosition.CENTER_TOP)
+                .biome(biomeId)
                 .theme(NotificationTheme.GOLD)
                 .queuePolicy(NotificationQueuePolicy.REPLACE)
                 .durationMs(DISPLAY_DURATION_MS)

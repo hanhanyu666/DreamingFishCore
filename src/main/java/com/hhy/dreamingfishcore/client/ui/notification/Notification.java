@@ -12,6 +12,7 @@ public final class Notification {
     private final long durationMs;
     private final String replaceKey;
     private final int accentColor;
+    private final String biomeId;
 
     private Notification(Builder builder) {
         this.title = builder.title;
@@ -26,6 +27,7 @@ public final class Notification {
         this.durationMs = builder.durationMs < 0L ? Long.MAX_VALUE : Math.max(1L, builder.durationMs);
         this.replaceKey = builder.replaceKey;
         this.accentColor = builder.accentColor;
+        this.biomeId = builder.biomeId;
     }
 
     public static Builder builder() {
@@ -64,6 +66,11 @@ public final class Notification {
         return accentColor;
     }
 
+    /** 区域提示对应的生物群系 id（如 {@code minecraft:cherry_grove}），其他通知为 null。 */
+    public String biomeId() {
+        return biomeId;
+    }
+
     public int effectiveAccentColor() {
         return accentColor >= 0 ? 0xFF000000 | accentColor : theme.accentColor();
     }
@@ -77,6 +84,7 @@ public final class Notification {
         private long durationMs = 5000L;
         private String replaceKey;
         private int accentColor = -1;
+        private String biomeId;
 
         public Builder title(Component title) {
             this.title = title == null ? Component.empty() : title;
@@ -117,6 +125,12 @@ public final class Notification {
         /** RGB color override for the border/accent, or -1 for the theme color. */
         public Builder accentColor(int accentColor) {
             this.accentColor = accentColor;
+            return this;
+        }
+
+        /** 区域提示对应的生物群系，上方横幅据此选择风景与配色。 */
+        public Builder biome(String biomeId) {
+            this.biomeId = biomeId == null || biomeId.isBlank() ? null : biomeId;
             return this;
         }
 
