@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "dreamingfishcore:item/infection_suppressant"
-  }
-}
