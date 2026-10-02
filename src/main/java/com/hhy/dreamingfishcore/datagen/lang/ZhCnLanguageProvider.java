@@ -31,6 +31,8 @@ public class ZhCnLanguageProvider extends LanguageProvider {
         add(DreamingFishCore_Items.PROFESSIONAL_AID_KIT.get(), "专业急救包");
         add(DreamingFishCore_Items.REVIVAL_CHARM.get(), "复活护符");
         add(DreamingFishCore_Items.GENE_RESURGENCE_POTION.get(), "基因复苏药剂");
+        add(DreamingFishCore_Items.INFECTION_SUPPRESSANT.get(), "感染抑制剂");
+        add(DreamingFishCore_Items.STRONG_INFECTION_SUPPRESSANT.get(), "强效感染抑制剂");
         add(DreamingFishCore_Items.PROTECTIVE_MASK.get(), "防护面具");
         add("item.dreamingfishcore.protective_mask.tooltip", "由逐光会牵头制作的防护面具，至少目前可以阻止感染者的传染……");
         add("item.dreamingfishcore.siege_zombie_spawn_egg", "丧尸刷怪蛋");
