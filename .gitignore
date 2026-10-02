@@ -34,6 +34,9 @@ bin/
 
 ### Minecraft Source ###
 minecraft_src/
+# 反编译/单类摘录出来的原版源码副本有时会被放在仓库根（如 net/minecraft/.../Player.java）：
+# 那是查阅用的参考文件，不属于模组源码，避免被 git add -A 误提交。
+/net/
 
 ### Minecraft Modding ###
 run/
