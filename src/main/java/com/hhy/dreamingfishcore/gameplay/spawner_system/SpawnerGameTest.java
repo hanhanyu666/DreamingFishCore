@@ -48,6 +48,7 @@ public class SpawnerGameTest {
         ServerLevel level = helper.getLevel();
         BlockPos devicePos = helper.absolutePos(new BlockPos(1, 1, 1));
         String dimensionId = level.dimension().location().toString();
+        ServerPlayer player = null;
 
         try {
             // 结构里铺一层地板，否则找不到"脚下有方块"的落点，一只都刷不出来。
@@ -93,7 +94,7 @@ public class SpawnerGameTest {
             entry.setSelfDestructWhenCleared(false);
 
             // 一名生存玩家站在检测范围内。
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            player = helper.makeMockServerPlayerInLevel();
             AuthSessionGuard.markAuthenticated(player);
             player.setGameMode(GameType.SURVIVAL);
             player.teleportTo(devicePos.getX() + 0.5D, devicePos.getY(),
@@ -164,6 +165,11 @@ public class SpawnerGameTest {
             for (Mob mob : level.getEntitiesOfClass(Mob.class,
                     new net.minecraft.world.phys.AABB(devicePos).inflate(48.0D))) {
                 mob.discard();
+            }
+            // 模拟玩家也摘掉：gametest 共用同一个测试世界与玩家列表，而感染系统等用例会
+            // 全服扫描"附近有没有玩家/传播来源"，测试残留的旁观者不该参与判定。
+            if (player != null && player.getServer() != null) {
+                player.getServer().getPlayerList().remove(player);
             }
             restore(configPath, backup);
         }
