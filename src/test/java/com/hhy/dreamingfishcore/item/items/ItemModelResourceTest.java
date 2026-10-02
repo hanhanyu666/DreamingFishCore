@@ -37,6 +37,17 @@ class ItemModelResourceTest {
     private static final List<String> ITEM_IDS = List.of(
             "infection_suppressant", "strong_infection_suppressant");
 
+    /**
+     * Java 版元素旋转允许的角度。
+     *
+     * <p>不是随便写的：原版 {@code BlockElement.Deserializer#getAngle} 只放行这几个值，
+     * 其余一律抛 {@code JsonParseException: Invalid rotation}，整个模型加载失败（表现为
+     * 物品显示不出来）。Blockbench 从 Bedrock 格式导出的模型常见任意角度，
+     * 直接搬过来就会踩这个坑。</p>
+     */
+    private static final List<Float> ALLOWED_ELEMENT_ANGLES =
+            List.of(-45.0F, -22.5F, 0.0F, 22.5F, 45.0F);
+
     @Test
     void itemModelsUseJavaFormatAndResolveTheirTextures() throws Exception {
         for (String itemId : ITEM_IDS) {
@@ -46,6 +57,7 @@ class ItemModelResourceTest {
 
             if (model.has("elements")) {
                 assertJavaRotationFormat(model, itemId);
+                assertElementShapeIsValid(model, itemId);
                 assertTrue(model.has("display") && model.getAsJsonObject("display").has("gui"),
                         "三维物品模型 " + itemId + " 必须给 gui 变换，否则背包里会大到溢出格子");
             }
@@ -95,6 +107,41 @@ class ItemModelResourceTest {
             assertTrue(!rotation.has("x") && !rotation.has("y") && !rotation.has("z"),
                     "元素旋转看起来是 Bedrock 格式（x/y/z 角度），需要转成 axis + angle："
                             + itemId + " → " + rotation);
+            assertTrue(rotation.has("origin"),
+                    "元素旋转必须带 origin 枢轴：" + itemId + " → " + rotation);
+
+            String axis = rotation.get("axis").getAsString();
+            assertTrue(List.of("x", "y", "z").contains(axis),
+                    "元素旋转轴只能是 x/y/z：" + itemId + " → " + axis);
+
+            // 真正的坑：Java 的元素旋转只接受这几个角度（BlockElement.Deserializer#getAngle），
+            // Blockbench 从 Bedrock 导出的任意角度（例如 -90）会让整个模型加载失败。
+            float angle = rotation.get("angle").getAsFloat();
+            assertTrue(ALLOWED_ELEMENT_ANGLES.contains(angle),
+                    "元素旋转角度非法：Java 只允许 " + ALLOWED_ELEMENT_ANGLES + "，实际 "
+                            + angle + "（" + itemId + "）；需要 -90 之类的朝向请改用 display 变换");
+        }
+    }
+
+    /** 元素几何与面的基本形状校验：对齐原版反序列化器会拒绝的情况。 */
+    private static void assertElementShapeIsValid(JsonObject model, String itemId) {
+        for (var element : model.getAsJsonArray("elements")) {
+            JsonObject box = element.getAsJsonObject();
+            assertTrue(box.has("from") && box.has("to"),
+                    "元素缺少 from/to：" + itemId);
+            assertTrue(box.getAsJsonArray("from").size() == 3
+                            && box.getAsJsonArray("to").size() == 3,
+                    "元素 from/to 必须是三个数：" + itemId);
+            JsonObject faces = box.getAsJsonObject("faces");
+            assertTrue(faces != null && !faces.isEmpty(), "元素没有任何面：" + itemId);
+            for (String direction : faces.keySet()) {
+                assertTrue(List.of("north", "south", "east", "west", "up", "down")
+                                .contains(direction),
+                        "非法面方向：" + direction + "（" + itemId + "）");
+                JsonObject face = faces.getAsJsonObject(direction);
+                assertTrue(face.has("uv") && face.getAsJsonArray("uv").size() == 4,
+                        "面的 uv 必须是四个数：" + itemId + " → " + direction);
+            }
         }
     }
 
