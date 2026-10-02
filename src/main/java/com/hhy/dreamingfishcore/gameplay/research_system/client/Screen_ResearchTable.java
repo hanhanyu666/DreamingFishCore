@@ -44,26 +44,13 @@ import java.util.List;
  *       界面只用服务端下发的除数把"需要多少个"即时算出来显示，不参与任何结算。</li>
  *   <li><b>列表超过一屏可滚动</b>：课题最多 15 条，小窗口下会超出，用滚轮翻。</li>
  * </ul>
+ *
+ * <p><b>版面完全交给 {@link ResearchTableLayout}</b>：这个类只按算出来的矩形画，
+ * 自己不做任何"剩下多少高度"的算术。以前这里是自己上上下下推算的，结果界面刚打开时快照还没到
+ * （课题数 0，面板按最小列表高度算），快照到了以后课题变成十几条，列表就画到提交区块上去了。
+ * 现在布局（含课题数）每次渲染前都会按当前的窗口尺寸与课题数量重算，这种时序问题不再存在。</p>
  */
 public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchTableMenu> {
-
-    private static final int PANEL_MAX_WIDTH = 360;
-    private static final int PANEL_MARGIN = 12;
-    /** 标题 + 状态一句话 + 列表标题，三行。 */
-    private static final int HEADER_HEIGHT = 42;
-    private static final int FOOTER_HEIGHT = 30;
-    /** 提交区：一行说明、一行"槽位 + 需要多少个"、一行服务端给的原因。 */
-    private static final int SUBMIT_HEIGHT = 50;
-    private static final int ROW_HEIGHT = 16;
-    private static final int ICON_SIZE = 16;
-    private static final int SLOT_SIZE = 18;
-    /** 玩家背包：主背包 3 行 + 快捷栏 1 行，中间留 4 像素。 */
-    private static final int INVENTORY_ROWS = 4;
-    private static final int INVENTORY_HEIGHT = INVENTORY_ROWS * SLOT_SIZE + 4;
-    private static final int INVENTORY_BLOCK_HEIGHT = INVENTORY_HEIGHT + 4;
-    /** 没有课题时也要留一点高度，免得面板缩成一条线。 */
-    private static final int MIN_LIST_ROWS = 2;
-    private static final int LIST_PADDING = 4;
 
     private static final int COLOR_TEXT = 0xFFE8EDF2;
     private static final int COLOR_MUTED = 0xFFA7B2BE;
@@ -80,27 +67,26 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
     private static final int COLOR_ROW = 0xFF161E25;
     private static final int COLOR_SLOT = 0xFF0B1014;
     private static final int COLOR_SLOT_HOVER = 0xFF2A3A46;
+    /** 列表 / 提交区块的底衬（半透明黑，让"这是一块区域"看得出来）。 */
+    private static final int COLOR_BLOCK_BACKDROP = 0x40000000;
 
-    private static final int BUTTON_MAX_WIDTH = 96;
-    private static final int BUTTON_HEIGHT = 20;
-    private static final int BUTTON_GAP = 8;
     /** 内容区的滚动量（像素）。 */
     private static final int SCROLL_STEP = 16;
+    /** 区块内文字相对区块左边缘的内衬。 */
+    private static final int TEXT_PADDING = 12;
 
     private final ResearchTableMenu menu;
     private final BlockPos tablePos;
     private final List<Hit> hits = new ArrayList<>();
 
-    private int panelX;
-    private int panelY;
-    private int panelWidth;
-    private int panelHeight;
-    private int listTop;
-    private int listBottom;
-    private int submitTop;
-    private int inventoryTop;
-    private int inventoryX;
-    private int footerTop;
+    /**
+     * 当前版面。按"窗口宽、窗口高、课题数"缓存：这三个只要没变就不必重算，
+     * 一变（窗口缩放、服务端快照到达）立刻重算——这正是保证不重叠的关键。
+     */
+    private ResearchTableLayout cachedLayout;
+    private int layoutScreenWidth = -1;
+    private int layoutScreenHeight = -1;
+    private int layoutOfferCount = -1;
     private int scroll;
 
     private record Hit(int x1, int y1, int x2, int y2, boolean enabled, Runnable action) {
@@ -126,7 +112,8 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
     @Override
     protected void init() {
         super.init();
-        computeLayout();
+        // 窗口尺寸可能变了（缩放 / 全屏），旧版面作废，下面第一次用到时重算。
+        this.cachedLayout = null;
         // 要一份最新快照：快照里的"当前经验"是服务端算的，玩家可能在打开界面之前刚补过经验。
         // 这个请求不会重掷课题（服务端只在旧课题失效时才换一批）。
         DreamingFishCore_NetworkManager.sendToServer(new Packet_ResearchTableOpenRequest(this.tablePos));
@@ -135,46 +122,20 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
     /**
      * 版面一次算好，渲染与点击命中都用这一份，避免"画在这儿、点在那儿"。
      *
-     * <p>自下而上排：页脚按钮 → 玩家背包 → 提交区 → 剩下的都给课题列表。
-     * 窗口太矮时先压缩的也是列表（它本来就能滚），其它区块保持完整。</p>
+     * <p>课题数量是版面的一部分（列表要给多少高度取决于它），而快照是异步到的：
+     * 界面 init 时可能还是 0 条、下一帧就变成 15 条。所以这里每次都拿当前的课题数比对，
+     * 对不上就重算，绝不沿用"打开界面那一刻"的旧版面。</p>
      */
-    private void computeLayout() {
-        int rows = Math.max(MIN_LIST_ROWS, Math.min(maxRows(), offer().size()));
-        panelWidth = Math.min(PANEL_MAX_WIDTH, this.width - PANEL_MARGIN * 2);
-        int desiredHeight = HEADER_HEIGHT + rows * ROW_HEIGHT
-                + SUBMIT_HEIGHT + INVENTORY_BLOCK_HEIGHT + FOOTER_HEIGHT;
-        panelHeight = Math.min(desiredHeight, this.height - PANEL_MARGIN * 2);
-        panelX = (this.width - panelWidth) / 2;
-        panelY = (this.height - panelHeight) / 2;
-
-        footerTop = panelY + panelHeight - FOOTER_HEIGHT;
-        inventoryTop = footerTop - INVENTORY_BLOCK_HEIGHT;
-        submitTop = inventoryTop - SUBMIT_HEIGHT;
-        listTop = panelY + HEADER_HEIGHT;
-        listBottom = Math.max(listTop + ROW_HEIGHT, submitTop);
-        inventoryX = panelX + Math.max(LIST_PADDING, (panelWidth - ResearchTableMenu.INVENTORY_COLUMNS * SLOT_SIZE) / 2);
-    }
-
-    private int maxRows() {
-        return Math.max(MIN_LIST_ROWS,
-                (this.height - PANEL_MARGIN * 2 - HEADER_HEIGHT - SUBMIT_HEIGHT
-                        - INVENTORY_BLOCK_HEIGHT - FOOTER_HEIGHT) / ROW_HEIGHT);
-    }
-
-    private int submitSlotX() {
-        return panelX + 12;
-    }
-
-    private int submitSlotY() {
-        return submitTop + 14;
-    }
-
-    private int inventoryGridY() {
-        return inventoryTop + 4;
-    }
-
-    private int hotbarY() {
-        return inventoryGridY() + 3 * SLOT_SIZE + 4;
+    private ResearchTableLayout layout() {
+        int offers = offer().size();
+        if (this.cachedLayout == null || this.layoutScreenWidth != this.width
+                || this.layoutScreenHeight != this.height || this.layoutOfferCount != offers) {
+            this.cachedLayout = ResearchTableLayout.of(this.width, this.height, offers);
+            this.layoutScreenWidth = this.width;
+            this.layoutScreenHeight = this.height;
+            this.layoutOfferCount = offers;
+        }
+        return this.cachedLayout;
     }
 
     private int inventoryCountOf(ItemStack sample) {
@@ -195,89 +156,105 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         ResearchTableClientCache.Snapshot snapshot = snapshot();
+        ResearchTableLayout layout = layout();
         hits.clear();
 
-        drawPanel(guiGraphics);
+        drawPanel(guiGraphics, layout);
 
         if (snapshot == null) {
-            guiGraphics.drawString(this.font, "§7正在读取研究桌状态…", panelX + 12, listTop, COLOR_MUTED, false);
-            drawFooter(guiGraphics, null, mouseX, mouseY);
+            guiGraphics.drawString(this.font, "§7正在读取研究桌状态…",
+                    layout.list().x() + 6, layout.list().y() + 2, COLOR_MUTED, false);
+            drawFooter(guiGraphics, layout, null, mouseX, mouseY);
             drawCarried(guiGraphics, mouseX, mouseY);
             return;
         }
 
-        drawHeader(guiGraphics, snapshot);
-        drawOfferList(guiGraphics, snapshot, mouseX, mouseY);
-        drawSubmitArea(guiGraphics, snapshot, mouseX, mouseY);
-        drawInventory(guiGraphics, mouseX, mouseY);
-        drawFooter(guiGraphics, snapshot, mouseX, mouseY);
-        drawSlotTooltip(guiGraphics, mouseX, mouseY);
+        drawHeader(guiGraphics, layout, snapshot);
+        drawOfferList(guiGraphics, layout, snapshot, mouseX, mouseY);
+        drawSubmitArea(guiGraphics, layout, snapshot, mouseX, mouseY);
+        drawInventory(guiGraphics, layout, mouseX, mouseY);
+        drawFooter(guiGraphics, layout, snapshot, mouseX, mouseY);
+        drawSlotTooltip(guiGraphics, layout, mouseX, mouseY);
         drawCarried(guiGraphics, mouseX, mouseY);
     }
 
-    private void drawPanel(GuiGraphics guiGraphics) {
-        guiGraphics.fill(panelX - 1, panelY - 1, panelX + panelWidth + 1, panelY + panelHeight + 1, COLOR_BORDER);
-        guiGraphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, COLOR_PANEL);
+    private void drawPanel(GuiGraphics guiGraphics, ResearchTableLayout layout) {
+        ResearchTableLayout.Rect panel = layout.panel();
+        guiGraphics.fill(panel.x() - 1, panel.y() - 1, panel.right() + 1, panel.bottom() + 1, COLOR_BORDER);
+        guiGraphics.fill(panel.x(), panel.y(), panel.right(), panel.bottom(), COLOR_PANEL);
     }
 
-    private void drawHeader(GuiGraphics guiGraphics, ResearchTableClientCache.Snapshot snapshot) {
-        int x = panelX + 12;
-        guiGraphics.drawString(this.font, "研究桌", x, panelY + 6, COLOR_TITLE, false);
+    private void drawHeader(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                            ResearchTableClientCache.Snapshot snapshot) {
+        int textX = layout.panel().x() + TEXT_PADDING;
+        int rightEdge = layout.panel().right() - TEXT_PADDING;
+        guiGraphics.drawString(this.font, "研究桌", textX, layout.titleY(), COLOR_TITLE, false);
 
         String cost = "消耗 " + snapshot.cost() + " 点经验";
         String have = "当前 " + snapshot.playerExperience() + " 点";
         guiGraphics.drawString(this.font, cost,
-                panelX + panelWidth - 12 - this.font.width(have) - this.font.width("  ") - this.font.width(cost),
-                panelY + 6, snapshot.available() ? COLOR_TEXT : COLOR_MUTED, false);
-        guiGraphics.drawString(this.font, have, panelX + panelWidth - 12 - this.font.width(have),
-                panelY + 6, snapshot.playerExperience() >= snapshot.cost() ? COLOR_TEXT : 0xFFFF8A8A, false);
+                rightEdge - this.font.width(have) - this.font.width("  ") - this.font.width(cost),
+                layout.titleY(), snapshot.available() ? COLOR_TEXT : COLOR_MUTED, false);
+        guiGraphics.drawString(this.font, have, rightEdge - this.font.width(have),
+                layout.titleY(), snapshot.playerExperience() >= snapshot.cost() ? COLOR_TEXT : 0xFFFF8A8A, false);
 
         if (!snapshot.message().isEmpty()) {
-            guiGraphics.drawString(this.font, snapshot.message(), x, panelY + 18, COLOR_MUTED, false);
+            guiGraphics.drawString(this.font, snapshot.message(), textX, layout.messageY(), COLOR_MUTED, false);
         }
         String hint = snapshot.learned().isEmpty()
                 ? "本次课题（" + snapshot.offer().size() + " 个）"
                 : "本次学会 " + snapshot.learned().size() + " 个";
-        guiGraphics.drawString(this.font, hint, x, panelY + 30, COLOR_MUTED, false);
-
-        // 列表底衬，让"这是一块可滚动区域"看起来像回事。
-        guiGraphics.fill(panelX + 8, listTop - 2, panelX + panelWidth - 8, listBottom + 1, 0x40000000);
+        guiGraphics.drawString(this.font, hint, textX, layout.listTitleY(), COLOR_MUTED, false);
     }
 
-    private void drawOfferList(GuiGraphics guiGraphics, ResearchTableClientCache.Snapshot snapshot,
-                               int mouseX, int mouseY) {
+    /**
+     * 课题列表：只画完整落在列表矩形里的行。
+     *
+     * <p>以前这里会多画一行（为了滚动时露出半行），但边界判断允许"整行起点正好落在列表下沿"，
+     * 于是多出来的那一行稳稳地压在提交区块上——列表越短、课题越多越明显。
+     * 现在行数由 {@link ResearchTableLayout#listRows()} 给定，且必须整行在矩形内才画。</p>
+     */
+    private void drawOfferList(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                               ResearchTableClientCache.Snapshot snapshot, int mouseX, int mouseY) {
+        ResearchTableLayout.Rect list = layout.list();
+        guiGraphics.fill(list.x(), list.y(), list.right(), list.bottom(), COLOR_BLOCK_BACKDROP);
+
         List<String> rows = snapshot.offer();
         if (rows.isEmpty()) {
-            guiGraphics.drawString(this.font, "§7没有可以研究的配方了", panelX + 14, listTop + 2, COLOR_MUTED, false);
+            guiGraphics.drawString(this.font, "§7没有可以研究的配方了",
+                    list.x() + 6, list.y() + 2, COLOR_MUTED, false);
             return;
         }
 
-        int visible = Math.max(1, (listBottom - listTop) / ROW_HEIGHT);
-        int maxScroll = Math.max(0, (rows.size() - visible) * ROW_HEIGHT);
+        int visible = Math.max(1, layout.listRows());
+        int maxScroll = Math.max(0, (rows.size() - visible) * ResearchTableLayout.ROW_HEIGHT);
         scroll = Math.max(0, Math.min(scroll, maxScroll));
-        int first = scroll / ROW_HEIGHT;
+        int first = scroll / ResearchTableLayout.ROW_HEIGHT;
 
-        for (int index = first; index < rows.size() && index < first + visible + 1; index++) {
-            int rowY = listTop + (index * ROW_HEIGHT) - scroll;
-            if (rowY + ROW_HEIGHT < listTop || rowY > listBottom) {
+        for (int index = first; index < rows.size() && index < first + visible; index++) {
+            int rowY = list.y() + (index * ResearchTableLayout.ROW_HEIGHT) - scroll;
+            // 滚动到一半时首行会露在半空：整行放不下就不画，免得画到列表外面去。
+            if (rowY < list.y() || rowY + ResearchTableLayout.ROW_HEIGHT > list.bottom()) {
                 continue;
             }
-            if (mouseY >= rowY && mouseY < rowY + ROW_HEIGHT && mouseX >= panelX + 8 && mouseX <= panelX + panelWidth - 8) {
-                guiGraphics.fill(panelX + 8, rowY, panelX + panelWidth - 8, rowY + ROW_HEIGHT, COLOR_ROW);
+            if (mouseY >= rowY && mouseY < rowY + ResearchTableLayout.ROW_HEIGHT
+                    && mouseX >= list.x() && mouseX <= list.right()) {
+                guiGraphics.fill(list.x(), rowY, list.right(), rowY + ResearchTableLayout.ROW_HEIGHT, COLOR_ROW);
             }
             ItemStack stack = resolve(rows.get(index));
             if (!stack.isEmpty()) {
-                guiGraphics.renderItem(stack, panelX + 14, rowY);
+                guiGraphics.renderItem(stack, list.x() + 6, rowY);
             }
             String name = stack.isEmpty() ? rows.get(index) : stack.getHoverName().getString();
-            guiGraphics.drawString(this.font, name, panelX + 14 + ICON_SIZE + 6, rowY + 4, COLOR_TEXT, false);
+            guiGraphics.drawString(this.font, name,
+                    list.x() + 6 + ResearchTableLayout.SLOT_INNER + 6, rowY + 4, COLOR_TEXT, false);
         }
 
         if (maxScroll > 0) {
             String more = (scroll > 0 ? "▲ " : "") + (scroll < maxScroll ? "▼ 滚轮翻页" : "");
             if (!more.isBlank()) {
-                guiGraphics.drawString(this.font, more, panelX + panelWidth - 12 - this.font.width(more),
-                        listBottom - 10, COLOR_MUTED, false);
+                guiGraphics.drawString(this.font, more,
+                        list.right() - 6 - this.font.width(more), list.bottom() - 10, COLOR_MUTED, false);
             }
         }
     }
@@ -288,28 +265,32 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
      * <p>"需要多少个"用服务端下发的除数当场算，所以放下物品的一瞬间就能看到数字；
      * 能不能提交仍然只认服务端那一份结论（按钮的可用状态）。</p>
      */
-    private void drawSubmitArea(GuiGraphics guiGraphics, ResearchTableClientCache.Snapshot snapshot,
-                                int mouseX, int mouseY) {
-        int x = panelX + 12;
+    private void drawSubmitArea(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                                ResearchTableClientCache.Snapshot snapshot, int mouseX, int mouseY) {
+        ResearchTableLayout.Rect submit = layout.submit();
+        ResearchTableLayout.Rect slot = layout.slot();
+        int textX = layout.panel().x() + TEXT_PADDING;
+        int rightEdge = layout.panel().right() - TEXT_PADDING;
         ItemStack stack = this.menu.getSubmitStack();
         int hovered = slotIndexAt(mouseX, mouseY);
 
-        guiGraphics.fill(panelX + 8, submitTop - 2, panelX + panelWidth - 8, submitTop + SUBMIT_HEIGHT - 2,
-                0x40000000);
-        guiGraphics.drawString(this.font, "提交物品解锁配方", x, submitTop + 2, COLOR_TEXT, false);
+        guiGraphics.fill(submit.x(), submit.y(), submit.right(), submit.bottom(), COLOR_BLOCK_BACKDROP);
+        guiGraphics.drawString(this.font, "提交物品解锁配方", textX,
+                submit.y() + ResearchTableLayout.SUBMIT_TITLE_OFFSET, COLOR_TEXT, false);
 
         String amount = stack.isEmpty()
                 ? "槽位 0 ｜ 背包 0"
                 : "槽位 " + stack.getCount() + " ｜ 背包 " + inventoryCountOf(stack);
-        guiGraphics.drawString(this.font, amount, panelX + panelWidth - 12 - this.font.width(amount),
-                submitTop + 2, COLOR_MUTED, false);
+        guiGraphics.drawString(this.font, amount, rightEdge - this.font.width(amount),
+                submit.y() + ResearchTableLayout.SUBMIT_TITLE_OFFSET, COLOR_MUTED, false);
 
-        drawSlot(guiGraphics, submitSlotX(), submitSlotY(), stack,
-                hovered == ResearchTableMenu.SUBMIT_SLOT);
-        guiGraphics.drawString(this.font, requiredLabel(snapshot, stack), submitSlotX() + SLOT_SIZE + 8,
-                submitSlotY() + 5, stack.isEmpty() ? COLOR_MUTED : COLOR_TEXT, false);
+        drawSlot(guiGraphics, slot.x(), slot.y(), stack, hovered == ResearchTableMenu.SUBMIT_SLOT);
+        guiGraphics.drawString(this.font, requiredLabel(snapshot, stack),
+                slot.x() + ResearchTableLayout.SLOT_SIZE + 8, slot.y() + 5,
+                stack.isEmpty() ? COLOR_MUTED : COLOR_TEXT, false);
 
-        guiGraphics.drawString(this.font, snapshot.submitStatus(), x, submitTop + 36,
+        guiGraphics.drawString(this.font, snapshot.submitStatus(), textX,
+                submit.y() + ResearchTableLayout.SUBMIT_STATUS_OFFSET,
                 snapshot.canSubmit() ? 0xFF9BE8A8 : COLOR_MUTED, false);
     }
 
@@ -323,33 +304,46 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
                 + "（堆叠上限 " + stack.getMaxStackSize() + " ÷ " + snapshot.submitDivisor() + "）";
     }
 
-    private void drawInventory(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+    private void drawInventory(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                              int mouseX, int mouseY) {
         int hovered = slotIndexAt(mouseX, mouseY);
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < ResearchTableMenu.INVENTORY_COLUMNS; column++) {
-                int index = ResearchTableMenu.INVENTORY_SLOT_START + row * ResearchTableMenu.INVENTORY_COLUMNS + column;
-                drawSlot(guiGraphics, inventoryX + column * SLOT_SIZE, inventoryGridY() + row * SLOT_SIZE,
+        for (int row = 0; row < ResearchTableLayout.INVENTORY_GRID_ROWS; row++) {
+            for (int column = 0; column < ResearchTableLayout.INVENTORY_COLUMNS; column++) {
+                int index = ResearchTableMenu.INVENTORY_SLOT_START
+                        + row * ResearchTableLayout.INVENTORY_COLUMNS + column;
+                drawSlot(guiGraphics,
+                        layout.inventoryX() + column * ResearchTableLayout.SLOT_SIZE,
+                        layout.inventoryGridY() + row * ResearchTableLayout.SLOT_SIZE,
                         this.menu.getSlot(index).getItem(), hovered == index);
             }
         }
-        for (int column = 0; column < ResearchTableMenu.INVENTORY_COLUMNS; column++) {
-            int index = ResearchTableMenu.INVENTORY_SLOT_START + ResearchTableMenu.MAIN_INVENTORY_SIZE + column;
-            drawSlot(guiGraphics, inventoryX + column * SLOT_SIZE, hotbarY(),
+        for (int column = 0; column < ResearchTableLayout.INVENTORY_COLUMNS; column++) {
+            int index = ResearchTableMenu.INVENTORY_SLOT_START
+                    + ResearchTableMenu.MAIN_INVENTORY_SIZE + column;
+            drawSlot(guiGraphics,
+                    layout.inventoryX() + column * ResearchTableLayout.SLOT_SIZE, layout.hotbarY(),
                     this.menu.getSlot(index).getItem(), hovered == index);
         }
     }
 
+    /**
+     * 原版槽位画法：18×18 的边框底 + 向内缩 1 像素的 16×16 内底，物品（含数量角标）画在内底上。
+     * 尺寸全部取自 {@link ResearchTableLayout}，界面里不再有第二个槽位尺寸。
+     */
     private void drawSlot(GuiGraphics guiGraphics, int x, int y, ItemStack stack, boolean hovered) {
-        guiGraphics.fill(x - 1, y - 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, COLOR_BORDER);
-        guiGraphics.fill(x, y, x + ICON_SIZE, y + ICON_SIZE, hovered ? COLOR_SLOT_HOVER : COLOR_SLOT);
+        guiGraphics.fill(x, y, x + ResearchTableLayout.SLOT_SIZE, y + ResearchTableLayout.SLOT_SIZE,
+                COLOR_BORDER);
+        guiGraphics.fill(x + 1, y + 1, x + 1 + ResearchTableLayout.SLOT_INNER,
+                y + 1 + ResearchTableLayout.SLOT_INNER, hovered ? COLOR_SLOT_HOVER : COLOR_SLOT);
         if (!stack.isEmpty()) {
-            guiGraphics.renderItem(stack, x, y);
-            guiGraphics.renderItemDecorations(this.font, stack, x, y);
+            guiGraphics.renderItem(stack, x + 1, y + 1);
+            guiGraphics.renderItemDecorations(this.font, stack, x + 1, y + 1);
         }
     }
 
     /** 悬停在有东西的槽位上时显示原版物品提示（正拿着东西时不显示，免得挡住鼠标）。 */
-    private void drawSlotTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+    private void drawSlotTooltip(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                                int mouseX, int mouseY) {
         if (!this.menu.getCarried().isEmpty()) {
             return;
         }
@@ -372,21 +366,21 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
         guiGraphics.renderItemDecorations(this.font, carried, mouseX - 8, mouseY - 8);
     }
 
-    private void drawFooter(GuiGraphics guiGraphics, ResearchTableClientCache.Snapshot snapshot,
-                            int mouseX, int mouseY) {
+    private void drawFooter(GuiGraphics guiGraphics, ResearchTableLayout layout,
+                            ResearchTableClientCache.Snapshot snapshot, int mouseX, int mouseY) {
         boolean ready = snapshot != null;
-        int width = Math.min(BUTTON_MAX_WIDTH, (panelWidth - PANEL_MARGIN * 2 - BUTTON_GAP * 2) / 3);
-        int y = footerTop + 5;
-        int closeX = panelX + 12;
-        int researchX = closeX + width + BUTTON_GAP;
-        int submitX = researchX + width + BUTTON_GAP;
+        int width = layout.buttonWidth();
+        int y = layout.buttons().y();
+        int closeX = layout.buttons().x();
+        int researchX = closeX + width + ResearchTableLayout.BUTTON_GAP;
+        int submitX = researchX + width + ResearchTableLayout.BUTTON_GAP;
 
-        drawButton(guiGraphics, closeX, y, width, BUTTON_HEIGHT, "关闭", true, mouseX, mouseY,
-                this::onClose);
-        drawButton(guiGraphics, researchX, y, width, BUTTON_HEIGHT, "开始研究",
+        drawButton(guiGraphics, closeX, y, width, ResearchTableLayout.BUTTON_HEIGHT, "关闭", true,
+                mouseX, mouseY, this::onClose);
+        drawButton(guiGraphics, researchX, y, width, ResearchTableLayout.BUTTON_HEIGHT, "开始研究",
                 ready && snapshot.available(), mouseX, mouseY,
                 () -> DreamingFishCore_NetworkManager.sendToServer(new Packet_ResearchConfirmRequest(tablePos)));
-        drawButton(guiGraphics, submitX, y, width, BUTTON_HEIGHT, "解锁这个配方",
+        drawButton(guiGraphics, submitX, y, width, ResearchTableLayout.BUTTON_HEIGHT, "解锁这个配方",
                 ready && snapshot.canSubmit(), mouseX, mouseY, this::submitItem);
     }
 
@@ -452,21 +446,24 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    /** 鼠标下的菜单槽位下标；不在任何槽位上时返回 -1。 */
+    /** 鼠标下的菜单槽位下标；不在任何槽位上时返回 -1。命中区就是布局给的那几个矩形。 */
     private int slotIndexAt(double mouseX, double mouseY) {
-        if (inside(mouseX, mouseY, submitSlotX(), submitSlotY())) {
+        ResearchTableLayout layout = layout();
+        if (inside(mouseX, mouseY, layout.slot())) {
             return ResearchTableMenu.SUBMIT_SLOT;
         }
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < ResearchTableMenu.INVENTORY_COLUMNS; column++) {
-                if (inside(mouseX, mouseY, inventoryX + column * SLOT_SIZE, inventoryGridY() + row * SLOT_SIZE)) {
+        for (int row = 0; row < ResearchTableLayout.INVENTORY_GRID_ROWS; row++) {
+            for (int column = 0; column < ResearchTableLayout.INVENTORY_COLUMNS; column++) {
+                if (inside(mouseX, mouseY, slotAt(layout, column, row))) {
                     return ResearchTableMenu.INVENTORY_SLOT_START
-                            + row * ResearchTableMenu.INVENTORY_COLUMNS + column;
+                            + row * ResearchTableLayout.INVENTORY_COLUMNS + column;
                 }
             }
         }
-        for (int column = 0; column < ResearchTableMenu.INVENTORY_COLUMNS; column++) {
-            if (inside(mouseX, mouseY, inventoryX + column * SLOT_SIZE, hotbarY())) {
+        for (int column = 0; column < ResearchTableLayout.INVENTORY_COLUMNS; column++) {
+            if (inside(mouseX, mouseY, new ResearchTableLayout.Rect(
+                    layout.inventoryX() + column * ResearchTableLayout.SLOT_SIZE, layout.hotbarY(),
+                    ResearchTableLayout.SLOT_SIZE, ResearchTableLayout.SLOT_SIZE))) {
                 return ResearchTableMenu.INVENTORY_SLOT_START
                         + ResearchTableMenu.MAIN_INVENTORY_SIZE + column;
             }
@@ -474,14 +471,22 @@ public class Screen_ResearchTable extends Screen implements MenuAccess<ResearchT
         return -1;
     }
 
-    private static boolean inside(double mouseX, double mouseY, int x, int y) {
-        return mouseX >= x && mouseX < x + SLOT_SIZE && mouseY >= y && mouseY < y + SLOT_SIZE;
+    private ResearchTableLayout.Rect slotAt(ResearchTableLayout layout, int column, int row) {
+        return new ResearchTableLayout.Rect(
+                layout.inventoryX() + column * ResearchTableLayout.SLOT_SIZE,
+                layout.inventoryGridY() + row * ResearchTableLayout.SLOT_SIZE,
+                ResearchTableLayout.SLOT_SIZE, ResearchTableLayout.SLOT_SIZE);
+    }
+
+    private static boolean inside(double mouseX, double mouseY, ResearchTableLayout.Rect rect) {
+        return mouseX >= rect.x() && mouseX < rect.right() && mouseY >= rect.y() && mouseY < rect.bottom();
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (scrollY != 0.0D && mouseX >= panelX + 8 && mouseX <= panelX + panelWidth - 8
-                && mouseY >= listTop && mouseY <= listBottom) {
+        ResearchTableLayout.Rect list = layout().list();
+        if (scrollY != 0.0D && mouseX >= list.x() && mouseX <= list.right()
+                && mouseY >= list.y() && mouseY <= list.bottom()) {
             scroll -= (int) (scrollY * SCROLL_STEP);
             scroll = Math.max(0, scroll);
             return true;
