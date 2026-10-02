@@ -37,6 +37,8 @@ public final class CommonInit {
         NpcMessageManager.init();
         LimbDamageConfig.init();
         ClueDropConfig.init();
+        // 线索目录要在随记本加载玩家数据之前就绪：旧整数编号迁移到稳定 ID 时要用它查映射。
+        com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog.load();
         OrganizationConfig.init();
         KillEffectConfig.init();
         ZombieSpeciesConfig.init();

@@ -4,6 +4,7 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog;
 import com.hhy.dreamingfishcore.server.persistence.JsonDataStore;
 import com.hhy.dreamingfishcore.server.persistence.WorldDataPaths;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
@@ -239,7 +240,10 @@ public class StoryBookDataManager {
             }
             PLAYER_DATA_CACHE.putAll(loadedPlayers);
             playerDataWritable = true;
-            DreamingFishCore.LOGGER.info("随记本玩家数据加载完成，共 {} 个玩家", PLAYER_DATA_CACHE.size());
+            int migrated = migrateLegacyClueIds();
+            DreamingFishCore.LOGGER.info("随记本玩家数据加载完成，共 {} 个玩家{}",
+                    PLAYER_DATA_CACHE.size(),
+                    migrated > 0 ? "（其中 " + migrated + " 名玩家的旧编号线索已迁移到稳定 ID）" : "");
         } catch (Exception exception) {
             PLAYER_DATA_CACHE.clear();
             playerDataWritable = false;
@@ -247,6 +251,30 @@ public class StoryBookDataManager {
         } finally {
             loaded = true;
         }
+    }
+
+    /**
+     * 把旧整数编号迁移成稳定 ID（里程碑 2）。
+     *
+     * <p>必须在玩家数据加载完成之后、且线索目录已就绪时调用；映射不到旧编号就跳过
+     * （内容被删掉时也要能正常开服），旧字段保持原样以便回退。</p>
+     *
+     * @return 发生了迁移的玩家数
+     */
+    private static int migrateLegacyClueIds() {
+        int migrated = 0;
+        for (Map.Entry<UUID, StoryBookData> entry : PLAYER_DATA_CACHE.entrySet()) {
+            StoryBookData data = entry.getValue();
+            if (data == null) {
+                continue;
+            }
+            data.normalizeClueRecords();
+            if (data.migrateLegacyClueIds(ClueCatalog::idForLegacy)) {
+                markPlayerDirty(entry.getKey());
+                migrated++;
+            }
+        }
+        return migrated;
     }
 
     /**
@@ -469,6 +497,56 @@ public class StoryBookDataManager {
             markPlayerDirty(playerUuid);
         }
         return unlocked;
+    }
+
+    // ==================== 里程碑 2：稳定 ID 的永久发现记录 ====================
+
+    /**
+     * 登记一条线索为永久发现（发放即视为已发现，ADR 0009）。
+     *
+     * <p>与旧的 {@code unlockFragmentForPlayer} 并存：旧路径按 int 编号走，
+     * 新路径按稳定 ID 走，两者最终都落到同一份玩家档案里。</p>
+     *
+     * @return 是否是本次新发现的
+     */
+    public static boolean discoverClueForPlayer(UUID playerUuid, String clueId) {
+        if (playerUuid == null || clueId == null || clueId.isBlank()) {
+            return false;
+        }
+        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
+        boolean discovered = storyBook.discoverClue(clueId);
+        if (discovered) {
+            markPlayerDirty(playerUuid);
+        }
+        return discovered;
+    }
+
+    public static boolean hasDiscoveredClue(UUID playerUuid, String clueId) {
+        if (playerUuid == null || clueId == null || clueId.isBlank()) {
+            return false;
+        }
+        StoryBookData storyBook = PLAYER_DATA_CACHE.get(playerUuid);
+        return storyBook != null && storyBook.hasDiscoveredClue(clueId);
+    }
+
+    public static java.util.List<String> getDiscoveredClueIds(UUID playerUuid) {
+        if (playerUuid == null) {
+            return java.util.List.of();
+        }
+        StoryBookData storyBook = PLAYER_DATA_CACHE.get(playerUuid);
+        return storyBook == null ? java.util.List.of() : storyBook.getSortedClueIds();
+    }
+
+    /** 标记一条已发现的线索为已读。 */
+    public static void markClueReadForPlayer(UUID playerUuid, String clueId) {
+        if (playerUuid == null || clueId == null || clueId.isBlank()) {
+            return;
+        }
+        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
+        if (storyBook.hasDiscoveredClue(clueId) && !storyBook.hasReadClue(clueId)) {
+            storyBook.markClueRead(clueId);
+            markPlayerDirty(playerUuid);
+        }
     }
 
     /**

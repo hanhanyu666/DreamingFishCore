@@ -2,10 +2,8 @@ package com.hhy.dreamingfishcore.gameplay.clue_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.item.items.Item_FragmentPage;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
@@ -42,13 +40,14 @@ public final class ClueGuaranteeService {
     /** 重生节点异常记录：感染者完成一次标准重建后发放。 */
     public static final int CLUE_RESPAWN_ANOMALY = 11;
 
-    private static final String GRANT_MESSAGE = "§7你获得了一张沾灰的残页，右键可以整理出上面的内容。";
-
     private ClueGuaranteeService() {
     }
 
     /**
-     * 向玩家发放一条保底线索（一张绑定编号的残页）。
+     * 向玩家发放一条保底线索。
+     *
+     * <p>里程碑 2 起改为委派 {@link ClueGrantService}：发放的动作统一在那边，
+     * 这里保留旧整数编号签名给既有的剧情调用点用（编号会映射到稳定 ID）。</p>
      *
      * @return 真的发放了才返回 true；已收录、已持有、编号不存在或数据未加载时返回 false
      */
@@ -59,31 +58,18 @@ public final class ClueGuaranteeService {
 
         FragmentData fragment = StoryBookDataManager.getFragment(fragmentId);
         if (fragment == null) {
-            // 服主可能从 fragment_data.json 里删掉了这条；不要因此打断剧情事件本身。
+            // 服主可能从内容文件里删掉了这条；不要因此打断剧情事件本身。
             DreamingFishCore.LOGGER.warn("保底线索 {} 不在当前线索池中，跳过发放", fragmentId);
             return false;
         }
 
-        StoryBookData storyBook;
-        try {
-            storyBook = StoryBookDataManager.getPlayerStoryBook(player);
-        } catch (IllegalStateException notLoaded) {
-            // 随记本数据尚未随世界加载时静默跳过，不能把异常抛进剧情事件里。
+        // 背包里已经有同编号的未使用残页时不再重复发（避免剧情重入刷物品）。
+        if (isCarrying(player, fragmentId)) {
             return false;
         }
 
-        if (!shouldGrant(true, storyBook.hasUnlockedFragment(fragmentId), isCarrying(player, fragmentId))) {
-            return false;
-        }
-
-        ItemStack page = Item_FragmentPage.createFragmentPage(fragmentId);
-        if (!player.addItem(page)) {
-            player.drop(page, false);
-        }
-        player.sendSystemMessage(Component.literal(GRANT_MESSAGE));
-        DreamingFishCore.LOGGER.info("向玩家 {} 发放保底线索 {}（{}）",
-                player.getScoreboardName(), fragmentId, fragment.getTitle());
-        return true;
+        ClueGrantService.Outcome outcome = ClueGrantService.grantLegacy(player, fragmentId);
+        return outcome == ClueGrantService.Outcome.GRANTED;
     }
 
     /** 判断是否可以发放；抽成纯函数方便单测。 */

@@ -20,6 +20,8 @@ import java.util.List;
 public class Item_FragmentPage extends Item {
     private static final String FRAGMENT_PAGE_TAG = "FragmentPage";
     private static final String FRAGMENT_ID_KEY = "fragmentId";
+    /** 里程碑 2：稳定线索 ID（新写入的残页用它；旧残页只有上面的整数编号）。 */
+    private static final String CLUE_ID_KEY = "clueId";
 
     public Item_FragmentPage(Properties properties) {
         super(properties);
@@ -68,6 +70,60 @@ public class Item_FragmentPage extends Item {
         ItemStack stack = new ItemStack(DreamingFishCore_Items.FRAGMENT_PAGE.get());
         setFragmentId(stack, fragmentId);
         return stack;
+    }
+
+    /**
+     * 按稳定 ID 造一张残页（里程碑 2）。
+     *
+     * <p>同时写入旧编号（如果有），这样在旧客户端或旧存档路径里仍然能读出内容。</p>
+     */
+    public static ItemStack createCluePage(String clueId, int legacyId) {
+        ItemStack stack = new ItemStack(DreamingFishCore_Items.FRAGMENT_PAGE.get());
+        setClueId(stack, clueId);
+        if (legacyId > 0) {
+            setFragmentId(stack, legacyId);
+        }
+        return stack;
+    }
+
+    public static void setClueId(ItemStack stack, String clueId) {
+        if (clueId == null || clueId.isBlank()) {
+            return;
+        }
+        CompoundTag rootTag = ItemStackDataHelper.getTag(stack);
+        if (rootTag == null) {
+            rootTag = new CompoundTag();
+        }
+        CompoundTag fragmentPageTag = rootTag.getCompound(FRAGMENT_PAGE_TAG);
+        fragmentPageTag.putString(CLUE_ID_KEY, clueId);
+        rootTag.put(FRAGMENT_PAGE_TAG, fragmentPageTag);
+        ItemStackDataHelper.setTag(stack, rootTag);
+    }
+
+    /** 残页绑定的线索：优先读稳定 ID，旧残页回退到整数编号再映射。 */
+    public static String getClueId(ItemStack stack) {
+        CompoundTag fragmentPageTag = fragmentPageTag(stack);
+        if (fragmentPageTag != null && fragmentPageTag.contains(CLUE_ID_KEY)) {
+            String clueId = fragmentPageTag.getString(CLUE_ID_KEY);
+            if (!clueId.isBlank()) {
+                return clueId;
+            }
+        }
+        Integer legacyId = getFragmentId(stack);
+        return legacyId == null
+                ? null
+                : com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog.idForLegacy(legacyId);
+    }
+
+    private static CompoundTag fragmentPageTag(ItemStack stack) {
+        if (!ItemStackDataHelper.hasTag(stack)) {
+            return null;
+        }
+        CompoundTag rootTag = ItemStackDataHelper.getTag(stack);
+        if (rootTag == null || !rootTag.contains(FRAGMENT_PAGE_TAG)) {
+            return null;
+        }
+        return rootTag.getCompound(FRAGMENT_PAGE_TAG);
     }
 
     public static void setFragmentId(ItemStack stack, int fragmentId) {
