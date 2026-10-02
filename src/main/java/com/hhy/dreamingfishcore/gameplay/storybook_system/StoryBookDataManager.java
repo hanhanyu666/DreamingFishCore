@@ -74,7 +74,6 @@ public class StoryBookDataManager {
 
     private static boolean loaded;
     /** 片段定义只有在整份文件成功解析和校验后才允许覆盖。 */
-    private static boolean fragmentConfigWritable;
     /** 玩家世界档案与片段定义分开保护；档案读取失败时绝不覆盖原档。 */
     private static boolean playerDataWritable;
 
@@ -104,7 +103,6 @@ public class StoryBookDataManager {
         STAGE_INDEX.clear();
         CHAPTER_INDEX.clear();
         // 每次重载都从只读保护开始；不能沿用上一个世界/上一次成功加载的状态。
-        fragmentConfigWritable = false;
         BuiltInFragmentCatalog.load();
 
         if (Files.notExists(FRAGMENT_DATA_PATH) && !saveDefaultFragmentConfig()) {
@@ -113,7 +111,6 @@ public class StoryBookDataManager {
 
         try {
             if (Files.size(FRAGMENT_DATA_PATH) == 0L) {
-                fragmentConfigWritable = false;
                 DreamingFishCore.LOGGER.error("片段配置为空，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
                 return;
             }
@@ -149,12 +146,10 @@ public class StoryBookDataManager {
             FRAGMENT_CACHE.putAll(fragments);
             STAGE_INDEX.putAll(stages);
             CHAPTER_INDEX.putAll(chapters);
-            fragmentConfigWritable = true;
         } catch (Exception exception) {
             FRAGMENT_CACHE.clear();
             STAGE_INDEX.clear();
             CHAPTER_INDEX.clear();
-            fragmentConfigWritable = false;
             DreamingFishCore.LOGGER.error(
                     "片段配置及备份读取失败，拒绝覆盖原文件：{}",
                     FRAGMENT_DATA_PATH,
@@ -163,26 +158,6 @@ public class StoryBookDataManager {
 
         DreamingFishCore.LOGGER.info("片段数据加载完成，共 {} 条片段，{} 个阶段，{} 个章节",
                 FRAGMENT_CACHE.size(), STAGE_INDEX.size(), CHAPTER_INDEX.size());
-    }
-
-    /**
-     * 保存片段配置数据
-     */
-    public static synchronized boolean saveFragmentData() {
-        if (!fragmentConfigWritable) {
-            DreamingFishCore.LOGGER.error("片段配置未安全加载，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
-            return false;
-        }
-
-        List<FragmentData> fragmentList = new ArrayList<>(FRAGMENT_CACHE.values());
-        fragmentList.sort(Comparator.comparingInt(FragmentData::getId));
-        try {
-            JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, fragmentList);
-            return true;
-        } catch (Exception exception) {
-            DreamingFishCore.LOGGER.error("保存片段数据失败：{}", FRAGMENT_DATA_PATH, exception);
-            return false;
-        }
     }
 
     /**
@@ -197,11 +172,9 @@ public class StoryBookDataManager {
         try {
             JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);
             // 这里只负责创建缺失模板；是否可写由后续完整读取+校验决定。
-            fragmentConfigWritable = false;
             DreamingFishCore.LOGGER.info("默认片段配置已保存");
             return true;
         } catch (Exception exception) {
-            fragmentConfigWritable = false;
             DreamingFishCore.LOGGER.error("保存默认片段配置失败：{}", FRAGMENT_DATA_PATH, exception);
             return false;
         }
@@ -333,7 +306,6 @@ public class StoryBookDataManager {
         PLAYER_DATA_CACHE.clear();
         DIRTY_PLAYERS.clear();
         loaded = false;
-        fragmentConfigWritable = false;
         playerDataWritable = false;
     }
 
@@ -809,16 +781,6 @@ public class StoryBookDataManager {
         levelUpStoryFeedback(player);
         markPlayerDirty(playerUuid);
         return true;
-    }
-
-    private static int getLatestUnlockedFragmentId(StoryBookData storyBook) {
-        List<Integer> obtainedOrder = storyBook.getObtainedOrder();
-        if (!obtainedOrder.isEmpty()) {
-            return obtainedOrder.get(obtainedOrder.size() - 1);
-        }
-        return storyBook.getUnlockedFragmentIds().stream()
-                .max(Integer::compareTo)
-                .orElse(-1);
     }
 
     private static void ensurePlayerHasStoryBookItem(ServerPlayer player) {
