@@ -131,8 +131,47 @@ class ResearchMathTest {
         assertTrue(ResearchMath.pickDistinct(POOL, 0, RandomSource.create(1L)).isEmpty());
     }
 
-    // ==================== 经验点数 ====================
+    // ==================== 提交数量（四分之一组） ====================
 
+    @Test
+    void submitCountIsAQuarterOfStackSize() {
+        assertEquals(16, ResearchMath.requiredSubmitCount(64, 4), "铁锭这类 64 堆叠的交 16 个");
+        assertEquals(4, ResearchMath.requiredSubmitCount(16, 4), "鸡蛋这类 16 堆叠的交 4 个");
+        assertEquals(1, ResearchMath.requiredSubmitCount(1, 4), "不可堆叠的（钻石镐）交 1 个");
+    }
+
+    @Test
+    void submitCountRoundsUpInsteadOfDown() {
+        // 向上取整：10 / 4 = 2.5 → 3；不取整的话会出现"交 2 个就够了"，比配置更便宜。
+        assertEquals(3, ResearchMath.requiredSubmitCount(10, 4));
+        assertEquals(1, ResearchMath.requiredSubmitCount(3, 4));
+        assertEquals(2, ResearchMath.requiredSubmitCount(5, 4));
+    }
+
+    @Test
+    void submitCountWithDivisorOneNeedsTheWholeStack() {
+        assertEquals(64, ResearchMath.requiredSubmitCount(64, 1));
+        assertEquals(16, ResearchMath.requiredSubmitCount(16, 1));
+        assertEquals(1, ResearchMath.requiredSubmitCount(1, 1));
+    }
+
+    @Test
+    void illegalDivisorFallsBackToWholeStackNeverZero() {
+        // 配置写成 0 / 负数时按 1 处理：最坏是"变贵"，绝不能变成"交 0 个白拿配方"。
+        assertEquals(64, ResearchMath.requiredSubmitCount(64, 0));
+        assertEquals(64, ResearchMath.requiredSubmitCount(64, -5));
+        assertEquals(64, ResearchMath.requiredSubmitCount(64, Integer.MIN_VALUE));
+    }
+
+    @Test
+    void submitCountIsAlwaysAtLeastOne() {
+        // 除数比堆叠上限还大时也至少交 1 个。
+        assertEquals(1, ResearchMath.requiredSubmitCount(1, 64));
+        assertEquals(1, ResearchMath.requiredSubmitCount(0, 64));
+        assertEquals(1, ResearchMath.requiredSubmitCount(-3, 4));
+    }
+
+    // ==================== 经验点数 ====================
     @Test
     void pointsToReachLevelMatchesVanillaTotals() {
         assertEquals(0, ResearchMath.pointsToReachLevel(0));

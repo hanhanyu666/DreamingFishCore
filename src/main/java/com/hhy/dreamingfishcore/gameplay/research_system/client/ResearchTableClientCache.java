@@ -25,7 +25,10 @@ public final class ResearchTableClientCache {
                            int playerExperience,
                            List<String> learned,
                            String message,
-                           boolean available) {
+                           boolean available,
+                           int submitDivisor,
+                           boolean canSubmit,
+                           String submitStatus) {
     }
 
     /** 由网络包在收到服务端快照时调用（在客户端的渲染线程上）。 */
@@ -37,7 +40,10 @@ public final class ResearchTableClientCache {
                 packet.playerExperience(),
                 List.copyOf(packet.learned()),
                 packet.message(),
-                packet.available());
+                packet.available(),
+                packet.submitDivisor(),
+                packet.canSubmit(),
+                packet.submitStatus());
     }
 
     /** 当前快照；服务端还没推过时为 {@code null}。 */

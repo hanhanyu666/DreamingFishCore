@@ -1,9 +1,11 @@
 # 研究桌
 
 花经验一次性研究出一批配方，是**蓝图的另一条获取途径**：不想靠丧尸掉落慢慢攒的玩家，
-可以用经验换。
+可以用经验换。另有第二条途径：**提交物品**——把物品放进界面的槽位，交够「四分之一组」
+（堆叠上限 ÷ `submitDivisor`，向上取整）就能直接解锁这件物品的配方。
 
-方块 id：`dreamingfishcore:research_table`。右键打开界面，先看清本次课题，点「开始研究」才扣经验。
+方块 id：`dreamingfishcore:research_table`。右键打开界面，先看清本次课题，点「开始研究」才扣经验；
+或者把物品放进提交槽，点「解锁这个配方」。
 
 **研究桌自己免蓝图**（在 `BlueprintConfig` 的默认放行名单里）：它是"获得蓝图"的工具本身，
 不能要求"先有它自己的蓝图"——那是循环依赖。同理它也不会出现在抽取池与候选里。
@@ -16,12 +18,16 @@
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `schemaVersion` | `1` | 结构版本，不认识的值会让配置回落到内存默认值 |
-| `enabled` | `true` | 研究桌总开关；关掉之后界面能打开但研究按钮禁用 |
+| `enabled` | `true` | 研究桌总开关；关掉之后界面能打开但两个按钮都禁用 |
 | `costExperiencePoints` | `100` | 一次研究消耗的**经验点数**（不是等级） |
 | `minRecipes` | `10` | 一次研究最少给几个 |
 | `maxRecipes` | `15` | 一次研究最多给几个（会被候选总数夹住，上限 64） |
 | `namespaces` | `["minecraft"]` | 允许被研究出来的命名空间；**空列表表示不限** |
 | `skipLearned` | `true` | 跳过已经学会的，不浪费经验 |
+| `submitDivisor` | `4` | 提交物品解锁配方时的除数：堆叠上限 ÷ 它（向上取整）。夹取到 `1..64` |
+
+`submitDivisor` 是后加的字段，老配置文件里没有它时会落到默认值 4（**不会**变成 0——
+那会变成"交 0 个白拿配方"）。除以 1 表示提交一整组，64 表示任何物品都只交 1 个。
 
 ---
 
@@ -39,6 +45,8 @@
   所以这种情况下界面会直接说明原因并禁用按钮，不会白扣经验。
 - 玩家把候选学完之后，界面提示"没有可以研究的配方了"，也不会扣经验。
 
+提交物品那条路用的是**同一套判据**：不在蓝图抽取池里的物品会被明确告知"该物品不需要蓝图"。
+
 ---
 
 ## 3. 服务端权威与"课题固定"
@@ -55,9 +63,44 @@
 
 ---
 
-## 4. 不变量（改这块代码前必读）
+## 4. 提交物品解锁配方（容器菜单）
 
-- **结算入口唯一**：`ResearchService.handleConfirm`。客户端不参与任何计算。
+**为什么可以没有方块实体**：界面是一个真正的容器菜单（`ResearchTableMenu`），槽位内容放在
+菜单自己的 `SimpleContainer(1)` 里——服务端与客户端各一份，靠原版 `broadcastChanges()` 同步。
+方块本身依然无状态；**关掉菜单时槽里剩下的东西会全部还给玩家**（`removed(Player)` 里
+`placeItemBackInInventory`，背包满时自动丢在脚下），所以没有"留在方块里"的数据要存档。
+
+流程（全部服务端权威）：
+
+1. 右键研究桌 → `ResearchService.onInteract` 调 `player.openMenu`，菜单类型用
+   `IMenuTypeExtension.create` 注册，并把**方块坐标**通过 `writeClientSideData` 一起发给客户端；
+   客户端的 `MenuScreens` 注册项把界面建成自绘的 `Screen_ResearchTable`（它实现 `MenuAccess`，
+   所以槽位点击会真的走原版容器同步）。
+2. 玩家把物品放进槽位 → 客户端 `MultiPlayerGameMode#handleInventoryMouseClick` 发
+   `ServerboundContainerClickPacket` → 服务端在菜单上落地；服务端随后重算一次"能不能提交"，
+   把结论（`canSubmit` + `submitStatus`）随 `research_table/open` 推回界面。
+3. 点「解锁这个配方」→ `research_table/submit`（**只带坐标**，连物品是什么都不告诉服务端）→
+   `ResearchService.handleSubmit` 读服务端自己那份菜单的槽位，重算并扣除
+   `ceil(堆叠上限 / submitDivisor)` 个，再走 `PlayerBlueprintData.unlockItem`。
+
+判定顺序与提示（`ResearchService.submitState`）：研究桌未启用 → 蓝图系统未启用 →
+界面已关闭 → 槽位为空 → 物品取不到 ID → **不在蓝图抽取池里**（"该物品不需要蓝图"）→
+**已经学会了** → 槽位数量不够（"需要 16 个铁锭，你只有 7 个"）。
+
+界面显示的"需要几个"是客户端用服务端下发的 `submitDivisor` 当场算的（只为显示）；
+按钮能不能点、到底扣不扣，一律以服务端那一份结论为准。
+
+---
+
+## 5. 不变量（改这块代码前必读）
+
+- **结算入口唯一**：花经验是 `ResearchService.handleConfirm`，提交物品是
+  `ResearchService.handleSubmit`，能不能提交由 `ResearchService.submitState` 单点判定。
+  客户端不参与任何计算。
+- **提交数量必须是纯函数**：`ResearchMath.requiredSubmitCount(堆叠上限, 除数)`，
+  64→16、16→4、1→1；除数非法（<1）时按 1 处理（最坏是变贵，绝不能变成"交 0 个"）。
+- **槽位内容不许丢**：`ResearchTableMenu.removed` 必须把槽里剩下的还给玩家；
+  服务端 `stillValid` 判定失败（走远 / 方块没了）时也会走这条路。
 - **经验判定与扣除分开**：判定用 `ResearchMath.experiencePointsOf`（由等级 + 等级内进度按原版
   公式反推点数），扣除用 `player.giveExperiencePoints(-cost)`。改判定公式前先看
   `ResearchMathTest` 里钉死的几个原版累计值（16 级 352 / 30 级 1395 / 32 级 1628）。
@@ -65,15 +108,20 @@
   所以死亡遗忘（`BlueprintEventHandler`）对研究出的配方一样生效。
 - **方块没有状态、也没有方块实体**：进度全在玩家身上。刷怪箱要存配置与运行状态所以必须
   有存档，研究桌除了"被点一下"没有可保存的东西——不要为了对称给它加 BlockEntity。
-- 新加了三个网络包（`research_table/open`、`research_table/request`、`research_table/confirm`），
-  **改线格式或字段必须提升 `PROTOCOL_VERSION`**。
+  槽位内容同理：它是**菜单**的状态，关掉就还给玩家，不需要落盘。
+- 现在有四个网络包（`research_table/open`、`research_table/request`、
+  `research_table/confirm`、`research_table/submit`），
+  **改线格式或字段必须提升 `PROTOCOL_VERSION`**（当前 `0.31.0`）。
 
 ---
 
-## 5. 已知边界
+## 6. 已知边界
 
 - 只研究**工作台配方**产物（候选来自蓝图抽取池，而那个池只收工作台配方）。
-  熔炼、切石机、锻造台的配方不参与。
+  熔炼、切石机、锻造台的配方不参与；提交物品这条路也受同一条约束。
 - 同一个物品如果同时有多个工作台配方，只会算一件。
 - 不给玩家蓝图物品，只直接解锁合成权限——想要可交易的蓝图就继续走掉落。
 - 界面里**不能挑**要研究哪一个，只能整批接受或走开。这是刻意的（见第 3 节）。
+- 自绘界面的槽位交互支持：左键拿起/放下整叠、右键一半/一个、Shift 快速移动。
+  **不支持**原版的拖拽分发（左键拖过多格平均分）、双击聚拢、把物品丢到界面外——
+  少这几个不影响"放进去提交"这条主路径，也少了误丢物品的可能。

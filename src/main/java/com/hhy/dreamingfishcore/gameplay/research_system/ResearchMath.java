@@ -85,6 +85,24 @@ public final class ResearchMath {
     }
 
     /**
+     * 提交多少个物品才能解锁对应配方：**物品堆叠上限的四分之一，向上取整**，至少 1 个。
+     *
+     * <p>64 → 16、16 → 4、1 → 1（钻石镐这类不可堆叠的物品交 1 个即可）。
+     * 除数非法（小于 1）时按 1 处理，也就是退化成"提交一整组"，而不是"提交 0 个"——
+     * 配置写坏了最坏结果是变贵，不能让玩家白拿配方。</p>
+     *
+     * @param maxStackSize 物品的堆叠上限
+     * @param divisor      配置里的"四分之一"除数
+     */
+    public static int requiredSubmitCount(int maxStackSize, int divisor) {
+        int safeDivisor = Math.max(divisor, 1);
+        int safeMaxStackSize = Math.max(maxStackSize, 1);
+        // 用 long 做中间量：堆叠上限写成 Integer.MAX_VALUE 时也不会溢出成负数。
+        long numerator = (long) safeMaxStackSize + safeDivisor - 1L;
+        return (int) Math.max(1L, numerator / safeDivisor);
+    }
+
+    /**
      * 玩家当前持有的经验点数（不是等级）。
      *
      * <p>由等级与当前等级的进度反推：等级只决定「升到该级需要多少点」，

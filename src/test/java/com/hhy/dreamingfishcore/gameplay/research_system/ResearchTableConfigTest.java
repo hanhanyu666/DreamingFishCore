@@ -34,6 +34,71 @@ class ResearchTableConfigTest {
         assertEquals(15, config.getMaxRecipes());
         assertEquals(List.of("minecraft"), config.getNamespaces());
         assertTrue(config.isSkipLearned());
+        assertEquals(4, config.getSubmitDivisor(), "默认提交四分之一组");
+    }
+
+    // ==================== 提交除数（四分之一组） ====================
+
+    @Test
+    void submitDivisorDefaultsToFourWhenFieldMissing(@TempDir Path dir) throws Exception {
+        // 老配置文件里没有这个字段：必须落到默认值 4，而不是 0（那会变成"交 0 个白拿配方"）。
+        Path config = write(dir, """
+                {"schemaVersion": 1, "costExperiencePoints": 100}
+                """);
+
+        ResearchTableConfig loaded = ResearchTableConfig.load(config);
+
+        assertEquals(ResearchTableConfig.DEFAULT_SUBMIT_DIVISOR, loaded.getSubmitDivisor());
+        assertEquals(16, ResearchMath.requiredSubmitCount(64, loaded.getSubmitDivisor()));
+    }
+
+    @Test
+    void submitDivisorZeroIsClampedToOne(@TempDir Path dir) throws Exception {
+        Path config = write(dir, """
+                {"schemaVersion": 1, "submitDivisor": 0}
+                """);
+
+        ResearchTableConfig loaded = ResearchTableConfig.load(config);
+
+        assertEquals(ResearchTableConfig.MIN_SUBMIT_DIVISOR, loaded.getSubmitDivisor());
+        assertEquals(64, ResearchMath.requiredSubmitCount(64, loaded.getSubmitDivisor()),
+                "除数为 1 时提交一整组，绝不能变成 0 个");
+    }
+
+    @Test
+    void negativeSubmitDivisorIsClamped(@TempDir Path dir) throws Exception {
+        Path config = write(dir, """
+                {"schemaVersion": 1, "submitDivisor": -20}
+                """);
+
+        ResearchTableConfig loaded = ResearchTableConfig.load(config);
+
+        assertEquals(ResearchTableConfig.MIN_SUBMIT_DIVISOR, loaded.getSubmitDivisor());
+    }
+
+    @Test
+    void absurdSubmitDivisorIsClampedToLimit(@TempDir Path dir) throws Exception {
+        Path config = write(dir, """
+                {"schemaVersion": 1, "submitDivisor": 9999}
+                """);
+
+        ResearchTableConfig loaded = ResearchTableConfig.load(config);
+
+        assertEquals(ResearchTableConfig.MAX_SUBMIT_DIVISOR, loaded.getSubmitDivisor());
+        // 夹到 64 之后，不可堆叠的物品依然只要 1 个（不会出现"需要 0 个"或"需要 1/64 个"）。
+        assertEquals(1, ResearchMath.requiredSubmitCount(1, loaded.getSubmitDivisor()));
+    }
+
+    @Test
+    void damagedFileWithSubmitDivisorFallsBackToDefaults(@TempDir Path dir) throws Exception {
+        String damaged = "{ \"schemaVersion\": 1, \"submitDivisor\": ";
+        Path config = write(dir, damaged);
+
+        ResearchTableConfig loaded = ResearchTableConfig.load(config);
+
+        assertEquals(ResearchTableConfig.DEFAULT_SUBMIT_DIVISOR, loaded.getSubmitDivisor());
+        assertEquals(damaged, Files.readString(config, StandardCharsets.UTF_8),
+                "损坏的服主文件不能被默认值覆盖");
     }
 
     @Test

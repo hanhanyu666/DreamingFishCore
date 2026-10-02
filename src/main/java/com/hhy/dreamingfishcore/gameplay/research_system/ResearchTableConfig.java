@@ -22,6 +22,10 @@ import java.util.Locale;
  * 能被研究出来的物品就是「需要蓝图、且落在下面命名空间白名单里、并且玩家还没学过」的那批
  * —— 白名单为空表示不限命名空间。</p>
  *
+ * <p>另一条途径是**提交物品**：把物品放进研究桌的槽位，交够
+ * 「堆叠上限 ÷ {@code submitDivisor}（向上取整）」个，直接解锁这件物品的配方。
+ * 除数走配置，见 {@link #getSubmitDivisor()}。</p>
+ *
  * <p>与项目其他配置一致：文件缺失时写入默认值；文件损坏时只使用内存默认值，
  * 不覆盖服主原有的文件。</p>
  */
@@ -37,9 +41,20 @@ public final class ResearchTableConfig {
     /** 默认只研究原版配方；服主可以加模组命名空间，或清空表示不限。 */
     public static final List<String> DEFAULT_NAMESPACES = List.of("minecraft");
     public static final boolean DEFAULT_SKIP_LEARNED = true;
+    /** "提交四分之一组物品解锁配方"里的除数：堆叠上限 ÷ 这个数（向上取整）。 */
+    public static final int DEFAULT_SUBMIT_DIVISOR = 4;
 
     /** 一次研究最多给多少个：防止配置写成 99999 把整本配方书一次倒给玩家。 */
     static final int MAX_RECIPES_LIMIT = 64;
+
+    /**
+     * 提交除数的允许范围。
+     *
+     * <p>下限是 1（提交一整组），上限 64 保证任何物品至少交 1 个；
+     * 写成 0 或负数会被夹到 1，而不是"提交 0 个白拿配方"。</p>
+     */
+    public static final int MIN_SUBMIT_DIVISOR = 1;
+    public static final int MAX_SUBMIT_DIVISOR = 64;
 
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -54,6 +69,7 @@ public final class ResearchTableConfig {
     private int maxRecipes = DEFAULT_MAX_RECIPES;
     private List<String> namespaces = new ArrayList<>(DEFAULT_NAMESPACES);
     private boolean skipLearned = DEFAULT_SKIP_LEARNED;
+    private int submitDivisor = DEFAULT_SUBMIT_DIVISOR;
 
     public ResearchTableConfig() {
     }
@@ -149,6 +165,14 @@ public final class ResearchTableConfig {
         return skipLearned;
     }
 
+    /**
+     * 「提交四分之一组物品解锁配方」里的除数（已夹取到
+     * {@link #MIN_SUBMIT_DIVISOR}..{@link #MAX_SUBMIT_DIVISOR}）。
+     */
+    public int getSubmitDivisor() {
+        return submitDivisor;
+    }
+
     /** 该物品所属命名空间是否允许被研究。命名空间列表为空时不限制。 */
     public boolean allowsNamespace(String itemId) {
         if (namespaces.isEmpty()) {
@@ -208,6 +232,14 @@ public final class ResearchTableConfig {
             changed = true;
         }
         changed |= stripBlanks(namespaces);
+        if (submitDivisor < MIN_SUBMIT_DIVISOR) {
+            submitDivisor = MIN_SUBMIT_DIVISOR;
+            changed = true;
+        }
+        if (submitDivisor > MAX_SUBMIT_DIVISOR) {
+            submitDivisor = MAX_SUBMIT_DIVISOR;
+            changed = true;
+        }
         return changed;
     }
 

@@ -47,6 +47,15 @@ public class ClientSetup {
     }
 
     @SubscribeEvent
+    public static void registerMenuScreens(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) {
+        // 研究桌的界面是自绘的（不是 AbstractContainerScreen），但仍然必须实现 MenuAccess：
+        // 客户端就是靠这个接口把 containerMenu 指向菜单实例，槽位点击才会发给服务端。
+        event.register(
+                com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableMenus.RESEARCH_TABLE.get(),
+                com.hhy.dreamingfishcore.gameplay.research_system.client.Screen_ResearchTable::new);
+    }
+
+    @SubscribeEvent
     public static void registerHudCacheReloadListener(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener((ResourceManagerReloadListener) resourceManager -> {
             CustomHotbarGUI.invalidateItemRenderCache();

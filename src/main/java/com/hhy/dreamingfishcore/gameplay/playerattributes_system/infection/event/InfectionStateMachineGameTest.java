@@ -58,17 +58,32 @@ public class InfectionStateMachineGameTest {
     public static void unstableInfectedExposesNearbySurvivor(GameTestHelper helper) {
         ServerPlayer survivor = authenticatedPlayer(helper);
         ServerPlayer unstable = authenticatedPlayer(helper);
+        try {
+            PlayerAttributesData unstableData = dataOf(unstable);
+            unstableData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
+            unstableData.setCurrentInfection(50.0F);
+            PlayerAttributesDataManager.updatePlayerAttributesData(unstable, unstableData);
 
-        PlayerAttributesData unstableData = dataOf(unstable);
-        unstableData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
-        unstableData.setCurrentInfection(50.0F);
-        PlayerAttributesDataManager.updatePlayerAttributesData(unstable, unstableData);
-
-        helper.assertTrue(unstableData.getInfectionIdentity() == InfectionIdentity.UNSTABLE,
-                "前置条件：该玩家应是不稳定感染者");
-        helper.assertTrue(InfectionEventHandler.hasSpreadingSourceNearby(survivor),
-                "不稳定感染者应被识别为传播来源");
+            helper.assertTrue(unstableData.getInfectionIdentity() == InfectionIdentity.UNSTABLE,
+                    "前置条件：该玩家应是不稳定感染者");
+            helper.assertTrue(InfectionEventHandler.hasSpreadingSourceNearby(survivor),
+                    "不稳定感染者应被识别为传播来源");
+        } finally {
+            // 本测试刻意造了一个"会传播"的感染者，而 gametest 共用同一个测试世界与玩家列表：
+            // 不摘掉它的话，后面任何"附近不应该有传播来源"的断言都会扫到这个残留
+            // （stableInfectedDoesNotExposeNearbySurvivor 就是这么被弄挂的）。
+            // 放在 finally 里，断言失败时也不会把残留留给后面的测试。
+            dispose(survivor);
+            dispose(unstable);
+        }
         helper.succeed();
+    }
+
+    /** 把测试造出来的模拟玩家从服务器上摘掉，别让它影响同一批次里的其它 gametest。 */
+    private static void dispose(ServerPlayer player) {
+        if (player != null && player.getServer() != null) {
+            player.getServer().getPlayerList().remove(player);
+        }
     }
 
     /** 暴露攒满后转化为实际感染增长，并且暴露量清零重新累积。 */
