@@ -157,8 +157,10 @@ final class UiHarnessScenarios {
         });
         UiHarness.register("fragment", minecraft -> {
             StoryBookEntryViewData entry = sampleFragments().get(0);
-            minecraft.setScreen(new Screen_StoryFragment(entry.getFragmentId(), entry.getStageId(), entry.getChapterId(),
-                    entry.getTitle(), entry.getContent(), entry.getTime(), entry.getAuthorName()));
+            minecraft.setScreen(new Screen_StoryFragment(entry.getClueId(), entry.getLegacyId(),
+                    entry.getStageId(), entry.getChapterId(), entry.getTitle(), entry.getContent(),
+                    entry.getTime(), entry.getAuthorName(), entry.getSource(),
+                    entry.getObservationSpan(), entry.getSample(), entry.getConditions()));
         });
         UiHarness.register("dialogue", minecraft -> minecraft.setScreen(new Screen_NpcDialogue(new NpcDialogueViewData(
                 1, -1, "林医生", "海岸医院仅存的外科医生，负责模板重建的最后一道核验。", "女", "医生", 2,
@@ -242,10 +244,10 @@ final class UiHarnessScenarios {
                 + "但她没说重建出来的，还是不是原来的那个人。\n\n"
                 + "逐光会的人在夜里来过。他们没有带走任何东西，只在墙上留下了一道白色的弧线。";
         return List.of(
-                new StoryBookEntryViewData(1, 1, 0, "灯塔下的铅盒", body, "第 3 日 · 黄昏", "守望者 07", true),
-                new StoryBookEntryViewData(2, 1, 0, "白色弧线", body, "第 4 日 · 深夜", "未知", false),
-                new StoryBookEntryViewData(3, 2, 1, "海岸医院", body, "第 9 日", "林医生", false),
-                new StoryBookEntryViewData(4, 2, 1, "抑制剂配方残页", body, "第 11 日", "药剂师", true),
-                new StoryBookEntryViewData(5, 3, 2, "逐光会的信", body, "第 20 日", "逐光会", false));
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_lead_box", 1, 1, 0, "灯塔下的铅盒", body, "第 3 日 · 黄昏", "守望者 07", "灯塔值守记录", "1 夜", "1 只铅盒", "退潮后的浅滩", true),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_white_arc", 2, 1, 0, "白色弧线", body, "第 4 日 · 深夜", "未知", "墙面痕迹", "1 夜", "1 处痕迹", "无人值守时发现", false),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_coast_hospital", 3, 2, 1, "海岸医院", body, "第 9 日", "林医生", "海岸医院随访", "3 天", "12 例", "院内隔离观察", false),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_inhibitor_page", 4, 2, 1, "抑制剂配方残页", body, "第 11 日", "药剂师", "药剂科手稿", "未标注", "1 页残稿", "抢救时掉落", true),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_zhuguang_letter", 5, 3, 2, "逐光会的信", body, "第 20 日", "逐光会", "逐光会公开信", "1 封", "1 封", "张贴于公告栏", false));
     }
 }

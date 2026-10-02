@@ -581,23 +581,32 @@ public class StoryBookDataManager {
     public static List<StoryBookEntryViewData> getStoryBookEntriesForPlayer(UUID playerUuid) {
         StoryBookData storyBook = getPlayerStoryBook(playerUuid);
         List<StoryBookEntryViewData> entries = new ArrayList<>();
-        for (Integer fragmentId : storyBook.getSortedFragmentIds()) {
-            FragmentData fragmentData = getFragment(fragmentId);
-            if (fragmentData == null) {
+        // 里程碑 2 起按稳定 ID 组装；内容被删掉的线索静默跳过（与旧行为一致）。
+        for (String clueId : storyBook.getSortedClueIds()) {
+            com.hhy.dreamingfishcore.gameplay.clue_system.ClueDefinition definition =
+                    com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog.byId(clueId);
+            if (definition == null) {
                 continue;
             }
-            entries.add(new StoryBookEntryViewData(
-                    fragmentData.getId(),
-                    fragmentData.getStageId(),
-                    fragmentData.getChapterId(),
-                    fragmentData.getTitle(),
-                    fragmentData.getContent(),
-                    fragmentData.getTime(),
-                    fragmentData.getAuthorName(),
-                    storyBook.hasReadFragment(fragmentId)
-            ));
+            entries.add(viewOf(definition, storyBook.hasReadClue(clueId)));
         }
         return entries;
+    }
+
+    /**
+     * 把一条线索定义装成客户端视图。
+     *
+     * <p>只搬玩家可见字段：私密定义（{@code ClueSecrets}）在这里**没有任何入口**，
+     * 想泄漏都泄漏不了。</p>
+     */
+    public static StoryBookEntryViewData viewOf(
+            com.hhy.dreamingfishcore.gameplay.clue_system.ClueDefinition definition,
+            boolean read) {
+        return new StoryBookEntryViewData(
+                definition.id(), definition.legacyId(), definition.stageId(), definition.chapterId(),
+                definition.title(), definition.content(), definition.time(), definition.authorName(),
+                definition.source(), definition.observationSpan(), definition.sample(),
+                definition.conditions(), read);
     }
 
     /**
@@ -655,6 +664,30 @@ public class StoryBookDataManager {
         );
     }
 
+    /**
+     * 按稳定 ID 更新随记本排序（里程碑 2 的客户端排序包走这里）。
+     *
+     * <p>与旧路径同样的防线：客户端可以少传（界面是陈旧视图），但不能引入未知或重复的 ID，
+     * 否则整包丢弃。</p>
+     */
+    public static void updateClueOrderForPlayer(UUID playerUuid, List<String> orderedClueIds) {
+        if (playerUuid == null || orderedClueIds == null
+                || orderedClueIds.size() > MAX_NETWORK_ORDER_ENTRIES) {
+            return;
+        }
+        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
+        Set<String> discovered = storyBook.getDiscoveredClueIds();
+        Set<String> seen = new HashSet<>();
+        for (String clueId : orderedClueIds) {
+            if (clueId == null || clueId.isBlank()
+                    || !discovered.contains(clueId) || !seen.add(clueId)) {
+                return;
+            }
+        }
+        storyBook.setClueOrder(orderedClueIds);
+        markPlayerDirty(playerUuid);
+    }
+
     public static void updateFragmentOrderForPlayer(UUID playerUuid, List<Integer> orderedFragmentIds) {
         if (playerUuid == null || orderedFragmentIds == null
                 || orderedFragmentIds.size() > MAX_NETWORK_ORDER_ENTRIES) {
@@ -689,16 +722,36 @@ public class StoryBookDataManager {
      * 如果物品指定了 fragmentId，则直接读取对应 json 片段；否则按默认顺序补全下一条内容。
      */
     public static boolean useFragmentPage(ServerPlayer player, Integer specifiedFragmentId) {
-        UUID playerUuid = player.getUUID();
-        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
-
         if (specifiedFragmentId == null) {
             player.sendSystemMessage(Component.literal("§c这张残页没有绑定编号，无法整理出新的内容。"));
             return false;
         }
-
-        if (!hasFragment(specifiedFragmentId)) {
+        // 旧编号映射到稳定 ID 后走同一条新流程。
+        String clueId = com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog
+                .idForLegacy(specifiedFragmentId);
+        if (clueId == null) {
             player.sendSystemMessage(Component.literal("§c指定的残页编号不存在：§f" + specifiedFragmentId));
+            return false;
+        }
+        return useCluePage(player, clueId);
+    }
+
+    /**
+     * 按稳定 ID 使用一张残页（里程碑 2 的主流程）。
+     *
+     * <p>与旧的 {@code useFragmentPage} 行为一致：首次使用发随记本与成就、解锁所属章节、
+     * 标记已读并弹开内容页；差别是"发现"在发放时就已经落盘（ADR 0009），这里只是读取与翻页。</p>
+     */
+    public static boolean useCluePage(ServerPlayer player, String clueId) {
+        if (player == null || clueId == null || clueId.isBlank()) {
+            return false;
+        }
+        UUID playerUuid = player.getUUID();
+        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
+        com.hhy.dreamingfishcore.gameplay.clue_system.ClueDefinition definition =
+                com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog.byId(clueId);
+        if (definition == null) {
+            player.sendSystemMessage(Component.literal("§c这张残页上没有可读取的内容。"));
             return false;
         }
 
@@ -714,30 +767,18 @@ public class StoryBookDataManager {
 
         incrementFragmentPageUseCount(playerUuid);
 
-        int fragmentIdToDisplay = specifiedFragmentId;
-        if (!storyBook.hasUnlockedFragment(fragmentIdToDisplay)) {
-            unlockFragmentForPlayer(playerUuid, fragmentIdToDisplay);
-            FragmentData fragmentData = getFragment(fragmentIdToDisplay);
-            if (fragmentData != null) {
-                // The fragment definition owns its chapter.  Do not use a
-                // synthetic chapter 0: StoryBookData intentionally rejects
-                // non-positive chapter IDs, and the first real page should
-                // unlock the chapter it actually belongs to.
-                unlockChapterForPlayer(playerUuid, fragmentData.getChapterId());
-                player.sendSystemMessage(Component.literal("§a你拼出了新的内容：§f" + fragmentData.getTitle()));
-            }
+        boolean newlyDiscovered = discoverClueForPlayer(playerUuid, clueId);
+        if (newlyDiscovered) {
+            unlockChapterForPlayer(playerUuid, definition.chapterId());
+            player.sendSystemMessage(Component.literal("§a你拼出了新的内容：§f" + definition.title()));
         } else {
-            player.sendSystemMessage(Component.literal("§7你翻开了已收录的残页：§f" + specifiedFragmentId));
+            player.sendSystemMessage(Component.literal("§7你翻开了已收录的残页：§f"
+                    + definition.title()));
         }
 
-        FragmentData fragmentToDisplay = getFragment(fragmentIdToDisplay);
-        if (fragmentToDisplay == null) {
-            player.sendSystemMessage(Component.literal("§c这张残页上没有可读取的内容。"));
-            return false;
-        }
-
-        markFragmentReadForPlayer(playerUuid, fragmentIdToDisplay);
-        DreamingFishCore_NetworkManager.sendToClient(new Packet_OpenStoryFragmentGUI(fragmentToDisplay), player);
+        markClueReadForPlayer(playerUuid, clueId);
+        DreamingFishCore_NetworkManager.sendToClient(
+                new Packet_OpenStoryFragmentGUI(viewOf(definition, true)), player);
         levelUpStoryFeedback(player);
         markPlayerDirty(playerUuid);
         return true;
