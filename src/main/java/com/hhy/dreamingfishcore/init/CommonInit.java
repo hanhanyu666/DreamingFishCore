@@ -42,5 +42,7 @@ public final class CommonInit {
         OrganizationConfig.init();
         KillEffectConfig.init();
         ZombieSpeciesConfig.init();
+        // 蓝图配置要在配方加载之前就绪：抽取池是在配方收集完成后按它过滤出来的。
+        com.hhy.dreamingfishcore.gameplay.blueprint_system.BlueprintConfig.init();
     }
 }

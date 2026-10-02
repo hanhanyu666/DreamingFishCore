@@ -224,6 +224,7 @@ public class StoryBookDataManager {
             return;
         }
 
+        Map<UUID, StoryBookData> loadedPlayers;
         try {
             Path playerPath = playerDataPath(server);
             if (Files.exists(playerPath) && Files.size(playerPath) == 0L) {
@@ -232,25 +233,38 @@ public class StoryBookDataManager {
             }
             Map<String, StoryBookData> dataMap = JsonDataStore.read(
                     playerPath, GSON, PLAYER_DATA_TYPE, HashMap::new);
-            Map<UUID, StoryBookData> loadedPlayers = new LinkedHashMap<>();
             validatePlayerDataMap(dataMap);
+            loadedPlayers = new LinkedHashMap<>();
             for (Map.Entry<String, StoryBookData> entry : dataMap.entrySet()) {
                 UUID uuid = UUID.fromString(entry.getKey());
                 loadedPlayers.put(uuid, entry.getValue());
             }
-            PLAYER_DATA_CACHE.putAll(loadedPlayers);
-            playerDataWritable = true;
-            int migrated = migrateLegacyClueIds();
-            DreamingFishCore.LOGGER.info("随记本玩家数据加载完成，共 {} 个玩家{}",
-                    PLAYER_DATA_CACHE.size(),
-                    migrated > 0 ? "（其中 " + migrated + " 名玩家的旧编号线索已迁移到稳定 ID）" : "");
         } catch (Exception exception) {
             PLAYER_DATA_CACHE.clear();
             playerDataWritable = false;
-            DreamingFishCore.LOGGER.error("读取世界随记本数据失败，本次会话不会覆盖损坏文件", exception);
-        } finally {
             loaded = true;
+            DreamingFishCore.LOGGER.error("读取世界随记本数据失败，本次会话不会覆盖损坏文件", exception);
+            return;
         }
+
+        // 读到这里数据已经安全拿到了：先落缓存、置可写，再做迁移。
+        PLAYER_DATA_CACHE.putAll(loadedPlayers);
+        playerDataWritable = true;
+        loaded = true;
+
+        // 迁移是「读取之后」的加工步骤，必须和上面的读取失败分支分开：
+        // 旧写法共用一个 catch，迁移一旦抛异常就连刚读到的数据一起清空并转只读
+        // ——读取明明成功了，不该因为加工步骤失败而丢掉数据。
+        int migrated = 0;
+        try {
+            migrated = migrateLegacyClueIds();
+        } catch (Exception exception) {
+            DreamingFishCore.LOGGER.error(
+                    "旧编号线索迁移失败；数据保持原样，本次会话其余功能不受影响", exception);
+        }
+        DreamingFishCore.LOGGER.info("随记本玩家数据加载完成，共 {} 个玩家{}",
+                PLAYER_DATA_CACHE.size(),
+                migrated > 0 ? "（其中 " + migrated + " 名玩家的旧编号线索已迁移到稳定 ID）" : "");
     }
 
     /**
@@ -270,7 +284,8 @@ public class StoryBookDataManager {
             }
             data.normalizeClueRecords();
             if (data.migrateLegacyClueIds(ClueCatalog::idForLegacy)) {
-                markPlayerDirty(entry.getKey());
+                // 加载路径内标记脏数据：不能走 markPlayerDirty（它会校验 loaded，见那里的注释）。
+                markPlayerDirtyDuringLoad(entry.getKey());
                 migrated++;
             }
         }
@@ -408,6 +423,18 @@ public class StoryBookDataManager {
      */
     public static void markPlayerDirty(UUID playerUuid) {
         ensureLoaded();
+        markPlayerDirtyDuringLoad(playerUuid);
+    }
+
+    /**
+     * 加载路径内使用的脏标记：**不做「必须已加载」校验**。
+     *
+     * <p>迁移就跑在加载过程中，此时 {@code loaded} 可能还没置位。曾经这里走的是
+     * {@link #markPlayerDirty}，于是加载流程回头要求"已经加载完成"、自己把自己卡死：
+     * 异常被读取失败的 catch 接住 → 清空玩家缓存 → 整个会话只读 → 存档再也写不进去。
+     * 凡是**加载过程中**标记脏数据，都走这个方法，不要依赖调用顺序。</p>
+     */
+    private static void markPlayerDirtyDuringLoad(UUID playerUuid) {
         if (playerUuid != null) {
             DIRTY_PLAYERS.add(playerUuid);
         }

@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.commands;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.blueprint_system.command.Command_Blueprint;
 import com.hhy.dreamingfishcore.gameplay.clue_system.command.Command_Clue;
 import com.hhy.dreamingfishcore.gameplay.clue_system.command.Command_ClueDebug;
 import com.hhy.dreamingfishcore.gameplay.npc_system.command.Command_Npc;
@@ -55,6 +56,7 @@ public final class DreamingFishCore_CommandManager {
         Command_TaskLocation.register(dreamingFishRoot);
         Command_ZombieSpecies.register(dreamingFishRoot);
         Command_Clue.register(dreamingFishRoot);
+        Command_Blueprint.register(dreamingFishRoot);
         // 仅 3 级权限可用：感染等级直改 + 疗程/随访直接完成 + 线索发放，供服务器自测。
         dreamingFishRoot.then(Commands.literal("debug")
                 .requires(source -> source.hasPermission(3))
