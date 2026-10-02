@@ -17,8 +17,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 线索目录：玩家可见的 {@link ClueDefinition} + 服主私密的 {@link ClueSecrets}。
@@ -53,6 +55,8 @@ public final class ClueCatalog {
     private static final Map<String, ClueDefinition> BY_ID = new LinkedHashMap<>();
     private static final Map<String, ClueSecrets> SECRETS_BY_ID = new LinkedHashMap<>();
     private static final Map<Integer, String> BY_LEGACY_ID = new LinkedHashMap<>();
+    /** 发放入口索引：{@code 类型:键} → 声明了该入口的线索 ID（保持声明顺序）。 */
+    private static final Map<String, List<String>> BY_GRANT_SOURCE = new LinkedHashMap<>();
 
     private static boolean loaded;
     private static boolean readOnly;
@@ -79,6 +83,7 @@ public final class ClueCatalog {
         BY_ID.clear();
         SECRETS_BY_ID.clear();
         BY_LEGACY_ID.clear();
+        BY_GRANT_SOURCE.clear();
         loaded = false;
         readOnly = false;
 
@@ -113,13 +118,16 @@ public final class ClueCatalog {
                     BY_LEGACY_ID.put(definition.legacyId(), definition.id());
                 }
             }
+            buildGrantSourceIndex(visible, secrets);
             loaded = true;
-            DreamingFishCore.LOGGER.info("线索目录加载完成：{} 条（其中 {} 条带旧编号，私密定义 {} 条）",
-                    BY_ID.size(), BY_LEGACY_ID.size(), SECRETS_BY_ID.size());
+            DreamingFishCore.LOGGER.info(
+                    "线索目录加载完成：{} 条（其中 {} 条带旧编号，私密定义 {} 条，发放入口 {} 个）",
+                    BY_ID.size(), BY_LEGACY_ID.size(), SECRETS_BY_ID.size(), BY_GRANT_SOURCE.size());
         } catch (IOException | RuntimeException exception) {
             BY_ID.clear();
             SECRETS_BY_ID.clear();
             BY_LEGACY_ID.clear();
+            BY_GRANT_SOURCE.clear();
             loaded = true;
             readOnly = true;
             DreamingFishCore.LOGGER.error("线索目录加载失败，本次启动不提供线索（旧文件保留）", exception);
@@ -196,6 +204,53 @@ public final class ClueCatalog {
         }
     }
 
+    /**
+     * 建立发放入口索引：{@code 类型:键} → 线索 ID。
+     *
+     * <p>一条写错的声明只跳过它自己并记警告，不影响同一条线索的其它入口——
+     * 和"私密定义指向不存在的线索"用的是同一套容错策略。</p>
+     */
+    private static void buildGrantSourceIndex(Map<String, ClueDefinition> visible,
+                                              Map<String, ClueSecrets> secrets) {
+        for (ClueSecrets entry : secrets.values()) {
+            if (!visible.containsKey(entry.id())) {
+                continue;
+            }
+            Set<String> seen = new LinkedHashSet<>();
+            for (String raw : entry.grantSources()) {
+                ClueGrantSource source = ClueGrantSource.parse(raw);
+                if (source == null) {
+                    DreamingFishCore.LOGGER.warn("线索发放入口声明非法，已跳过：{} → \"{}\"（合法前缀：{}）",
+                            entry.id(), raw, ClueSourceType.allTokens());
+                    continue;
+                }
+                if (seen.add(source.indexKey())) {
+                    BY_GRANT_SOURCE.computeIfAbsent(source.indexKey(), ignored -> new ArrayList<>())
+                            .add(entry.id());
+                }
+            }
+        }
+    }
+
+    /**
+     * 找出声明了某个发放入口的线索 ID。
+     *
+     * <p>入口触发点靠它把"刚刚发生了什么"翻译成"该发哪几条线索"，
+     * 触发点本身不需要知道任何一条线索的名字。</p>
+     */
+    public static synchronized List<String> cluesForGrantSource(ClueSourceType type, String key) {
+        if (type == null || key == null || key.isBlank()) {
+            return List.of();
+        }
+        List<String> ids = BY_GRANT_SOURCE.get(ClueGrantSource.indexKey(type, key));
+        return ids == null ? List.of() : List.copyOf(ids);
+    }
+
+    /** 已登记的发放入口数量（启动日志与排查用）。 */
+    public static synchronized int grantSourceCount() {
+        return BY_GRANT_SOURCE.size();
+    }
+
     private static List<ClueDefinition> readBuiltIn() {
         try (InputStream stream = ClueCatalog.class.getResourceAsStream(BUILT_IN_RESOURCE)) {
             if (stream == null) {
@@ -258,6 +313,12 @@ public final class ClueCatalog {
         return clueId == null ? null : SECRETS_BY_ID.get(clueId);
     }
 
+    /** 这条线索声明的发放入口（原始字符串，未解析；没有私密定义时返回空表）。 */
+    public static synchronized List<String> grantSourcesOf(String clueId) {
+        ClueSecrets secrets = secretsOf(clueId);
+        return secrets == null ? List.of() : secrets.grantSources();
+    }
+
     public static synchronized List<ClueSecrets> allSecrets() {
         return List.copyOf(SECRETS_BY_ID.values());
     }
@@ -291,6 +352,7 @@ public final class ClueCatalog {
         BY_ID.clear();
         SECRETS_BY_ID.clear();
         BY_LEGACY_ID.clear();
+        BY_GRANT_SOURCE.clear();
         BY_ID.putAll(visible);
         SECRETS_BY_ID.putAll(secretMap);
         for (ClueDefinition definition : visible.values()) {
@@ -298,6 +360,7 @@ public final class ClueCatalog {
                 BY_LEGACY_ID.put(definition.legacyId(), definition.id());
             }
         }
+        buildGrantSourceIndex(visible, secretMap);
         loaded = true;
         readOnly = false;
     }
@@ -306,6 +369,7 @@ public final class ClueCatalog {
         BY_ID.clear();
         SECRETS_BY_ID.clear();
         BY_LEGACY_ID.clear();
+        BY_GRANT_SOURCE.clear();
         loaded = false;
         readOnly = false;
         builtInAvailable = false;

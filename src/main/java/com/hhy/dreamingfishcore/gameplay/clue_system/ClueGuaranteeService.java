@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.item.items.Item_FragmentPage;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -41,6 +42,26 @@ public final class ClueGuaranteeService {
     public static final int CLUE_RESPAWN_ANOMALY = 11;
 
     private ClueGuaranteeService() {
+    }
+
+    /**
+     * 保底通道覆盖的线索稳定 ID。
+     *
+     * <p>对应三个调用点：医院复查与登录补发（01）、疗程终检与登录补发（04）、
+     * 感染者标准重建（11）。{@link #CLUE_OUTER_RELAY} 的编号虽然登记在类里，
+     * 但外缘事件尚未接入，因此不算已覆盖；刷怪箱剿灭按实例配置发放，也不在这里。</p>
+     *
+     * <p>线索可达性审计（{@code /dreamingfish clue audit}）靠它区分"有确定入口"与"只能靠掉落"。</p>
+     */
+    public static List<String> guaranteedClueIds() {
+        List<String> ids = new ArrayList<>();
+        for (int legacyId : List.of(CLUE_OBSERVATION_LOG, CLUE_RECOVERED_VOICE, CLUE_RESPAWN_ANOMALY)) {
+            String clueId = ClueCatalog.idForLegacy(legacyId);
+            if (clueId != null) {
+                ids.add(clueId);
+            }
+        }
+        return ids;
     }
 
     /**

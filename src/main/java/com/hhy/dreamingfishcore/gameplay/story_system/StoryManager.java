@@ -11,6 +11,8 @@ import com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStoryProgre
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamPlayerProgress;
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamWorldProgress;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueEntryDispatcher;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueSourceType;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.StoryLocationResolver;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationManager;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.TaskLocationDefinition;
@@ -213,6 +215,8 @@ public final class StoryManager {
         if (player == null || !loaded) {
             return;
         }
+        // 线索入口：与 NPC 交互（不分阶段；声明了 npc=<编号> 的线索在这里发放）。
+        ClueEntryDispatcher.fire(player, ClueSourceType.NPC, Integer.toString(npcId));
         if (AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
             com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
                     .onNpcDialogueOpened(player, npcId);
@@ -249,6 +253,8 @@ public final class StoryManager {
         if (player == null || !loaded) {
             return;
         }
+        // 线索入口：读完公告（声明了 broadcast=<公告 key> 的线索在这里发放）。
+        ClueEntryDispatcher.fire(player, ClueSourceType.BROADCAST, noticeKey);
         if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
             com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
                     .onNoticeRead(player, noticeKey);
@@ -318,6 +324,10 @@ public final class StoryManager {
         if (normalized.equals(previous)) {
             return;
         }
+        // 线索入口：真正进入地点时触发。地点名与稳定 ID 各试一次，
+        // 服主写 area=逐光会医疗接待点 或 area=dreamingfishcore:location_xxx 都能命中（发放本身幂等）。
+        ClueEntryDispatcher.fire(player, ClueSourceType.AREA, location.getName());
+        ClueEntryDispatcher.fire(player, ClueSourceType.AREA, normalized);
         if (OpeningStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
             com.hhy.dreamingfishcore.gameplay.opening_story_system.OpeningStory
                     .onLocationEntered(player, location);
