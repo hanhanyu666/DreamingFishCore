@@ -12,7 +12,7 @@ public enum OrganizationRank {
 
     MEMBER(0, "成员"),
     OFFICER(1, "干部"),
-    VICE_LEADER(2, "副会长"),
+    ADMIN(2, "管理员"),
     LEADER(3, "会长");
 
     private final int weight;
@@ -48,12 +48,24 @@ public enum OrganizationRank {
         return name();
     }
 
+    /**
+     * 旧职位名：2026-10-02 之前这个职位叫「副会长」。
+     *
+     * <p>旧存档里存的是这个枚举名，必须显式映射——否则 {@code valueOf} 抛异常后被下面的
+     * 容错降级成 {@link #MEMBER}，等于把旧档里的副会长静默降权（人还在、权限没了）。</p>
+     */
+    private static final String LEGACY_ADMIN_NAME = "VICE_LEADER";
+
     public static OrganizationRank parse(String raw) {
         if (raw == null || raw.isBlank()) {
             return MEMBER;
         }
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        if (LEGACY_ADMIN_NAME.equals(normalized)) {
+            return ADMIN;
+        }
         try {
-            return valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            return valueOf(normalized);
         } catch (IllegalArgumentException exception) {
             return MEMBER;
         }

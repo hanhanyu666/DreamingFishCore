@@ -84,14 +84,22 @@ class OrganizationNamesTest {
         assertEquals(OrganizationRank.MEMBER, OrganizationRank.parse(null));
         assertEquals(OrganizationRank.MEMBER, OrganizationRank.parse("  "));
         assertEquals(OrganizationRank.MEMBER, OrganizationRank.parse("不存在的职位"));
-        assertEquals(OrganizationRank.VICE_LEADER, OrganizationRank.parse("vice_leader"),
-                "解析应忽略大小写");
+        // 2026-10-02 起「副会长」更名为「管理员」：旧存档里存的还是 VICE_LEADER，
+        // 必须映射到 ADMIN。只靠 valueOf 的容错会静默变成 MEMBER，等于把旧档降权。
+        assertEquals(OrganizationRank.ADMIN, OrganizationRank.parse("vice_leader"),
+                "旧职位名必须迁移为管理员（大小写不敏感）");
+        assertEquals(OrganizationRank.ADMIN, OrganizationRank.parse("VICE_LEADER"));
+        assertEquals(OrganizationRank.ADMIN, OrganizationRank.parse("  VICE_LEADER  "));
+        assertEquals("ADMIN", OrganizationRank.ADMIN.serializedName(),
+                "新存档写出的名字应为 ADMIN");
+        assertEquals("管理员", OrganizationRank.ADMIN.displayName());
+        assertEquals(2, OrganizationRank.ADMIN.weight(), "改名不改权重：与旧副会长同权限");
     }
 
     @Test
     void rankWeightDrivesComparison() {
-        assertTrue(OrganizationRank.LEADER.isHigherThan(OrganizationRank.VICE_LEADER));
-        assertTrue(OrganizationRank.VICE_LEADER.isHigherThan(OrganizationRank.OFFICER));
+        assertTrue(OrganizationRank.LEADER.isHigherThan(OrganizationRank.ADMIN));
+        assertTrue(OrganizationRank.ADMIN.isHigherThan(OrganizationRank.OFFICER));
         assertTrue(OrganizationRank.OFFICER.isHigherThan(OrganizationRank.MEMBER));
         assertFalse(OrganizationRank.MEMBER.isHigherThan(OrganizationRank.MEMBER));
         assertTrue(OrganizationRank.MEMBER.atLeast(OrganizationRank.MEMBER));

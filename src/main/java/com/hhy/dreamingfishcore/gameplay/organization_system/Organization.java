@@ -5,9 +5,11 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -82,6 +84,15 @@ public final class Organization {
      * {@code territoriesByOwner} / {@code territory(id)} 重新校验，失效条目自动摘除。</p>
      */
     private Map<String, Long> territoryIds = new LinkedHashMap<>();
+
+    /**
+     * 被标记为「核心领地」的领地 id（必须是上面已登记的领地）。
+     *
+     * <p>用户 2026-10-02 定的分级：核心领地的登记与标记只有会长/管理员能改，
+     * 且普通成员不能把它当作自己的场地/据点使用（准入判定见
+     * {@code OrganizationPermissions.canUseTerritoryAsVenue}）。这里同样只存引用。</p>
+     */
+    private Set<String> coreTerritoryIds = new LinkedHashSet<>();
     /** 成员：UUID 字符串 → 成员记录。 */
     private Map<String, Member> members = new LinkedHashMap<>();
     /** 待审批的入会申请：UUID 字符串 → 申请时间。 */
@@ -213,7 +224,36 @@ public final class Organization {
     }
 
     public boolean unregisterTerritory(String territoryId) {
+        // 取消登记时核心标记必须一起摘掉，否则会留下指向不存在领地的孤儿标记。
+        coreTerritoryIds().remove(territoryId);
         return territoryId != null && territoryIds().remove(territoryId) != null;
+    }
+
+    // ==================== 核心领地标记 ====================
+
+    public Set<String> coreTerritoryIds() {
+        if (coreTerritoryIds == null) {
+            coreTerritoryIds = new LinkedHashSet<>();
+        }
+        return coreTerritoryIds;
+    }
+
+    public boolean isCoreTerritory(String territoryId) {
+        return territoryId != null && !territoryId.isBlank()
+                && coreTerritoryIds().contains(territoryId);
+    }
+
+    /**
+     * 设置或取消核心标记。
+     *
+     * @return 是否发生了变化；未登记的领地一律拒绝标记（返回 false）
+     */
+    public boolean setCoreTerritory(String territoryId, boolean core) {
+        if (!hasTerritory(territoryId)) {
+            return false;
+        }
+        return core ? coreTerritoryIds().add(territoryId)
+                : coreTerritoryIds().remove(territoryId);
     }
 
     /**
@@ -382,6 +422,15 @@ public final class Organization {
         if (territories.size() != before) {
             DreamingFishCore.LOGGER.warn("组织 {} 有 {} 条失效的领地登记，已清除",
                     id(), before - territories.size());
+            changed = true;
+        }
+        // 核心标记必须是已登记领地：领地登记被摘除后，标记也要跟着清掉。
+        Set<String> core = coreTerritoryIds();
+        int coreBefore = core.size();
+        core.removeIf(coreId -> coreId == null || coreId.isBlank() || !hasTerritory(coreId));
+        if (core.size() != coreBefore) {
+            DreamingFishCore.LOGGER.warn("组织 {} 有 {} 条核心领地标记指向未登记的领地，已清除",
+                    id(), coreBefore - core.size());
             changed = true;
         }
         return changed;

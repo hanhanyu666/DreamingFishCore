@@ -16,7 +16,7 @@ class OrganizationPermissionsTest {
     @Test
     void officersAndAboveMayReviewInviteAndEditAnnouncement() {
         for (OrganizationRank rank : new OrganizationRank[]{
-                OrganizationRank.OFFICER, OrganizationRank.VICE_LEADER, OrganizationRank.LEADER}) {
+                OrganizationRank.OFFICER, OrganizationRank.ADMIN, OrganizationRank.LEADER}) {
             assertTrue(OrganizationPermissions.canReviewApplications(rank), rank + " 应能审批申请");
             assertTrue(OrganizationPermissions.canInvite(rank), rank + " 应能邀请");
             assertTrue(OrganizationPermissions.canEditAnnouncement(rank), rank + " 应能编辑公告");
@@ -30,7 +30,7 @@ class OrganizationPermissionsTest {
     @Test
     void territoryManagementIsLimitedToLeaderAndViceLeader() {
         assertTrue(OrganizationPermissions.canManageTerritories(OrganizationRank.LEADER));
-        assertTrue(OrganizationPermissions.canManageTerritories(OrganizationRank.VICE_LEADER));
+        assertTrue(OrganizationPermissions.canManageTerritories(OrganizationRank.ADMIN));
 
         assertFalse(OrganizationPermissions.canManageTerritories(OrganizationRank.OFFICER),
                 "干部不能登记/移除组织领地");
@@ -51,12 +51,12 @@ class OrganizationPermissionsTest {
     void kickRequiresStrictlyHigherRankAndNeverTargetsLeader() {
         assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.MEMBER));
         assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.OFFICER));
-        assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.VICE_LEADER));
+        assertTrue(OrganizationPermissions.canKick(OrganizationRank.LEADER, OrganizationRank.ADMIN));
         assertTrue(OrganizationPermissions.canKick(OrganizationRank.OFFICER, OrganizationRank.MEMBER));
 
         assertFalse(OrganizationPermissions.canKick(OrganizationRank.OFFICER, OrganizationRank.OFFICER),
                 "同级不能踢");
-        assertFalse(OrganizationPermissions.canKick(OrganizationRank.VICE_LEADER, OrganizationRank.LEADER),
+        assertFalse(OrganizationPermissions.canKick(OrganizationRank.ADMIN, OrganizationRank.LEADER),
                 "会长不能被任何人踢");
         assertFalse(OrganizationPermissions.canKick(OrganizationRank.MEMBER, OrganizationRank.MEMBER),
                 "不能踢自己（同级判定即自我）");
@@ -68,10 +68,10 @@ class OrganizationPermissionsTest {
         assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.LEADER,
                 OrganizationRank.MEMBER, OrganizationRank.OFFICER));
         assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.LEADER,
-                OrganizationRank.OFFICER, OrganizationRank.VICE_LEADER));
+                OrganizationRank.OFFICER, OrganizationRank.ADMIN));
 
         assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.LEADER,
-                OrganizationRank.VICE_LEADER, OrganizationRank.LEADER),
+                OrganizationRank.ADMIN, OrganizationRank.LEADER),
                 "会长也不能把别人提成会长，转让走独立入口");
         assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.LEADER,
                 OrganizationRank.LEADER, OrganizationRank.MEMBER),
@@ -83,17 +83,17 @@ class OrganizationPermissionsTest {
 
     @Test
     void viceLeaderOnlyMovesRanksBelowItself() {
-        assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.VICE_LEADER,
+        assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.ADMIN,
                 OrganizationRank.MEMBER, OrganizationRank.OFFICER));
-        assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.VICE_LEADER,
+        assertTrue(OrganizationPermissions.canChangeRank(OrganizationRank.ADMIN,
                 OrganizationRank.OFFICER, OrganizationRank.MEMBER));
 
-        assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.VICE_LEADER,
-                OrganizationRank.MEMBER, OrganizationRank.VICE_LEADER),
-                "副会长不能造出同级");
-        assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.VICE_LEADER,
-                OrganizationRank.VICE_LEADER, OrganizationRank.MEMBER),
-                "副会长之间互不管理");
+        assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.ADMIN,
+                OrganizationRank.MEMBER, OrganizationRank.ADMIN),
+                "管理员不能造出同级");
+        assertFalse(OrganizationPermissions.canChangeRank(OrganizationRank.ADMIN,
+                OrganizationRank.ADMIN, OrganizationRank.MEMBER),
+                "管理员之间互不管理");
     }
 
     @Test
@@ -113,12 +113,45 @@ class OrganizationPermissionsTest {
         assertTrue(OrganizationPermissions.canDisband(OrganizationRank.LEADER));
 
         for (OrganizationRank rank : new OrganizationRank[]{
-                OrganizationRank.MEMBER, OrganizationRank.OFFICER, OrganizationRank.VICE_LEADER}) {
+                OrganizationRank.MEMBER, OrganizationRank.OFFICER, OrganizationRank.ADMIN}) {
             assertFalse(OrganizationPermissions.canRename(rank), rank + " 不能改名");
             assertFalse(OrganizationPermissions.canTransferLeadership(rank), rank + " 不能转让");
             assertFalse(OrganizationPermissions.canDisband(rank), rank + " 不能解散");
         }
         assertFalse(OrganizationPermissions.canRename(null));
         assertFalse(OrganizationPermissions.canDisband(null));
+    }
+
+    // ==================== 核心领地分级（2026-10-02） ====================
+
+    @Test
+    void coreTerritoryMarkingIsLimitedToLeaderAndAdmin() {
+        assertTrue(OrganizationPermissions.canManageCoreTerritories(OrganizationRank.LEADER));
+        assertTrue(OrganizationPermissions.canManageCoreTerritories(OrganizationRank.ADMIN));
+
+        for (OrganizationRank rank : new OrganizationRank[]{
+                OrganizationRank.MEMBER, OrganizationRank.OFFICER}) {
+            assertFalse(OrganizationPermissions.canManageCoreTerritories(rank),
+                    rank + " 不能登记或标记核心领地");
+        }
+        assertFalse(OrganizationPermissions.canManageCoreTerritories(null));
+    }
+
+    @Test
+    void coreTerritoryCannotBeUsedAsVenueByOrdinaryMembers() {
+        // 普通领地：任何成员都能当作场地/据点
+        for (OrganizationRank rank : OrganizationRank.values()) {
+            assertTrue(OrganizationPermissions.canUseTerritoryAsVenue(rank, false),
+                    rank + " 可以使用普通领地");
+        }
+        // 核心领地：只有会长与管理员能用
+        assertTrue(OrganizationPermissions.canUseTerritoryAsVenue(OrganizationRank.LEADER, true));
+        assertTrue(OrganizationPermissions.canUseTerritoryAsVenue(OrganizationRank.ADMIN, true));
+        assertFalse(OrganizationPermissions.canUseTerritoryAsVenue(OrganizationRank.OFFICER, true),
+                "干部不能把核心领地当作场地");
+        assertFalse(OrganizationPermissions.canUseTerritoryAsVenue(OrganizationRank.MEMBER, true),
+                "普通成员不能把核心领地当作场地");
+        assertFalse(OrganizationPermissions.canUseTerritoryAsVenue(null, false));
+        assertFalse(OrganizationPermissions.canUseTerritoryAsVenue(null, true));
     }
 }

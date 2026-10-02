@@ -21,7 +21,7 @@ import java.util.List;
  *
  * <p>三条规则：</p>
  * <ul>
- *   <li><b>绑定</b>：会长/副会长右键，且设备必须位于本组织已登记的领地内；</li>
+ *   <li><b>绑定</b>：会长/管理员右键，且设备必须位于本组织已登记的领地内；</li>
  *   <li><b>维护</b>：每个维护周期（默认一个剧情活动日）从组织资金池扣一次维护费，
  *       扣不动就停机；位置校验不过同样停机；</li>
  *   <li><b>抑制</b>：工作中的设备覆盖范围内（水平半径，贯穿高度，与领地语义一致）的幸存者
@@ -76,7 +76,7 @@ public final class SettlementFilterService {
         if (!OrganizationPermissions.canManageTerritories(
                 organization.rankOf(player.getUUID()).orElse(null))) {
             player.displayClientMessage(
-                    Component.literal("§c只有会长与副会长可以绑定或解除设备。"), false);
+                    Component.literal("§c只有会长与管理员可以绑定或解除设备。"), false);
             return false;
         }
 

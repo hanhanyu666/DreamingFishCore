@@ -358,7 +358,7 @@ final class OrganizationViews {
         }
         if (OrganizationPermissions.canTransferLeadership(myRank) && !rank.atLeast(OrganizationRank.LEADER)) {
             row.add(Button.of("转让").ghost().small().onClick(() -> TerminalPrompt.confirm(terminal, "转让会长",
-                    "把会长转让给 " + member.name() + "？转让后你将成为副会长。", true,
+                    "把会长转让给 " + member.name() + "？转让后你将成为管理员。", true,
                     () -> send(Packet_OrganizationActionRequest.Action.TRANSFER_LEADERSHIP, member.playerId(), "", false, 0))));
         }
         if (OrganizationPermissions.canKick(myRank, rank)) {

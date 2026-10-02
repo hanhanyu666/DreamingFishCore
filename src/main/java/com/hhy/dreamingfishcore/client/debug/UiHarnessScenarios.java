@@ -211,7 +211,7 @@ final class UiHarnessScenarios {
     private static OrganizationViewData.Snapshot sampleOrganizations(String self, boolean member) {
         List<OrganizationViewData.MemberLine> members = List.of(
                 new OrganizationViewData.MemberLine(self, "Dev", "LEADER", "会长", true),
-                new OrganizationViewData.MemberLine("a1", "林潮", "VICE_LEADER", "副会长", true),
+                new OrganizationViewData.MemberLine("a1", "林潮", "ADMIN", "管理员", true),
                 new OrganizationViewData.MemberLine("a2", "白芷", "OFFICER", "干部", false),
                 new OrganizationViewData.MemberLine("a3", "周岑", "MEMBER", "成员", true),
                 new OrganizationViewData.MemberLine("a4", "听海", "MEMBER", "成员", false));
