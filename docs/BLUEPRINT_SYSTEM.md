@@ -42,7 +42,8 @@ minecraft:campfire
 minecraft:chest
 minecraft:wooden_pickaxe / _axe / _shovel / _hoe / _sword
 minecraft:stone_pickaxe  / _axe / _shovel / _hoe / _sword
-dreamingfishcore:spawner        （创造模式物品，放进来只是避免它变成造不了的死物）
+dreamingfishcore:spawner         （创造模式物品，放进来只是避免它变成造不了的死物）
+dreamingfishcore:research_table  （它是「获得蓝图」的工具本身，不能要求先有它自己的蓝图）
 ```
 
 ---

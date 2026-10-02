@@ -32,6 +32,7 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.PROTECTIVE_MASK.get());
                         output.accept(DreamingFishCore_Items.SETTLEMENT_FILTER.get());
                         output.accept(DreamingFishCore_Items.SPAWNER.get());
+                        output.accept(DreamingFishCore_Items.RESEARCH_TABLE.get());
                         output.accept(SiegeZombieEntities.SIEGE_ZOMBIE_SPAWN_EGG.get());
                     })
                     .build()

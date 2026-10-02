@@ -166,6 +166,12 @@ public class DreamingFishCore_Items {
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SPAWNER.get(),
                     new Item.Properties().rarity(Rarity.EPIC)));
 
+    // 研究桌：消耗经验一次性研究出一批原版配方。
+    public static final DeferredHolder<Item, BlockItem> RESEARCH_TABLE = ITEMS.register("research_table",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.RESEARCH_TABLE.get(),
+                    new Item.Properties().rarity(Rarity.UNCOMMON)));
+
     private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
         EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);
         for (ArmorItem.Type type : ArmorItem.Type.values()) {

@@ -67,7 +67,9 @@ public final class BlueprintConfig {
             "minecraft:stone_hoe",
             "minecraft:stone_sword",
             // 刷怪箱是创造模式物品，玩家平时拿不到；放进放行列表只是避免它变成「造不了也拿不到」的死物。
-            "dreamingfishcore:spawner"
+            "dreamingfishcore:spawner",
+            // 研究桌是「获得蓝图」的工具本身，不能让造它的前提是自己已被研究出来（循环依赖）。
+            "dreamingfishcore:research_table"
     );
 
     private static final Gson GSON = new GsonBuilder()

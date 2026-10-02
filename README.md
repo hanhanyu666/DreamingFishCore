@@ -35,6 +35,14 @@ DreamingFishCore 是为梦鱼服制作的 Minecraft NeoForge 1.21.1 核心模组
 放行名单、白名单、黑名单与"整个模组赦免"都在 `config/dreamingfishcore/blueprint.json` 里改。
 **该功能默认关闭**，需要在配置里显式打开；详见 [docs/BLUEPRINT_SYSTEM.md](docs/BLUEPRINT_SYSTEM.md)。
 
+### 研究桌
+
+研究桌（`dreamingfishcore:research_table`）是蓝图的另一条获取途径：右键打开界面，
+花经验一次性研究出一批原版配方。一次默认 100 点经验换 10~15 个，只会研究出
+「需要蓝图、属于指定命名空间、且自己还没学会」的配方；课题由服务端掷定并锁定，
+关掉再开是同一批，不会因为反复开界面而刷出想要的结果。
+配置见 `config/dreamingfishcore/research_table.json`，详见 [docs/RESEARCH_TABLE.md](docs/RESEARCH_TABLE.md)。
+
 ### 角色属性
 
 模组扩展了玩家状态，包含感染、勇气、体力、肢体健康和复活相关数据。这些系统用于支撑更偏生存与角色扮演的服务器规则。

@@ -44,5 +44,7 @@ public final class CommonInit {
         ZombieSpeciesConfig.init();
         // 蓝图配置要在配方加载之前就绪：抽取池是在配方收集完成后按它过滤出来的。
         com.hhy.dreamingfishcore.gameplay.blueprint_system.BlueprintConfig.init();
+        // 研究桌的候选来自蓝图抽取池，所以它排在上面那条之后（虽然两者都是读文件，顺序不影响结果）。
+        com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableConfig.init();
     }
 }
