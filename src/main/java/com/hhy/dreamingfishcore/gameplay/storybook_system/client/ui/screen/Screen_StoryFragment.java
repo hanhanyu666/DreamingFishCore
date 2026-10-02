@@ -36,9 +36,14 @@ public class Screen_StoryFragment extends UiScreen {
     private final String content;
     private final String time;
     private final String authorName;
+    private final String source;
+    private final String observationSpan;
+    private final String sample;
+    private final String conditions;
+    private final String clueLabel;
     private final AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 260.0F, Easing.DECELERATE);
 
-    public Screen_StoryFragment(int fragmentId, int stageId, int chapterId, String title, String content, String time, String authorName) {
+    public Screen_StoryFragment(String clueId, int fragmentId, int stageId, int chapterId, String title, String content, String time, String authorName, String source, String observationSpan, String sample, String conditions) {
         super(Component.literal("残页"));
         this.fragmentId = fragmentId;
         this.stageId = stageId;
@@ -46,7 +51,14 @@ public class Screen_StoryFragment extends UiScreen {
         this.title = title == null ? "未命名残页" : title;
         this.content = content == null ? "" : content;
         this.time = time == null ? "" : time;
-        this.authorName = authorName == null ? "未知记录者" : authorName;
+        this.authorName = authorName == null ? "" : authorName;
+        this.source = source == null ? "" : source;
+        this.observationSpan = observationSpan == null ? "" : observationSpan;
+        this.sample = sample == null ? "" : sample;
+        this.conditions = conditions == null ? "" : conditions;
+        this.clueLabel = fragmentId > 0 ? String.valueOf(fragmentId)
+                : (clueId == null || clueId.isBlank() ? ""
+                        : clueId.substring(clueId.lastIndexOf('/') + 1));
         setBackground(Background.NONE);
     }
 
@@ -56,7 +68,12 @@ public class Screen_StoryFragment extends UiScreen {
         Box meta = Ui.column(
                 metaLine("时间", time.isEmpty() ? "未知" : time),
                 metaLine("记录者", authorName),
-                metaLine("出处", Screen_StoryBookCatalog.chapterLabel(chapterId) + " · 阶段 " + stageId + " · 片段 " + fragmentId)
+                metaLine("出处", Screen_StoryBookCatalog.chapterLabel(chapterId) + " · 阶段 " + stageId
+                        + (clueLabel.isEmpty() ? "" : " · 片段 " + clueLabel)),
+                metaLine("来源", source.isEmpty() ? "未标注" : source),
+                metaLine("观察跨度", observationSpan.isEmpty() ? "未标注" : observationSpan),
+                metaLine("样本", sample.isEmpty() ? "未标注" : sample),
+                metaLine("观察条件", conditions.isEmpty() ? "未标注" : conditions)
         ).gap(3.0F);
 
         Box body = Ui.column().gap(6.0F);

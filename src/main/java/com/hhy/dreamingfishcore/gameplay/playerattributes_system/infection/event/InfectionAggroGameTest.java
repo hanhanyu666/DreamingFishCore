@@ -34,15 +34,25 @@ public class InfectionAggroGameTest {
     public static void zombiePrefersNearbySurvivorOverStableInfected(GameTestHelper helper) {
         ServerPlayer survivor = authenticatedPlayer(helper);
         ServerPlayer stable = authenticatedPlayer(helper);
-        setIdentity(stable, PlayerAttributesData.INFECTION_LEVEL_TWO);
+        Zombie zombie = null;
+        try {
+            setIdentity(stable, PlayerAttributesData.INFECTION_LEVEL_TWO);
 
-        Zombie zombie = spawnZombieWithTwoPlayers(helper, survivor, stable);
+            zombie = spawnZombieWithTwoPlayers(helper, survivor, stable);
 
-        zombie.setTarget(stable);
+            zombie.setTarget(stable);
 
-        helper.assertTrue(zombie.getTarget() == survivor,
-                "稳定感染者被选为目标时应转给更近的幸存者，实际目标是 "
-                        + describeTarget(zombie));
+            helper.assertTrue(zombie.getTarget() == survivor,
+                    "稳定感染者被选为目标时应转给更近的幸存者，实际目标是 "
+                            + describeTarget(zombie));
+        } finally {
+            // gametest 共用同一个测试世界与玩家列表：漏下来的玩家会被后面用例的
+            // "附近有没有传播来源/玩家"扫描扫到，漏下来的丧尸则可能去追别的用例的玩家。
+            if (zombie != null) {
+                zombie.discard();
+            }
+            dispose(survivor, stable);
+        }
         helper.succeed();
     }
 
@@ -51,15 +61,40 @@ public class InfectionAggroGameTest {
     public static void zombieKeepsUnstableInfectedAsTarget(GameTestHelper helper) {
         ServerPlayer survivor = authenticatedPlayer(helper);
         ServerPlayer unstable = authenticatedPlayer(helper);
-        setIdentity(unstable, PlayerAttributesData.INFECTION_LEVEL_ONE);
+        Zombie zombie = null;
+        try {
+            setIdentity(unstable, PlayerAttributesData.INFECTION_LEVEL_ONE);
 
-        Zombie zombie = spawnZombieWithTwoPlayers(helper, survivor, unstable);
+            zombie = spawnZombieWithTwoPlayers(helper, survivor, unstable);
 
-        zombie.setTarget(unstable);
+            zombie.setTarget(unstable);
 
-        helper.assertTrue(zombie.getTarget() == unstable,
-                "不稳定感染者不应被降仇恨，实际目标是 " + describeTarget(zombie));
+            helper.assertTrue(zombie.getTarget() == unstable,
+                    "不稳定感染者不应被降仇恨，实际目标是 " + describeTarget(zombie));
+        } finally {
+            // 这里的不稳定感染者是真正的"传播来源"（会持续污染附近扫描），必须摘掉；
+            // 丧尸与幸存者也一起清掉，理由同上。
+            if (zombie != null) {
+                zombie.discard();
+            }
+            dispose(survivor, unstable);
+        }
         helper.succeed();
+    }
+
+    /**
+     * 把测试造出来的模拟玩家从服务器上摘掉。
+     *
+     * <p>gametest 共用同一个测试世界与 {@code PlayerList}，而"附近有没有玩家 / 传播来源"是
+     * 全服扫描；这些模拟玩家又都由 {@code makeMockServerPlayerInLevel()} 放在同一个出生点上，
+     * 只要留下一个就会干扰后面用例的判定。</p>
+     */
+    private static void dispose(ServerPlayer... players) {
+        for (ServerPlayer player : players) {
+            if (player != null && player.getServer() != null) {
+                player.getServer().getPlayerList().remove(player);
+            }
+        }
     }
 
     /** 同一套位置安排：丧尸在 (0,1,0)，幸存者在 (1,1,0)，目标玩家在 (1,1,1)。 */

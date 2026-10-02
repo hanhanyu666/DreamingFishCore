@@ -44,7 +44,9 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
         /** 把 {@code targetId} 对应的领地登记为组织领地。 */
         REGISTER_TERRITORY,
         /** 移除 {@code targetId} 对应的组织领地登记。 */
-        UNREGISTER_TERRITORY
+        UNREGISTER_TERRITORY,
+        /** 设置/取消 {@code targetId} 对应领地的核心标记；是否设为核心放在 {@code flag}。 */
+        SET_CORE_TERRITORY
     }
 
     /** 旧四参构造：不需要金额的动作保持原样。 */
@@ -130,6 +132,8 @@ public record Packet_OrganizationActionRequest(Action action, String targetId, S
                     OrganizationManager.registerTerritory(player, packet.targetId());
             case UNREGISTER_TERRITORY ->
                     OrganizationManager.unregisterTerritory(player, packet.targetId());
+            case SET_CORE_TERRITORY ->
+                    OrganizationManager.setCoreTerritory(player, packet.targetId(), packet.flag());
         };
     }
 

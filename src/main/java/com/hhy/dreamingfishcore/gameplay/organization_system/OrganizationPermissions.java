@@ -27,13 +27,38 @@ public final class OrganizationPermissions {
     }
 
     /**
-     * 登记或移除组织领地：仅会长与副会长。
+     * 登记或移除组织领地：管理员及以上（2026-10-02 起「副会长」更名为「管理员」，权限不变）。
      *
      * <p>领地登记涉及"把某人的私人财产挂到组织名下"，权限刻意比发公告更紧；
      * 往资金池捐钱则对所有成员开放，因为那只进不出。</p>
      */
     public static boolean canManageTerritories(OrganizationRank actor) {
-        return actor != null && actor.atLeast(OrganizationRank.VICE_LEADER);
+        return actor != null && actor.atLeast(OrganizationRank.ADMIN);
+    }
+
+    /**
+     * 登记/取消「核心领地」标记：会长与管理员（与领地登记同档）。
+     *
+     * <p>用户 2026-10-02 定的分级：核心领地的登记与标记只有会长/管理员能做，普通成员与干部不行。
+     * 单独留一个谓词而不是复用 {@link #canManageTerritories}，是为了以后单独收紧/放宽标记权时
+     * 只改这一处。</p>
+     */
+    public static boolean canManageCoreTerritories(OrganizationRank actor) {
+        return actor != null && actor.atLeast(OrganizationRank.ADMIN);
+    }
+
+    /**
+     * 能否把某块组织领地当作自己的场地/据点使用。
+     *
+     * <p>核心领地只有会长/管理员能用，普通成员与干部不行；非核心领地任意成员都能用。
+     * 这条判定是给玩家场地系统（路线图里程碑 6）预留的准入：那套系统落地时直接调这里，
+     * 不要另写第二份规则。</p>
+     */
+    public static boolean canUseTerritoryAsVenue(OrganizationRank actor, boolean core) {
+        if (actor == null) {
+            return false;
+        }
+        return !core || actor.atLeast(OrganizationRank.ADMIN);
     }
 
     /** 向组织资金池捐款：任何成员都可以（只进不出，不需要额外权限）。 */
@@ -51,7 +76,7 @@ public final class OrganizationPermissions {
     /**
      * 调整他人职位。
      *
-     * <p>会长可以任免任何人；副会长只能在 {@code 干部 / 成员} 之间调动；干部与成员无权调整职位
+     * <p>会长可以任免任何人；管理员只能在 {@code 干部 / 成员} 之间调动；干部与成员无权调整职位
      * （干部对成员唯一的"合法"操作是维持成员不变，那等于没有操作，所以直接禁止，避免出现
      * "命令能发、界面不给按钮"的两处真相）。任何人都不能把别人提升到自己同级或更高，
      * 也不能改自己的职位（避免自我提权），更不涉及会长 — 转让走独立入口。</p>
@@ -73,7 +98,7 @@ public final class OrganizationPermissions {
         if (actor == OrganizationRank.LEADER) {
             return true;
         }
-        if (actor == OrganizationRank.VICE_LEADER) {
+        if (actor == OrganizationRank.ADMIN) {
             return newRank.atLeast(OrganizationRank.OFFICER) || newRank == OrganizationRank.MEMBER;
         }
         return false;

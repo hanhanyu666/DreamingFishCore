@@ -28,6 +28,11 @@ public final class DreamingFishCore_Blocks {
             BLOCKS.register("spawner",
                     () -> new SpawnerBlock(SpawnerBlock.defaultProperties()));
 
+    /** 研究桌：花经验一次性研究出一批原版配方（蓝图的另一条获取途径）。 */
+    public static final DeferredHolder<Block, ResearchTableBlock> RESEARCH_TABLE =
+            BLOCKS.register("research_table",
+                    () -> new ResearchTableBlock(ResearchTableBlock.defaultProperties()));
+
     private DreamingFishCore_Blocks() {
     }
 

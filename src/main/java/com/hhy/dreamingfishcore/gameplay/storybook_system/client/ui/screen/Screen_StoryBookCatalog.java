@@ -222,17 +222,19 @@ public class Screen_StoryBookCatalog extends UiScreen {
         }
         order.set(a, second);
         order.set(b, first);
-        List<Integer> ids = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         for (StoryBookEntryViewData entry : order) {
-            ids.add(entry.getFragmentId());
+            ids.add(entry.getClueId());
         }
         DreamingFishCore_NetworkManager.sendToServer(new Packet_UpdateStoryBookOrder(ids));
         version++;
     }
 
     private void open(StoryBookEntryViewData entry) {
-        Minecraft.getInstance().setScreen(new Screen_StoryFragment(entry.getFragmentId(), entry.getStageId(),
-                entry.getChapterId(), entry.getTitle(), entry.getContent(), entry.getTime(), entry.getAuthorName()));
+        Minecraft.getInstance().setScreen(new Screen_StoryFragment(entry.getClueId(),
+                entry.getLegacyId(), entry.getStageId(), entry.getChapterId(), entry.getTitle(),
+                entry.getContent(), entry.getTime(), entry.getAuthorName(), entry.getSource(),
+                entry.getObservationSpan(), entry.getSample(), entry.getConditions()));
     }
 
     @Override

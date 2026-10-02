@@ -1,7 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.clue_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.SiegeZombieEntity;
@@ -61,8 +60,8 @@ public final class ClueDropHandler {
             return;
         }
 
-        // 线索池以配置文件为准，服主可以通过 config/dreamingfishcore/data/fragment_data.json 增删内容。
-        List<FragmentData> pool = List.copyOf(StoryBookDataManager.getAllFragments().values());
+        // 线索池以线索目录为准（内置内容 + 服主在 config/dreamingfishcore/data/clues.json 的增删）。
+        List<ClueDefinition> pool = ClueCatalog.all();
         if (pool.isEmpty()) {
             return;
         }
@@ -80,15 +79,19 @@ public final class ClueDropHandler {
             return;
         }
 
-        Integer fragmentId = ClueDropSelector.pick(
-                ClueDropSelector.candidates(pool, storyBook.getUnlockedFragmentIds()),
+        String clueId = ClueDropSelector.pick(
+                ClueDropSelector.candidates(pool, storyBook.getDiscoveredClueIds()),
                 random);
-        if (fragmentId == null) {
-            // 该玩家已经把当前线索池收录完，这次击杀不再掉落残页。
+        if (clueId == null) {
+            // 该玩家已经把当前线索池发现完，这次击杀不再掉落残页。
             return;
         }
 
-        ItemStack fragmentPage = Item_FragmentPage.createFragmentPage(fragmentId);
+        // 掉在地上的残页不算"已发现"：玩家得自己捡起来整理，才写进永久发现记录。
+        ClueDefinition definition =
+                ClueCatalog.byId(clueId);
+        ItemStack fragmentPage = Item_FragmentPage.createCluePage(clueId,
+                definition == null ? 0 : definition.legacyId());
         event.getDrops().add(new ItemEntity(
                 serverLevel,
                 killed.getX(),

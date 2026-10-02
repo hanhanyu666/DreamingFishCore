@@ -38,7 +38,9 @@ public final class DreamingFishCore_NetworkManager {
     // 数据驱动剧情/任务状态、感染身份（含传播复发标记）、玩家组织（领地联动与资金池字段）、
     // 刷怪箱配置（尸潮功能，含"为什么不在尸潮区域内"的说明字段）、服务器状态 TPS 的同步契约均已变更，
     // 旧客户端必须在握手阶段明确拒绝连接。
-    private static final String PROTOCOL_VERSION = "0.28.2";
+    // 0.31.0：研究桌新增"提交四分之一组物品解锁配方"——open 包多带了下标除数与提交判定字段，
+    // 并新增 research_table/submit 请求包。
+    private static final String PROTOCOL_VERSION = "0.31.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -117,6 +119,19 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI.TYPE,
                 com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI.STREAM_CODEC,
                 com.hhy.dreamingfishcore.gameplay.spawner_system.network.Packet_OpenSpawnerConfigGUI::handle);
+        // 研究桌：服务端推状态并开屏 + 客户端请求确认研究 + 客户端请求提交物品解锁配方。
+        registrar.playToClient(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpen.TYPE,
+                com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpen.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpen::handle);
+        registrar.playToServer(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchConfirmRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchConfirmRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchConfirmRequest::handle));
+        registrar.playToServer(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchSubmitItemRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchSubmitItemRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchSubmitItemRequest::handle));
+        registrar.playToServer(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpenRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpenRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpenRequest::handle));
 
         registrar.playToClient(Packet_PlayerLoginRequest.TYPE, Packet_PlayerLoginRequest.STREAM_CODEC, Packet_PlayerLoginRequest::handle);
         registrar.playToServer(Packet_PlayerLoginResponse.TYPE, Packet_PlayerLoginResponse.STREAM_CODEC, Packet_PlayerLoginResponse::handle);

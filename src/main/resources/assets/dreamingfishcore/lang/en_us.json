@@ -11,6 +11,8 @@
   "item.dreamingfishcore.protective_mask": "Protective Mask",
   "item.dreamingfishcore.protective_mask.tooltip": "A protective mask produced under the Zhuiguang Society's direction. For now, it can prevent infection from spreading...",
   "item.dreamingfishcore.restore_uninfected_potion": "Gene Resurgence Potion",
+  "item.dreamingfishcore.infection_suppressant": "Infection Suppressant",
+  "item.dreamingfishcore.strong_infection_suppressant": "Strong Infection Suppressant",
   "item.dreamingfishcore.revival_charm": "Revival Charm",
   "item.dreamingfishcore.story_book": "Story Book",
   "item.dreamingfishcore.siege_zombie_spawn_egg": "Zombie Spawn Egg",
@@ -45,5 +47,6 @@
   "effect.dreamingfishcore.fear": "Fear",
   "effect.dreamingfishcore.courage": "Courage",
   "block.dreamingfishcore.settlement_filter": "Settlement Filter",
-  "block.dreamingfishcore.spawner": "Horde Spawner"
+  "block.dreamingfishcore.spawner": "Horde Spawner",
+  "block.dreamingfishcore.research_table": "Research Table"
 }

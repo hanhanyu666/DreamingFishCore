@@ -162,6 +162,50 @@ public final class InfectionTreatmentService {
         return TreatmentOutcome.APPLIED;
     }
 
+    /**
+     * 按剂量压制感染读数；读数被压到 0 时**一并解除感染者身份**。
+     *
+     * <p>这是两种「感染抑制剂」道具共用的服务端入口（剂量由物品给出）。与
+     * {@link #applySuppressant} 的差别有两点，都是用户 2026-10-02 明确的规则：</p>
+     * <ul>
+     *   <li><b>不限制身份</b>：幸存者与感染者都能吃，只是压读数；</li>
+     *   <li><b>归零即解身份</b>：读数到 0 那一下把身份清回幸存者。副作用是稳定感染者
+     *       反复服用也能刷到 0，从而绕开重构疗程——这是明确选择的取舍，不是遗漏。</li>
+     * </ul>
+     *
+     * <p>身份变更仍然只在这里发生（{@link #clearToSurvivor}），外部不要直接
+     * {@code setInfectionLevel}。</p>
+     */
+    public static TreatmentOutcome applyDoseSuppressant(ServerPlayer player, float dose) {
+        PlayerAttributesData data = resolve(player);
+        if (data == null) {
+            return notReady(player);
+        }
+        if (dose <= 0.0F) {
+            return TreatmentOutcome.NOTHING_TO_DO;
+        }
+        boolean infected = data.isInfected();
+        if (!infected && data.getCurrentInfection() <= 0.0F) {
+            return TreatmentOutcome.NOTHING_TO_DO;
+        }
+
+        // 压读数：reduceInfection 已负责下限钳制、警告档位回退与客户端同步。
+        PlayerInfectionManager.reduceInfection(player, dose);
+
+        PlayerAttributesData after = resolve(player);
+        if (after == null) {
+            return TreatmentOutcome.APPLIED;
+        }
+        if (after.getCurrentInfection() <= 0.0F
+                && after.getInfectionIdentity() != InfectionIdentity.SURVIVOR) {
+            clearToSurvivor(after);
+            commit(player, after, "§a感染读数已归零，你恢复为幸存者。");
+            DreamingFishCore.LOGGER.info("感染抑制剂把读数压到 0：玩家 {} 恢复为幸存者",
+                    player.getScoreboardName());
+        }
+        return TreatmentOutcome.APPLIED;
+    }
+
     // ==================== 身份推进（非治疗） ====================
 
     /**

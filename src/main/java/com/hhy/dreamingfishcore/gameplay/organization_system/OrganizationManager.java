@@ -887,7 +887,7 @@ public final class OrganizationManager {
         return Optional.empty();
     }
 
-    /** 会长/副会长把自己名下的领地登记为组织领地。 */
+    /** 会长/管理员把自己名下的领地登记为组织领地。 */
     public static synchronized OrganizationResult registerTerritory(ServerPlayer actor, String territoryId) {
         if (!requireAuthenticated(actor)) {
             return OrganizationResult.fail("登录认证未完成");
@@ -901,7 +901,7 @@ public final class OrganizationManager {
         }
         if (!OrganizationPermissions.canManageTerritories(
                 organization.rankOf(actor.getUUID()).orElse(null))) {
-            return OrganizationResult.fail("只有会长与副会长可以登记组织领地");
+            return OrganizationResult.fail("只有会长与管理员可以登记组织领地");
         }
         String id = territoryId == null ? "" : territoryId.trim();
         if (id.isEmpty()) {
@@ -952,7 +952,7 @@ public final class OrganizationManager {
         }
         if (!OrganizationPermissions.canManageTerritories(
                 organization.rankOf(actor.getUUID()).orElse(null))) {
-            return OrganizationResult.fail("只有会长与副会长可以移除组织领地");
+            return OrganizationResult.fail("只有会长与管理员可以移除组织领地");
         }
         String id = territoryId == null ? "" : territoryId.trim();
         if (id.isEmpty() || !organization.unregisterTerritory(id)) {
@@ -960,6 +960,46 @@ public final class OrganizationManager {
         }
         markDirty();
         return OrganizationResult.ok("已移除组织领地登记（剩余 " + organization.territoryCount() + " 块）");
+    }
+
+    /**
+     * 设置或取消某块组织领地的「核心领地」标记。
+     *
+     * <p>分级规则（用户 2026-10-02 定）：核心领地的登记与标记只有会长/管理员能改，
+     * 普通成员与干部不行；被标记后普通成员不能把它当作自己的场地或据点使用
+     * （准入判定 {@code OrganizationPermissions.canUseTerritoryAsVenue}）。</p>
+     */
+    public static synchronized OrganizationResult setCoreTerritory(ServerPlayer actor,
+                                                                   String territoryId,
+                                                                   boolean core) {
+        if (!requireAuthenticated(actor)) {
+            return OrganizationResult.fail("登录认证未完成");
+        }
+        if (!writable()) {
+            return OrganizationResult.fail(notWritableMessage());
+        }
+        Organization organization = findByPlayer(actor.getUUID()).orElse(null);
+        if (organization == null) {
+            return OrganizationResult.fail("你还没有组织");
+        }
+        if (!OrganizationPermissions.canManageCoreTerritories(
+                organization.rankOf(actor.getUUID()).orElse(null))) {
+            return OrganizationResult.fail("只有会长与管理员可以设置核心领地");
+        }
+        String id = territoryId == null ? "" : territoryId.trim();
+        if (id.isEmpty() || !organization.hasTerritory(id)) {
+            return OrganizationResult.fail("这块领地没有登记给本组织");
+        }
+        if (!organization.setCoreTerritory(id, core)) {
+            return OrganizationResult.fail(core
+                    ? "这块领地已经是核心领地了" : "这块领地本来就不是核心领地");
+        }
+        markDirty();
+        DreamingFishCore.LOGGER.info("玩家 {} 把组织「{}」的领地「{}」{}核心领地",
+                actor.getScoreboardName(), organization.name(), id, core ? "设为" : "取消");
+        return OrganizationResult.ok(core
+                ? "已设为核心领地：普通成员不能把它当作场地或据点使用"
+                : "已取消核心领地标记：成员可以正常使用这块领地");
     }
 
     /**
@@ -1076,18 +1116,22 @@ public final class OrganizationManager {
             EconomySystemBridge.TerritoryInfo info = linked.info();
             if (info == null) {
                 territories.add(new OrganizationViewData.TerritoryLine(
-                        linked.territoryId(), "已失效的登记", "", 0, 0, 0, 0, 0, true));
+                        linked.territoryId(), "已失效的登记", "", 0, 0, 0, 0, 0, true,
+                        organization.isCoreTerritory(linked.territoryId())));
                 continue;
             }
             territories.add(new OrganizationViewData.TerritoryLine(
                     info.territoryId(), info.name(), info.dimensionId(),
-                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false,
+                    organization.isCoreTerritory(info.territoryId())));
         }
         List<OrganizationViewData.TerritoryLine> available = new ArrayList<>();
         for (EconomySystemBridge.TerritoryInfo info : listing.available()) {
+            // 可登记列表里的领地还没登记，因此不可能是核心领地。
             available.add(new OrganizationViewData.TerritoryLine(
                     info.territoryId(), info.name(), info.dimensionId(),
-                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false,
+                    false));
         }
         List<OrganizationViewData.DeviceLine> devices = new ArrayList<>();
         for (SettlementFilterRegistry.Device device : SettlementFilterRegistry.devicesOf(organization.id())) {
@@ -1108,6 +1152,7 @@ public final class OrganizationManager {
                 organization.funds(), config().getMaxDeposit(),
                 OrganizationPermissions.canDepositFunds(myRank),
                 OrganizationPermissions.canManageTerritories(myRank),
+                OrganizationPermissions.canManageCoreTerritories(myRank),
                 config().getMaxRegisteredTerritories(), config().getMaxFilterDevices(),
                 List.copyOf(territories), List.copyOf(available), List.copyOf(devices));
     }

@@ -41,9 +41,13 @@ public final class OrganizationViewData {
      *
      * <p>{@code missing=true} 表示这条登记在当前读不到对应领地（被移除，或经济服务不可用）——
      * 界面要把它显示成"已失效"而不是假装它还在地图上。</p>
+     *
+     * <p>{@code core=true} 表示这块领地被标记为核心领地：登记与标记只有会长/管理员能做，
+     * 普通成员不能把它当作自己的场地或据点使用（判定在服务端）。</p>
      */
     public record TerritoryLine(String territoryId, String name, String dimensionId,
-                                int minX, int minZ, int maxX, int maxZ, int area, boolean missing) {
+                                int minX, int minZ, int maxX, int maxZ, int area, boolean missing,
+                                boolean core) {
     }
 
     /** 组织绑定的一台聚居地过滤装置。 */
@@ -58,7 +62,8 @@ public final class OrganizationViewData {
                          List<MemberLine> members, List<MemberLine> applicants,
                          List<MemberLine> invited, long createdAtEpochMillis,
                          int funds, int maxDeposit, boolean canDepositFunds,
-                         boolean canManageTerritories, int maxTerritories, int maxFilterDevices,
+                         boolean canManageTerritories, boolean canManageCoreTerritories,
+                         int maxTerritories, int maxFilterDevices,
                          List<TerritoryLine> territories, List<TerritoryLine> availableTerritories,
                          List<DeviceLine> devices) {
     }

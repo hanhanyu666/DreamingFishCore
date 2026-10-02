@@ -147,7 +147,21 @@ public final class Command_Organization {
                                         .executes(context -> run(context,
                                                 player -> OrganizationManager.unregisterTerritory(
                                                         player,
-                                                        StringArgumentType.getString(context, "name")))))))
+                                                        StringArgumentType.getString(context, "name"))))))
+                        // 核心领地标记：只有会长与管理员能用（服务端会再校验一次权限）。
+                        .then(Commands.literal("core")
+                                .then(Commands.argument("name", StringArgumentType.greedyString())
+                                        .executes(context -> run(context,
+                                                player -> OrganizationManager.setCoreTerritory(
+                                                        player,
+                                                        StringArgumentType.getString(context, "name"),
+                                                        true)))
+                                        .then(Commands.literal("off")
+                                                .executes(context -> run(context,
+                                                        player -> OrganizationManager.setCoreTerritory(
+                                                                player,
+                                                                StringArgumentType.getString(context, "name"),
+                                                                false)))))))
                 .then(Commands.literal("reload")
                         .requires(source -> source.hasPermission(3))
                         .executes(context -> {

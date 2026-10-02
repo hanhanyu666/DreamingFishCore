@@ -11,6 +11,8 @@
   "item.dreamingfishcore.protective_mask": "防护面具",
   "item.dreamingfishcore.protective_mask.tooltip": "由逐光会牵头制作的防护面具，至少目前可以阻止感染者的传染……",
   "item.dreamingfishcore.restore_uninfected_potion": "基因复苏药剂",
+  "item.dreamingfishcore.infection_suppressant": "感染抑制剂",
+  "item.dreamingfishcore.strong_infection_suppressant": "强效感染抑制剂",
   "item.dreamingfishcore.revival_charm": "复活护符",
   "item.dreamingfishcore.story_book": "随记本",
   "item.dreamingfishcore.siege_zombie_spawn_egg": "丧尸刷怪蛋",
@@ -45,5 +47,6 @@
   "effect.dreamingfishcore.fear": "害怕",
   "effect.dreamingfishcore.courage": "勇气",
   "block.dreamingfishcore.settlement_filter": "聚居地过滤装置",
-  "block.dreamingfishcore.spawner": "刷怪箱"
+  "block.dreamingfishcore.spawner": "刷怪箱",
+  "block.dreamingfishcore.research_table": "研究桌"
 }

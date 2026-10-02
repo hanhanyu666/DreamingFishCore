@@ -2,13 +2,21 @@ package com.hhy.dreamingfishcore.client.debug;
 
 import com.hhy.dreamingfishcore.gameplay.organization_system.OrganizationViewData;
 import com.hhy.dreamingfishcore.gameplay.organization_system.client.cache.OrganizationClientCache;
+import com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableMenu;
+import com.hhy.dreamingfishcore.gameplay.research_system.client.ResearchTableClientCache;
+import com.hhy.dreamingfishcore.gameplay.research_system.client.Screen_ResearchTable;
+import com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpen;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import com.hhy.dreamingfishcore.gameplay.npc_system.NpcDialogueViewData;
 import com.hhy.dreamingfishcore.gameplay.npc_system.client.ui.screen.Screen_NpcDialogue;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.client.ui.screen.Screen_RevivalCharm;
@@ -21,6 +29,15 @@ import java.util.List;
 
 /** {@link UiHarness} 可用的截图场景。 */
 final class UiHarnessScenarios {
+
+    /** 研究桌演示用的容器 id：服务端没有这个容器，关界面时发出的关闭包会被服务端忽略。 */
+    private static final int RESEARCH_TABLE_CONTAINER_ID = 127;
+    /** 研究桌演示用的课题：10 条真实存在的原版物品（与服务端默认配置的 10~15 条对齐）。 */
+    private static final List<String> RESEARCH_TABLE_OFFER = List.of(
+            "minecraft:oak_fence", "minecraft:bookshelf", "minecraft:lantern", "minecraft:glass_pane",
+            "minecraft:stone_bricks", "minecraft:chest", "minecraft:crafting_table", "minecraft:white_wool",
+            "minecraft:oak_planks", "minecraft:iron_door");
+
     private UiHarnessScenarios() {
     }
 
@@ -229,8 +246,10 @@ final class UiHarnessScenarios {
         });
         UiHarness.register("fragment", minecraft -> {
             StoryBookEntryViewData entry = sampleFragments().get(0);
-            minecraft.setScreen(new Screen_StoryFragment(entry.getFragmentId(), entry.getStageId(), entry.getChapterId(),
-                    entry.getTitle(), entry.getContent(), entry.getTime(), entry.getAuthorName()));
+            minecraft.setScreen(new Screen_StoryFragment(entry.getClueId(), entry.getLegacyId(),
+                    entry.getStageId(), entry.getChapterId(), entry.getTitle(), entry.getContent(),
+                    entry.getTime(), entry.getAuthorName(), entry.getSource(),
+                    entry.getObservationSpan(), entry.getSample(), entry.getConditions()));
         });
         UiHarness.register("dialogue", minecraft -> minecraft.setScreen(new Screen_NpcDialogue(new NpcDialogueViewData(
                 1, -1, "林医生", "海岸医院仅存的外科医生，负责模板重建的最后一道核验。", "女", "医生", 2,
@@ -239,6 +258,8 @@ final class UiHarnessScenarios {
                         "如果你要出去，记得带上足够的抑制剂。"),
                 "她的目光在你手腕的读数上停留了片刻。", "minecraft:golden_apple", 42, "信任",
                 List.of("DIALOGUE", "ABOUT", "FOLLOW", "HOSPITAL_REVIEW")))));
+
+        UiHarness.register("research_table", UiHarnessScenarios::openResearchTable);
 
         for (TerminalScreen.Tab tab : TerminalScreen.Tab.values()) {
             String name = tab.name().toLowerCase(java.util.Locale.ROOT);
@@ -308,10 +329,67 @@ final class UiHarnessScenarios {
         });
     }
 
+    /**
+     * 研究桌：把"有内容"的界面截下来（课题列表、提交槽、背包都要有东西）。
+     *
+     * <p>研究桌是**自绘的容器界面**：槽位内容放在真实的 {@link ResearchTableMenu} 里，界面靠
+     * {@code MenuAccess} 拿到菜单再画。所以这里也要在客户端自己造一份菜单，并把
+     * {@code player.containerMenu} 指过去——这正是原版客户端收到开屏包时做的两步
+     * （见 {@code MenuScreens#create}）。少做一步，{@code Screen_ResearchTable#tick}
+     * 就会认为"服务端已经把界面关了"而立刻收屏。</p>
+     *
+     * <p>状态走 {@link Packet_ResearchTableOpen}：与服务端下发的是同一条路，界面拿到的东西
+     * 和真实运行时一模一样。场景里没有真的研究桌方块（服务端不会回推任何东西），但仍然每 tick
+     * 重写一遍，免得被别的同步顶掉。</p>
+     */
+    private static void openResearchTable(net.minecraft.client.Minecraft minecraft) {
+        if (minecraft.player == null) {
+            return;
+        }
+        // 用玩家脚下的坐标：界面会把它随"打开请求"发给服务端，也是菜单与快照对上的依据。
+        BlockPos tablePos = minecraft.player.blockPosition();
+        ResearchTableMenu menu = new ResearchTableMenu(RESEARCH_TABLE_CONTAINER_ID,
+                minecraft.player.getInventory(), tablePos);
+        // 先指菜单再开屏：否则旧界面在 setScreen 里 removed() 时会按"我还开着"去关容器，
+        // 把刚建好的菜单顶掉（研究桌的 tick 会让界面立刻收屏）。
+        minecraft.player.containerMenu = menu;
+        minecraft.setScreen(new Screen_ResearchTable(menu, minecraft.player.getInventory(),
+                Component.literal("研究桌")));
+        applyResearchTableState(minecraft, menu, tablePos);
+        UiHarness.whileStep(() -> applyResearchTableState(minecraft, menu, tablePos));
+    }
+
+    /** 每 tick 重写一遍研究桌的演示状态：菜单指向、提交槽、背包、服务端那份快照。 */
+    private static void applyResearchTableState(net.minecraft.client.Minecraft minecraft,
+                                                ResearchTableMenu menu, BlockPos tablePos) {
+        if (minecraft.player == null) {
+            return;
+        }
+        minecraft.player.containerMenu = menu;
+        // 提交槽：20 个铁锭。堆叠上限 64 ÷ 除数 4 = 需要 16 个，所以这一叠正好是"够提交"的状态。
+        menu.getSubmitContainer().setItem(ResearchTableMenu.SUBMIT_SLOT, new ItemStack(Items.IRON_INGOT, 20));
+        fillResearchTableInventory(minecraft.player.getInventory());
+        // 快照：10 条课题、消耗 100 点、手上 50 点（标题上的"当前"会变红、警告行给出原因）。
+        ResearchTableClientCache.accept(new Packet_ResearchTableOpen(tablePos, RESEARCH_TABLE_OFFER, 100, 50,
+                List.of(), "§c经验不足：需要 100 点，你当前有 50 点", true, 4, true,
+                "§a可以提交：16 个铁锭"));
+    }
+
+    /** 背包里放几样东西：菜单的背包槽直接指向玩家背包，所以放了这里背包区就不是空的。 */
+    private static void fillResearchTableInventory(Inventory inventory) {
+        inventory.setItem(9, new ItemStack(Items.STONE, 64));        // 主背包第一行
+        inventory.setItem(10, new ItemStack(Items.TORCH, 32));
+        inventory.setItem(11, new ItemStack(Items.BREAD, 5));
+        inventory.setItem(22, new ItemStack(Items.IRON_INGOT, 20));  // 与提交槽同一种物品，"背包 N"能算出来
+        inventory.setItem(35, new ItemStack(Items.DIAMOND, 7));
+        inventory.setItem(0, new ItemStack(Items.IRON_PICKAXE));     // 快捷栏
+        inventory.setItem(1, new ItemStack(Items.OAK_FENCE, 16));
+    }
+
     private static OrganizationViewData.Snapshot sampleOrganizations(String self, boolean member) {
         List<OrganizationViewData.MemberLine> members = List.of(
                 new OrganizationViewData.MemberLine(self, "Dev", "LEADER", "会长", true),
-                new OrganizationViewData.MemberLine("a1", "林潮", "VICE_LEADER", "副会长", true),
+                new OrganizationViewData.MemberLine("a1", "林潮", "ADMIN", "管理员", true),
                 new OrganizationViewData.MemberLine("a2", "白芷", "OFFICER", "干部", false),
                 new OrganizationViewData.MemberLine("a3", "周岑", "MEMBER", "成员", true),
                 new OrganizationViewData.MemberLine("a4", "听海", "MEMBER", "成员", false));
@@ -320,12 +398,12 @@ final class UiHarnessScenarios {
                 "LEADER", "会长", true, true, true, true, members,
                 List.of(new OrganizationViewData.MemberLine("b1", "拾荒的阿洛", "MEMBER", "成员", true)),
                 List.of(new OrganizationViewData.MemberLine("b2", "雾港旅人", "MEMBER", "成员", false)),
-                System.currentTimeMillis(), 1280, 10000, true, true, 4, 2,
+                System.currentTimeMillis(), 1280, 10000, true, true, true, 4, 2,
                 List.of(new OrganizationViewData.TerritoryLine("t1", "灯塔聚居地", "minecraft:overworld",
-                                -320, 410, -256, 470, 3840, false),
-                        new OrganizationViewData.TerritoryLine("t2", "", "minecraft:overworld", 0, 0, 0, 0, 0, true)),
+                                -320, 410, -256, 470, 3840, false, true),
+                        new OrganizationViewData.TerritoryLine("t2", "", "minecraft:overworld", 0, 0, 0, 0, 0, true, false)),
                 List.of(new OrganizationViewData.TerritoryLine("t3", "海岸菜园", "minecraft:overworld",
-                        -180, 520, -150, 548, 840, false)),
+                        -180, 520, -150, 548, 840, false, false)),
                 List.of(new OrganizationViewData.DeviceLine("minecraft:overworld", -290, 72, 436, true),
                         new OrganizationViewData.DeviceLine("minecraft:overworld", -270, 70, 455, false)));
         List<OrganizationViewData.Summary> organizations = List.of(
@@ -344,10 +422,10 @@ final class UiHarnessScenarios {
                 + "但她没说重建出来的，还是不是原来的那个人。\n\n"
                 + "逐光会的人在夜里来过。他们没有带走任何东西，只在墙上留下了一道白色的弧线。";
         return List.of(
-                new StoryBookEntryViewData(1, 1, 0, "灯塔下的铅盒", body, "第 3 日 · 黄昏", "守望者 07", true),
-                new StoryBookEntryViewData(2, 1, 0, "白色弧线", body, "第 4 日 · 深夜", "未知", false),
-                new StoryBookEntryViewData(3, 2, 1, "海岸医院", body, "第 9 日", "林医生", false),
-                new StoryBookEntryViewData(4, 2, 1, "抑制剂配方残页", body, "第 11 日", "药剂师", true),
-                new StoryBookEntryViewData(5, 3, 2, "逐光会的信", body, "第 20 日", "逐光会", false));
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_lead_box", 1, 1, 0, "灯塔下的铅盒", body, "第 3 日 · 黄昏", "守望者 07", "灯塔值守记录", "1 夜", "1 只铅盒", "退潮后的浅滩", true),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_white_arc", 2, 1, 0, "白色弧线", body, "第 4 日 · 深夜", "未知", "墙面痕迹", "1 夜", "1 处痕迹", "无人值守时发现", false),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_coast_hospital", 3, 2, 1, "海岸医院", body, "第 9 日", "林医生", "海岸医院随访", "3 天", "12 例", "院内隔离观察", false),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_inhibitor_page", 4, 2, 1, "抑制剂配方残页", body, "第 11 日", "药剂师", "药剂科手稿", "未标注", "1 页残稿", "抢救时掉落", true),
+                new StoryBookEntryViewData("dreamingfishcore:clue/harness_zhuguang_letter", 5, 3, 2, "逐光会的信", body, "第 20 日", "逐光会", "逐光会公开信", "1 封", "1 封", "张贴于公告栏", false));
     }
 }

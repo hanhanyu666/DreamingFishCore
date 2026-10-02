@@ -59,9 +59,10 @@ public class Packet_SyncPlayerStats implements net.minecraft.network.protocol.co
         // 获取已探索群系数量
         int biomesCount = PlayerBiomesDataManager.getExploredBiomeCount(player.getUUID());
 
-        // 获取已解锁蓝图数量（不包括默认解锁的基础物品）
-        int blueprintCount = PlayerBlueprintData.getAllUnlockedItems(player).size()
-                - PlayerBlueprintData.getDefaultUnlockedItems().size();
+        // 已学会的蓝图数量：只数「确实需要蓝图」的物品。
+        // 旧写法是「已解锁总数 − 默认物品条数」，默认放行名单改成配置里的通配符规则后
+        // 两边不再是同一个量纲，那个减法会算错（甚至为负）。
+        int blueprintCount = PlayerBlueprintData.getLearnedBlueprintCount(player);
 
         // 发送数据包
         Packet_SyncPlayerStats packet = new Packet_SyncPlayerStats(biomesCount, blueprintCount);

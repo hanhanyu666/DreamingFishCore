@@ -1,7 +1,9 @@
 package com.hhy.dreamingfishcore.gameplay.hospital_system;
 
 import com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueEntryDispatcher;
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueSourceType;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceManager;
 import com.hhy.dreamingfishcore.gameplay.guidance_system.GuidanceSeed;
 import com.hhy.dreamingfishcore.gameplay.npc_system.StoryNpcContentPolicy;
@@ -208,6 +210,10 @@ public final class HospitalStory {
                 result + "\n\n模板重建余量：" + String.format(java.util.Locale.ROOT, "%.1f / 100", data.getRespawnPoint()));
         // 正式复查属于医院观察区的事实来源，由江晚交出一份观察记录（保底线索，幂等）。
         ClueGuaranteeService.grant(player, ClueGuaranteeService.CLUE_OBSERVATION_LOG);
+        // 同一个事件点也是"同一病例两份记录"的另一半：声明了 event=hospital_review 的线索
+        // （比如感染医学评审意见）在这里发放。两条通道互不干扰，都靠幂等去重。
+        ClueEntryDispatcher.fire(player, ClueSourceType.EVENT,
+                ClueEntryDispatcher.EVENT_HOSPITAL_REVIEW);
     }
 
     /** 已经完成过正式复查的玩家在登录时补发观察区值班记录。 */

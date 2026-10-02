@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.item.items.*;
 import com.hhy.dreamingfishcore.item.items.medicine.Easy_Aid_Kit;
 import com.hhy.dreamingfishcore.item.items.Potion_RestoreUnInfected;
+import com.hhy.dreamingfishcore.item.items.Item_InfectionSuppressant;
 import com.hhy.dreamingfishcore.item.items.Item_RevivalCharm;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.*;
@@ -147,6 +148,20 @@ public class DreamingFishCore_Items {
                     .rarity(Rarity.EPIC)  // 史诗品质
             ));
 
+    // 感染抑制剂（低剂量）：一次降低 5 点感染进度，不解除感染者身份。
+    public static final DeferredHolder<Item, ? extends Item> INFECTION_SUPPRESSANT = ITEMS.register("infection_suppressant",
+            () -> new Item_InfectionSuppressant(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.UNCOMMON),
+                    Item_InfectionSuppressant.LOW_DOSE));
+
+    // 感染抑制剂（高剂量）：一次降低 15 点感染进度，不解除感染者身份。
+    public static final DeferredHolder<Item, ? extends Item> STRONG_INFECTION_SUPPRESSANT = ITEMS.register("strong_infection_suppressant",
+            () -> new Item_InfectionSuppressant(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.RARE),
+                    Item_InfectionSuppressant.HIGH_DOSE));
+
     // 防护面具：可佩戴在头部；防护效果由感染系统根据佩戴状态判定。
     public static final DeferredHolder<Item, ProtectiveMaskItem> PROTECTIVE_MASK = ITEMS.register("protective_mask",
             () -> new ProtectiveMaskItem(PROTECTIVE_MASK_MATERIAL, new Item.Properties()
@@ -165,6 +180,12 @@ public class DreamingFishCore_Items {
             () -> new BlockItem(
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.SPAWNER.get(),
                     new Item.Properties().rarity(Rarity.EPIC)));
+
+    // 研究桌：消耗经验一次性研究出一批原版配方。
+    public static final DeferredHolder<Item, BlockItem> RESEARCH_TABLE = ITEMS.register("research_table",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.RESEARCH_TABLE.get(),
+                    new Item.Properties().rarity(Rarity.UNCOMMON)));
 
     private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
         EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);

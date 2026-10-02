@@ -1,6 +1,5 @@
 package com.hhy.dreamingfishcore.gameplay.clue_system;
 
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
 import net.minecraft.util.RandomSource;
 
 import java.util.ArrayList;
@@ -9,10 +8,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 线索掉落的纯逻辑：从一个线索池里挑出该玩家还没有收录的线索。
+ * 线索掉落的纯逻辑：从一个线索池里挑出该玩家还没有发现的线索。
  *
  * <p>这里不接触事件、世界或网络，只做集合与随机数处理，便于单元测试。
- * “同一残页全服共享内容、个人收集状态独立”的规则因此只落在一处。</p>
+ * “同一残页全服共享内容、个人发现状态独立”的规则因此只落在一处。</p>
+ *
+ * <p>里程碑 2 收尾后线索池与玩家状态都用稳定 ID：池来自 {@link ClueCatalog}，
+ * 玩家状态来自随记本的永久发现记录（不再是旧的整数编号集合）。</p>
  */
 public final class ClueDropSelector {
 
@@ -20,25 +22,26 @@ public final class ClueDropSelector {
     }
 
     /**
-     * 返回候选人线索 ID：排除玩家已经解锁的线索，并跳过内容缺失的条目。
+     * 返回候选线索 ID：排除玩家已经发现的线索，并跳过内容缺失的条目。
      *
-     * @param pool        当前生效的线索池（来自配置文件）
-     * @param unlockedIds 该玩家随记本里已经收录的线索 ID
+     * @param pool              当前生效的线索池
+     * @param discoveredClueIds 该玩家随记本里已经发现的线索 ID
      */
-    public static List<Integer> candidates(Collection<FragmentData> pool, Set<Integer> unlockedIds) {
-        List<Integer> candidates = new ArrayList<>();
+    public static List<String> candidates(Collection<ClueDefinition> pool,
+                                          Set<String> discoveredClueIds) {
+        List<String> candidates = new ArrayList<>();
         if (pool == null || pool.isEmpty()) {
             return candidates;
         }
 
-        for (FragmentData fragment : pool) {
-            if (fragment == null || fragment.getId() <= 0) {
+        for (ClueDefinition definition : pool) {
+            if (definition == null || definition.id().isBlank()) {
                 continue;
             }
-            if (unlockedIds != null && unlockedIds.contains(fragment.getId())) {
+            if (discoveredClueIds != null && discoveredClueIds.contains(definition.id())) {
                 continue;
             }
-            candidates.add(fragment.getId());
+            candidates.add(definition.id());
         }
         return candidates;
     }
@@ -46,7 +49,7 @@ public final class ClueDropSelector {
     /**
      * 从候选列表里随机取一条；没有候选时返回 {@code null}，表示这次不掉落而不是掉落空内容。
      */
-    public static Integer pick(List<Integer> candidates, RandomSource random) {
+    public static String pick(List<String> candidates, RandomSource random) {
         if (candidates == null || candidates.isEmpty()) {
             return null;
         }

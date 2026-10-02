@@ -1,6 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.clue_system;
 
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
+import com.google.gson.Gson;
 import net.minecraft.util.RandomSource;
 import org.junit.jupiter.api.Test;
 
@@ -13,31 +13,49 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 线索掉落选择的纯逻辑测试：去重、空池、概率边界。 */
+/**
+ * 线索掉落选择的纯逻辑测试：去重、空池、概率边界。
+ *
+ * <p>里程碑 2 收尾后线索池与玩家发现状态都用稳定 ID，这里也按稳定 ID 构造。</p>
+ */
 class ClueDropSelectorTest {
 
-    private static FragmentData fragment(int id) {
-        return new FragmentData(id, 1, 1, "作者", "标题" + id, "时间", "内容");
+    private static final Gson GSON = new Gson();
+
+    private static ClueDefinition clue(String slug) {
+        // 走真实的反序列化路径，保证测试数据和配置文件是同一种结构。
+        return GSON.fromJson("""
+                {
+                  "id": "dreamingfishcore:clue/%s",
+                  "stageId": 1,
+                  "chapterId": 1,
+                  "title": "标题 %s",
+                  "content": "正文"
+                }
+                """.formatted(slug, slug), ClueDefinition.class);
     }
 
-    private static List<FragmentData> pool(int... ids) {
-        List<FragmentData> fragments = new ArrayList<>();
-        for (int id : ids) {
-            fragments.add(fragment(id));
+    private static List<ClueDefinition> pool(String... slugs) {
+        List<ClueDefinition> definitions = new ArrayList<>();
+        for (String slug : slugs) {
+            definitions.add(clue(slug));
         }
-        return fragments;
+        return definitions;
     }
 
     @Test
-    void excludesAlreadyUnlockedClues() {
-        List<Integer> candidates = ClueDropSelector.candidates(pool(1, 2, 3, 4), Set.of(1, 3));
+    void excludesAlreadyDiscoveredClues() {
+        List<String> candidates = ClueDropSelector.candidates(
+                pool("a", "b", "c", "d"),
+                Set.of("dreamingfishcore:clue/a", "dreamingfishcore:clue/c"));
 
-        assertEquals(List.of(2, 4), candidates);
+        assertEquals(List.of("dreamingfishcore:clue/b", "dreamingfishcore:clue/d"), candidates);
     }
 
     @Test
-    void returnsEmptyWhenEverythingIsUnlocked() {
-        List<Integer> candidates = ClueDropSelector.candidates(pool(1, 2), Set.of(1, 2));
+    void returnsEmptyWhenEverythingIsDiscovered() {
+        List<String> candidates = ClueDropSelector.candidates(pool("a", "b"),
+                Set.of("dreamingfishcore:clue/a", "dreamingfishcore:clue/b"));
 
         assertTrue(candidates.isEmpty());
         assertNull(ClueDropSelector.pick(candidates, RandomSource.create(1L)),
@@ -45,29 +63,32 @@ class ClueDropSelectorTest {
     }
 
     @Test
-    void handlesMissingPoolAndUnlockedSet() {
+    void handlesMissingPoolAndDiscoveredSet() {
         assertTrue(ClueDropSelector.candidates(null, Set.of()).isEmpty());
         assertTrue(ClueDropSelector.candidates(List.of(), null).isEmpty());
-        assertEquals(List.of(5), ClueDropSelector.candidates(pool(5), null));
+        assertEquals(List.of("dreamingfishcore:clue/e"),
+                ClueDropSelector.candidates(pool("e"), null));
     }
 
     @Test
-    void skipsMalformedFragmentEntries() {
-        List<FragmentData> fragments = new ArrayList<>();
-        fragments.add(null);
-        fragments.add(fragment(0));
-        fragments.add(fragment(7));
+    void skipsMalformedDefinitions() {
+        List<ClueDefinition> definitions = new ArrayList<>();
+        definitions.add(null);
+        definitions.add(GSON.fromJson("{\"stageId\": 1, \"title\": \"没有 ID\"}", ClueDefinition.class));
+        definitions.add(clue("g"));
 
-        assertEquals(List.of(7), ClueDropSelector.candidates(fragments, Set.of()));
+        assertEquals(List.of("dreamingfishcore:clue/g"),
+                ClueDropSelector.candidates(definitions, Set.of()));
     }
 
     @Test
     void pickStaysInsideCandidateRange() {
-        List<Integer> candidates = List.of(3, 6, 9);
+        List<String> candidates = List.of("dreamingfishcore:clue/x",
+                "dreamingfishcore:clue/y", "dreamingfishcore:clue/z");
         RandomSource random = RandomSource.create(42L);
 
         for (int i = 0; i < 200; i++) {
-            Integer picked = ClueDropSelector.pick(candidates, random);
+            String picked = ClueDropSelector.pick(candidates, random);
             assertTrue(candidates.contains(picked), "拾取结果必须来自候选列表：" + picked);
         }
     }

@@ -38,6 +38,8 @@ public class DreamingFishCore {
         StoryNpcEntities.register(modEventBus);
         SiegeZombieEntities.register(modEventBus);
         DeathCorpseEntities.register(modEventBus);
+        // 注册菜单类型（研究桌的容器菜单）
+        com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableMenus.register(modEventBus);
         CorpseAccessoryCompat.initialize();
         CommonInit.initialize();
 

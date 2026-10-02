@@ -17,21 +17,21 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
     public net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<? extends net.minecraft.network.protocol.common.custom.CustomPacketPayload> type() {
         return TYPE;
     }
-    private final List<Integer> orderedFragmentIds;
+    private final List<String> orderedClueIds;
 
-    public Packet_UpdateStoryBookOrder(List<Integer> orderedFragmentIds) {
-        this.orderedFragmentIds = orderedFragmentIds;
+    public Packet_UpdateStoryBookOrder(List<String> orderedClueIds) {
+        this.orderedClueIds = orderedClueIds;
     }
 
     public static void encode(Packet_UpdateStoryBookOrder packet, FriendlyByteBuf buf) {
-        if (packet == null || packet.orderedFragmentIds == null
-                || packet.orderedFragmentIds.size()
+        if (packet == null || packet.orderedClueIds == null
+                || packet.orderedClueIds.size()
                 > StoryBookDataManager.MAX_NETWORK_ORDER_ENTRIES) {
             throw new IllegalArgumentException("随记本排序条目超过上限");
         }
-        buf.writeVarInt(packet.orderedFragmentIds.size());
-        for (Integer fragmentId : packet.orderedFragmentIds) {
-            buf.writeVarInt(fragmentId);
+        buf.writeVarInt(packet.orderedClueIds.size());
+        for (String clueId : packet.orderedClueIds) {
+            buf.writeUtf(clueId, 256);
         }
     }
 
@@ -40,9 +40,9 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
         if (size < 0 || size > StoryBookDataManager.MAX_NETWORK_ORDER_ENTRIES) {
             throw new IllegalArgumentException("随记本排序条目数量非法：" + size);
         }
-        List<Integer> orderedIds = new ArrayList<>();
+        List<String> orderedIds = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            orderedIds.add(buf.readVarInt());
+            orderedIds.add(buf.readUtf(256));
         }
         return new Packet_UpdateStoryBookOrder(orderedIds);
     }
@@ -51,7 +51,7 @@ public class Packet_UpdateStoryBookOrder implements net.minecraft.network.protoc
         context.enqueueWork(() -> {
             ServerPlayer player = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
             if (player != null) {
-                StoryBookDataManager.updateFragmentOrderForPlayer(player.getUUID(), packet.orderedFragmentIds);
+                StoryBookDataManager.updateClueOrderForPlayer(player.getUUID(), packet.orderedClueIds);
             }
         });
     }
