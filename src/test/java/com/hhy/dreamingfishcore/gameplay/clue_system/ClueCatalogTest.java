@@ -10,7 +10,6 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClueCatalogTest {
 
     private static final String VISIBLE_RESOURCE = "/dreamingfishcore/defaults/clues.json";
-    private static final String LEGACY_RESOURCE = "/dreamingfishcore/defaults/fragment_data.json";
     private static final Gson GSON = new Gson();
 
     @AfterEach
@@ -122,26 +120,20 @@ class ClueCatalogTest {
                 () -> ClueCatalog.installForTest(List.of(tooLongTitle), List.of()));
     }
 
-    // ==================== 内置内容与迁移保真 ====================
+    // ==================== 内置内容 ====================
 
     @Test
     void builtInClueContentParsesAndKeepsEveryLegacyNumber() throws Exception {
         List<ClueDefinition> clues = readResource(VISIBLE_RESOURCE, ClueDefinition.class);
-        List<Map<String, Object>> legacy = readRawList(LEGACY_RESOURCE);
 
-        assertEquals(legacy.size(), clues.size(),
-                "迁移后的线索条数必须与旧内容一致");
+        assertEquals(12, clues.size(), "内置线索应为 12 条");
         ClueCatalog.installForTest(clues, List.of());
 
-        Map<Integer, String> legacyTitles = new LinkedHashMap<>();
-        for (Map<String, Object> entry : legacy) {
-            legacyTitles.put(((Number) entry.get("id")).intValue(), (String) entry.get("title"));
-        }
-        for (int legacyId = 1; legacyId <= legacy.size(); legacyId++) {
+        // 旧整数编号 1..12 必须全部还能解析：玩家手里已有的旧残页、旧存档里的 int
+        // 发现记录都靠它映射到稳定 ID，这是"升级不丢记录"的最后一道保险。
+        for (int legacyId = 1; legacyId <= 12; legacyId++) {
             ClueDefinition definition = ClueCatalog.byLegacyId(legacyId);
             assertNotNull(definition, "旧编号 " + legacyId + " 必须有对应的稳定 ID");
-            assertEquals(legacyTitles.get(legacyId), definition.title(),
-                    "旧编号 " + legacyId + " 的标题必须逐字保留");
             assertTrue(definition.id().startsWith("dreamingfishcore:clue/"),
                     "稳定 ID 必须带命名空间：" + definition.id());
             assertFalse(definition.content().isBlank(), "正文不能为空：" + definition.id());
@@ -151,6 +143,12 @@ class ClueCatalogTest {
             assertFalse(definition.sample().isBlank(),
                     "里程碑 2 要求每条线索都写样本：" + definition.id());
         }
+
+        // 两条锚点：编号与标题的对应关系不能在后来的内容整理里被悄悄换掉。
+        assertEquals("dreamingfishcore:clue/observation_ward_log", ClueCatalog.byLegacyId(1).id());
+        assertEquals("观察区值班记录（第 2 天）", ClueCatalog.byLegacyId(1).title());
+        assertEquals("dreamingfishcore:clue/respawn_node_anomaly", ClueCatalog.byLegacyId(11).id());
+        assertEquals("重生节点异常记录（节录）", ClueCatalog.byLegacyId(11).title());
     }
 
     // ==================== 工具 ====================
@@ -202,15 +200,4 @@ class ClueCatalogTest {
         }
     }
 
-    /** 旧内容读成"原始键值表"，只用来核对标题与编号，不需要映射到具体的类。 */
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> readRawList(String path) throws Exception {
-        try (InputStream stream = ClueCatalogTest.class.getResourceAsStream(path)) {
-            assertNotNull(stream, "缺少内置资源：" + path);
-            try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-                List<Map<String, Object>> parsed = GSON.fromJson(reader, List.class);
-                return parsed == null ? List.of() : parsed;
-            }
-        }
-    }
 }

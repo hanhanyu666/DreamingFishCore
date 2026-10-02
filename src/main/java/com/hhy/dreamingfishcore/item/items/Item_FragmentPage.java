@@ -1,7 +1,6 @@
 package com.hhy.dreamingfishcore.item.items;
 
 import com.hhy.dreamingfishcore.common.util.ItemStackDataHelper;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import net.minecraft.nbt.CompoundTag;
@@ -36,7 +35,8 @@ public class Item_FragmentPage extends Item {
         }
 
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            boolean used = StoryBookDataManager.useFragmentPage(serverPlayer, getFragmentId(stack));
+            // 里程碑 2 收尾后统一按稳定线索 ID 翻页；旧残页（只有整数编号）由 getClueId 映射回来。
+            boolean used = StoryBookDataManager.useCluePage(serverPlayer, getClueId(stack));
             if (used && !player.isCreative()) {
                 stack.shrink(1);
             }
@@ -52,25 +52,21 @@ public class Item_FragmentPage extends Item {
         tooltip.add(Component.literal("§7一张残破的纸。需要拼成完整的才能真正读懂。"));
         tooltip.add(Component.literal("§8右键后获得§f随记本§8，并直接阅读这次整理出的内容"));
 
-        Integer fragmentId = getFragmentId(stack);
-        if (fragmentId != null) {
-            FragmentData fragmentData = StoryBookDataManager.getFragment(fragmentId);
-            if (fragmentData != null) {
-                tooltip.add(Component.literal("§7编号: §f" + fragmentId));
-                tooltip.add(Component.literal("§7标题: §f" + fragmentData.getTitle()));
-            } else {
-                tooltip.add(Component.literal("§c无效编号: §f" + fragmentId));
-            }
+        String clueId = getClueId(stack);
+        if (clueId != null && !clueId.isBlank()) {
+            // 只显示短编号：客户端没有线索目录，标题要等服务端下发，这里不硬猜。
+            tooltip.add(Component.literal("§7线索: §f" + shortLabel(clueId)));
         } else {
-            tooltip.add(Component.literal("§c未绑定片段编号，无法解锁内容"));
+            tooltip.add(Component.literal("§c未绑定线索，无法整理出内容"));
         }
     }
 
-    public static ItemStack createFragmentPage(int fragmentId) {
-        ItemStack stack = new ItemStack(DreamingFishCore_Items.FRAGMENT_PAGE.get());
-        setFragmentId(stack, fragmentId);
-        return stack;
+    /** 短编号：稳定 ID 的最后一段；旧残页只有整数编号时由调用方映射。 */
+    private static String shortLabel(String clueId) {
+        String tail = clueId.substring(clueId.lastIndexOf('/') + 1);
+        return tail.isBlank() ? clueId : tail;
     }
+
 
     /**
      * 按稳定 ID 造一张残页（里程碑 2）。

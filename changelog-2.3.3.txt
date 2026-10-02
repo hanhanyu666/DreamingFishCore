@@ -12,7 +12,9 @@
 修复死亡结算时尸体所在区块未加载，导致复活后尸体永久停留在「待结算」、玩家无法领取的问题。
 
 随机丧尸线索掉落（新）
-12 条线索正文随模组内置，首次开服写入 config/dreamingfishcore/data/fragment_data.json。
+12 条线索正文随模组内置，首次开服写入 config/dreamingfishcore/data/clues.json（旧版 fragment_data.json 不再读取）。
+随机掉落池、保底发放的存在性判定与调试命令现在全部走线索目录，不再读旧的片段文件；
+旧的整数编号继续保留，用于兼容玩家手里已有的残页与旧存档里的收录记录。
 被真人玩家击杀的普通丧尸（僵尸、尸壳）与攻城丧尸按概率掉落残页，概率与开关由
 config/dreamingfishcore/clue_drop.json 控制（默认 0.01%，可整体关闭）。
 玩家已收录的线索不再重复掉落，收齐后不再掉落。
@@ -195,8 +197,8 @@ maxDeposit（默认 10000）。
 /dreamingfish debug infection set <survivor|unstable|stable|relapse|0|1|2> [感染值] 直接设置感染身份。
 /dreamingfish debug infection stabilize|relapse|cure 稳定治疗 / 强制传播复发 / 重构回幸存者。
 /dreamingfish debug infection exposure step [次数]|clear 按真实规则推进或清空接触暴露（单人也能验证警告与转化）。
-/dreamingfish debug clue list 列出线索池里的编号与标题。
-/dreamingfish debug clue grant <编号> [玩家] 直接发放一条线索（幂等，连敲两次只给一张）。
+/dreamingfish clue info 查看线索目录、私密定义与发放入口的规模。
+/dreamingfish clue grant <线索> [玩家] 直接发放一条线索（稳定 ID 与旧编号都认，幂等，连敲两次只给一张）。
 
 组织命令（正式服可用）
 /organization deposit <金额> 向本组织资金池捐款。

@@ -1,6 +1,5 @@
 package com.hhy.dreamingfishcore.gameplay.storybook_system.network;
 
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookEntryViewData;
 import com.hhy.dreamingfishcore.gameplay.storybook_system.client.ui.screen.Screen_StoryFragment;
@@ -47,13 +46,6 @@ public class Packet_OpenStoryFragmentGUI implements net.minecraft.network.protoc
                 view.getTitle(), view.getContent(), view.getTime(), view.getAuthorName(),
                 view.getSource(), view.getObservationSpan(), view.getSample(),
                 view.getConditions());
-    }
-
-    /** 兼容旧的片段定义（内容文件尚未迁移的调用点）。 */
-    public Packet_OpenStoryFragmentGUI(FragmentData fragmentData) {
-        this("", fragmentData.getId(), fragmentData.getStageId(), fragmentData.getChapterId(),
-                fragmentData.getTitle(), fragmentData.getContent(), fragmentData.getTime(),
-                fragmentData.getAuthorName(), "", "", "", "");
     }
 
     public Packet_OpenStoryFragmentGUI(String clueId, int legacyId, int stageId, int chapterId,

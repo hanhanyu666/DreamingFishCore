@@ -1,8 +1,6 @@
 package com.hhy.dreamingfishcore.gameplay.clue_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.FragmentData;
-import com.hhy.dreamingfishcore.gameplay.storybook_system.StoryBookDataManager;
 import com.hhy.dreamingfishcore.item.items.Item_FragmentPage;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -68,28 +66,30 @@ public final class ClueGuaranteeService {
      * 向玩家发放一条保底线索。
      *
      * <p>里程碑 2 起改为委派 {@link ClueGrantService}：发放的动作统一在那边，
-     * 这里保留旧整数编号签名给既有的剧情调用点用（编号会映射到稳定 ID）。</p>
+     * 这里保留旧整数编号签名给既有的剧情调用点用（编号会映射到稳定 ID）。
+     * 存在性判定也交给线索目录，不再查旧的整数内容缓存——两份内容并存时
+     * 那种"旧文件里没有就直接跳过"的静默失败就是收尾要解决的问题。</p>
      *
-     * @return 真的发放了才返回 true；已收录、已持有、编号不存在或数据未加载时返回 false
+     * @return 真的发放了才返回 true；已发现、已持有、编号不存在或数据未加载时返回 false
      */
-    public static boolean grant(ServerPlayer player, int fragmentId) {
+    public static boolean grant(ServerPlayer player, int legacyId) {
         if (player == null || player.level().isClientSide()) {
             return false;
         }
 
-        FragmentData fragment = StoryBookDataManager.getFragment(fragmentId);
-        if (fragment == null) {
-            // 服主可能从内容文件里删掉了这条；不要因此打断剧情事件本身。
-            DreamingFishCore.LOGGER.warn("保底线索 {} 不在当前线索池中，跳过发放", fragmentId);
+        String clueId = ClueCatalog.idForLegacy(legacyId);
+        if (clueId == null) {
+            // 服主可能把这条内容删了，或者旧编号没登记；不要因此打断剧情事件本身。
+            DreamingFishCore.LOGGER.warn("保底线索 {} 没有对应的稳定 ID，跳过发放", legacyId);
             return false;
         }
 
-        // 背包里已经有同编号的未使用残页时不再重复发（避免剧情重入刷物品）。
-        if (isCarrying(player, fragmentId)) {
+        // 背包里已经有同一条的未使用残页时不再重复发（避免剧情重入刷物品）。
+        if (isCarrying(player, clueId)) {
             return false;
         }
 
-        ClueGrantService.Outcome outcome = ClueGrantService.grantLegacy(player, fragmentId);
+        ClueGrantService.Outcome outcome = ClueGrantService.grant(player, clueId);
         return outcome == ClueGrantService.Outcome.GRANTED;
     }
 
@@ -98,19 +98,19 @@ public final class ClueGuaranteeService {
         return fragmentExists && !alreadyOwned && !alreadyCarrying;
     }
 
-    /** 背包（含副手）里是否已经有一张同编号的未使用残页。 */
-    private static boolean isCarrying(ServerPlayer player, int fragmentId) {
-        return carriesFragmentPage(player.getInventory().items, fragmentId)
-                || carriesFragmentPage(player.getInventory().offhand, fragmentId);
+    /** 背包（含副手）里是否已经有一张同一条的未使用残页。 */
+    private static boolean isCarrying(ServerPlayer player, String clueId) {
+        return carriesFragmentPage(player.getInventory().items, clueId)
+                || carriesFragmentPage(player.getInventory().offhand, clueId);
     }
 
-    private static boolean carriesFragmentPage(List<ItemStack> stacks, int fragmentId) {
+    private static boolean carriesFragmentPage(List<ItemStack> stacks, String clueId) {
         for (ItemStack stack : stacks) {
             if (stack == null || stack.isEmpty()) {
                 continue;
             }
-            Integer bound = Item_FragmentPage.getFragmentId(stack);
-            if (bound != null && bound == fragmentId) {
+            String bound = Item_FragmentPage.getClueId(stack);
+            if (bound != null && bound.equals(clueId)) {
                 return true;
             }
         }

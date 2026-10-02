@@ -22,7 +22,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.loading.FMLPaths;
 
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -39,21 +38,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @EventBusSubscriber(modid = DreamingFishCore.MODID)
 public class StoryBookDataManager {
 
-    private static final Path FRAGMENT_DATA_PATH = FMLPaths.CONFIGDIR.get()
-            .resolve(DreamingFishCore.MODID)
-            .resolve("data")
-            .resolve("fragment_data.json");
-
-    // ==================== 片段配置数据 ====================
-    // 片段缓存：fragmentId -> FragmentData
-    public static Map<Integer, FragmentData> FRAGMENT_CACHE = new ConcurrentHashMap<>();
-
-    // 阶段片段索引：stageId -> List<FragmentData>
-    public static Map<Integer, List<FragmentData>> STAGE_INDEX = new ConcurrentHashMap<>();
-
-    // 章节片段索引：chapterId -> List<FragmentData>
-    public static Map<Integer, List<FragmentData>> CHAPTER_INDEX = new ConcurrentHashMap<>();
-
     // ==================== 玩家随记本数据 ====================
     // 玩家数据：playerUUID -> StoryBookData
     public static Map<UUID, StoryBookData> PLAYER_DATA_CACHE = new ConcurrentHashMap<>();
@@ -61,12 +45,8 @@ public class StoryBookDataManager {
     // 待保存的玩家数据队列
     private static final Set<UUID> DIRTY_PLAYERS = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    private static final int MAX_FRAGMENT_ENTRIES = 16_384;
     private static final int MAX_PLAYER_RECORDS = 16_384;
     private static final int MAX_PLAYER_FRAGMENT_ENTRIES = 16_384;
-    private static final int MAX_FRAGMENT_TITLE_LENGTH = 512;
-    private static final int MAX_FRAGMENT_CONTENT_LENGTH = 32_768;
-    private static final int MAX_FRAGMENT_META_LENGTH = 256;
     /** 网络包和玩家排序请求共用的硬上限，避免客户端 VarInt 放大主线程工作量。 */
     public static final int MAX_NETWORK_ORDER_ENTRIES = 16_384;
     public static final int MAX_NETWORK_BOOK_ENTRIES = 16_384;
@@ -82,7 +62,6 @@ public class StoryBookDataManager {
             .serializeNulls()
             .create();
 
-    private static final Type FRAGMENT_LIST_TYPE = new TypeToken<List<FragmentData>>() {}.getType();
     private static final Type PLAYER_DATA_TYPE = new TypeToken<Map<String, StoryBookData>>() {}.getType();
 
     @SubscribeEvent
@@ -93,102 +72,14 @@ public class StoryBookDataManager {
         }
     }
 
-    // ==================== 片段配置数据加载/保存 ====================
-
-    /**
-     * 加载片段配置数据
-     */
-    public static synchronized void loadFragmentData() {
-        FRAGMENT_CACHE.clear();
-        STAGE_INDEX.clear();
-        CHAPTER_INDEX.clear();
-        // 每次重载都从只读保护开始；不能沿用上一个世界/上一次成功加载的状态。
-        BuiltInFragmentCatalog.load();
-
-        if (Files.notExists(FRAGMENT_DATA_PATH) && !saveDefaultFragmentConfig()) {
-            return;
-        }
-
-        try {
-            if (Files.size(FRAGMENT_DATA_PATH) == 0L) {
-                DreamingFishCore.LOGGER.error("片段配置为空，拒绝覆盖文件：{}", FRAGMENT_DATA_PATH);
-                return;
-            }
-
-            List<FragmentData> fragmentList = JsonDataStore.read(
-                    FRAGMENT_DATA_PATH,
-                    GSON,
-                    FRAGMENT_LIST_TYPE,
-                    ArrayList::new);
-            validateFragmentList(fragmentList);
-
-            // 2.3.3 之前默认写入的是空数组（“开服前暂不投放随机线索”）。
-            // 配置文件完整读取并校验通过后，才把内置线索补进去，避免覆盖玩家或服主
-            // 已经编辑过的内容，也避免半份坏配置被内置文案顶掉。
-            if (fragmentList.isEmpty() && BuiltInFragmentCatalog.isAvailable()) {
-                List<FragmentData> builtInFragments = BuiltInFragmentCatalog.fragments();
-                validateFragmentList(builtInFragments);
-                JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, builtInFragments);
-                fragmentList = builtInFragments;
-                DreamingFishCore.LOGGER.info("线索配置为空，已写入内置线索 {} 条", builtInFragments.size());
-            }
-
-            // 先在临时索引中完整构建，最后一次性提交，避免半份坏配置留在运行缓存。
-            Map<Integer, FragmentData> fragments = new LinkedHashMap<>();
-            Map<Integer, List<FragmentData>> stages = new LinkedHashMap<>();
-            Map<Integer, List<FragmentData>> chapters = new LinkedHashMap<>();
-            for (FragmentData fragment : fragmentList) {
-                fragments.put(fragment.getId(), fragment);
-                stages.computeIfAbsent(fragment.getStageId(), k -> new ArrayList<>()).add(fragment);
-                chapters.computeIfAbsent(fragment.getChapterId(), k -> new ArrayList<>()).add(fragment);
-            }
-
-            FRAGMENT_CACHE.putAll(fragments);
-            STAGE_INDEX.putAll(stages);
-            CHAPTER_INDEX.putAll(chapters);
-        } catch (Exception exception) {
-            FRAGMENT_CACHE.clear();
-            STAGE_INDEX.clear();
-            CHAPTER_INDEX.clear();
-            DreamingFishCore.LOGGER.error(
-                    "片段配置及备份读取失败，拒绝覆盖原文件：{}",
-                    FRAGMENT_DATA_PATH,
-                    exception);
-        }
-
-        DreamingFishCore.LOGGER.info("片段数据加载完成，共 {} 条片段，{} 个阶段，{} 个章节",
-                FRAGMENT_CACHE.size(), STAGE_INDEX.size(), CHAPTER_INDEX.size());
-    }
-
-    /**
-     * 保存默认片段配置
-     */
-    private static boolean saveDefaultFragmentConfig() {
-        // 首次开服写入随模组分发的内置线索；内置资源不可用时退回空配置，
-        // 保持与历史版本一致的行为，不会因为文案资源损坏导致开服失败。
-        BuiltInFragmentCatalog.load();
-        List<FragmentData> defaultFragments = BuiltInFragmentCatalog.fragments();
-
-        try {
-            JsonDataStore.writeAtomic(FRAGMENT_DATA_PATH, GSON, defaultFragments);
-            // 这里只负责创建缺失模板；是否可写由后续完整读取+校验决定。
-            DreamingFishCore.LOGGER.info("默认片段配置已保存");
-            return true;
-        } catch (Exception exception) {
-            DreamingFishCore.LOGGER.error("保存默认片段配置失败：{}", FRAGMENT_DATA_PATH, exception);
-            return false;
-        }
-    }
-
     // ==================== 玩家数据加载/保存 ====================
 
     /**
-     * 加载当前世界的玩家随记本数据。片段定义仍从全局配置加载。
+     * 加载当前世界的玩家随记本数据。线索内容由 {@code ClueCatalog} 独立加载。
      */
     public static synchronized void loadWorldData(MinecraftServer server) {
-        // 世界切换/重复启动时不能残留上一个世界的片段、索引或可写状态。
+        // 世界切换/重复启动时不能残留上一个世界的玩家档案或可写状态。
         clearWorldCache();
-        loadFragmentData();
 
         if (server == null) {
             loaded = true;
@@ -300,40 +191,10 @@ public class StoryBookDataManager {
      * 服务器关闭后释放世界级静态缓存，避免下一次开服串档。
      */
     public static synchronized void clearWorldCache() {
-        FRAGMENT_CACHE.clear();
-        STAGE_INDEX.clear();
-        CHAPTER_INDEX.clear();
         PLAYER_DATA_CACHE.clear();
         DIRTY_PLAYERS.clear();
         loaded = false;
         playerDataWritable = false;
-    }
-
-    private static void validateFragmentList(List<FragmentData> fragments) {
-        if (fragments == null) {
-            throw new IllegalStateException("片段配置根节点不是数组");
-        }
-        if (fragments.size() > MAX_FRAGMENT_ENTRIES) {
-            throw new IllegalStateException("片段配置条目超过上限：" + MAX_FRAGMENT_ENTRIES);
-        }
-        Set<Integer> ids = new HashSet<>();
-        for (FragmentData fragment : fragments) {
-            if (fragment == null) {
-                throw new IllegalStateException("片段配置包含空条目");
-            }
-            if (fragment.getId() <= 0 || !ids.add(fragment.getId())) {
-                throw new IllegalStateException("片段 ID 非法或重复：" + fragment.getId());
-            }
-            // 1.20.1 的内置片段使用 chapterId=0 作为历史展示分组；继续允许读取，
-            // 但仍拒绝负数，避免升级后把原本可用的配置误判为损坏并锁成只读。
-            if (fragment.getStageId() <= 0 || fragment.getChapterId() < 0) {
-                throw new IllegalStateException("片段阶段 ID 必须为正数且章节 ID 不能为负数：" + fragment.getId());
-            }
-            requireLength(fragment.getAuthorName(), MAX_FRAGMENT_META_LENGTH, "authorName", fragment.getId());
-            requireLength(fragment.getTime(), MAX_FRAGMENT_META_LENGTH, "time", fragment.getId());
-            requireLength(fragment.getTitle(), MAX_FRAGMENT_TITLE_LENGTH, "title", fragment.getId());
-            requireLength(fragment.getContent(), MAX_FRAGMENT_CONTENT_LENGTH, "content", fragment.getId());
-        }
     }
 
     private static void validatePlayerDataMap(Map<String, StoryBookData> dataMap) {
@@ -356,7 +217,10 @@ public class StoryBookDataManager {
                     || data.getUnlockedFragmentIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
                     || data.getReadFragmentIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
                     || data.getUnlockedChapterIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
-                    || data.getObtainedOrder().size() > MAX_PLAYER_FRAGMENT_ENTRIES) {
+                    || data.getObtainedOrder().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getDiscoveredClueIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getReadClueIds().size() > MAX_PLAYER_FRAGMENT_ENTRIES
+                    || data.getClueOrder().size() > MAX_PLAYER_FRAGMENT_ENTRIES) {
                 throw new IllegalStateException("随记本玩家集合超过上限：" + entry.getKey());
             }
             validatePositiveIds(data.getUnlockedFragmentIds(), "已解锁片段", entry.getKey());
@@ -366,6 +230,13 @@ public class StoryBookDataManager {
             for (Integer id : data.getObtainedOrder()) {
                 if (id == null || id <= 0 || !ordered.add(id)) {
                     throw new IllegalStateException("随记本排序列表含非法/重复片段：" + entry.getKey());
+                }
+            }
+            // 稳定 ID 的发现记录同样要过一遍：空白或重复会让"已发现"判断失真。
+            Set<String> discovered = new HashSet<>();
+            for (String clueId : data.getDiscoveredClueIds()) {
+                if (clueId == null || clueId.isBlank() || !discovered.add(clueId)) {
+                    throw new IllegalStateException("随记本发现记录含非法/重复线索：" + entry.getKey());
                 }
             }
         }
@@ -412,50 +283,6 @@ public class StoryBookDataManager {
         }
     }
 
-    // ==================== 片段查询方法 ====================
-
-    /**
-     * 根据片段ID获取片段数据
-     */
-    public static FragmentData getFragment(int fragmentId) {
-        return FRAGMENT_CACHE.get(fragmentId);
-    }
-
-    /**
-     * 根据阶段ID获取该阶段的所有片段
-     */
-    public static List<FragmentData> getFragmentsByStage(int stageId) {
-        return new ArrayList<>(STAGE_INDEX.getOrDefault(stageId, Collections.emptyList()));
-    }
-
-    /**
-     * 根据章节ID获取该章节的所有片段
-     */
-    public static List<FragmentData> getFragmentsByChapter(int chapterId) {
-        return new ArrayList<>(CHAPTER_INDEX.getOrDefault(chapterId, Collections.emptyList()));
-    }
-
-    /**
-     * 获取所有片段
-     */
-    public static Map<Integer, FragmentData> getAllFragments() {
-        return new HashMap<>(FRAGMENT_CACHE);
-    }
-
-    /**
-     * 获取片段总数
-     */
-    public static int getFragmentCount() {
-        return FRAGMENT_CACHE.size();
-    }
-
-    /**
-     * 检查片段是否存在
-     */
-    public static boolean hasFragment(int fragmentId) {
-        return FRAGMENT_CACHE.containsKey(fragmentId);
-    }
-
     // ==================== 玩家数据查询方法 ====================
 
     /**
@@ -482,21 +309,7 @@ public class StoryBookDataManager {
         return getPlayerStoryBook(player.getUUID());
     }
 
-    /**
-     * 解锁片段
-     */
-    public static boolean unlockFragmentForPlayer(UUID playerUuid, int fragmentId) {
-        if (!hasFragment(fragmentId)) {
-            return false;
-        }
 
-        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
-        boolean unlocked = storyBook.unlockFragment(fragmentId);
-        if (unlocked) {
-            markPlayerDirty(playerUuid);
-        }
-        return unlocked;
-    }
 
     // ==================== 里程碑 2：稳定 ID 的永久发现记录 ====================
 
@@ -560,14 +373,7 @@ public class StoryBookDataManager {
         return unlocked;
     }
 
-    /**
-     * 标记片段已读
-     */
-    public static void markFragmentReadForPlayer(UUID playerUuid, int fragmentId) {
-        StoryBookData storyBook = getPlayerStoryBook(playerUuid);
-        storyBook.markFragmentRead(fragmentId);
-        markPlayerDirty(playerUuid);
-    }
+
 
     /**
      * 检查玩家是否拥有随记本
@@ -712,34 +518,11 @@ public class StoryBookDataManager {
         }
     }
 
-    public static boolean useFragmentPage(ServerPlayer player) {
-        return useFragmentPage(player, null);
-    }
-
     /**
-     * 使用片段残页。
-     * 如果物品指定了 fragmentId，则直接读取对应 json 片段；否则按默认顺序补全下一条内容。
-     */
-    public static boolean useFragmentPage(ServerPlayer player, Integer specifiedFragmentId) {
-        if (specifiedFragmentId == null) {
-            player.sendSystemMessage(Component.literal("§c这张残页没有绑定编号，无法整理出新的内容。"));
-            return false;
-        }
-        // 旧编号映射到稳定 ID 后走同一条新流程。
-        String clueId = com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog
-                .idForLegacy(specifiedFragmentId);
-        if (clueId == null) {
-            player.sendSystemMessage(Component.literal("§c指定的残页编号不存在：§f" + specifiedFragmentId));
-            return false;
-        }
-        return useCluePage(player, clueId);
-    }
-
-    /**
-     * 按稳定 ID 使用一张残页（里程碑 2 的主流程）。
+     * 按稳定 ID 使用一张残页（里程碑 2 收尾后的唯一翻页流程）。
      *
-     * <p>与旧的 {@code useFragmentPage} 行为一致：首次使用发随记本与成就、解锁所属章节、
-     * 标记已读并弹开内容页；差别是"发现"在发放时就已经落盘（ADR 0009），这里只是读取与翻页。</p>
+     * <p>首次使用发随记本与成就、解锁所属章节、标记已读并弹开内容页；
+     * "发现"在发放时就已经落盘（ADR 0009），这里只是读取与翻页。</p>
      */
     public static boolean useCluePage(ServerPlayer player, String clueId) {
         if (player == null || clueId == null || clueId.isBlank()) {

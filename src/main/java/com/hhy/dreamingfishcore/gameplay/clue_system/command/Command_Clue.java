@@ -2,14 +2,18 @@ package com.hhy.dreamingfishcore.gameplay.clue_system.command;
 
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueCatalog;
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueDefinition;
+import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGrantService;
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGrantSource;
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueGuaranteeService;
 import com.hhy.dreamingfishcore.gameplay.clue_system.ClueSecrets;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,7 +44,52 @@ public final class Command_Clue {
         root.then(Commands.literal("clue")
                 .then(Commands.literal("info").executes(Command_Clue::info))
                 .then(Commands.literal("audit").executes(Command_Clue::audit))
-                .then(Commands.literal("reload").executes(Command_Clue::reload)));
+                .then(Commands.literal("reload").executes(Command_Clue::reload))
+                // 管理员手动补页：稳定 ID 与旧编号都认（旧编号靠 catalog 的映射），
+                // 是给新线索（没有历史编号）做验收测试的唯一手段。
+                .then(Commands.literal("grant")
+                        .then(Commands.argument("线索", StringArgumentType.string())
+                                .executes(ctx -> grant(ctx,
+                                        StringArgumentType.getString(ctx, "线索"), null))
+                                .then(Commands.argument("玩家", EntityArgument.player())
+                                        .executes(ctx -> grant(ctx,
+                                                StringArgumentType.getString(ctx, "线索"),
+                                                EntityArgument.getPlayer(ctx, "玩家")))))));
+    }
+
+    private static int grant(CommandContext<CommandSourceStack> context, String key,
+                             ServerPlayer target) {
+        ServerPlayer resolved = target;
+        if (resolved == null) {
+            try {
+                resolved = context.getSource().getPlayerOrException();
+            } catch (Exception exception) {
+                context.getSource().sendFailure(Component.literal("请指定玩家，或以玩家身份执行"));
+                return 0;
+            }
+        }
+        String clueId = ClueCatalog.byId(key) != null
+                ? key
+                : ClueCatalog.idForLegacy(parseLegacyId(key));
+        if (clueId == null) {
+            context.getSource().sendFailure(Component.literal(
+                    "找不到线索：§f" + key + "§c（可用稳定 ID 或旧编号，用 /dreamingfish clue info 看目录规模）"));
+            return 0;
+        }
+        ServerPlayer player = resolved;
+        ClueGrantService.Outcome outcome = ClueGrantService.grant(player, clueId);
+        context.getSource().sendSuccess(() -> Component.literal(
+                "发放 " + clueId + " → " + player.getScoreboardName() + " 结果：" + outcome), true);
+        return outcome == ClueGrantService.Outcome.GRANTED ? 1 : 0;
+    }
+
+    /** 旧编号解析：不是数字就返回 0（catalog 里必定查不到）。 */
+    private static int parseLegacyId(String key) {
+        try {
+            return Integer.parseInt(key.trim());
+        } catch (NumberFormatException exception) {
+            return 0;
+        }
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {
