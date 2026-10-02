@@ -225,7 +225,8 @@ final class OrganizationViews {
             card.add(hint("还没有登记组织领地；登记后在领地内放置并绑定聚居地过滤装置即可"));
         } else {
             for (OrganizationViewData.TerritoryLine line : detail.territories()) {
-                card.add(territoryRow(terminal, line, detail.canManageTerritories(), true));
+                card.add(territoryRow(terminal, line, detail.canManageTerritories(),
+                        detail.canManageCoreTerritories(), true));
             }
         }
         if (detail.canManageTerritories()) {
@@ -234,7 +235,7 @@ final class OrganizationViews {
                 card.add(hint("没有可登记的领地（需要先用圈地杖与 /confirm_claim 圈地）"));
             } else {
                 for (OrganizationViewData.TerritoryLine line : detail.availableTerritories()) {
-                    card.add(territoryRow(terminal, line, true, false));
+                    card.add(territoryRow(terminal, line, true, false, false));
                 }
             }
         }
@@ -259,8 +260,16 @@ final class OrganizationViews {
                 .background(0x40060A0E).border(1.0F, UiColor.withAlpha(color, 0.18F)).grow(1.0F).basis(0.0F);
     }
 
+    /**
+     * 领地行。
+     *
+     * @param actionable     当前职位能否登记/移除领地（会长与管理员）
+     * @param canManageCore  当前职位能否设置核心领地（会长与管理员；与上面同档但独立传参，
+     *                       以后要单独收紧标记权时只改调用处）
+     * @param registered     这行是已登记领地（true）还是可登记的自有领地（false）
+     */
     private static UiNode<?> territoryRow(TerminalScreen terminal, OrganizationViewData.TerritoryLine line,
-                                          boolean actionable, boolean registered) {
+                                          boolean actionable, boolean canManageCore, boolean registered) {
         UiNode<?> info;
         if (line.missing()) {
             info = Text.of("已失效的登记（领地不存在或读不到）").style(TextStyle.LABEL).color(TerminalUi.ROSE).singleLine();
@@ -274,6 +283,16 @@ final class OrganizationViews {
                         info.grow(1.0F).shrink(1.0F))
                 .gap(Theme.Space.SM).alignItems(Align.CENTER).padding(Theme.Space.SM, Theme.Space.XS + 1.0F)
                 .radius(Theme.Radius.MD).background(0x30060A0E);
+
+        if (line.core()) {
+            // 核心领地对普通成员是"看得见、不能用作场地"：徽标要给所有人看，按钮只给管理员。
+            row.add(TerminalUi.chip("核心领地", TerminalUi.GOLD));
+            if (!canManageCore) {
+                row.add(Text.of("仅会长与管理员可用作场地").style(TextStyle.CAPTION)
+                        .color(TerminalUi.STEEL).singleLine());
+            }
+        }
+
         if (actionable && !line.territoryId().isBlank()) {
             row.add(registered
                     ? Button.of("移除").outlined().small().onClick(() -> TerminalPrompt.confirm(terminal, "移除组织领地",
@@ -281,6 +300,24 @@ final class OrganizationViews {
                             () -> send(Packet_OrganizationActionRequest.Action.UNREGISTER_TERRITORY, line.territoryId(), "", false, 0)))
                     : Button.of("登记").tonal().accentColor(TerminalUi.GREEN).small()
                             .onClick(() -> send(Packet_OrganizationActionRequest.Action.REGISTER_TERRITORY, line.territoryId(), "", false, 0)));
+        }
+        if (registered && actionable && canManageCore && !line.territoryId().isBlank()) {
+            if (line.core()) {
+                row.add(Button.of("取消核心").outlined().small()
+                        .onClick(() -> TerminalPrompt.confirm(terminal, "取消核心领地",
+                                "取消「" + line.name() + "」的核心标记？之后普通成员也能把它当作场地或据点使用。",
+                                true,
+                                () -> send(Packet_OrganizationActionRequest.Action.SET_CORE_TERRITORY,
+                                        line.territoryId(), "", false, 0))));
+            } else {
+                row.add(Button.of("设为核心").tonal().accentColor(TerminalUi.GOLD).small()
+                        .onClick(() -> TerminalPrompt.confirm(terminal, "设为核心领地",
+                                "把「" + line.name() + "」设为核心领地？之后普通成员不能把它当作场地或据点使用，"
+                                        + "只有会长与管理员可以。",
+                                true,
+                                () -> send(Packet_OrganizationActionRequest.Action.SET_CORE_TERRITORY,
+                                        line.territoryId(), "", true, 0))));
+            }
         }
         return row;
     }

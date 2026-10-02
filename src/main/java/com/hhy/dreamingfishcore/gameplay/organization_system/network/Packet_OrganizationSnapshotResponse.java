@@ -75,6 +75,7 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
             buffer.writeVarInt(Math.max(0, detail.maxDeposit()));
             buffer.writeBoolean(detail.canDepositFunds());
             buffer.writeBoolean(detail.canManageTerritories());
+            buffer.writeBoolean(detail.canManageCoreTerritories());
             buffer.writeVarInt(Math.max(0, detail.maxTerritories()));
             buffer.writeVarInt(Math.max(0, detail.maxFilterDevices()));
             writeTerritories(buffer, detail.territories());
@@ -96,6 +97,7 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
             buffer.writeVarInt(line.maxZ());
             buffer.writeVarInt(Math.max(0, line.area()));
             buffer.writeBoolean(line.missing());
+            buffer.writeBoolean(line.core());
         }
     }
 
@@ -161,6 +163,7 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
             int maxDeposit = buffer.readVarInt();
             boolean canDepositFunds = buffer.readBoolean();
             boolean canManageTerritories = buffer.readBoolean();
+            boolean canManageCoreTerritories = buffer.readBoolean();
             int maxTerritories = buffer.readVarInt();
             int maxFilterDevices = buffer.readVarInt();
             List<OrganizationViewData.TerritoryLine> territories = readTerritories(buffer);
@@ -170,7 +173,8 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
                     canReview, canInvite, canEditAnnouncement, canManageMembers,
                     members, applicants, invited, createdAt,
                     funds, maxDeposit, canDepositFunds, canManageTerritories,
-                    maxTerritories, maxFilterDevices, territories, available, devices);
+                    canManageCoreTerritories, maxTerritories, maxFilterDevices, territories,
+                    available, devices);
         }
 
         return new Packet_OrganizationSnapshotResponse(new OrganizationViewData.Snapshot(
@@ -206,6 +210,7 @@ public record Packet_OrganizationSnapshotResponse(OrganizationViewData.Snapshot 
                     buffer.readVarInt(),
                     buffer.readVarInt(),
                     buffer.readVarInt(),
+                    buffer.readBoolean(),
                     buffer.readBoolean()));
         }
         return List.copyOf(lines);

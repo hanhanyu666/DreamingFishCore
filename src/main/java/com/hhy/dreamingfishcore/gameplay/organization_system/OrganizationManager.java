@@ -1116,18 +1116,22 @@ public final class OrganizationManager {
             EconomySystemBridge.TerritoryInfo info = linked.info();
             if (info == null) {
                 territories.add(new OrganizationViewData.TerritoryLine(
-                        linked.territoryId(), "已失效的登记", "", 0, 0, 0, 0, 0, true));
+                        linked.territoryId(), "已失效的登记", "", 0, 0, 0, 0, 0, true,
+                        organization.isCoreTerritory(linked.territoryId())));
                 continue;
             }
             territories.add(new OrganizationViewData.TerritoryLine(
                     info.territoryId(), info.name(), info.dimensionId(),
-                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false,
+                    organization.isCoreTerritory(info.territoryId())));
         }
         List<OrganizationViewData.TerritoryLine> available = new ArrayList<>();
         for (EconomySystemBridge.TerritoryInfo info : listing.available()) {
+            // 可登记列表里的领地还没登记，因此不可能是核心领地。
             available.add(new OrganizationViewData.TerritoryLine(
                     info.territoryId(), info.name(), info.dimensionId(),
-                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false));
+                    info.minX(), info.minZ(), info.maxX(), info.maxZ(), info.area(), false,
+                    false));
         }
         List<OrganizationViewData.DeviceLine> devices = new ArrayList<>();
         for (SettlementFilterRegistry.Device device : SettlementFilterRegistry.devicesOf(organization.id())) {
@@ -1148,6 +1152,7 @@ public final class OrganizationManager {
                 organization.funds(), config().getMaxDeposit(),
                 OrganizationPermissions.canDepositFunds(myRank),
                 OrganizationPermissions.canManageTerritories(myRank),
+                OrganizationPermissions.canManageCoreTerritories(myRank),
                 config().getMaxRegisteredTerritories(), config().getMaxFilterDevices(),
                 List.copyOf(territories), List.copyOf(available), List.copyOf(devices));
     }

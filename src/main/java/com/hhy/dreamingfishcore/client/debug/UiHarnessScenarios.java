@@ -220,12 +220,12 @@ final class UiHarnessScenarios {
                 "LEADER", "会长", true, true, true, true, members,
                 List.of(new OrganizationViewData.MemberLine("b1", "拾荒的阿洛", "MEMBER", "成员", true)),
                 List.of(new OrganizationViewData.MemberLine("b2", "雾港旅人", "MEMBER", "成员", false)),
-                System.currentTimeMillis(), 1280, 10000, true, true, 4, 2,
+                System.currentTimeMillis(), 1280, 10000, true, true, true, 4, 2,
                 List.of(new OrganizationViewData.TerritoryLine("t1", "灯塔聚居地", "minecraft:overworld",
-                                -320, 410, -256, 470, 3840, false),
-                        new OrganizationViewData.TerritoryLine("t2", "", "minecraft:overworld", 0, 0, 0, 0, 0, true)),
+                                -320, 410, -256, 470, 3840, false, true),
+                        new OrganizationViewData.TerritoryLine("t2", "", "minecraft:overworld", 0, 0, 0, 0, 0, true, false)),
                 List.of(new OrganizationViewData.TerritoryLine("t3", "海岸菜园", "minecraft:overworld",
-                        -180, 520, -150, 548, 840, false)),
+                        -180, 520, -150, 548, 840, false, false)),
                 List.of(new OrganizationViewData.DeviceLine("minecraft:overworld", -290, 72, 436, true),
                         new OrganizationViewData.DeviceLine("minecraft:overworld", -270, 70, 455, false)));
         List<OrganizationViewData.Summary> organizations = List.of(

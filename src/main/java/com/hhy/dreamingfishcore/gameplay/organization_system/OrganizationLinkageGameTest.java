@@ -71,6 +71,9 @@ public class OrganizationLinkageGameTest {
         // 模拟玩家没有领地，所以这里构造数据而不是走登记流程（登记规则由单测覆盖）。
         String territoryId = "11111111-2222-3333-4444-555555555555";
         organization.registerTerritory(territoryId, 42L);
+        // 核心领地标记：会长/管理员才能设，且必须跟着快照过网（普通成员的界面靠它显示徽标）。
+        helper.assertTrue(organization.setCoreTerritory(territoryId, true),
+                "会长应当能把已登记的领地设为核心领地");
 
         String dimensionId = helper.getLevel().dimension().location().toString();
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -86,6 +89,8 @@ public class OrganizationLinkageGameTest {
         helper.assertTrue(before.territories().size() == 1, "应带上那条领地引用");
         helper.assertTrue(before.devices().size() == 1, "应带上那台设备");
         helper.assertTrue(before.canManageTerritories(), "会长应当能管理组织领地");
+        helper.assertTrue(before.canManageCoreTerritories(), "会长应当能设置核心领地");
+        helper.assertTrue(before.territories().get(0).core(), "快照里应带上核心领地标记");
         helper.assertTrue(before.canDepositFunds(), "成员应当能捐款");
 
         // 真实编解码往返：字段顺序/类型写错会在这里暴露。
@@ -113,6 +118,10 @@ public class OrganizationLinkageGameTest {
                 "设备坐标应原样过网");
         helper.assertTrue(after.canManageTerritories() == before.canManageTerritories(),
                 "权限开关应一致");
+        helper.assertTrue(after.canManageCoreTerritories() == before.canManageCoreTerritories(),
+                "核心领地权限开关应一致");
+        helper.assertTrue(after.territories().get(0).core(),
+                "核心领地标记必须原样过网（写读顺序错位会在这里暴露）");
 
         // 清理：组织与设备表都是全局状态，别影响同一服务器上的其它 gametest。
         SettlementFilterRegistry.unregister(dimensionId, pos.getX(), pos.getY(), pos.getZ());
