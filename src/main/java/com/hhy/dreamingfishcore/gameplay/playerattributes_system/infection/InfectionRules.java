@@ -107,6 +107,17 @@ public final class InfectionRules {
     /** 抑制剂单次降低的感染值；只对尚未突变的幸存者有效。 */
     public static final float SUPPRESSANT_INFECTION_REDUCTION = 30.0F;
 
+    /**
+     * 感染抑制剂（低剂量）单次压制的感染读数。
+     *
+     * <p>与上面的 {SUPPRESSANT_INFECTION_REDUCTION} 不同：这两种是**道具**剂量，
+     * 不限制身份（幸存者与感染者都能吃），读数被压到 0 时一并解除感染者身份。</p>
+     */
+    public static final float SUPPRESSANT_DOSE_LOW = 5.0F;
+
+    /** 感染抑制剂（高剂量）单次压制的感染读数。 */
+    public static final float SUPPRESSANT_DOSE_HIGH = 15.0F;
+
     // ==================== 重生代价（ADR 0016） ====================
 
     /** 幸存者的标准重建消耗最低。 */

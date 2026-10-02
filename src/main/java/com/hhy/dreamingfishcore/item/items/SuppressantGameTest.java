@@ -3,7 +3,8 @@ package com.hhy.dreamingfishcore.item.items;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesData;
 import com.hhy.dreamingfishcore.gameplay.playerattributes_system.PlayerAttributesDataManager;
-import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.PlayerInfectionManager;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionIdentity;
+import com.hhy.dreamingfishcore.gameplay.playerattributes_system.infection.InfectionTreatmentService;
 import com.hhy.dreamingfishcore.item.DreamingFishCore_Items;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -52,29 +53,68 @@ public class SuppressantGameTest {
         helper.succeed();
     }
 
-    /** 剂量作用于真实感染值：低剂量精确扣 5，高剂量在不足时清零而不会变成负数。 */
+    /**
+     * 剂量作用于真实感染值：读数按剂量下降，**归零时解除感染者身份**。
+     *
+     * <p>三种身份都过一遍：幸存者只降读数；不稳定感染者与稳定感染者读数归零后都变回幸存者
+     * （后者是用户明确选择的取舍——稳定感染者反复服用可以绕开重构疗程）。</p>
+     */
     @GameTest(template = "empty")
-    public static void dosesReduceInfectionAndClampAtZero(GameTestHelper helper) {
-        ServerPlayer player = authenticatedPlayer(helper);
-        PlayerAttributesData data = dataOf(player);
+    public static void dosesReduceInfectionAndClearIdentityAtZero(GameTestHelper helper) {
+        ServerPlayer survivor = authenticatedPlayer(helper);
+        PlayerAttributesData survivorData = dataOf(survivor);
+        survivorData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
+        survivorData.setCurrentInfection(20.0F);
+        PlayerAttributesDataManager.updatePlayerAttributesData(survivor, survivorData);
 
-        data.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_NONE);
-        data.setCurrentInfection(20.0F);
-        PlayerAttributesDataManager.updatePlayerAttributesData(player, data);
-        PlayerInfectionManager.reduceInfection(player, Item_InfectionSuppressant.LOW_DOSE);
-        helper.assertValueEqual(dataOf(player).getCurrentInfection(), 15.0F,
-                "20 点感染用低剂量应剩 15 点");
+        // 幸存者：20 - 5 = 15，身份不变
+        helper.assertValueEqual(InfectionTreatmentService.applyDoseSuppressant(
+                        survivor, Item_InfectionSuppressant.LOW_DOSE),
+                InfectionTreatmentService.TreatmentOutcome.APPLIED, "幸存者低剂量应当生效");
+        helper.assertValueEqual(dataOf(survivor).getCurrentInfection(), 15.0F,
+                "20 点读数用低剂量应剩 15 点");
+        helper.assertValueEqual(dataOf(survivor).getInfectionIdentity(), InfectionIdentity.SURVIVOR,
+                "幸存者吃药不应改变身份");
 
-        PlayerInfectionManager.reduceInfection(player, Item_InfectionSuppressant.HIGH_DOSE);
-        helper.assertValueEqual(dataOf(player).getCurrentInfection(), 0.0F,
-                "15 点感染用高剂量应清零");
+        // 再吃高剂量：15 - 15 = 0，仍是幸存者
+        InfectionTreatmentService.applyDoseSuppressant(survivor,
+                Item_InfectionSuppressant.HIGH_DOSE);
+        helper.assertValueEqual(dataOf(survivor).getCurrentInfection(), 0.0F,
+                "15 点读数用高剂量应清零");
 
-        // 再吃一次：已经 0 了不能变成负数（这也是物品拒绝消耗的依据）。
-        PlayerInfectionManager.reduceInfection(player, Item_InfectionSuppressant.HIGH_DOSE);
-        helper.assertValueEqual(dataOf(player).getCurrentInfection(), 0.0F,
-                "感染进度为 0 时继续用药不能下溢");
-        helper.assertFalse(Item_InfectionSuppressant.canTreat(0.0F),
-                "感染进度为 0 时不应允许服用");
+        // 读数 0 且不是感染者：没有可做的事，物品据此不消耗
+        helper.assertValueEqual(InfectionTreatmentService.applyDoseSuppressant(
+                        survivor, Item_InfectionSuppressant.HIGH_DOSE),
+                InfectionTreatmentService.TreatmentOutcome.NOTHING_TO_DO,
+                "读数 0 的幸存者再吃药应判定为无事可做");
+        helper.assertFalse(Item_InfectionSuppressant.canTreat(0.0F, false),
+                "读数 0 且非感染者不应允许服用");
+
+        // 不稳定感染者：读数归零时必须解除身份
+        ServerPlayer unstable = authenticatedPlayer(helper);
+        PlayerAttributesData unstableData = dataOf(unstable);
+        unstableData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_ONE);
+        unstableData.setCurrentInfection(10.0F);
+        PlayerAttributesDataManager.updatePlayerAttributesData(unstable, unstableData);
+        InfectionTreatmentService.applyDoseSuppressant(unstable,
+                Item_InfectionSuppressant.HIGH_DOSE);
+        helper.assertValueEqual(dataOf(unstable).getCurrentInfection(), 0.0F,
+                "不稳定感染者读数应被压到 0");
+        helper.assertValueEqual(dataOf(unstable).getInfectionIdentity(), InfectionIdentity.SURVIVOR,
+                "读数归零后不稳定感染者应恢复为幸存者");
+
+        // 稳定感染者：同样归零解身份（已知且明确选择的副作用）
+        ServerPlayer stable = authenticatedPlayer(helper);
+        PlayerAttributesData stableData = dataOf(stable);
+        stableData.setInfectionLevel(PlayerAttributesData.INFECTION_LEVEL_TWO);
+        stableData.setCurrentInfection(10.0F);
+        PlayerAttributesDataManager.updatePlayerAttributesData(stable, stableData);
+        InfectionTreatmentService.applyDoseSuppressant(stable,
+                Item_InfectionSuppressant.HIGH_DOSE);
+        helper.assertValueEqual(dataOf(stable).getCurrentInfection(), 0.0F,
+                "稳定感染者读数应被压到 0");
+        helper.assertValueEqual(dataOf(stable).getInfectionIdentity(), InfectionIdentity.SURVIVOR,
+                "读数归零后稳定感染者也会变回幸存者（既定取舍）");
         helper.succeed();
     }
 
