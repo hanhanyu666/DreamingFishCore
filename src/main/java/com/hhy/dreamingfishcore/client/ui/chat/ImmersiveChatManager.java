@@ -15,7 +15,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.ChatVisiblity;
 import net.minecraft.world.level.storage.LevelResource;
@@ -62,24 +61,32 @@ public final class ImmersiveChatManager {
     private static final int HISTORY_LOAD_LIMIT = 450;
     private static final int HISTORY_FILE_DAYS = 5;
     private static final int OUTER_PADDING = 8;
-    private static final int PLAYER_HEAD_SIZE = 16;
-    private static final int PLAYER_HEAD_GAP = 5;
-    private static final int HEADER_HEIGHT = 10;
+    /** 头像边长；名字一行与正文都从头像右侧 {@link #CONTENT_INDENT} 处开始。 */
+    private static final int HEAD_SIZE = 12;
+    private static final int CONTENT_INDENT = 17;
+    private static final int HEADER_HEIGHT = 9;
+    private static final int QUOTE_LINE_HEIGHT = 9;
     private static final int BODY_LINE_HEIGHT = 10;
     private static final int ENTRY_GAP = 4;
-    private static final int SYSTEM_LINE_HEIGHT = 10;
+    /** 系统消息比玩家消息小一号、颜色更淡，前面一个金色小圆点。 */
+    private static final int SYSTEM_INDENT = 8;
+    private static final float SYSTEM_TEXT_SCALE = 0.84F;
+    private static final int SYSTEM_LINE_HEIGHT = 9;
     private static final float CHAT_TEXT_SCALE = 0.90f;
+    private static final float NAME_SCALE = 0.8F;
+    private static final float TAG_SCALE = 0.5F;
+    private static final float TITLE_SCALE = 0.62F;
     private static final int UNFOCUSED_SIDE_ANIMATION_MS = 220;
     private static final int UNFOCUSED_LIFETIME_MS = 13_000;
     private static final int MIN_ALPHA = 4;
     private static final int DRAG_HANDLE_HEIGHT = 8;
     private static final int RESIZE_HANDLE_SIZE = 11;
     private static final int BOTTOM_RESIZE_HEIGHT = 6;
-    private static final int FOCUSED_PANEL_RADIUS = 6;
-    private static final int UNFOCUSED_PANEL_RADIUS = 5;
-    private static final int INPUT_PANEL_RADIUS = 5;
+    private static final float PANEL_RADIUS = 7.0F;
     private static final int INPUT_BOTTOM_MARGIN = 5;
     private static final int INPUT_PANEL_HEIGHT = 18;
+    /** 输入框左侧留给提示符“›”的宽度。 */
+    private static final int INPUT_PROMPT_WIDTH = 9;
     private static final int COMMAND_SUGGESTION_GAP = 2;
     private static final int SCROLLBAR_HIT_PADDING = 3;
     private static final long CLEAR_CONFIRMATION_MS = 3_000L;
@@ -88,20 +95,19 @@ public final class ImmersiveChatManager {
     private static final int QUOTE_PREVIEW_MARGIN_X = 8;
     private static final int QUOTE_PREVIEW_CLOSE_SIZE = 10;
 
-    private static final int PANEL_BG = 0xA025282A;
-    private static final int MENTION_HIGHLIGHT_BG = 0xFF596166;
-    private static final int MENTION_LABEL_COLOR = 0xFFFFD54A;
-    private static final String MENTION_LABEL = "（@了我）";
+    private static final String MENTION_TAG = "@你";
     private static final String REPEAT_LABEL_PREFIX = " (重复 ";
     private static final String REPEAT_LABEL_SUFFIX = ")";
     private static final String CLEAR_CONFIRMATION_TEXT = "再按两下右键才能清空当前聊天记录";
     private static final String CLEAR_FINAL_CONFIRMATION_TEXT = "再按一下右键确认清空当前聊天记录";
 
-    // One shared deep-gray chat surface. Individual entries do not draw their own cards.
-    private static final int MESSAGE_BG = 0xFF25282A;
-    private static final int BODY_COLOR = 0xFFE8E8E4;
+    private static final int BODY_COLOR = 0xFFEEE8D8;
     private static final int NAME_COLOR = 0xFFF1F1EE;
-    private static final int MUTED_COLOR = 0xFFA7AAA7;
+    private static final int SYSTEM_COLOR = 0xFFA9A79F;
+    private static final int QUOTE_COLOR = 0xFF8F9496;
+    private static final int GOLD = 0xFFE8C482;
+    /** 每条消息后面那条向右渐隐的暗带的底色。 */
+    private static final int SCRIM = 0x0A0C0E;
 
     private static final List<ChatEntry> MESSAGES = new ArrayList<>();
     private static final Map<UUID, PlayerInfo> CACHED_PLAYER_INFO = new HashMap<>();
@@ -302,8 +308,6 @@ public final class ImmersiveChatManager {
         HudCanvas.paintNow(graphics, canvas -> {
             if (focused) {
                 drawFocusedPanel(canvas, layout);
-            } else {
-                drawUnfocusedPanel(canvas, layouts, viewportX, viewportY, viewportWidth, viewportBottom, now);
             }
 
             canvas.pushClip(layout.x(), layout.y(), layout.width(), layout.height(), 0.0F);
@@ -363,10 +367,9 @@ public final class ImmersiveChatManager {
         // Keeping it close to vanilla also lets CommandSuggestions anchor above it naturally.
         int marginX = 7;
         int inputHeight = 12;
-
-        input.setX(marginX);
+        input.setX(marginX + INPUT_PROMPT_WIDTH);
         input.setY(screenHeight - inputHeight - INPUT_BOTTOM_MARGIN);
-        input.setWidth(Math.max(80, screenWidth - marginX * 2));
+        input.setWidth(Math.max(80, screenWidth - marginX * 2 - INPUT_PROMPT_WIDTH));
         input.setHeight(inputHeight);
     }
 
@@ -394,9 +397,7 @@ public final class ImmersiveChatManager {
         int width = screenWidth - 4;
         int height = INPUT_PANEL_HEIGHT;
 
-        // One background and one quiet border: no top accent, shadow, or inset frame.
-        HudCanvas.paintNow(graphics, canvas -> panel(canvas, x, y, width, height,
-                INPUT_PANEL_RADIUS, 0xB80A0C0E, 0x426B7276));
+        HudCanvas.paintNow(graphics, canvas -> drawInputPanel(canvas, x, y, width, height));
     }
 
     /** Clears the pending message quote when the chat screen closes. */
@@ -683,36 +684,6 @@ public final class ImmersiveChatManager {
         return CACHED_LAYOUTS;
     }
 
-    private static List<EntryLayout> buildLayouts(Font font, int viewportWidth) {
-        List<EntryLayout> result = new ArrayList<>(MESSAGES.size());
-        for (ChatEntry entry : MESSAGES) {
-            Component displayBody = displayBody(entry);
-            if (entry.kind() == EntryKind.PLAYER) {
-                int contentWidth = Math.max(48, viewportWidth - PLAYER_HEAD_SIZE - PLAYER_HEAD_GAP);
-                List<FormattedCharSequence> bodyLines = font.split(displayBody, unscaledWidth(contentWidth));
-                int bodyHeight = Math.max(BODY_LINE_HEIGHT, bodyLines.size() * BODY_LINE_HEIGHT);
-                boolean mentioned = isMentionedForLocalPlayer(entry);
-                boolean wrappedHeader = shouldWrapPlayerHeader(font, entry, contentWidth, mentioned);
-                int headerHeight = wrappedHeader
-                        ? HEADER_HEIGHT * 2
-                        : HEADER_HEIGHT;
-                List<FormattedCharSequence> quoteLines = entry.hasQuote()
-                        ? font.split(Component.literal("@" + entry.quotedPlayerName() + ": " + entry.quotedBody())
-                        .withStyle(Style.EMPTY.withItalic(true)), unscaledWidth(Math.max(40, contentWidth - 8)))
-                        : List.of();
-                int quoteHeight = quoteLines.isEmpty() ? 0 : Math.min(2, quoteLines.size()) * BODY_LINE_HEIGHT + 4;
-                int height = Math.max(PLAYER_HEAD_SIZE + 3, headerHeight + quoteHeight + bodyHeight + 3);
-                result.add(new EntryLayout(entry, bodyLines, quoteLines, quoteHeight, height, mentioned, wrappedHeader));
-            } else {
-                int contentWidth = Math.max(60, viewportWidth - 10);
-                List<FormattedCharSequence> bodyLines = font.split(displayBody, unscaledWidth(contentWidth));
-                int height = Math.max(SYSTEM_LINE_HEIGHT + 4, bodyLines.size() * SYSTEM_LINE_HEIGHT + 6);
-                result.add(new EntryLayout(entry, bodyLines, List.of(), 0, height, false, false));
-            }
-        }
-        return List.copyOf(result);
-    }
-
     private static void invalidateLayoutCache() {
         MESSAGE_LAYOUT_REVISION++;
         CACHED_LAYOUT_REVISION = Long.MIN_VALUE;
@@ -725,270 +696,6 @@ public final class ImmersiveChatManager {
         }
         return entry.body().copy().append(Component.literal(
                 REPEAT_LABEL_PREFIX + entry.repeatCount() + REPEAT_LABEL_SUFFIX));
-    }
-
-    private static void drawUnfocusedPanel(UiCanvas canvas, List<EntryLayout> layouts,
-                                           int viewportX, int viewportY, int viewportWidth,
-                                           int viewportBottom, long now) {
-        int cursorBottom = viewportBottom;
-        int visibleTop = viewportBottom;
-        int strongestAlpha = 0;
-        float panelVisibility = 0.0f;
-        boolean hasVisibleEntry = false;
-
-        for (int index = layouts.size() - 1; index >= 0; index--) {
-            EntryLayout entryLayout = layouts.get(index);
-            float visibility = unfocusedVisibility(entryLayout.entry().timestamp(), now);
-            int alpha = Math.round(230.0f * visibility);
-            if (alpha <= MIN_ALPHA) {
-                continue;
-            }
-
-            int entryTop = cursorBottom - entryLayout.height();
-            if (entryTop < viewportBottom && cursorBottom > viewportY) {
-                hasVisibleEntry = true;
-                visibleTop = Math.max(viewportY, entryTop);
-                strongestAlpha = Math.max(strongestAlpha, alpha);
-                panelVisibility = Math.max(panelVisibility, visibility);
-            }
-
-            cursorBottom = entryTop - ENTRY_GAP;
-            if (cursorBottom < viewportY) {
-                break;
-            }
-        }
-
-        if (!hasVisibleEntry) {
-            return;
-        }
-
-        int backgroundTop = Math.max(viewportY - 4, visibleTop - 4);
-        int backgroundBottom = viewportBottom + 4;
-        int backgroundAlpha = Math.min(138, Math.round(strongestAlpha * 0.56f));
-        boolean revealPanel = panelVisibility < 0.999f;
-        if (revealPanel) {
-            int panelWidth = viewportWidth + 10;
-            int revealRight = viewportX - 5 + Math.max(1, Math.round(panelWidth * panelVisibility));
-            canvas.pushClip(viewportX - 5, backgroundTop, revealRight - (viewportX - 5), backgroundBottom - backgroundTop, 0.0F);
-        }
-        panel(
-                canvas,
-                viewportX - 5,
-                backgroundTop,
-                viewportWidth + 10,
-                backgroundBottom - backgroundTop,
-                UNFOCUSED_PANEL_RADIUS,
-                withAlpha(MESSAGE_BG, backgroundAlpha),
-                0x00000000
-        );
-        if (revealPanel) {
-            canvas.popClip();
-        }
-    }
-
-    private static void drawEntry(UiCanvas canvas, Font font, EntryLayout layout,
-                                  int x, int y, int width, int alpha, boolean focused) {
-        if (layout.entry().kind() == EntryKind.PLAYER) {
-            drawPlayerEntry(canvas, font, layout, x, y, width, alpha, focused);
-        } else {
-            drawSystemEntry(canvas, font, layout, x, y, width, alpha, focused);
-        }
-    }
-
-    private static void drawPlayerEntry(UiCanvas canvas, Font font, EntryLayout layout, int x, int y,
-                                        int width, int alpha, boolean focused) {
-        ChatEntry entry = layout.entry();
-
-        if (layout.mentioned()) {
-            int highlightAlpha = focused ? 154 : Math.min(138, Math.round(alpha * 0.68f));
-            panel(canvas, x - 4, y - 1, width + 8, layout.height() + 2,
-                    4, withAlpha(MENTION_HIGHLIGHT_BG, highlightAlpha), 0x00000000);
-        }
-
-        int headY = y + 2;
-        drawPlayerHead(canvas, entry, x, headY, alpha);
-        if (focused && !entry.playerName().isBlank()) {
-            String quoteBody = entry.body().getString();
-            HIT_AVATARS.add(new HitAvatar(x, headY, PLAYER_HEAD_SIZE, entry.playerName(), quoteBody));
-            HIT_PLAYER_MESSAGES.add(new HitPlayerMessage(x - 4, y, width + 8, layout.height(),
-                    entry.playerName(), quoteBody));
-        }
-        int contentX = x + PLAYER_HEAD_SIZE + PLAYER_HEAD_GAP;
-        int contentWidth = Math.max(42, width - PLAYER_HEAD_SIZE - PLAYER_HEAD_GAP);
-        boolean wrappedHeader = layout.wrappedHeader();
-        drawPlayerHeader(canvas, font, entry, contentX, y + 1, contentWidth, alpha,
-                layout.mentioned(), wrappedHeader);
-
-        int headerHeight = wrappedHeader ? HEADER_HEIGHT * 2 : HEADER_HEIGHT;
-        int bodyY = y + headerHeight + 2;
-        if (layout.quoteHeight() > 0) {
-            int quoteHeight = layout.quoteHeight();
-            panel(canvas, contentX, bodyY, contentWidth, quoteHeight,
-                    2, withAlpha(0xFF242A2E, Math.min(alpha, 190)), 0x00000000);
-            fillRect(canvas, contentX + 2, bodyY + 3, contentX + 3, bodyY + quoteHeight - 3,
-                    withAlpha(0xFF8C989D, alpha));
-            int quoteIndex = 0;
-            for (FormattedCharSequence line : layout.quoteLines()) {
-                if (quoteIndex >= 2) break;
-                canvas.text(line, contentX + 6, bodyY + 2 + quoteIndex * BODY_LINE_HEIGHT,
-                        withAlpha(0xFFB8C0C2, alpha), CHAT_TEXT_SCALE, true);
-                quoteIndex++;
-            }
-            bodyY += quoteHeight + 2;
-        }
-        int lineColor = withAlpha(BODY_COLOR, Math.min(255, alpha));
-        for (FormattedCharSequence line : layout.bodyLines()) {
-            canvas.text(line, contentX, bodyY, lineColor, CHAT_TEXT_SCALE, true);
-            if (focused) {
-                int hitWidth = Math.min(contentWidth, Math.max(1, scaledTextWidth(font, line)));
-                HIT_LINES.add(new HitLine(contentX, bodyY, hitWidth, BODY_LINE_HEIGHT, line));
-            }
-            bodyY += BODY_LINE_HEIGHT;
-        }
-    }
-
-    private static boolean shouldWrapPlayerHeader(Font font, ChatEntry entry, int width, boolean mentioned) {
-        boolean hasRank = !isEmptyRank(entry.rank());
-        boolean hasTitle = !entry.title().isBlank();
-        int rankWidth = hasRank ? scaledTextWidth(font, entry.rank()) + 7 : 0;
-        int titleWidth = hasTitle ? scaledTextWidth(font, entry.title()) + 7 : 0;
-        int nameWidth = scaledTextWidth(font, entry.playerName())
-                + (mentioned ? 3 + scaledTextWidth(font, MENTION_LABEL) : 0);
-        int gaps = (hasRank ? 1 : 0) + (hasTitle ? 1 : 0);
-        return rankWidth + titleWidth + nameWidth + gaps * 3 > width;
-    }
-
-    private static void drawPlayerHeader(UiCanvas canvas, Font font, ChatEntry entry, int x, int y,
-                                         int width, int alpha, boolean mentioned, boolean wrapped) {
-        boolean hasRank = !isEmptyRank(entry.rank());
-        boolean hasTitle = !entry.title().isBlank();
-
-        int rankNaturalWidth = hasRank ? scaledTextWidth(font, entry.rank()) + 7 : 0;
-        int titleNaturalWidth = hasTitle ? scaledTextWidth(font, entry.title()) + 7 : 0;
-        int nameNaturalWidth = scaledTextWidth(font, entry.playerName());
-        int mentionLabelWidth = mentioned ? scaledTextWidth(font, MENTION_LABEL) : 0;
-        int nameColor = hasRank
-                ? (0xFF000000 | (entry.rankColor() & 0x00FFFFFF))
-                : NAME_COLOR;
-
-        if (!wrapped) {
-            int currentX = x;
-            if (hasRank) {
-                drawChip(canvas, font, entry.rank(), currentX, y, rankNaturalWidth, entry.rankColor(), alpha);
-                currentX += rankNaturalWidth + 3;
-            }
-            if (hasTitle) {
-                drawChip(canvas, font, entry.title(), currentX, y, titleNaturalWidth, entry.titleColor(), alpha);
-                currentX += titleNaturalWidth + 3;
-            }
-            drawScaledString(canvas, font, entry.playerName(), currentX, y + 1,
-                    withAlpha(nameColor, alpha), true);
-            if (mentioned) {
-                drawScaledString(canvas, font, MENTION_LABEL, currentX + nameNaturalWidth + 3, y + 1,
-                        withAlpha(MENTION_LABEL_COLOR, alpha), true);
-            }
-            return;
-        }
-
-        // Wrapped layout: Rank + title stay on the first row; the player name moves to a second row.
-        // Only trim an element when that row cannot fit inside the chat content width by itself.
-        int currentX = x;
-        int remainingFirstRow = width;
-
-        if (hasRank && remainingFirstRow >= 16) {
-            int rankWidth = Math.min(rankNaturalWidth, remainingFirstRow);
-            drawChip(canvas, font, entry.rank(), currentX, y, rankWidth, entry.rankColor(), alpha);
-            currentX += rankWidth + 3;
-            remainingFirstRow = Math.max(0, remainingFirstRow - rankWidth - 3);
-        }
-
-        if (hasTitle && remainingFirstRow >= 16) {
-            int titleWidth = Math.min(titleNaturalWidth, remainingFirstRow);
-            drawChip(canvas, font, entry.title(), currentX, y, titleWidth, entry.titleColor(), alpha);
-        }
-
-        int reservedMentionWidth = mentioned ? mentionLabelWidth + 3 : 0;
-        int nameWidth = Math.min(nameNaturalWidth, Math.max(0, width - reservedMentionWidth));
-        if (nameWidth > 0) {
-            String displayName = trimToScaledWidth(font, entry.playerName(), nameWidth);
-            drawScaledString(canvas, font, displayName, x, y + HEADER_HEIGHT + 1,
-                    withAlpha(nameColor, alpha), true);
-            if (mentioned) {
-                int labelX = x + scaledTextWidth(font, displayName) + 3;
-                drawScaledString(canvas, font, MENTION_LABEL, labelX, y + HEADER_HEIGHT + 1,
-                        withAlpha(MENTION_LABEL_COLOR, alpha), true);
-            }
-        }
-    }
-
-    private static void drawChip(UiCanvas canvas, Font font, String text, int x, int y, int width,
-                                 int rgbColor, int alpha) {
-        int color = 0xFF000000 | (rgbColor & 0x00FFFFFF);
-        int background = withAlpha(color, Math.min(110, Math.round(alpha * 0.35f)));
-        int border = withAlpha(color, Math.min(190, Math.round(alpha * 0.68f)));
-        panel(canvas, x, y, width, 9,
-                3, background, border);
-        String clipped = trimToScaledWidth(font, text, Math.max(4, width - 6));
-        drawScaledString(canvas, font, clipped, x + 3, y + 1,
-                withAlpha(blendWithWhite(color, 0.34f), alpha), false);
-    }
-
-    private static void drawSystemEntry(UiCanvas canvas, Font font, EntryLayout layout, int x, int y,
-                                        int width, int alpha, boolean focused) {
-        // System lines share the same single chat surface; only the vertical rule distinguishes them.
-        fillRect(canvas, x + 1, y + 2, x + 3, y + layout.height() - 2,
-                withAlpha(MUTED_COLOR, Math.min(145, alpha)));
-        int textX = x + 8;
-        int textY = y + 4;
-        int contentWidth = Math.max(40, width - 11);
-        int lineColor = withAlpha(MUTED_COLOR, alpha);
-        for (FormattedCharSequence line : layout.bodyLines()) {
-            canvas.text(line, textX, textY, lineColor, CHAT_TEXT_SCALE, true);
-            if (focused) {
-                int hitWidth = Math.min(contentWidth, Math.max(1, scaledTextWidth(font, line)));
-                HIT_LINES.add(new HitLine(textX, textY, hitWidth, SYSTEM_LINE_HEIGHT, line));
-            }
-            textY += SYSTEM_LINE_HEIGHT;
-        }
-    }
-
-    private static void drawPlayerHead(UiCanvas canvas, ChatEntry entry,
-                                       int x, int y, int alpha) {
-        Minecraft mc = Minecraft.getInstance();
-        UUID playerId = entry.playerId();
-        PlayerInfo playerInfo = playerId == null ? null : CACHED_PLAYER_INFO.get(playerId);
-        if (playerInfo == null && mc.getConnection() != null && playerId != null) {
-            playerInfo = mc.getConnection().getPlayerInfo(playerId);
-            if (playerInfo != null) {
-                CACHED_PLAYER_INFO.put(playerId, playerInfo);
-            }
-        }
-        if (playerInfo != null) {
-            // Resolve the skin from the cached PlayerInfo so an asynchronously
-            // downloaded texture can still replace its temporary default.
-            ResourceLocation skin = playerInfo.getSkin().texture();
-            canvas.playerFace(skin, x, y, PLAYER_HEAD_SIZE, 2.0F, withAlpha(0xFFFFFFFF, Math.min(255, alpha)));
-            return;
-        }
-
-        panel(canvas, x, y, PLAYER_HEAD_SIZE, PLAYER_HEAD_SIZE,
-                4, withAlpha(0xFF242A2E, Math.min(alpha, 210)), 0x00000000);
-        String initial = entry.playerName().isBlank()
-                ? "?"
-                : entry.playerName().substring(0, 1).toUpperCase(Locale.ROOT);
-        int textX = x + (PLAYER_HEAD_SIZE - scaledTextWidth(mc.font, initial)) / 2;
-        drawScaledString(canvas, mc.font, initial, textX, y + 4,
-                withAlpha(NAME_COLOR, alpha), false);
-    }
-
-    private static void drawFocusedPanel(UiCanvas canvas, ImmersiveChatConfig.Layout layout) {
-        // Exactly one deep-gray translucent surface. No border, inset, shadow, or per-entry card.
-        panel(canvas, layout.x(), layout.y(), layout.width(), layout.height(),
-                FOCUSED_PANEL_RADIUS, PANEL_BG, 0x00000000);
-
-        int handleWidth = Math.min(34, Math.max(18, layout.width() / 9));
-        int handleX = layout.x() + (layout.width() - handleWidth) / 2;
-        fillRect(canvas, handleX, layout.y() + 3, handleX + handleWidth, layout.y() + 4, 0x667F888C);
     }
 
     private static void drawClearConfirmation(UiCanvas canvas, Font font,
@@ -1082,6 +789,195 @@ public final class ImmersiveChatManager {
         fillRect(canvas, trackX, viewportY, trackX + 1, viewportY + viewportHeight, 0x3AFFFFFF);
         fillRect(canvas, trackX - 1, thumbY, trackX + 2, thumbY + thumbHeight, 0x86C4C8C7);
         scrollbarMetrics = new ScrollbarMetrics(trackX, viewportY, viewportHeight, thumbY, thumbHeight);
+    }
+
+    private static List<EntryLayout> buildLayouts(Font font, int viewportWidth) {
+        List<EntryLayout> result = new ArrayList<>(MESSAGES.size());
+        for (ChatEntry entry : MESSAGES) {
+            Component displayBody = displayBody(entry);
+            if (entry.kind() == EntryKind.PLAYER) {
+                int contentWidth = Math.max(48, viewportWidth - CONTENT_INDENT);
+                List<FormattedCharSequence> bodyLines = font.split(displayBody, unscaledWidth(contentWidth));
+                boolean mentioned = isMentionedForLocalPlayer(entry);
+                List<FormattedCharSequence> quoteLines = entry.hasQuote()
+                        ? List.of(Component.literal("↳ " + entry.quotedPlayerName() + "：" + entry.quotedBody())
+                        .getVisualOrderText())
+                        : List.of();
+                int quoteHeight = quoteLines.isEmpty() ? 0 : QUOTE_LINE_HEIGHT;
+                int height = Math.max(HEAD_SIZE + 2,
+                        HEADER_HEIGHT + quoteHeight + Math.max(1, bodyLines.size()) * BODY_LINE_HEIGHT);
+                result.add(new EntryLayout(entry, bodyLines, quoteLines, quoteHeight, height, mentioned));
+            } else {
+                int contentWidth = Math.max(60, viewportWidth - SYSTEM_INDENT);
+                List<FormattedCharSequence> bodyLines = font.split(displayBody,
+                        Math.max(1, (int) Math.floor(contentWidth / SYSTEM_TEXT_SCALE)));
+                int height = Math.max(SYSTEM_LINE_HEIGHT, bodyLines.size() * SYSTEM_LINE_HEIGHT) + 1;
+                result.add(new EntryLayout(entry, bodyLines, List.of(), 0, height, false));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void drawEntry(UiCanvas canvas, Font font, EntryLayout layout, int x, int y,
+                                        int width, int alpha, boolean focused) {
+        ChatEntry entry = layout.entry();
+        boolean player = entry.kind() == EntryKind.PLAYER;
+        int indent = player ? CONTENT_INDENT : SYSTEM_INDENT;
+        float a = alpha / 255.0F;
+
+        // 未打开聊天时：每条消息后面一条向右渐隐的暗带，长度跟着文字走，像字幕的底
+        if (!focused) {
+            int textWidth = 0;
+            for (FormattedCharSequence line : layout.bodyLines()) {
+                textWidth = Math.max(textWidth, Math.round(font.width(line) * (player ? CHAT_TEXT_SCALE : SYSTEM_TEXT_SCALE)));
+            }
+            if (player) {
+                textWidth = Math.max(textWidth, headerWidth(font, entry, layout.mentioned()));
+            }
+            float bandWidth = Math.min(width + 8.0F, indent + textWidth + 30.0F);
+            int strength = Math.round((player ? 120 : 92) * a);
+            canvas.shape(x - 5.0F, y - 2.0F, bandWidth, layout.height() + 3.0F).radius(4.0F)
+                    .horizontalGradient(withAlpha(SCRIM, strength), withAlpha(SCRIM, 0)).draw();
+        }
+        if (layout.mentioned()) {
+            canvas.shape(x - 5.0F, y - 2.0F, Math.min(width + 8.0F, 160.0F), layout.height() + 3.0F).radius(4.0F)
+                    .horizontalGradient(withAlpha(GOLD, Math.round(46 * a)), withAlpha(GOLD, 0)).draw();
+            canvas.fill(x - 5.0F, y - 1.0F, 1.0F, layout.height() + 1.0F, withAlpha(GOLD, Math.round(220 * a)));
+        }
+
+        if (!player) {
+            int textX = x + indent;
+            canvas.circle(x + 2.0F, y + 4.0F, 0.9F, withAlpha(GOLD, Math.round(170 * a)));
+            int textY = y + 1;
+            int contentWidth = Math.max(40, width - indent);
+            for (FormattedCharSequence line : layout.bodyLines()) {
+                canvas.text(line, textX, textY, withAlpha(SYSTEM_COLOR, alpha), SYSTEM_TEXT_SCALE, true);
+                if (focused) {
+                    HIT_LINES.add(new HitLine(textX, textY, Math.min(contentWidth,
+                            Math.max(1, Math.round(font.width(line) * SYSTEM_TEXT_SCALE))), SYSTEM_LINE_HEIGHT, line));
+                }
+                textY += SYSTEM_LINE_HEIGHT;
+            }
+            return;
+        }
+
+        int contentX = x + indent;
+        drawPlayerHead(canvas, entry, x, y, alpha);
+        if (focused && !entry.playerName().isBlank()) {
+            HIT_AVATARS.add(new HitAvatar(x, y, HEAD_SIZE, entry.playerName(), entry.body().getString()));
+        }
+        if (focused && !entry.playerName().isBlank()) {
+            HIT_PLAYER_MESSAGES.add(new HitPlayerMessage(x - 4, y, width + 8, layout.height(),
+                    entry.playerName(), entry.body().getString()));
+        }
+        drawPlayerHeader(canvas, font, entry, contentX, y, alpha, layout.mentioned());
+        int bodyY = y + HEADER_HEIGHT;
+        if (layout.quoteHeight() > 0) {
+            // 引用只占一行：“↳ 名字：原文”，超出部分裁掉
+            FormattedCharSequence quote = layout.quoteLines().get(0);
+            canvas.pushClip(contentX, bodyY, Math.max(10, width - indent), QUOTE_LINE_HEIGHT, 0.0F);
+            canvas.text(quote, contentX, bodyY + 0.5F, withAlpha(QUOTE_COLOR, alpha), 0.78F, false);
+            canvas.popClip();
+            bodyY += QUOTE_LINE_HEIGHT;
+        }
+        int lineColor = withAlpha(BODY_COLOR, alpha);
+        int contentWidth = Math.max(42, width - indent);
+        for (FormattedCharSequence line : layout.bodyLines()) {
+            canvas.text(line, contentX, bodyY, lineColor, CHAT_TEXT_SCALE, true);
+            if (focused) {
+                HIT_LINES.add(new HitLine(contentX, bodyY, Math.min(contentWidth, Math.max(1, scaledTextWidth(font, line))),
+                        BODY_LINE_HEIGHT, line));
+            }
+            bodyY += BODY_LINE_HEIGHT;
+        }
+    }
+
+    /** 名字一行：名字用 Rank 色（往骨白靠一点），后面跟描边的 Rank 小标签与称号小字。 */
+    private static void drawPlayerHeader(UiCanvas canvas, Font font, ChatEntry entry, int x, int y, int alpha,
+                                         boolean mentioned) {
+        float a = alpha / 255.0F;
+        int nameColor = isEmptyRank(entry.rank()) ? NAME_COLOR : rankTone(entry);
+        canvas.text(entry.playerName(), x, y, withAlpha(nameColor, alpha), NAME_SCALE, true);
+        float cursor = x + font.width(entry.playerName()) * NAME_SCALE + 4.0F;
+        if (!isEmptyRank(entry.rank())) {
+            // Rank 标签不描边，底色在文字起头处最浓，向右淡出
+            float tagWidth = font.width(entry.rank()) * TAG_SCALE + 8.0F;
+            int color = blendWithWhite(0xFF000000 | entry.rankColor(), 0.2F);
+            canvas.shape(cursor, y + 0.8F, tagWidth, 5.8F).radius(1.5F, 0.0F, 0.0F, 1.5F)
+                    .horizontalGradient(withAlpha(color, Math.round(130 * a)), withAlpha(color, 0)).draw();
+            canvas.text(entry.rank(), cursor + 2.0F, y + 1.6F, withAlpha(blendWithWhite(color, 0.55F), alpha), TAG_SCALE, false);
+            cursor += tagWidth + 2.0F;
+        }
+        if (!entry.title().isBlank()) {
+            // 称号不套框，调淡后跟在后面当头衔
+            int color = blendWithWhite(0xFF000000 | entry.titleColor(), 0.25F);
+            canvas.text(entry.title(), cursor, y + 1.2F, withAlpha(color, Math.round(130 * a)), TITLE_SCALE, false);
+            cursor += font.width(entry.title()) * TITLE_SCALE + 3.0F;
+        }
+        if (mentioned) {
+            float tagWidth = font.width(MENTION_TAG) * TAG_SCALE + 4.0F;
+            canvas.shape(cursor, y + 0.8F, tagWidth, 5.8F).radius(1.0F).fill(withAlpha(GOLD, Math.round(210 * a))).draw();
+            canvas.text(MENTION_TAG, cursor + 2.0F, y + 1.6F, withAlpha(0xFF241C0E, alpha), TAG_SCALE, false);
+        }
+    }
+
+    private static int headerWidth(Font font, ChatEntry entry, boolean mentioned) {
+        float width = font.width(entry.playerName()) * NAME_SCALE + 4.0F;
+        if (!isEmptyRank(entry.rank())) {
+            width += font.width(entry.rank()) * TAG_SCALE + 10.0F;
+        }
+        if (!entry.title().isBlank()) {
+            width += font.width(entry.title()) * TITLE_SCALE + 3.0F;
+        }
+        if (mentioned) {
+            width += font.width(MENTION_TAG) * TAG_SCALE + 4.0F;
+        }
+        return Math.round(width);
+    }
+
+    private static int rankTone(ChatEntry entry) {
+        return blendWithWhite(0xFF000000 | entry.rankColor(), 0.28F);
+    }
+
+    private static void drawPlayerHead(UiCanvas canvas, ChatEntry entry, int x, int y, int alpha) {
+        Minecraft mc = Minecraft.getInstance();
+        UUID playerId = entry.playerId();
+        PlayerInfo playerInfo = playerId == null ? null : CACHED_PLAYER_INFO.get(playerId);
+        if (playerInfo == null && mc.getConnection() != null && playerId != null) {
+            playerInfo = mc.getConnection().getPlayerInfo(playerId);
+            if (playerInfo != null) {
+                CACHED_PLAYER_INFO.put(playerId, playerInfo);
+            }
+        }
+        canvas.shape(x - 0.5F, y - 0.5F, HEAD_SIZE + 1.0F, HEAD_SIZE + 1.0F).radius(3.0F)
+                .fill(withAlpha(0xFF0A0C0E, Math.min(200, alpha))).draw();
+        if (playerInfo != null) {
+            // 皮肤异步下载完成后会替换临时皮肤，所以每次都从缓存的 PlayerInfo 取
+            canvas.playerFace(playerInfo.getSkin().texture(), x, y, HEAD_SIZE, 2.5F, withAlpha(0xFFFFFFFF, alpha));
+            return;
+        }
+        String initial = entry.playerName().isBlank() ? "?" : entry.playerName().substring(0, 1).toUpperCase(Locale.ROOT);
+        canvas.text(initial, x + (HEAD_SIZE - mc.font.width(initial) * 0.8F) / 2.0F, y + 2.6F,
+                withAlpha(NAME_COLOR, alpha), 0.8F, false);
+    }
+
+    private static void drawFocusedPanel(UiCanvas canvas, ImmersiveChatConfig.Layout layout) {
+        int x = layout.x();
+        int y = layout.y();
+        int width = layout.width();
+        int height = layout.height();
+        // 磨砂玻璃：上浅下深，一圈很淡的亮边，顶上一道高光，中间是拖动把手
+        canvas.shape(x, y, width, height).radius(PANEL_RADIUS).verticalGradient(0xB4121518, 0xD00B0D10)
+                .border(1.0F, 0x1CFFFFFF).draw();
+        canvas.shape(x + 10, y + 1, width / 2.0F - 10, 1.0F).horizontalGradient(0x00FFFFFF, 0x1EFFFFFF).draw();
+        canvas.shape(x + width / 2.0F, y + 1, width / 2.0F - 10, 1.0F).horizontalGradient(0x1EFFFFFF, 0x00FFFFFF).draw();
+        canvas.shape(x + width / 2.0F - 9, y + 3.5F, 18, 1.5F).radius(0.75F).fill(0x55FFFFFF).draw();
+    }
+
+    private static void drawInputPanel(UiCanvas canvas, int x, int y, int width, int height) {
+        canvas.shape(x, y, width, height).radius(PANEL_RADIUS).verticalGradient(0xC4121518, 0xDC0B0D10)
+                .border(1.0F, 0x22FFFFFF).draw();
+        canvas.text("›", x + 6.0F, y + 4.5F, GOLD, 1.0F, false);
     }
 
     private static boolean isMentionedForLocalPlayer(ChatEntry entry) {
@@ -1480,7 +1376,7 @@ public final class ImmersiveChatManager {
 
     private record EntryLayout(ChatEntry entry, List<FormattedCharSequence> bodyLines,
                                List<FormattedCharSequence> quoteLines, int quoteHeight, int height,
-                               boolean mentioned, boolean wrappedHeader) {
+                               boolean mentioned) {
     }
 
     private record HitLine(int x, int y, int width, int height, FormattedCharSequence content) {

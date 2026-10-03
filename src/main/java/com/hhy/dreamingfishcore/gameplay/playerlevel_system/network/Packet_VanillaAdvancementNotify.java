@@ -1,9 +1,12 @@
 package com.hhy.dreamingfishcore.gameplay.playerlevel_system.network;
 
+import com.hhy.dreamingfishcore.client.ui.notification.SystemEvent;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -71,7 +74,14 @@ public class Packet_VanillaAdvancementNotify implements net.minecraft.network.pr
                             .withStyle(ChatFormatting.WHITE));
 
             // 添加到系统消息显示（右侧）
-            SystemMessageDisplay.addMessage(message);
+            SystemMessageKind kind = switch (packet.frameType) {
+                case "GOAL" -> SystemMessageKind.GOAL;
+                case "CHALLENGE" -> SystemMessageKind.CHALLENGE;
+                default -> SystemMessageKind.TASK;
+            };
+            SystemMessageDisplay.addMessage(message, -1, new SystemEvent(
+                    kind, null, packet.playerName, ItemStack.EMPTY,
+                    Component.literal(packet.advancementTitle)));
         });
     }
 

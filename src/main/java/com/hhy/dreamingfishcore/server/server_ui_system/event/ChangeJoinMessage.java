@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
+import net.minecraft.world.item.ItemStack;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
@@ -213,7 +215,8 @@ public class ChangeJoinMessage {
                 continue;
             }
             DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SystemMessage(content, borderColor),
+                    new Packet_SystemMessage(content, borderColor, SystemMessageKind.JOIN, serverPlayer.getUUID(),
+                            serverPlayer.getName().getString(), ItemStack.EMPTY, Component.empty()),
                     onlinePlayer
             );
         }
@@ -256,7 +259,8 @@ public class ChangeJoinMessage {
                 continue;
             }
             DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SystemMessage(content, borderColor),
+                    new Packet_SystemMessage(content, borderColor, SystemMessageKind.LEAVE, serverPlayer.getUUID(),
+                            serverPlayer.getName().getString(), ItemStack.EMPTY, Component.empty()),
                     onlinePlayer
             );
         }

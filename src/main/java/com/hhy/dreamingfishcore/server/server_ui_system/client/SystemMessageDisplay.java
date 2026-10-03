@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.client.ui.notification.NotificationPosition;
 import com.hhy.dreamingfishcore.client.ui.notification.NotificationQueuePolicy;
 import com.hhy.dreamingfishcore.client.ui.notification.NotificationRenderer;
 import com.hhy.dreamingfishcore.client.ui.notification.NotificationTheme;
+import com.hhy.dreamingfishcore.client.ui.notification.SystemEvent;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -22,9 +23,14 @@ public final class SystemMessageDisplay {
     }
 
     public static void addMessage(Component text, int borderColor) {
+        addMessage(text, borderColor, null);
+    }
+
+    public static void addMessage(Component text, int borderColor, SystemEvent event) {
         int accentColor = borderColor >= 0 ? borderColor : getPlayerRankBorderColor();
         NotificationManager.show(Notification.builder()
                 .message(text)
+                .event(event)
                 .position(NotificationPosition.TOP_RIGHT)
                 .theme(NotificationTheme.SYSTEM)
                 .queuePolicy(NotificationQueuePolicy.STACK)
