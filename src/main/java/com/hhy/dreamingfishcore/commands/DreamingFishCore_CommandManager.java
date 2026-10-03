@@ -20,6 +20,7 @@ import com.hhy.dreamingfishcore.server.check_system.command.Command_Info;
 import com.hhy.dreamingfishcore.server.notice_system.command.Command_Notice;
 import com.hhy.dreamingfishcore.server.rank_system.command.Command_Rank;
 import com.hhy.dreamingfishcore.server.title_system.command.Command_Title;
+import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.Command_RaidAnchor;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
