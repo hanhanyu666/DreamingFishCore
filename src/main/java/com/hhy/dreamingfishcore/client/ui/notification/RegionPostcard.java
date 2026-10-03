@@ -46,6 +46,8 @@ public final class RegionPostcard {
     private static final float MIN_WIDTH = 190.0F;
     private static final float HEIGHT = 38.0F;
     private static final float PLAIN_HEIGHT = 29.0F;
+    /** 卡片顶边离屏幕上沿的距离，与原来的区域横幅相同。 */
+    private static final float TOP = 16.0F;
     /** 场景里各种小物件（太阳、花草）按卡片高度相对 66 的比例缩放，画面的比例不变。 */
     private static final float DESIGN_HEIGHT = 66.0F;
     private static final float TITLE_SCALE = 1.2F;
@@ -694,7 +696,7 @@ public final class RegionPostcard {
         float w = state.width;
         float h = state.height;
         float x0 = Math.round((screenWidth - w) / 2.0F);
-        float y0 = 8.0F - 6.0F * (1.0F - cardIn) - 4.0F * cardOut;
+        float y0 = TOP - 6.0F * (1.0F - cardIn) - 4.0F * cardOut;
 
         canvas.push();
         canvas.translate(x0, y0);

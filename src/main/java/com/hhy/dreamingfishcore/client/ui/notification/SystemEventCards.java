@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.client.ui.notification;
 
 import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
 import com.hhy.dreamingfishcore.client.ui.framework.theme.UiColor;
+import com.hhy.dreamingfishcore.client.ui.render.RankBadge;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -20,8 +21,10 @@ import net.minecraft.util.StringDecomposer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
@@ -29,8 +32,10 @@ import java.util.WeakHashMap;
  * 右上角的系统消息（进服、离开、进度、死亡），接在终端眼镜读数下方，每条一张事件卡。
  *
  * <p>卡片向左渐隐，右侧是当事玩家的头像或进度图标，上面一行小字写“发生了什么 · 谁”，
- * 下面一行是主要内容；挑战会有一道金色扫光。最新的在最上面，越旧越淡。
- * 文字画在卡片的暗底上，不加阴影。</p>
+ * 下面一行是主要内容。最新的在最上面，越旧越淡。文字画在卡片的暗底上，不加阴影。</p>
+ *
+ * <p>进服、离开、阵亡的卡片用当事玩家的 Rank 色（右侧竖条、顶边细线、头像框），一眼能分出等级；
+ * 小字里的“进服 / 离开 / 阵亡”仍用类型色。挑战有一道金色扫光，高等级玩家进服有一道 Rank 色的扫光。</p>
  */
 final class SystemEventCards {
     private static final int MAIN = 0xFFEEE8D8;
@@ -38,16 +43,19 @@ final class SystemEventCards {
     private static final int CARD = 0xCC0C0E11;
     private static final float RIGHT_MARGIN = 9.0F;
     private static final int MAX_CARDS = 4;
-    private static final float CARD_HEIGHT = 19.0F;
+    private static final float CARD_HEIGHT = 20.0F;
     private static final float CARD_GAP = 2.0F;
     private static final float FADE_WIDTH = 14.0F;
     private static final float MIN_WIDTH = 96.0F;
     private static final float MAX_WIDTH = 176.0F;
     /** 右侧图标区的宽度。 */
     private static final float ICON_ZONE = 15.0F;
-    private static final float CAPTION_SCALE = 0.45F;
+    private static final float CAPTION_SCALE = 0.52F;
     private static final float CAPTION_TRACKING = 0.6F;
     private static final float MAIN_SCALE = 0.66F;
+
+    /** 进服时带扫光的高等级 Rank。 */
+    private static final Set<String> HIGHLIGHT_RANKS = Set.of("FISH++", "MYTH SHAPER FISH", "OPERATOR");
 
     private static final Map<Notification, Parsed> PARSED = new WeakHashMap<>();
 
@@ -83,18 +91,34 @@ final class SystemEventCards {
                                   float y, long age, float alpha, float slide, float pixel) {
         SystemEvent event = notification.event();
         SystemMessageKind kind = event != null ? event.kind() : null;
-        int color = kind != null ? kindColor(kind) : notification.accentColor() >= 0
-                ? toneColor(notification.effectiveAccentColor()) : DIM;
+        // 服务端随消息发来的颜色：进服、离开、阵亡时是当事玩家的 Rank 色
+        int serverColor = notification.accentColor() >= 0 ? notification.effectiveAccentColor() : DIM;
+        int color = kind != null ? kindColor(kind) : toneColor(serverColor);
+        boolean personal = kind == SystemMessageKind.JOIN || kind == SystemMessageKind.LEAVE
+                || kind == SystemMessageKind.DEATH;
+        int accent = personal ? serverColor : color;
 
         // 进度卡片的主要内容是进度名称，其余是消息正文
         Component main = kind != null && kind.advancement() && !event.headline().getString().isEmpty()
                 ? event.headline().copy().withStyle(Style.EMPTY.withColor(TextColor.fromRgb(color & 0xFFFFFF)))
                 : parsed.body();
         String label = kind != null ? kindLabel(kind) : "系统";
-        String who = kind != null && kind.advancement() ? event.player() : parsed.rank();
-        int whoColor = kind != null && kind.advancement() ? DIM : toneColor(parsed.rankColor());
+        // 小字第二部分：进度写是谁完成的；进服、离开、阵亡挂一个和聊天栏同款的 Rank 标签
+        String player = kind != null && kind.advancement() ? event.player() : "";
+        String rank = "";
+        int rankColor = DIM;
+        if (player.isEmpty()) {
+            if (event != null && event.hasRank()) {
+                rank = event.rank();
+                rankColor = serverColor;
+            } else {
+                rank = parsed.rank();
+                rankColor = parsed.rankColor();
+            }
+        }
         float labelWidth = trackedWidth(font, label, CAPTION_SCALE, CAPTION_TRACKING);
-        float whoWidth = who.isEmpty() ? 0.0F : trackedWidth(font, who, CAPTION_SCALE, 0.4F) + 5.0F;
+        float whoWidth = !rank.isEmpty() ? RankBadge.width(font, rank) + 3.0F
+                : !player.isEmpty() ? trackedWidth(font, player, CAPTION_SCALE, 0.4F) + 5.0F : 0.0F;
         float maxMain = MAX_WIDTH - ICON_ZONE - 22.0F;
         FormattedCharSequence mainText = fit(font, main, maxMain / MAIN_SCALE);
         float mainWidth = font.width(mainText) * MAIN_SCALE;
@@ -109,43 +133,62 @@ final class SystemEventCards {
                 .horizontalGradient(UiColor.withAlpha(CARD, 0), CARD).draw();
         canvas.fill(x + FADE_WIDTH, y, width - FADE_WIDTH, CARD_HEIGHT, CARD);
         canvas.shape(x + width * 0.35F, y, width * 0.65F, pixel * 2.0F)
-                .horizontalGradient(UiColor.withAlpha(color, 0), UiColor.withAlpha(color, 0.7F)).draw();
-        canvas.fill(rail - 1.5F, y, 1.5F, CARD_HEIGHT, UiColor.withAlpha(color, 0.95F));
+                .horizontalGradient(UiColor.withAlpha(accent, 0), UiColor.withAlpha(accent, 0.7F)).draw();
+        canvas.fill(rail - 1.5F, y, 1.5F, CARD_HEIGHT, UiColor.withAlpha(accent, 0.95F));
 
+        // 扫光：挑战是金色；高等级玩家进服用各自的 Rank 色
         if (kind == SystemMessageKind.CHALLENGE) {
-            // 挑战：一道金色扫光掠过卡片
-            float sweep = range(age, 280L, 1300L);
-            if (sweep > 0.0F && sweep < 1.0F) {
-                canvas.pushClip(x, y, width, CARD_HEIGHT, 0.0F);
-                float sx = x + (width + 26.0F) * smooth(sweep) - 26.0F;
-                canvas.shape(sx, y, 13.0F, CARD_HEIGHT).horizontalGradient(0x00FFE6A6, 0x3CFFE6A6).draw();
-                canvas.shape(sx + 13.0F, y, 13.0F, CARD_HEIGHT).horizontalGradient(0x3CFFE6A6, 0x00FFE6A6).draw();
-                canvas.popClip();
-            }
+            sweep(canvas, x, y, width, age, 0xFFFFE6A6, 0.24F);
+        } else if (kind == SystemMessageKind.JOIN && event.hasRank()
+                && HIGHLIGHT_RANKS.contains(event.rank().toUpperCase(Locale.ROOT))) {
+            sweep(canvas, x, y, width, age, UiColor.lerp(serverColor | 0xFF000000, 0xFFFFFFFF, 0.35F), 0.36F);
         }
 
         float iconX = rail - 4.0F - ICON_ZONE / 2.0F;
         float iconY = y + CARD_HEIGHT / 2.0F;
-        paintIcon(canvas, event, kind, color, iconX, iconY, age, pixel);
+        paintIcon(canvas, event, kind, color, accent, iconX, iconY, age, pixel);
 
         float textRight = iconX - ICON_ZONE / 2.0F - 3.0F;
         float captionY = y + 3.0F;
+        float captionMiddle = captionY + font.lineHeight * CAPTION_SCALE / 2.0F;
         float cursor = textRight;
-        if (!who.isEmpty()) {
-            cursor -= trackedWidth(font, who, CAPTION_SCALE, 0.4F);
-            drawTracked(canvas, font, who, cursor, captionY, CAPTION_SCALE, 0.4F, whoColor);
+        if (!rank.isEmpty()) {
+            cursor -= RankBadge.width(font, rank);
+            RankBadge.draw(canvas, font, rank, rankColor, cursor, captionMiddle - RankBadge.HEIGHT / 2.0F, 1.0F);
+            cursor -= 3.0F;
+        } else if (!player.isEmpty()) {
+            cursor -= trackedWidth(font, player, CAPTION_SCALE, 0.4F);
+            drawTracked(canvas, font, player, cursor, captionY, CAPTION_SCALE, 0.4F, DIM);
             cursor -= 2.5F;
-            canvas.circle(cursor, captionY + 2.0F, 0.55F, UiColor.withAlpha(DIM, 0.8F));
+            canvas.circle(cursor, captionMiddle, 0.6F, UiColor.withAlpha(DIM, 0.8F));
             cursor -= 2.5F;
         }
         drawTracked(canvas, font, label, cursor - labelWidth, captionY, CAPTION_SCALE, CAPTION_TRACKING, color);
-        canvas.text(mainText, textRight - mainWidth, y + 9.5F, MAIN, MAIN_SCALE, false);
+        canvas.text(mainText, textRight - mainWidth, y + 10.3F, MAIN, MAIN_SCALE, false);
         canvas.popAlpha();
         canvas.pop();
     }
 
-    /** 卡片右侧的图标：进度画物品（外框按进度/目标/挑战区分），其余画当事玩家的头像。 */
-    private static void paintIcon(UiCanvas canvas, SystemEvent event, SystemMessageKind kind, int color,
+    /** 入场后掠过卡片的一道光。 */
+    private static void sweep(UiCanvas canvas, float x, float y, float width, long age, int color, float strength) {
+        float progress = range(age, 280L, 1300L);
+        if (progress <= 0.0F || progress >= 1.0F) {
+            return;
+        }
+        canvas.pushClip(x, y, width, CARD_HEIGHT, 0.0F);
+        float sx = x + (width + 26.0F) * smooth(progress) - 26.0F;
+        int clear = UiColor.withAlpha(color, 0);
+        int bright = UiColor.withAlpha(color, strength);
+        canvas.shape(sx, y, 13.0F, CARD_HEIGHT).horizontalGradient(clear, bright).draw();
+        canvas.shape(sx + 13.0F, y, 13.0F, CARD_HEIGHT).horizontalGradient(bright, clear).draw();
+        canvas.popClip();
+    }
+
+    /**
+     * 卡片右侧的图标：进度画物品（外框按进度/目标/挑战区分），其余画当事玩家的头像。
+     * {@code color} 为类型色（进服的小绿点、阵亡的叉），{@code faceFrame} 为头像框的颜色。
+     */
+    private static void paintIcon(UiCanvas canvas, SystemEvent event, SystemMessageKind kind, int color, int faceFrame,
                                   float cx, float cy, long age, float pixel) {
         float pop = easeOutBack(range(age, 100L, 480L));
         if (pop <= 0.05F) {
@@ -189,7 +232,7 @@ final class SystemEventCards {
         int tint = kind == SystemMessageKind.LEAVE ? 0x99B4B4B4 : kind == SystemMessageKind.DEATH ? 0xFFC77A6E : 0xFFFFFFFF;
         float size = 10.0F * pop;
         canvas.shape(cx - size / 2.0F - 1.0F, cy - size / 2.0F - 1.0F, size + 2.0F, size + 2.0F).radius(2.5F)
-                .fill(0x900C0E11).border(line, UiColor.withAlpha(color, 0.7F)).draw();
+                .fill(0x900C0E11).border(line, UiColor.withAlpha(faceFrame, 0.8F)).draw();
         canvas.playerFace(skin(event.playerId(), event.player()), cx - size / 2.0F, cy - size / 2.0F, size, 1.5F, tint);
         if (kind == SystemMessageKind.DEATH) {
             float k = size * 0.32F;

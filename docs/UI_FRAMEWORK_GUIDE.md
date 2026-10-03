@@ -122,7 +122,8 @@ AnimatedFloat reveal = AnimatedFloat.tween(0.0F, 380.0F, Easing.EMPHASIZED);
 | 原版界面 | `client/ui/vanilla/VanillaChrome` | 标题、世界选择、服务器列表、加载与断开界面共用的玻璃面板与徽章 |
 | HUD | `gameplay/playerattributes_system/client/ui/hud/HudDraw` 等 | 半透明面板与数值条，尽量少遮挡画面 |
 | 区域明信片 | `client/ui/notification/RegionPostcard` | 上方居中横幅：按群系、时间、天气变化的分层风景剪影，入场像立体书依次弹起 |
-| 系统消息事件卡 | `client/ui/notification/SystemEventCards` | 右上角读数下方：进服、离开、进度、阵亡各一张向左渐隐的卡片，右侧头像或进度图标；文字不加阴影 |
+| 系统消息事件卡 | `client/ui/notification/SystemEventCards` | 右上角读数下方：进服、离开、进度、阵亡各一张向左渐隐的卡片，右侧头像或进度图标；进服/离开/阵亡用玩家 Rank 色，高等级进服有扫光；文字不加阴影 |
+| Rank 标签 | `client/ui/render/RankBadge` | 聊天栏与右上角卡片共用：不描边，前浓后淡 |
 | 聊天栏 | `client/ui/chat/ImmersiveChatManager` | 没有整块底板，每条消息后面一条跟着文字长度向右渐隐的暗带；Rank 标签前浓后淡、不描边，称号调淡跟在后面当头衔 |
 
 新界面优先复用对应风格里的组件（如 `TerminalUi.card()`、`TerminalUi.header(...)`、`VanillaChrome.glassPanel()`），
@@ -158,5 +159,6 @@ death gui=2 wait=80 as=death
   判定（群系标签 + 群系颜色 + 世界当前时间）。风景剪影由 `tools/generate_region_scenes.py` 生成，
   中景里风车、烟囱、灯塔的位置写在 `tools/region_scene_anchors.json`，改图后要同步到 `RegionPostcard`。
 - `system_messages`：右上角放入进服、离开、阵亡、进度、挑战各一条事件卡（带服务端会发的事件信息）。
+  `system_messages_joins` 为不同 Rank 的进服卡片（扫光在出现后 0.3～1.3 秒，`wait=18` 左右能截到）。
 - `chat_busy` / `chat_busy_open`：清空聊天后放入系统通知、带 Rank 与称号的玩家、引用并 @ 自己的回复、
   无 Rank 的玩家几条消息；后者再打开聊天界面。

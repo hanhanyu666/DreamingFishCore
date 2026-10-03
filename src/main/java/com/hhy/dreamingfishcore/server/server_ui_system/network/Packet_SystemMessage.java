@@ -17,7 +17,7 @@ import java.util.UUID;
 /**
  * 通用系统消息数据包 - 将所有系统消息显示在右上角
  *
- * <p>进服、离开、进度与死亡会额外带上事件类型、当事玩家与进度图标，右上角据此画成带头像或图标的事件卡；
+ * <p>进服、离开、进度与死亡会额外带上事件类型、当事玩家（含 Rank）与进度图标，右上角据此画成带头像或图标的事件卡；
  * 只有文字的旧消息照常显示为普通卡片。</p>
  */
 public class Packet_SystemMessage implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
@@ -36,11 +36,13 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
     @Nullable
     private final UUID playerId;
     private final String playerName;
+    /** 当事玩家的 Rank 名（如 {@code OPERATOR}），没有 Rank 时为空串。 */
+    private final String rank;
     private final ItemStack icon;
     private final Component headline;
 
     public Packet_SystemMessage(Component message, int borderColor) {
-        this(message, borderColor, null, null, "", ItemStack.EMPTY, Component.empty());
+        this(message, borderColor, null, null, "", "", ItemStack.EMPTY, Component.empty());
     }
 
     // 向后兼容：只传消息时使用默认颜色（Rank 颜色）
@@ -51,16 +53,19 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
     /**
      * 带事件信息的系统消息。
      *
+     * @param rank     当事玩家的 Rank 名，没有 Rank 时传空串
      * @param icon     进度的图标，其他事件传 {@link ItemStack#EMPTY}
      * @param headline 进度名称，其他事件传空组件
      */
     public Packet_SystemMessage(Component message, int borderColor, @Nullable SystemMessageKind kind,
-                                @Nullable UUID playerId, String playerName, ItemStack icon, Component headline) {
+                                @Nullable UUID playerId, String playerName, String rank, ItemStack icon,
+                                Component headline) {
         this.message = message;
         this.borderColor = borderColor;
         this.kind = kind;
         this.playerId = playerId;
         this.playerName = playerName == null ? "" : playerName;
+        this.rank = rank == null ? "" : rank;
         this.icon = icon == null ? ItemStack.EMPTY : icon;
         this.headline = headline == null ? Component.empty() : headline;
     }
@@ -87,6 +92,10 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
         return playerName;
     }
 
+    String rank() {
+        return rank;
+    }
+
     ItemStack icon() {
         return icon;
     }
@@ -107,6 +116,7 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
             buf.writeUUID(packet.playerId);
         }
         buf.writeUtf(packet.playerName);
+        buf.writeUtf(packet.rank);
         ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, packet.icon);
         ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.encode(buf, packet.headline);
     }
@@ -120,9 +130,10 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
         }
         UUID playerId = buf.readBoolean() ? buf.readUUID() : null;
         String playerName = buf.readUtf();
+        String rank = buf.readUtf();
         ItemStack icon = ItemStack.OPTIONAL_STREAM_CODEC.decode(buf);
         Component headline = ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC.decode(buf);
-        return new Packet_SystemMessage(message, borderColor, kind, playerId, playerName, icon, headline);
+        return new Packet_SystemMessage(message, borderColor, kind, playerId, playerName, rank, icon, headline);
     }
 
     public static void handle(Packet_SystemMessage packet, IPayloadContext context) {
@@ -143,7 +154,7 @@ public class Packet_SystemMessage implements net.minecraft.network.protocol.comm
                 net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
                 if (minecraft != null && minecraft.isSameThread() && minecraft.player != null) {
                     SystemEvent event = packet.kind == null ? null : new SystemEvent(packet.kind, packet.playerId,
-                            packet.playerName, packet.icon, packet.headline);
+                            packet.playerName, packet.rank, packet.icon, packet.headline);
                     SystemMessageDisplay.addMessage(packet.message, packet.borderColor, event);
                 }
             } catch (Exception e) {

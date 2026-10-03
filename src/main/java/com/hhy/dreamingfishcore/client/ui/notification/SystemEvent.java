@@ -13,9 +13,14 @@ import java.util.UUID;
  * @param kind     事件类型
  * @param playerId 当事玩家（画头像用），未知时为 null
  * @param player   当事玩家的名字
+ * @param rank     当事玩家的 Rank 名（如 {@code OPERATOR}），没有 Rank 时为空串或 {@code NO_RANK}
  * @param icon     进度的图标物品，其他事件为空
  * @param headline 进度名称等需要突出的内容，没有时为空组件
  */
-public record SystemEvent(SystemMessageKind kind, @Nullable UUID playerId, String player, ItemStack icon,
+public record SystemEvent(SystemMessageKind kind, @Nullable UUID playerId, String player, String rank, ItemStack icon,
                           Component headline) {
+
+    public boolean hasRank() {
+        return rank != null && !rank.isBlank() && !"NO_RANK".equalsIgnoreCase(rank);
+    }
 }

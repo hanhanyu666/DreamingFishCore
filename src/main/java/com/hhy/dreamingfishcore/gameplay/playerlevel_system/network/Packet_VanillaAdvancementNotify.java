@@ -80,7 +80,7 @@ public class Packet_VanillaAdvancementNotify implements net.minecraft.network.pr
                 default -> SystemMessageKind.TASK;
             };
             SystemMessageDisplay.addMessage(message, -1, new SystemEvent(
-                    kind, null, packet.playerName, ItemStack.EMPTY,
+                    kind, null, packet.playerName, "", ItemStack.EMPTY,
                     Component.literal(packet.advancementTitle)));
         });
     }

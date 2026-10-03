@@ -100,7 +100,7 @@ public class SystemMessageEventHandler {
 
         // 发送到所有玩家的右上角；附带进度图标与名称，客户端画成进度卡片
         broadcastSystemMessage(player, new Packet_SystemMessage(message, borderColor, kind, player.getUUID(),
-                player.getName().getString(), display.getIcon(), title));
+                player.getName().getString(), playerRank == null ? "" : playerRank.getRankName(), display.getIcon(), title));
     }
 
     // ==================== 死亡消息 ====================
@@ -134,7 +134,8 @@ public class SystemMessageEventHandler {
         // 发送到所有玩家的右上角（使用该玩家的 Rank 颜色）
         int borderColor = getRankBorderColor(playerRank);
         broadcastSystemMessage(player, new Packet_SystemMessage(deathMessage, borderColor, SystemMessageKind.DEATH,
-                player.getUUID(), player.getName().getString(), ItemStack.EMPTY, Component.empty()));
+                player.getUUID(), player.getName().getString(), playerRank == null ? "" : playerRank.getRankName(),
+                ItemStack.EMPTY, Component.empty()));
     }
 
     // ==================== 离服消息 ====================

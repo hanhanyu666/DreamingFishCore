@@ -6,6 +6,7 @@ import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.client.ui.framework.hud.HudCanvas;
 import com.hhy.dreamingfishcore.client.ui.framework.render.UiCanvas;
+import com.hhy.dreamingfishcore.client.ui.render.RankBadge;
 import com.hhy.dreamingfishcore.server.title_system.network.Packet_QuotedChatMessage;
 import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
@@ -900,13 +901,7 @@ public final class ImmersiveChatManager {
         canvas.text(entry.playerName(), x, y, withAlpha(nameColor, alpha), NAME_SCALE, true);
         float cursor = x + font.width(entry.playerName()) * NAME_SCALE + 4.0F;
         if (!isEmptyRank(entry.rank())) {
-            // Rank 标签不描边，底色在文字起头处最浓，向右淡出
-            float tagWidth = font.width(entry.rank()) * TAG_SCALE + 8.0F;
-            int color = blendWithWhite(0xFF000000 | entry.rankColor(), 0.2F);
-            canvas.shape(cursor, y + 0.8F, tagWidth, 5.8F).radius(1.5F, 0.0F, 0.0F, 1.5F)
-                    .horizontalGradient(withAlpha(color, Math.round(130 * a)), withAlpha(color, 0)).draw();
-            canvas.text(entry.rank(), cursor + 2.0F, y + 1.6F, withAlpha(blendWithWhite(color, 0.55F), alpha), TAG_SCALE, false);
-            cursor += tagWidth + 2.0F;
+            cursor += RankBadge.draw(canvas, font, entry.rank(), entry.rankColor(), cursor, y + 0.8F, a) + 2.0F;
         }
         if (!entry.title().isBlank()) {
             // 称号不套框，调淡后跟在后面当头衔
@@ -924,7 +919,7 @@ public final class ImmersiveChatManager {
     private static int headerWidth(Font font, ChatEntry entry, boolean mentioned) {
         float width = font.width(entry.playerName()) * NAME_SCALE + 4.0F;
         if (!isEmptyRank(entry.rank())) {
-            width += font.width(entry.rank()) * TAG_SCALE + 10.0F;
+            width += RankBadge.width(font, entry.rank()) + 2.0F;
         }
         if (!entry.title().isBlank()) {
             width += font.width(entry.title()) * TITLE_SCALE + 3.0F;

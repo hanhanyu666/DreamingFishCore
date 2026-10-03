@@ -23,12 +23,12 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public class SystemMessagePacketGameTest {
 
-    /** 带事件信息的消息（挑战、玩家、图标、进度名）编码再解码后原样还原。 */
+    /** 带事件信息的消息（挑战、玩家与 Rank、图标、进度名）编码再解码后原样还原。 */
     @GameTest(template = "empty")
     public static void eventFieldsSurviveTheWire(GameTestHelper helper) {
         UUID player = UUID.randomUUID();
         Packet_SystemMessage sent = new Packet_SystemMessage(Component.literal("Dev 完成了挑战[资深怪物猎人]"), 0xAA00AA,
-                SystemMessageKind.CHALLENGE, player, "Dev", new ItemStack(Items.DIAMOND_SWORD),
+                SystemMessageKind.CHALLENGE, player, "Dev", "OPERATOR", new ItemStack(Items.DIAMOND_SWORD),
                 Component.literal("资深怪物猎人"));
         Packet_SystemMessage received = roundTrip(helper, sent);
 
@@ -37,6 +37,7 @@ public class SystemMessagePacketGameTest {
         helper.assertValueEqual(received.kind(), SystemMessageKind.CHALLENGE, "事件类型");
         helper.assertValueEqual(received.playerId(), player, "玩家 UUID");
         helper.assertValueEqual(received.playerName(), "Dev", "玩家名字");
+        helper.assertValueEqual(received.rank(), "OPERATOR", "玩家 Rank");
         helper.assertTrue(received.icon().is(Items.DIAMOND_SWORD), "进度图标应为钻石剑，实际 " + received.icon());
         helper.assertValueEqual(received.headline().getString(), "资深怪物猎人", "进度名称");
         helper.succeed();
