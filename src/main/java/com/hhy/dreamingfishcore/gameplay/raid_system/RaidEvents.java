@@ -26,5 +26,6 @@ public final class RaidEvents {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         RaidService.clear();
+        com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService.clear();
     }
 }

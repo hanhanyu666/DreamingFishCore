@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
@@ -47,6 +48,13 @@ public final class Command_Raid {
                                         .executes(context -> seed(context,
                                                 com.mojang.brigadier.arguments.LongArgumentType
                                                         .getLong(context, "raid_id"))))))
+                .then(Commands.literal("plan")
+                        .executes(Command_Raid::plan))
+                .then(Commands.literal("loot")
+                        .then(Commands.literal("reload")
+                                .executes(Command_Raid::lootReload))
+                        .then(Commands.literal("overview")
+                                .executes(Command_Raid::lootOverview)))
                 .then(Commands.literal("end")
                         .executes(Command_Raid::end)));
     }
@@ -108,6 +116,23 @@ public final class Command_Raid {
 
     private static int end(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidService.endRaid(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
+    private static int plan(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int lootReload(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidLootService.reload(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int lootOverview(CommandContext<CommandSourceStack> context) {
+        RaidLootService.ensureLoaded(context.getSource().getServer());
+        reply(context.getSource(), RaidLootService.overview());
         return 1;
     }
 }
