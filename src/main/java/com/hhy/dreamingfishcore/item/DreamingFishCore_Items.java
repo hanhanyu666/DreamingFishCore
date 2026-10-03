@@ -54,6 +54,12 @@ public class DreamingFishCore_Items {
                     .fireResistant() // 可选，防火
             ));
 
+    // 呲水枪：左键射水、右键喷自己、对水源右键装水。水量存在物品的 CustomData 里。
+    // stacksTo(1)：水量是逐件状态，堆叠会让每件共享一个数值。
+    public static final DeferredHolder<Item, ? extends Item> WATER_GUN = ITEMS.register("water_gun",
+            () -> new com.hhy.dreamingfishcore.gameplay.water_gun_system.Item_WaterGun(
+                    new Item.Properties().stacksTo(1)));
+
     // 注册启程锦鲤
     public static final DeferredHolder<Item, ? extends Item> DREAMINGFISH = ITEMS.register(
             "dreamingfish",

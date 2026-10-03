@@ -1,0 +1,29 @@
+{
+  "entity.archer_zombie.charge": {
+    "subtitle": "subtitles.entity.archer_zombie.charge",
+    "sounds": [
+      {
+        "name": "minecraft:entity.zombie.ambient",
+        "type": "event"
+      }
+    ]
+  },
+  "entity.archer_zombie.shoot": {
+    "subtitle": "subtitles.entity.archer_zombie.shoot",
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event"
+      }
+    ]
+  },
+  "entity.bone_spike.hit": {
+    "subtitle": "subtitles.entity.bone_spike.hit",
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.hit",
+        "type": "event"
+      }
+    ]
+  }
+}

@@ -37,6 +37,11 @@ public class DreamingFishCore {
         DreamingFishCore_LootModifiers.register(modEventBus);
         StoryNpcEntities.register(modEventBus);
         SiegeZombieEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieSounds.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunEntities.register(modEventBus);
         DeathCorpseEntities.register(modEventBus);
         // 注册菜单类型（研究桌的容器菜单）
         com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableMenus.register(modEventBus);

@@ -86,15 +86,27 @@ public final class ZombieSpeciesEvents {
                 List.copyOf(event.getSpawnerDataList());
         try {
             // Replace only the vanilla zombie-family entries with a split
-            // vanilla/custom pair and apply the configured family/other
+            // vanilla/siege/archer triple and apply the configured family/other
             // multipliers. The mob cap itself remains vanilla.
+            ZombieSpeciesConfig.ResolvedSettings zombieSettings = settings;
+            com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieConfig.Resolved
+                    archerSettings = com.hhy.dreamingfishcore.gameplay.zombie_system.archer
+                    .ArcherZombieConfig.current().resolve();
+            // 射手僵尸关掉（或禁用自然生成）时传 null，权重池行为与新增它之前完全一致。
+            net.minecraft.world.entity.EntityType<?> archerType =
+                    archerSettings.enabled() && archerSettings.naturalSpawn()
+                            ? com.hhy.dreamingfishcore.gameplay.zombie_system.archer
+                            .ArcherZombieEntities.ARCHER_ZOMBIE.get()
+                            : null;
             List<MobSpawnSettings.SpawnerData> rewritten = ZombieSpawnPoolRewriter.rewrite(
                     original,
                     SiegeZombieEntities.SIEGE_ZOMBIE.get(),
-                    settings.zombieFamilySpawnPercent(),
-                    settings.vanillaZombieSpawnPercent(),
-                    settings.customZombieSpawnPercent(),
-                    settings.otherMonsterSpawnPercent());
+                    archerType,
+                    zombieSettings.zombieFamilySpawnPercent(),
+                    zombieSettings.vanillaZombieSpawnPercent(),
+                    zombieSettings.customZombieSpawnPercent(),
+                    archerSettings.spawnPercentOfCustomZombie(),
+                    zombieSettings.otherMonsterSpawnPercent());
             if (rewritten == original) {
                 return;
             }
