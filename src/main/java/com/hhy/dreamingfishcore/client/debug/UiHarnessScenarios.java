@@ -7,6 +7,7 @@ import com.hhy.dreamingfishcore.gameplay.research_system.client.ResearchTableCli
 import com.hhy.dreamingfishcore.gameplay.research_system.client.Screen_ResearchTable;
 import com.hhy.dreamingfishcore.gameplay.research_system.network.Packet_ResearchTableOpen;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.serverscreen.ServerScreenUI;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
 import com.hhy.dreamingfishcore.server.server_ui_system.client.terminal.TerminalScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
@@ -128,6 +129,10 @@ final class UiHarnessScenarios {
             }
             notifications.getName();
         });
+        // 右上角系统消息（事件卡）：文字与服务端默认配置一致，并带上服务端会发的事件信息
+        UiHarness.register("system_messages", minecraft -> showSystemMessages(minecraft, sampleSystemMessages(minecraft)));
+        // 不同 Rank 的进服卡片（看 Rank 色与高等级的扫光，扫光在出现后 0.3～1.3 秒）
+        UiHarness.register("system_messages_joins", minecraft -> showSystemMessages(minecraft, sampleJoinMessages(minecraft)));
         UiHarness.register("canvas_test", minecraft -> minecraft.setScreen(new UiCanvasTestScreen()));
         UiHarness.register("gallery", minecraft -> minecraft.setScreen(new UiGalleryScreen()));
         UiHarness.register("gallery_dialog", minecraft -> {
@@ -166,18 +171,14 @@ final class UiHarnessScenarios {
             com.hhy.dreamingfishcore.gameplay.marker_system.MarkerManager.addOrReplace(java.util.UUID.randomUUID(),
                     "守望者07", eye.subtract(look.scale(30.0)), now);
         });
+        // 清空后放入一组典型聊天；chat_busy_open 再打开聊天界面
         UiHarness.register("chat_busy", minecraft -> {
             minecraft.setScreen(null);
-            var chat = com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.class;
-            java.util.UUID self = minecraft.player != null ? minecraft.player.getUUID() : java.util.UUID.randomUUID();
-            long now = System.currentTimeMillis();
-            minecraft.gui.getChat().addMessage(Component.literal("§7[系统] 海岸医院的发电机重新启动了"));
-            com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(self, "OPERATOR", 0xFF5555,
-                    "萌新鱼友", 0x9FD46C, "Dev", "有人看到灯塔那边的白色弧线了吗？", now);
-            com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(java.util.UUID.randomUUID(),
-                    "FISH+", 0x55FFFF, "逐光会", 0xFFC857, "Lighthouse", "看到了，@Dev 我们在医院门口集合，带上抑制剂。", now,
-                    "Dev", "有人看到灯塔那边的白色弧线了吗？");
-            chat.getName();
+            fillSampleChat(minecraft);
+        });
+        UiHarness.register("chat_busy_open", minecraft -> {
+            fillSampleChat(minecraft);
+            minecraft.setScreen(new ChatScreen(""));
         });
         UiHarness.register("death", minecraft -> {
             var player = minecraft.player;
@@ -414,6 +415,91 @@ final class UiHarnessScenarios {
                 new OrganizationViewData.Summary("north", "北港拾荒者", 3, "阿洛", OrganizationViewData.Relation.NONE));
         return new OrganizationViewData.Snapshot(true, 32, 12, 200, 150, member ? "lighthouse" : "",
                 organizations, member ? detail : null);
+    }
+
+    /** 清空聊天后放入一组典型消息：系统通知、带 Rank 与称号的玩家、引用并 @ 自己的回复、无 Rank 的玩家。 */
+    private static void fillSampleChat(net.minecraft.client.Minecraft minecraft) {
+        com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.clearVisibleMessages();
+        java.util.UUID self = minecraft.player != null ? minecraft.player.getUUID() : java.util.UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        minecraft.gui.getChat().addMessage(Component.literal("§7[系统] 海岸医院的发电机重新启动了"));
+        com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(self, "OPERATOR", 0xFF5555,
+                "萌新鱼友", 0x9FD46C, "Dev", "有人看到灯塔那边的白色弧线了吗？", now);
+        com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(java.util.UUID.randomUUID(),
+                "FISH+", 0x55FFFF, "逐光会", 0xFFC857, "Lighthouse", "看到了，@Dev 我们在医院门口集合，带上抑制剂。", now,
+                "Dev", "有人看到灯塔那边的白色弧线了吗？");
+        com.hhy.dreamingfishcore.client.ui.chat.ImmersiveChatManager.receivePlayerMessage(java.util.UUID.randomUUID(),
+                "", 0xFFFFFF, "", 0xFFFFFF, "听海", "收到，我从北港过去，大概三分钟。", now);
+        minecraft.gui.getChat().addMessage(Component.literal("§e白芷 加入了队伍「灯塔守望会」"));
+    }
+
+    private static void showSystemMessages(net.minecraft.client.Minecraft minecraft, List<SampleMessage> samples) {
+        minecraft.setScreen(null);
+        com.hhy.dreamingfishcore.client.ui.notification.NotificationManager.clearAll();
+        for (SampleMessage sample : samples) {
+            com.hhy.dreamingfishcore.server.server_ui_system.client.SystemMessageDisplay.addMessage(sample.text(),
+                    sample.color(), sample.event());
+        }
+    }
+
+    private record SampleMessage(Component text, int color,
+                                 com.hhy.dreamingfishcore.client.ui.notification.SystemEvent event) {
+    }
+
+    /** 与 ChangeJoinMessage、SystemMessageEventHandler 的默认配置拼出来的文字一致；最后一条最新。 */
+    private static List<SampleMessage> sampleSystemMessages(net.minecraft.client.Minecraft minecraft) {
+        java.util.UUID self = minecraft.player != null ? minecraft.player.getUUID() : java.util.UUID.randomUUID();
+        net.minecraft.network.chat.MutableComponent advancement = Component.literal("[FISH+] ")
+                .withStyle(net.minecraft.ChatFormatting.AQUA)
+                .append(Component.literal("Lighthouse").withStyle(net.minecraft.ChatFormatting.WHITE))
+                .append(Component.literal(" 完成了进度").withStyle(net.minecraft.ChatFormatting.WHITE))
+                .append(Component.literal("[石器时代]").withStyle(net.minecraft.ChatFormatting.GREEN));
+        net.minecraft.network.chat.MutableComponent challenge = Component.literal("Dev")
+                .append(Component.literal(" 完成了挑战").withStyle(net.minecraft.ChatFormatting.WHITE))
+                .append(Component.literal("[资深怪物猎人]").withStyle(net.minecraft.ChatFormatting.DARK_PURPLE));
+        return List.of(
+                new SampleMessage(Component.literal("§b[§bFISH+§b]§b鱼友§6林潮§b不想和你VAN辣！"), 0x55FFFF,
+                        event(SystemMessageKind.LEAVE, null, "林潮", "FISH+", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§7[§a+§7]§b鱼友§e听海§b来和你VAN辣！"), 0xAAAAAA,
+                        event(SystemMessageKind.JOIN, null, "听海", "NO_RANK", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§c[§cOPERATOR§c]§b鱼友§6Dev§b来和你VAN辣！"), 0xFF5555,
+                        event(SystemMessageKind.JOIN, self, "Dev", "OPERATOR", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("白芷 被僵尸杀死了"), 0xAAAAAA,
+                        event(SystemMessageKind.DEATH, null, "白芷", "NO_RANK", ItemStack.EMPTY, "")),
+                new SampleMessage(advancement, 0x55FF55,
+                        event(SystemMessageKind.TASK, null, "Lighthouse", "FISH+", new ItemStack(Items.STONE_PICKAXE), "石器时代")),
+                new SampleMessage(challenge, 0xAA00AA,
+                        event(SystemMessageKind.CHALLENGE, self, "Dev", "OPERATOR", new ItemStack(Items.DIAMOND_SWORD),
+                                "资深怪物猎人")));
+    }
+
+    /**
+     * 不同 Rank 的进服卡片：无 Rank、FISH+ 没有扫光；FISH++、MYTH SHAPER FISH、OPERATOR 有 Rank 色扫光。
+     * 最多同时显示 4 张，最早的 FISH+ 会被挤掉（FISH+ 的配色在 system_messages 里能看到）。
+     */
+    private static List<SampleMessage> sampleJoinMessages(net.minecraft.client.Minecraft minecraft) {
+        java.util.UUID self = minecraft.player != null ? minecraft.player.getUUID() : java.util.UUID.randomUUID();
+        return List.of(
+                new SampleMessage(Component.literal("§b[§bFISH+§b]§b鱼友§6林潮§b来和你VAN辣！"), 0x55FFFF,
+                        event(SystemMessageKind.JOIN, null, "林潮", "FISH+", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§7[§a+§7]§b鱼友§e听海§b来和你VAN辣！"), 0xAAAAAA,
+                        event(SystemMessageKind.JOIN, null, "听海", "NO_RANK", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§6[§6FISH++§6]§b鱼友§6白芷§b来和你VAN辣！"), 0xFFAA00,
+                        event(SystemMessageKind.JOIN, null, "白芷", "FISH++", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§d[MYTH SHAPER FISH] §b神话缔造者§d阿洛§b降临梦屿！"), 0xFF69B4,
+                        event(SystemMessageKind.JOIN, null, "阿洛", "MYTH SHAPER FISH", ItemStack.EMPTY, "")),
+                new SampleMessage(Component.literal("§c[§cOPERATOR§c]§b鱼友§6Dev§b来和你VAN辣！"), 0xFF5555,
+                        event(SystemMessageKind.JOIN, self, "Dev", "OPERATOR", ItemStack.EMPTY, "")));
+    }
+
+    private static com.hhy.dreamingfishcore.client.ui.notification.SystemEvent event(SystemMessageKind kind,
+                                                                                    java.util.UUID id, String player,
+                                                                                    String rank, ItemStack icon,
+                                                                                    String headline) {
+        java.util.UUID playerId = id != null ? id : java.util.UUID.nameUUIDFromBytes(player.getBytes(
+                java.nio.charset.StandardCharsets.UTF_8));
+        return new com.hhy.dreamingfishcore.client.ui.notification.SystemEvent(kind, playerId, player, rank, icon,
+                Component.literal(headline));
     }
 
     private static List<StoryBookEntryViewData> sampleFragments() {

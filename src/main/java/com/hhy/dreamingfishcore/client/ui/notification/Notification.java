@@ -13,6 +13,7 @@ public final class Notification {
     private final String replaceKey;
     private final int accentColor;
     private final String biomeId;
+    private final SystemEvent event;
 
     private Notification(Builder builder) {
         this.title = builder.title;
@@ -28,6 +29,7 @@ public final class Notification {
         this.replaceKey = builder.replaceKey;
         this.accentColor = builder.accentColor;
         this.biomeId = builder.biomeId;
+        this.event = builder.event;
     }
 
     public static Builder builder() {
@@ -71,6 +73,11 @@ public final class Notification {
         return biomeId;
     }
 
+    /** 右上角系统消息的结构化内容（谁、发生了什么），旧消息为 null。 */
+    public SystemEvent event() {
+        return event;
+    }
+
     public int effectiveAccentColor() {
         return accentColor >= 0 ? 0xFF000000 | accentColor : theme.accentColor();
     }
@@ -85,6 +92,7 @@ public final class Notification {
         private String replaceKey;
         private int accentColor = -1;
         private String biomeId;
+        private SystemEvent event;
 
         public Builder title(Component title) {
             this.title = title == null ? Component.empty() : title;
@@ -131,6 +139,11 @@ public final class Notification {
         /** 区域提示对应的生物群系，上方横幅据此选择风景与配色。 */
         public Builder biome(String biomeId) {
             this.biomeId = biomeId == null || biomeId.isBlank() ? null : biomeId;
+            return this;
+        }
+
+        public Builder event(SystemEvent event) {
+            this.event = event;
             return this;
         }
 

@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * 通知的三种位置：屏幕上方居中的横幅（区域提示，见 {@link RegionPostcard}）、左上角的提示卡片与右上角读数下方的系统消息。
- * 全部画在统一 HUD 画布上；出入场时卡片按宽度展开/收起（画布裁剪）。
+ * 通知的三种位置：屏幕上方居中的横幅（区域提示，见 {@link RegionPostcard}）、左上角的提示卡片与右上角读数下方的系统消息
+ * （事件卡，见 {@link SystemEventCards}）。全部画在统一 HUD 画布上；左上角卡片出入场时按宽度展开/收起（画布裁剪）。
  */
 public final class NotificationRenderer {
     private static final int LEFT_MARGIN = 5;
@@ -27,16 +27,6 @@ public final class NotificationRenderer {
     private static final int INNER_PADDING = 7;
     private static final int ACCENT_WIDTH = 2;
     private static final long SIDE_NOTIFICATION_ANIMATION_MS = 220L;
-    private static final float TOP_RIGHT_TEXT_SCALE = 0.82f;
-    private static final int TOP_RIGHT_MAX_WIDTH = 196;
-    private static final int TOP_RIGHT_BOX_HEIGHT = 15;
-    private static final int TOP_RIGHT_RADIUS = 4;
-    private static final int TOP_RIGHT_STACK_GAP = 3;
-    private static final int TOP_RIGHT_LEFT_PADDING = 5;
-    private static final int TOP_RIGHT_ACCENT_GAP = 4;
-    private static final int TOP_RIGHT_RIGHT_PADDING = 6;
-    private static final int TOP_RIGHT_VERTICAL_PADDING = 3;
-    private static final int TOP_RIGHT_LINE_GAP = 1;
     private static final int MAX_LEFT_WIDTH = 300;
     private static final int CENTER_MIN_WIDTH = 190;
     private static final int CENTER_SIDE_MARGIN = 58;
@@ -47,7 +37,6 @@ public final class NotificationRenderer {
     // Font.split result around instead of rebuilding it on every HUD frame;
     // weak keys let completed notifications disappear from the cache naturally.
     private static final Map<Notification, CachedLines> LEFT_LINES_CACHE = new WeakHashMap<>();
-    private static final Map<Notification, CachedLines> TOP_RIGHT_LINES_CACHE = new WeakHashMap<>();
     private static final Map<Notification, CenterLayout> CENTER_LAYOUT_CACHE = new WeakHashMap<>();
     private static Font lineCacheFont;
     private static volatile boolean lineCachesDirty;
@@ -100,70 +89,13 @@ public final class NotificationRenderer {
 
     // ==================== 右上角系统消息 ====================
 
+    /** 右上角终端眼镜读数下方的系统消息；{@code anchorY + anchorHeight} 为读数区下沿。 */
     public static void renderTopRight(UiCanvas canvas, Font font, int rightEdge, int anchorY, int anchorHeight,
                                       List<NotificationManager.ActiveNotification> entries) {
-        Minecraft mc = Minecraft.getInstance();
-        if (!hudVisible(mc) || entries.isEmpty()) {
+        if (!hudVisible(Minecraft.getInstance()) || entries.isEmpty()) {
             return;
         }
-
-        int currentY = anchorY + anchorHeight + 2;
-        long now = System.currentTimeMillis();
-        for (int index = entries.size() - 1; index >= 0; index--) {
-            NotificationManager.ActiveNotification entry = entries.get(index);
-            Notification notification = entry.notification();
-            float visibility = visibility(entry, notification, now);
-            int alpha = Math.round(visibility * 255.0f);
-            if (alpha <= 0) {
-                continue;
-            }
-
-            int chromeWidth = TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH
-                    + TOP_RIGHT_ACCENT_GAP + TOP_RIGHT_RIGHT_PADDING;
-            int maxTextWidth = Math.max(24,
-                    (int) ((TOP_RIGHT_MAX_WIDTH - chromeWidth) / TOP_RIGHT_TEXT_SCALE));
-            CachedLines cachedLines = splitTopRightLines(font, notification, maxTextWidth);
-            List<FormattedCharSequence> displayLines = cachedLines.lines();
-            int textWidth = Math.round(cachedLines.maxWidth() * TOP_RIGHT_TEXT_SCALE);
-            int boxWidth = Math.min(TOP_RIGHT_MAX_WIDTH, chromeWidth + textWidth);
-            int rawLineStep = font.lineHeight + TOP_RIGHT_LINE_GAP;
-            int rawTextHeight = font.lineHeight + Math.max(0, displayLines.size() - 1) * rawLineStep;
-            int scaledTextHeight = Math.max(1, Math.round(rawTextHeight * TOP_RIGHT_TEXT_SCALE));
-            int boxHeight = Math.max(TOP_RIGHT_BOX_HEIGHT,
-                    TOP_RIGHT_VERTICAL_PADDING * 2 + scaledTextHeight);
-            int boxX = rightEdge - boxWidth - 2;
-            int boxRight = boxX + boxWidth;
-            boolean clipAnimation = visibility < 0.999f;
-            if (clipAnimation) {
-                int animatedWidth = Math.max(1, Math.round(boxWidth * visibility));
-                canvas.pushClip(boxRight - animatedWidth, currentY, animatedWidth, boxHeight, 0.0F);
-            }
-            drawTopRightPanel(canvas, boxX, currentY, boxWidth, boxHeight, notification, alpha);
-
-            float textX = boxX + TOP_RIGHT_LEFT_PADDING + ACCENT_WIDTH + TOP_RIGHT_ACCENT_GAP;
-            float textY = currentY + (boxHeight - scaledTextHeight) / 2.0F;
-            int textColor = scaleAlpha(notification.theme().textColor(), alpha);
-            for (FormattedCharSequence line : displayLines) {
-                canvas.text(line, textX, textY, textColor, TOP_RIGHT_TEXT_SCALE, false);
-                textY += rawLineStep * TOP_RIGHT_TEXT_SCALE;
-            }
-            if (clipAnimation) {
-                canvas.popClip();
-            }
-            currentY += boxHeight + TOP_RIGHT_STACK_GAP;
-        }
-    }
-
-    private static void drawTopRightPanel(UiCanvas canvas, int x, int y, int width, int height,
-                                          Notification notification, int alpha) {
-        NotificationTheme theme = notification.theme();
-        int accent = notification.effectiveAccentColor();
-        int border = notification.accentColor() >= 0 ? accent : theme.borderColor();
-        canvas.shape(x, y, width, height).radius(TOP_RIGHT_RADIUS)
-                .fill(scaleAlpha(theme.backgroundColor(), Math.round(alpha * 0.78f)))
-                .border(1.0F, scaleAlpha(border, Math.round(alpha * 0.62f))).draw();
-        canvas.shape(x + TOP_RIGHT_LEFT_PADDING, y + 3, ACCENT_WIDTH, Math.max(2, height - 6)).radius(1.0F)
-                .fill(scaleAlpha(accent, Math.round(alpha * 0.88f))).draw();
+        SystemEventCards.render(canvas, font, rightEdge, anchorY + anchorHeight, entries);
     }
 
     // ==================== 左上角提示 ====================
@@ -222,6 +154,10 @@ public final class NotificationRenderer {
     // ==================== 居中横幅 ====================
 
     private static void renderCenterTop(UiCanvas canvas, Minecraft mc, List<NotificationManager.ActiveNotification> entries) {
+        // visible() 与 paint() 之间通知可能刚好到期，列表会变空
+        if (entries.isEmpty()) {
+            return;
+        }
         NotificationManager.ActiveNotification entry = entries.get(0);
         // 正常情况下画成风景明信片；界面着色器不可用时退回原来的面板样式
         if (SdfRenderer.available()) {
@@ -343,19 +279,6 @@ public final class NotificationRenderer {
         });
     }
 
-    private static CachedLines splitTopRightLines(Font font, Notification notification, int maxTextWidth) {
-        ensureLineCacheFont(font);
-        // The top-right width is fixed by the HUD constants, so the first
-        // computed split remains valid for the notification's lifetime.
-        return TOP_RIGHT_LINES_CACHE.computeIfAbsent(notification, ignored -> {
-            List<FormattedCharSequence> lines = font.split(notification.message(), maxTextWidth);
-            List<FormattedCharSequence> safeLines = lines.isEmpty()
-                    ? List.of(notification.message().getVisualOrderText())
-                    : List.copyOf(lines);
-            return new CachedLines(safeLines, maxWidth(font, safeLines));
-        });
-    }
-
     private static CenterLayout getCenterLayout(Font font, Notification notification, int maxPanelWidth) {
         ensureLineCacheFont(font);
         CenterLayout cached = CENTER_LAYOUT_CACHE.get(notification);
@@ -386,7 +309,6 @@ public final class NotificationRenderer {
             return;
         }
         LEFT_LINES_CACHE.clear();
-        TOP_RIGHT_LINES_CACHE.clear();
         CENTER_LAYOUT_CACHE.clear();
         lineCacheFont = font;
         lineCachesDirty = false;

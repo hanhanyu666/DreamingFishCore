@@ -41,7 +41,20 @@ public final class RegionPostcard {
     private static final int TEX_W = 1280;
     private static final int TEX_H = 160;
     private static final int GROUND_TEX_H = 64;
-    private static final float RADIUS = 7.0F;
+    private static final float RADIUS = 5.0F;
+    /** 与原来的区域横幅一样大：最窄 190，有说明行时高 38，只有地名时高 29。 */
+    private static final float MIN_WIDTH = 190.0F;
+    private static final float HEIGHT = 38.0F;
+    private static final float PLAIN_HEIGHT = 29.0F;
+    /** 卡片顶边离屏幕上沿的距离，与原来的区域横幅相同。 */
+    private static final float TOP = 16.0F;
+    /** 场景里各种小物件（太阳、花草）按卡片高度相对 66 的比例缩放，画面的比例不变。 */
+    private static final float DESIGN_HEIGHT = 66.0F;
+    private static final float TITLE_SCALE = 1.2F;
+    private static final float TITLE_TRACKING = 1.0F;
+    private static final float DETAIL_SCALE = 0.64F;
+    private static final float DETAIL_TRACKING = 0.25F;
+    private static final String DETAIL_SEPARATOR = "  ·  ";
     private static final int TITLE_COLOR = 0xFFFFF8EC;
     private static final int DETAIL_COLOR = 0xFFF5E9D0;
     private static final int FIRST_COLOR = 0xFFF3CF8A;
@@ -461,12 +474,12 @@ public final class RegionPostcard {
             }
             details = List.copyOf(parts);
             first = !parts.isEmpty() && parts.get(0).contains("首次");
-            float maxWidth = Math.min(300.0F, screenWidth - 24.0F);
+            float maxWidth = Math.max(MIN_WIDTH, Math.min(300.0F, screenWidth - 24.0F));
             String fullTitle = notification.title().getString().trim();
-            title = TextFit.trim(fullTitle, font, (int) ((maxWidth - 70.0F) / 1.35F));
-            float titleWidth = trackedWidth(font, title, 1.35F, 1.2F);
-            width = Math.max(Math.min(236.0F, maxWidth), Math.min(maxWidth, titleWidth + 104.0F));
-            height = details.isEmpty() ? 58.0F : 66.0F;
+            title = TextFit.trim(fullTitle, font, (int) ((maxWidth - 56.0F) / TITLE_SCALE));
+            float contentWidth = Math.max(trackedWidth(font, title, TITLE_SCALE, TITLE_TRACKING), detailWidth(font, details));
+            width = Math.round(Math.max(MIN_WIDTH, Math.min(maxWidth, contentWidth + 56.0F)));
+            height = details.isEmpty() ? PLAIN_HEIGHT : HEIGHT;
 
             backOffset = hash(seed, 1, 0);
             farOffset = hash(seed, 2, 0);
@@ -493,14 +506,14 @@ public final class RegionPostcard {
             if (scene.ground == Ground.NONE || scene == Scene.DESERT || scene == Scene.BADLANDS || snowy()) {
                 return;
             }
-            int count = (int) (width / 6.5F);
+            int count = (int) (width / 5.5F);
             float flowerShare = (look & LOOK_FLORAL) != 0 ? 0.75F : 0.3F;
             for (int i = 0; i < count; i++) {
                 float x = hash(seed, 10, i) * (width + 20.0F);
                 float pick = hash(seed, 11, i);
                 if (scene == Scene.MUSHROOM) {
                     if (pick < 0.35F) {
-                        decor.add(new Decor(x, 2.2F + hash(seed, 12, i) * 2.0F, 2,
+                        decor.add(new Decor(x, (2.2F + hash(seed, 12, i) * 2.0F) * Math.max(0.6F, height / DESIGN_HEIGHT), 2,
                                 hash(seed, 13, i) < 0.6F ? 0xFFD9534F : 0xFFB48A62, hash(seed, 14, i) * 6.28F));
                     }
                     continue;
@@ -511,6 +524,7 @@ public final class RegionPostcard {
                 if (scene == Scene.SAVANNA) {
                     height += 1.5F;
                 }
+                height *= Math.max(0.6F, this.height / DESIGN_HEIGHT);
                 decor.add(new Decor(x, height, flower ? 1 : 0, color, hash(seed, 14, i) * 6.28F));
             }
         }
@@ -536,11 +550,11 @@ public final class RegionPostcard {
 
     /** 卡片里各层的高度；洞穴与下界的岩壁铺满整张卡片。 */
     private static float backHeight(Scene scene, float h) {
-        return scene == Scene.CAVE || scene == Scene.NETHER ? h : h * 0.6F;
+        return scene == Scene.CAVE || scene == Scene.NETHER ? h : h * 0.56F;
     }
 
     private static float midHeight(Scene scene, float h) {
-        return scene == Scene.CAVE || scene == Scene.NETHER ? h : h * 0.5F;
+        return scene == Scene.CAVE || scene == Scene.NETHER ? h : h * 0.46F;
     }
 
     private static boolean leafy(Scene scene) {
@@ -682,7 +696,7 @@ public final class RegionPostcard {
         float w = state.width;
         float h = state.height;
         float x0 = Math.round((screenWidth - w) / 2.0F);
-        float y0 = 8.0F - 6.0F * (1.0F - cardIn) - 4.0F * cardOut;
+        float y0 = TOP - 6.0F * (1.0F - cardIn) - 4.0F * cardOut;
 
         canvas.push();
         canvas.translate(x0, y0);
@@ -691,7 +705,7 @@ public final class RegionPostcard {
 
         // 卡片底与投影；天空在 0.72 处到达地平线色
         canvas.shape(0.0F, 0.0F, w, h).radius(RADIUS).verticalGradient(p.skyTop(), UiColor.lerp(p.ground(), 0xFF000000, 0.3F))
-                .shadow(new Theme.Shadow(0.0F, 4.0F, 14.0F, 0.0F, 0x78000000)).draw();
+                .shadow(new Theme.Shadow(0.0F, 3.0F, 10.0F, 0.0F, 0x70000000)).draw();
         canvas.pushClip(0.0F, 0.0F, w, h, RADIUS);
         canvas.shape(0.0F, 0.0F, w, h * 0.72F).verticalGradient(p.skyTop(), p.horizon()).draw();
         canvas.fill(0.0F, h * 0.72F - 0.5F, w, h * 0.28F + 0.5F, p.horizon());
@@ -717,7 +731,7 @@ public final class RegionPostcard {
         }
         mist(canvas, p, w, backY + backH * 0.5F, backH * 0.5F, state.time == Time.NIGHT ? 0.3F : 0.45F);
         if (state.scene.far != null) {
-            float farH = h * 0.48F;
+            float farH = h * 0.42F;
             float farY = h - farH + lift(t, 220L, outro + 160L, farH);
             drawLayer(canvas, state.scene.far, w, farY, farH, state.farOffset + drift(t, 0.9F, farH), p.far());
             mist(canvas, p, w, farY + farH * 0.55F, farH * 0.45F, state.time == Time.NIGHT ? 0.18F : 0.3F);
@@ -746,14 +760,16 @@ public final class RegionPostcard {
         paintParticles(canvas, state, p, w, h, t, fxIn);
 
         // 顶部压暗托住标题；四角轻微暗角
-        canvas.shape(0.0F, 0.0F, w, h * 0.55F).verticalGradient(0x50000000, 0x00000000).draw();
+        canvas.shape(0.0F, 0.0F, w, h * 0.55F).verticalGradient(0x40000000, 0x00000000).draw();
+        float scrimW = Math.min(w * 0.5F, 70.0F);
+        canvas.shape(w / 2.0F - scrimW, 0.0F, scrimW * 2.0F, h).radial(0x34000000, 0x00000000, scrimW, h * 0.36F, scrimW).draw();
         canvas.shape(0.0F, 0.0F, w, h).radial(0x00000000, 0x38000000, w / 2.0F, h / 2.0F,
                 (float) Math.hypot(w, h) * 0.58F).draw();
         canvas.popClip();
 
         // 边框：外圈暖色细线，内圈一道淡白线，像明信片的压边
         canvas.shape(0.0F, 0.0F, w, h).radius(RADIUS).fill(0).border(1.0F, UiColor.withAlpha(0xFFF6E7C8, 0.3F)).draw();
-        canvas.shape(2.5F, 2.5F, w - 5.0F, h - 5.0F).radius(RADIUS - 2.0F).fill(0)
+        canvas.shape(2.0F, 2.0F, w - 4.0F, h - 4.0F).radius(RADIUS - 1.5F).fill(0)
                 .border(0.6F, UiColor.withAlpha(0xFFFFFFFF, 0.08F)).draw();
 
         paintText(canvas, font, state, w, t, outro);
@@ -795,7 +811,7 @@ public final class RegionPostcard {
         float rise = easeOutCubic(range(t, 150L, 1000L));
         float x = w * 0.82F;
         float y = h * p.sunY() + (1.0F - rise) * h * 0.25F;
-        float r = p.sunRadius();
+        float r = p.sunRadius() * Math.max(0.6F, h / DESIGN_HEIGHT);
         float glow = r * 5.0F;
         canvas.shape(x - glow, y - glow, glow * 2.0F, glow * 2.0F)
                 .radial(UiColor.withAlpha(p.sun(), moon ? 0.3F : 0.45F), UiColor.withAlpha(p.sun(), 0), glow, glow, glow).draw();
@@ -1157,11 +1173,15 @@ public final class RegionPostcard {
         if (alpha <= 0.01F) {
             return;
         }
-        float scale = 1.35F;
-        float tracking = 1.2F + 4.0F * (1.0F - titleIn);
+        float scale = TITLE_SCALE;
+        float tracking = TITLE_TRACKING + 3.0F * (1.0F - titleIn);
         float titleW = trackedWidth(font, s.title, scale, tracking);
         boolean twoLines = !s.details.isEmpty();
-        float titleY = (twoLines ? 9.0F : 12.0F) + 3.0F * (1.0F - titleIn);
+        float titleH = font.lineHeight * scale;
+        float detailH = font.lineHeight * DETAIL_SCALE;
+        float block = twoLines ? titleH + 2.0F + detailH : titleH;
+        // 文字放在天空里，尽量不压中景：两行时贴近上沿，只有地名时略高于正中
+        float titleY = (twoLines ? s.height * 0.12F : (s.height - block) / 2.0F - 2.5F) + 2.0F * (1.0F - titleIn);
         drawTracked(canvas, font, s.title, (w - titleW) / 2.0F, titleY, scale, tracking,
                 UiColor.withAlpha(TITLE_COLOR, alpha), 0.55F * alpha);
         if (!twoLines) {
@@ -1169,28 +1189,43 @@ public final class RegionPostcard {
         }
         // 说明行：“首次发现”用淡金色点一下，其余为米白，段与段之间是暗一些的间隔点
         float detailIn = easeOutCubic(range(t, 850L, 1500L)) * (1.0F - out);
-        float detailScale = 0.68F;
-        String separator = "  ·  ";
-        float total = 0.0F;
-        for (int i = 0; i < s.details.size(); i++) {
-            total += trackedWidth(font, s.details.get(i), detailScale, 0.3F);
-            if (i > 0) {
-                total += trackedWidth(font, separator, detailScale, 0.3F) + 0.3F;
-            }
-        }
-        float x = (w - total) / 2.0F;
-        float y = titleY + font.lineHeight * scale + 4.0F;
+        float x = (w - detailWidth(font, s.details)) / 2.0F;
+        float y = titleY + titleH + 2.0F;
         for (int i = 0; i < s.details.size(); i++) {
             if (i > 0) {
-                drawTracked(canvas, font, separator, x, y, detailScale, 0.3F,
+                drawTracked(canvas, font, DETAIL_SEPARATOR, x, y, DETAIL_SCALE, DETAIL_TRACKING,
                         UiColor.withAlpha(DETAIL_COLOR, 0.5F * detailIn), 0.3F * detailIn);
-                x += trackedWidth(font, separator, detailScale, 0.3F) + 0.3F;
+                x += trackedWidth(font, DETAIL_SEPARATOR, DETAIL_SCALE, DETAIL_TRACKING) + DETAIL_TRACKING;
             }
             String part = s.details.get(i);
             int color = i == 0 && s.first ? FIRST_COLOR : DETAIL_COLOR;
-            drawTracked(canvas, font, part, x, y, detailScale, 0.3F, UiColor.withAlpha(color, 0.9F * detailIn), 0.4F * detailIn);
-            x += trackedWidth(font, part, detailScale, 0.3F);
+            haloTracked(canvas, font, part, x, y, DETAIL_SCALE, DETAIL_TRACKING, 0.32F * detailIn);
+            drawTracked(canvas, font, part, x, y, DETAIL_SCALE, DETAIL_TRACKING, UiColor.withAlpha(color, 0.95F * detailIn),
+                    0.55F * detailIn);
+            x += trackedWidth(font, part, DETAIL_SCALE, DETAIL_TRACKING);
         }
+    }
+
+    /** 小字在亮背景（白天的天空、中景）上的暗描边：上下左右各偏半个像素画一层半透明黑字。 */
+    private static void haloTracked(UiCanvas canvas, Font font, String text, float x, float y, float scale,
+                                    float tracking, float alpha) {
+        int color = UiColor.withAlpha(0xFF000000, alpha);
+        drawTracked(canvas, font, text, x - 0.5F, y, scale, tracking, color, 0.0F);
+        drawTracked(canvas, font, text, x + 0.5F, y, scale, tracking, color, 0.0F);
+        drawTracked(canvas, font, text, x, y - 0.5F, scale, tracking, color, 0.0F);
+        drawTracked(canvas, font, text, x, y + 0.5F, scale, tracking, color, 0.0F);
+    }
+
+    /** 说明行（各段加间隔点）的总宽度。 */
+    private static float detailWidth(Font font, List<String> details) {
+        float total = 0.0F;
+        for (int i = 0; i < details.size(); i++) {
+            total += trackedWidth(font, details.get(i), DETAIL_SCALE, DETAIL_TRACKING);
+            if (i > 0) {
+                total += trackedWidth(font, DETAIL_SEPARATOR, DETAIL_SCALE, DETAIL_TRACKING) + DETAIL_TRACKING;
+            }
+        }
+        return total;
     }
 
     // ==================== 工具 ====================

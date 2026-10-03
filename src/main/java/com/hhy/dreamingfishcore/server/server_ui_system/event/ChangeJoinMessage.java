@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.login_system.AuthSessionGuard;
 import com.hhy.dreamingfishcore.server.login_system.event.PlayerAuthenticatedEvent;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
+import net.minecraft.world.item.ItemStack;
 import com.hhy.dreamingfishcore.server.playerdata_system.PlayerDataManager;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
@@ -213,7 +215,8 @@ public class ChangeJoinMessage {
                 continue;
             }
             DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SystemMessage(content, borderColor),
+                    new Packet_SystemMessage(content, borderColor, SystemMessageKind.JOIN, serverPlayer.getUUID(),
+                            serverPlayer.getName().getString(), rankName(playerRank), ItemStack.EMPTY, Component.empty()),
                     onlinePlayer
             );
         }
@@ -256,10 +259,16 @@ public class ChangeJoinMessage {
                 continue;
             }
             DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SystemMessage(content, borderColor),
+                    new Packet_SystemMessage(content, borderColor, SystemMessageKind.LEAVE, serverPlayer.getUUID(),
+                            serverPlayer.getName().getString(), rankName(playerRank), ItemStack.EMPTY, Component.empty()),
                     onlinePlayer
             );
         }
+    }
+
+    /** 随系统消息发给客户端的 Rank 名：客户端据此决定卡片配色与高等级的扫光。 */
+    private static String rankName(Rank rank) {
+        return rank == null ? "" : rank.getRankName();
     }
 
     /**

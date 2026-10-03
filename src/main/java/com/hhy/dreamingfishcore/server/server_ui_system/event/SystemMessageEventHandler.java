@@ -3,6 +3,8 @@ package com.hhy.dreamingfishcore.server.server_ui_system.event;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.network.DreamingFishCore_NetworkManager;
 import com.hhy.dreamingfishcore.server.server_ui_system.network.Packet_SystemMessage;
+import com.hhy.dreamingfishcore.server.server_ui_system.network.SystemMessageKind;
+import net.minecraft.world.item.ItemStack;
 import com.hhy.dreamingfishcore.server.rank_system.PlayerRankManager;
 import com.hhy.dreamingfishcore.server.rank_system.Rank;
 import net.minecraft.advancements.Advancement;
@@ -51,21 +53,25 @@ public class SystemMessageEventHandler {
         String typeText;
         int borderColor;
         ChatFormatting titleColor;
+        SystemMessageKind kind;
         switch (frame) {
             case CHALLENGE:
                 typeText = "挑战";
                 borderColor = COLOR_CHALLENGE; // 紫色
                 titleColor = ChatFormatting.DARK_PURPLE;
+                kind = SystemMessageKind.CHALLENGE;
                 break;
             case GOAL:
                 typeText = "目标";
                 borderColor = COLOR_GOAL; // 蓝色
                 titleColor = ChatFormatting.AQUA;
+                kind = SystemMessageKind.GOAL;
                 break;
             default:
                 typeText = "进度";
                 borderColor = COLOR_TASK; // 绿色
                 titleColor = ChatFormatting.GREEN;
+                kind = SystemMessageKind.TASK;
                 break;
         }
 
@@ -92,8 +98,9 @@ public class SystemMessageEventHandler {
                 .append(title.copy().withStyle(style -> style.withColor(titleColor))) // 标题根据类型着色
                 .append(Component.literal("]").withStyle(style -> style.withColor(titleColor))); // 右括号同标题颜色
 
-        // 发送到所有玩家的右上角
-        broadcastSystemMessage(player, message, borderColor);
+        // 发送到所有玩家的右上角；附带进度图标与名称，客户端画成进度卡片
+        broadcastSystemMessage(player, new Packet_SystemMessage(message, borderColor, kind, player.getUUID(),
+                player.getName().getString(), playerRank == null ? "" : playerRank.getRankName(), display.getIcon(), title));
     }
 
     // ==================== 死亡消息 ====================
@@ -126,7 +133,9 @@ public class SystemMessageEventHandler {
 
         // 发送到所有玩家的右上角（使用该玩家的 Rank 颜色）
         int borderColor = getRankBorderColor(playerRank);
-        broadcastSystemMessage(player, deathMessage, borderColor);
+        broadcastSystemMessage(player, new Packet_SystemMessage(deathMessage, borderColor, SystemMessageKind.DEATH,
+                player.getUUID(), player.getName().getString(), playerRank == null ? "" : playerRank.getRankName(),
+                ItemStack.EMPTY, Component.empty()));
     }
 
     // ==================== 离服消息 ====================
@@ -180,17 +189,14 @@ public class SystemMessageEventHandler {
     */
 
     // ==================== 通用发送方法 ====================
-    private static void broadcastSystemMessage(ServerPlayer source, Component message, int borderColor) {
+    private static void broadcastSystemMessage(ServerPlayer source, Packet_SystemMessage packet) {
         // 获取服务器
         var server = source.getServer();
         if (server == null) return;
 
         // 发送到所有在线玩家的右上角
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            DreamingFishCore_NetworkManager.sendToClient(
-                    new Packet_SystemMessage(message, borderColor),
-                    player
-            );
+            DreamingFishCore_NetworkManager.sendToClient(packet, player);
         }
     }
 
