@@ -167,12 +167,16 @@ public final class Command_TaskLocation {
     private static int remove(CommandContext<CommandSourceStack> context) {
         String locationName = StringArgumentType.getString(context, "name");
         try {
-            if (!TaskLocationManager.removeLocationByName(locationName)) {
+            // 区域参数既接受 id 也接受显示名，与管理器里的 removeLocation（按 id）配合
+            TaskLocationDefinition target =
+                    TaskLocationManager.resolveLocationReference(locationName).orElse(null);
+            if (target == null || !TaskLocationManager.removeLocation(target.getId())) {
                 context.getSource().sendFailure(Component.literal("任务地点不存在：" + locationName));
                 return 0;
             }
             context.getSource().sendSuccess(
-                    () -> Component.literal("已删除任务地点：" + locationName), true);
+                    () -> Component.literal("已删除任务地点：" + target.getName()
+                            + "（id " + target.getId() + "）"), true);
             return 1;
         } catch (Exception exception) {
             context.getSource().sendFailure(Component.literal(exception.getMessage()));
@@ -202,7 +206,16 @@ public final class Command_TaskLocation {
     private static int setHorde(CommandContext<CommandSourceStack> context, boolean horde) {
         String locationName = StringArgumentType.getString(context, "name");
         try {
-            java.util.Optional<Boolean> result = TaskLocationManager.setHordeByName(locationName, horde);
+            // 区域参数既接受 id 也接受显示名：先按 id 匹配，再退回按显示名匹配。
+            // 管理器只有按名字设置尸潮的接口，所以这里先解析出定义再传它的显示名。
+            TaskLocationDefinition target =
+                    TaskLocationManager.resolveLocationReference(locationName).orElse(null);
+            if (target == null) {
+                context.getSource().sendFailure(Component.literal("任务地点不存在：" + locationName));
+                return 0;
+            }
+            java.util.Optional<Boolean> result =
+                    TaskLocationManager.setHordeByName(target.getName(), horde);
             if (result.isEmpty()) {
                 context.getSource().sendFailure(Component.literal("任务地点不存在：" + locationName));
                 return 0;
