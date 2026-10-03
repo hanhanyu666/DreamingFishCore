@@ -231,3 +231,165 @@ maxDeposit（默认 10000）。
 
 任务地点命令
 /dreamingfish task_location horde on|off <地点名> 开关该地点的尸潮区域。
+
+射手僵尸（新）
+新增远程丧尸变体「射手僵尸」（dreamingfishcore:archer_zombie）。它继承原版僵尸：近战追击、
+开门、白天着火、水中腐化、原版模型与音效全部保留，只把生命值压到 16（低于原版僵尸的 20，
+远程压制单位刻意更脆）、移速调到 0.21（原版 0.23），并额外增加了远程攻击。贴脸（2.5 格内）时
+远程 AI 主动让位，交回原版近战，所以它仍然是一只普通僵尸，而不是站桩炮台。
+远程 AI：与目标保持在 6~16 格之间——太近就后撤、太远就接近、在射程内站桩并横向游走；
+视线通畅时按「蓄力抬手（22 tick，期间站定）→ 发射 → 固定冷却（40 tick）」的节奏循环，
+抬手动作由同步状态驱动，客户端会看到它把双臂举起来。
+骨刺投射物（dreamingfishcore:bone_spike）：飞行时有轻微下坠（每 tick 重力 0.045），
+命中生物造成穿刺伤害（走自定义伤害类型 dreamingfishcore:bone_spike）并附加 3 秒「缓慢 I」
+与 5 秒「流血」；命中方块或离开发射点 24 格后碎成骨屑消散。骨刺**不会伤害其他僵尸**
+（同族免伤），尸潮里不会自相残杀。
+骨刺伤害按**原版难度**缩放（和平/简单/普通/困难 = 0 / 0.75 / 1 / 1.5 倍，基础伤害 4 即
+0 / 3 / 4 / 6 点）。这四个倍率写在 archer_zombie.json 里，可单独调。之所以为骨刺单独注册
+伤害类型并声明 scaling: never，是因为原版 mob_projectile 自带一套硬编码的难度缩放
+（简单 min(伤害/2+1, 伤害)、普通 ×1、困难 ×1.5），直接复用会让"按难度变化"变成隐式且不可调，
+叠加自定义倍率还会变成双倍变化。死亡提示：death.attack.bone_spike[.player]。
+流血（dreamingfishcore:bleeding）：每秒结算 1 + 等级点穿透护甲伤害，走自定义伤害类型
+dreamingfishcore:bleeding（死亡提示「失血过多」）。**对玩家而言只有在移动中才结算**——
+结算那一 tick 必须有 WASD 级别的水平位移（位移信号由 PlayerMotionTracker 在
+PlayerTickEvent.Post 采样上一 tick 的位移得到，因为原版的 tickEffects() 跑在移动之前，
+当场现算永远是 0）；站着不动等于压迫止血，但效果本身不会提前消失，一走又开始掉。
+非玩家生物（村民、动物）不受这条限制，照常每秒结算。
+音效：新增 entity.archer_zombie.charge / shoot 与 entity.bone_spike.hit 三个事件，
+音源以 sounds.json 的 event 别名复用原版音效（僵尸低吼 / 破空 / 命中），资源包可直接覆盖。
+资源：占位皮肤 textures/entity/archer_zombie/archer_zombie.png（复制自围攻僵尸皮肤，
+换正式美术只需替换该文件）、骨刺贴图与流血图标均为代码生成的占位资源。
+自然生成：射手僵尸不新增独立条目，而是从「自定义丧尸」的权重里再切一刀
+（archer_zombie.json 的 spawnPercentOfCustomZombie，默认 40%，即原版 40 : 围攻 36 : 射手 24，
+僵尸家族总权重不变、原版僵尸比例不变）；把它设为 0 即完全退回改动前的行为。
+数值配置：config/dreamingfishcore/archer_zombie.json，写入即生效，改完用
+/dreamingfish zombie reload 热重载（同时重载围攻僵尸配置）；/dreamingfish zombie status
+会打印当前全部射手数值（伤害、难度倍率、射程、间隔、弹速、生成权重等）。所有字段都有范围校验，
+写坏的配置会被拒绝并保留上一份有效值，不会进到正在跑的 AI 里。注意配置文件优先于代码默认值：
+升级已有服务器时请删掉旧的 archer_zombie.json 让它按新默认重建（或手动改 maxHealth）。
+蓝图掉落：射手僵尸与围攻僵尸一样，被玩家击杀时按 blueprint.json 的
+siegeZombieDropPercent 抽蓝图（「模组丧尸家族」统一由 ModZombieSpecies 标记接口判定）。
+验证：`gradlew compileJava` 通过；`gradlew test` 517 用例全绿（新增 17 条：配置校验、
+难度倍率映射与逐档覆盖、生成权重三分法的守恒/单调性质、贴图与 sounds.json 一致性）；
+`gradlew runGameTestServer` 全部 19 条 required gametest 通过，新增 6 条覆盖
+「AI 锁定玩家并在射程内开火」「骨刺命中造成伤害 + 减速 + 流血 + 消散」「属性与掉落表沿用原版僵尸」
+「骨刺伤害等于基础伤害 × 当前难度倍率」「流血在静止时不结算、移动时结算」「模拟玩家可被骨刺伤害」。
+自然生成的实际刷怪密度建议在正式服按需微调 spawnPercentOfCustomZombie。
+
+焦尸（新）
+新增变体「焦尸」（dreamingfishcore:charred_zombie）：只受火焰类伤害的僵尸。继承原版僵尸，
+近战追击、开门、破门、装备随机生成、水中腐化全部保留，差异在属性（生命 22、移速 0.20、
+索敌仍为 35）与一条核心规则上——非火焰类伤害在扣血前被归零。
+伤害闸门：火焰类伤害照常结算，判定用原版 minecraft:is_fire 标签，并额外纳入烈焰人与恶魂的
+火球（minecraft:fireball / minecraft:unattributed_fireball，它们不在原版标签里）；其余伤害一律归零。
+归零不等于无事发生：受伤动画、击退、仇恨、武器耐久消耗、附魔点火全部保留。实现上刻意**不**在
+hurt 里提前 return false，而是把这次伤害压到 0 再交给原版流程——因为火焰附加的点燃挂在
+Player#attack 里 EnchantmentHelper.doPostAttackEffects(...) 的调用条件（if (target.hurt(...))）上，
+返回 false 会让「用火剑点火」这条最顺手的反制路径直接失效（而火矢的点燃在 hurt 之前无条件执行，
+两条路径会变得不一致，很容易被当成 bug 报上来）。免疫命中时会喷灰烬粒子并播出 block.fire.extinguish
+作为反馈，因此**没有**新增 sounds.json 条目。
+易燃体质：受到的火焰类伤害 ×2（fireDamageMultiplier），且着火期间移速 +15%、攻击力 +2
+（burningBoostEnabled / burningSpeedBonus / burningAttackBonus）——用火是双刃剑，点火的人要承担它变凶的代价。
+易损：被火焰类伤害命中后附加新效果 dreamingfishcore:vulnerable「易损」（默认 100 tick = 5 秒）。
+期间 ① 非火伤害不再被归零（破防），② 所有伤害按 1 + 10% × 等级 放大。等级按原版口径换算，
+amplifier 0 就是 I 级 = +10%（不是 +0%）；易损期间焦尸会发光，给玩家「它现在打得动了」的可读信号。
+本次命中只结算火伤、不享受自己打出的易损加成，下一次命中才开始破防，避免自我放大。
+环境行为：白天不再自燃（burnInDaylight 默认 false）——日光燃烧走的是 on_fire 伤害类型，也就是
+免费的火焰伤害，保留它等于让玩家靠等天亮就能破解「必须用火」这条机制；泡水 600 tick 仍会腐化成
+溺尸（convertInWater 默认 true），当作「水把它浇灭了」的收场，也给玩家留了一条处理它的路。
+兜底通道：虚空/溺水/摔落默认始终有效（alwaysEffectiveDamageTypes），不吃免疫也不吃倍率，避免出现
+一旦卡位就只能靠 OP 命令清理的怪；把该数组清空即变成「除了火谁也弄不死」的硬核版本。
+资源：占位皮肤 textures/entity/charred_zombie/charred_zombie.png（原版僵尸皮肤炭化版）、余烬眼睛层
+charred_zombie_eyes.png（走 RenderType.eyes 全亮叠加，只亮两个眼睛像素）、易损图标
+textures/mob_effect/vulnerable.png，均可在替换正式美术后直接覆盖。
+生成：本版**不接入自然生成**（不改刷怪池、不注册生成位置规则），只提供创造栏刷怪蛋与 /summon；
+/dreamingfish zombie status 会打印焦尸的全部当前数值，/dreamingfish zombie reload 一并热重载。
+数值配置：config/dreamingfishcore/charred_zombie.json，写入即生效，所有字段有范围校验，
+写坏的配置会被拒绝并保留上一份有效值；配置文件优先于代码默认值，升级已有存档时按需删旧重建。
+验证：`gradlew test` 542 用例全绿（新增 25：伤害闸门判定表、倍率与等级换算的单调性、配置默认值/
+校验/坏值拒绝、贴图与语言键一致性）；`gradlew runGameTestServer` 全部 24 条 required gametest 通过，
+新增 5 条覆盖「非火伤害不掉血但命中必须生效」「火焰伤害被易燃体质放大成 2 倍并打出易损」
+「易损期间非火伤害破防并按 +10% 结算」「兜底类型不被免疫且不吃倍率」「属性与掉落沿用原版僵尸、
+日光自燃关闭」。另做过一次反向对照：把 isSunSensitive 改回原版行为后，日光那条用例确实变红，
+确认这 5 条不是假绿灯。
+
+呲水枪（新）
+新增物品「呲水枪」（dreamingfishcore:water_gun）：左键射出水柱、右键喷自己、对着水源右键装水。
+左键在客户端拦截原版攻击（InteractionKeyMappingTriggered 同时覆盖"点按"与"按住"两条路径，
+所以手持水枪时不会挖方块、也不会挥空打人），真正开火放在每 tick 的检查里，按住左键按
+fireIntervalTicks（默认 6 tick ≈ 3.3 发/秒）连射；服务端用原版 ItemCooldowns 再校验一次冷却，
+物品栏上因此能看到回满中的冷却条。开火只发一个请求包，水量/冷却/生成水柱全部由服务端裁决。
+蓄水：水量存在物品的 CustomData 里（沿用项目既有的 ItemStackDataHelper，不新增数据组件），
+默认 10 发、每发消耗 1；对着水方块、含水方块或水瓶炼药锅右键一次装满，炼药锅会被吸走一层水
+（drainWaterCauldron，可关）。物品栏上有蓝色水量条，tooltip 显示"水量 x/10"与操作提示。
+水柱（dreamingfishcore:water_jet）：无伤害投射物——水枪不是武器，玩家不会被水柱打到掉血。
+初速 1.2 格/tick、每 tick 微下坠、射程 8 格、命中即消散；命中生物/玩家熄灭其身上的火，
+命中方块扑灭周围一格内的火方块与点着的营火，命中金刚僵尸则为它涨一层锈。
+环境行为由 water_gun.json 控制（开关、容量、射速、弹速、下坠、射程、每次涨锈层数、是否灭火）。
+音效与粒子复用原版（GENERIC_SPLASH / FIRE_EXTINGUISH / BUCKET_FILL），不新增 sounds.json 条目。
+
+金刚僵尸（新）
+新增变体「金刚僵尸」（dreamingfishcore:adamant_zombie）：未生锈时打不动，浇水生锈后才能打死。
+继承原版僵尸，生命 40、移速沿用 0.23、索敌 35、攻击 3.0，**击退抗性 1.0**（被打时纹丝不动，
+这是"它是堵墙"最主要的体感来源）。默认白天不自燃（金属不该被日光烧死，且日光燃烧会成为绕过
+"必须先浇水"的后门），泡水也不腐化成溺尸（它的水反应是生锈）。
+未生锈：完全免疫伤害（兜底只放开虚空，避免一旦卡位就只能靠 OP 命令清理），攻击它的玩家吃
+「硬直」。免疫同样**不**用 return false 实现——照常调 super.hurt 只把伤害压到 0，从而保住受伤
+动画、音效、仇恨与附魔点火链路。硬直挂在攻击者身上：新增效果 dreamingfishcore:stagger（默认
+10 tick = 0.5 秒），攻击力按 ADD_MULTIPLIED_TOTAL -1.0 归零 + 移速 -40%，同时重置攻击冷却，
+并配"当啷"重击音 + 火花；只豁免旁观者（不按创造模式豁免，理由见下）。
+分级生锈：每次被水浇到涨一层，泡水或淋雨每 2 秒涨一层，封顶 3 层，锈不会退。锈级就是
+dreamingfishcore:rusted 效果的等级，因此天然跨端同步、天然跟实体存档；属性惩罚交给效果修饰符
+（原版按 amount × (等级+1) 缩放，所以每层只写一次：移速 -20%、攻击 -1、护甲 -0.5）。
+受伤倍率写不进属性，在伤害闸门里：第 1 层就是 1.0（刚生锈就能正常打死），第 2/3 层再 +20%/+40%。
+皮肤按锈级切四张（干净 + 三级锈迹，脚本从原版僵尸皮肤生成），玩家一眼能看出它锈到第几层。
+数值配置：config/dreamingfishcore/adamant_zombie.json，热重载与打印并入
+/dreamingfish zombie reload|status。同样**不接入自然生成**，只提供创造栏刷怪蛋与 /summon。
+
+验证：`gradlew compileJava` 通过；`gradlew test` 577 用例全绿（新增 35：水量数学与边界、
+金刚僵尸判定表与逐级倍率单调性、两份配置的默认值/校验/坏值拒绝、物品模型与贴图/语言键一致性、
+四级锈迹的"越锈越暖"性质断言）；`gradlew runGameTestServer` 全部 33 条 required gametest 通过，
+新增 9 条覆盖「未生锈不掉血但命中生效且攻击者吃硬直」「生锈破防且第 2 层比第 1 层更疼」
+「锈级在上限处停住」「水柱给金刚僵尸涨锈且不掉血」「水柱扑灭着火生物」「水柱扑灭附近火方块
+且不误伤远处的火」「右键喷自己灭火并消耗一发水」「对水源右键装满」。
+过程中 4 条用例先红后绿，失败信息里带着诊断数据（坐标、维度、状态、水量）直接定位到根因，
+这也是它们不是假绿灯的证据。
+
+水枪装水修复（实机反馈）
+现象：游戏里对着水面右键装不上水（水量不涨、量条不动），反而喷了自己一身。
+根因有两个，都不在「装水逻辑」本身，而在它两侧：
+
+1) 水源根本认不出来。原版选方块走 ClipContext.Block.OUTLINE，而 LiquidBlock#getShape(...) 返回
+   Shapes.empty()——水方块没有轮廓形状、准星选不中它，射线直接穿水而过打在水底的地面上。
+   于是 useOn 收到的 clickedPos 是沙子/泥土，state.getFluidState() 恒为 EMPTY，判定永远不成立，
+   返回 PASS 之后原版就落到「喷自己」上。
+   修法：新增 Item_WaterGun#findWaterSource，改用 ClipContext.Fluid.WATER 单独做一次带流体的射线
+   （该模式下水流体是有形状的，能被命中），长度取玩家的方块触及距离。装水的判定只保留这一份：
+   useOn 里只额外处理「水瓶炼药锅」这一个例外（锅里的水不是流体方块，流体射线看不到它），
+   其余（含水方块、普通水）都交给它；useOn 返回 PASS 后原版会接着走 use，那里也调同一个方法，
+   所以「对着水面右键」的两条入口（命中方块 / 射线 MISS）都能装水。
+
+2) 装上了也看不见。原版只有 ServerPlayerGameMode#useItem 会顺手调
+   inventoryMenu.sendAllDataToRemote()；useOn 这条路径全程没有物品同步，左键射水走的又是自定义
+   网络包，原版根本不知道。不补这一步，服务端水量变了而客户端的 ItemStack 组件还是旧的，
+   物品栏那条量条与 tooltip 会一直停在装水前的数字，玩家会当成「压根没装上」。
+   修法：新增 Item_WaterGun#syncWater(player)，在装水成功与 fireJet 成功后各同步一次。
+
+为什么之前没测出来（教训）：原来那条 gametest 用手工 new 出来的 BlockHitResult 直接指定水方块坐标
+去调 useOn，等于把真实的射线入口整个旁路掉了——逻辑是绿的、游戏里是坏的。现在改成用 level.clip
+算出的真实命中点去构造上下文，并新增一条守护事实的用例 vanillaBlockRaycastPassesThroughWater
+（断言原版方块射线不会把水方块当作命中目标、带流体的射线才会命中）。反向对照做过：把
+findWaterSource 临时改成恒返回 null 后，正是那两条装水用例变红。
+
+另有一个测试环境的坑一并记下：给玩家摆朝向时只调 setYRot 是没用的——LivingEntity 覆写了
+getViewYRot 取 yHeadRot，而 Entity#getViewVector 是 final 的、会走那个覆写；pitch 没有这层覆写
+所以照常生效。表现为「低头角度对了、水平方向完全没转」。要一起调 setYHeadRot。
+
+验证：`gradlew test` 577 用例 0 失败；`gradlew runGameTestServer` 全部 35 条 required gametest 通过
+（33 → 35：原「对水源右键装满」1 条替换为 3 条，净增 2）。
+
+美术：水枪物品贴图换成正式美术（16x16 RGBA，原图 C:\叽叽团\工程\纹理\watergun_16x16.png），
+替换原先脚本生成的占位图；模型引用不变（item/handheld + dreamingfishcore:item/water_gun），
+物品模型与资源一致性测试（7 条）全绿。随后按第一人称手持观感，贴图换成其水平镜像版
+（枪口朝左，逐像素 256/256 与原图镜像一致）。
+

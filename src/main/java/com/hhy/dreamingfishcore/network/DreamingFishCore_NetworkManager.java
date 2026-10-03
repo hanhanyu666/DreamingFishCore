@@ -16,6 +16,7 @@ import com.hhy.dreamingfishcore.gameplay.storybook_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.story_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_system.network.*;
 import com.hhy.dreamingfishcore.gameplay.task_location_system.network.Packet_SyncTaskLocationHud;
+import com.hhy.dreamingfishcore.gameplay.water_gun_system.network.Packet_WaterGunFire;
 import com.hhy.dreamingfishcore.server.check_system.network.*;
 import com.hhy.dreamingfishcore.server.economy_bridge.network.*;
 import com.hhy.dreamingfishcore.server.login_system.network.*;
@@ -163,6 +164,12 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToServer(Packet_RequestMarker.TYPE, Packet_RequestMarker.STREAM_CODEC, authenticated(Packet_RequestMarker::handle));
         registrar.playToClient(Packet_ShowMarker.TYPE, Packet_ShowMarker.STREAM_CODEC, Packet_ShowMarker::handle);
         registrar.playToClient(Packet_MarkerRejected.TYPE, Packet_MarkerRejected.STREAM_CODEC, Packet_MarkerRejected::handle);
+
+        // 呲水枪开火：客户端只负责报告"扣了扳机"，水量/冷却/生成水柱全部由服务端裁决。
+        registrar.playToServer(
+                Packet_WaterGunFire.TYPE,
+                Packet_WaterGunFire.STREAM_CODEC,
+                authenticated(Packet_WaterGunFire::handle));
     }
 
     public static void sendToClient(CustomPacketPayload packet, ServerPlayer player) {

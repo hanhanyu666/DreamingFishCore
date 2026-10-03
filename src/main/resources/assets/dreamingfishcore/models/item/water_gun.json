@@ -1,0 +1,6 @@
+{
+  "parent": "item/handheld",
+  "textures": {
+    "layer0": "dreamingfishcore:item/water_gun"
+  }
+}

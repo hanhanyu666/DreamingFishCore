@@ -57,7 +57,7 @@ import java.util.UUID;
  * so the normal model, skin, sounds, combat and baby/jockey behaviour remain
  * compatible with resource packs and existing server mechanics.
  */
-public class SiegeZombieEntity extends Zombie {
+public class SiegeZombieEntity extends Zombie implements ModZombieSpecies {
     /** Friend-authored appearance variants; UUID assignment is save-stable and network-free. */
     private static final int SKIN_VARIANT_COUNT = 12;
     private static final int EYE_LIGHT_VARIANT_COUNT = 6;

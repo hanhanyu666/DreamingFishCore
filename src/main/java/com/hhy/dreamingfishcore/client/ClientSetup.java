@@ -72,6 +72,21 @@ public class ClientSetup {
         event.registerEntityRenderer(StoryNpcEntities.STORY_NPC.get(), StoryNpcRenderer::new);
         event.registerEntityRenderer(DeathCorpseEntities.DEATH_CORPSE.get(), DeathCorpseRenderer::new);
         event.registerEntityRenderer(SiegeZombieEntities.SIEGE_ZOMBIE.get(), SiegeZombieRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieEntities.ARCHER_ZOMBIE.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.ArcherZombieRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieEntities.BONE_SPIKE.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.BoneSpikeRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.CHARRED_ZOMBIE.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.charred.client.CharredZombieRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.ADAMANT_ZOMBIE.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.client.AdamantZombieRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunEntities.WATER_JET.get(),
+                com.hhy.dreamingfishcore.gameplay.water_gun_system.client.WaterJetRenderer::new);
     }
 
     // 修改模型烘焙结果

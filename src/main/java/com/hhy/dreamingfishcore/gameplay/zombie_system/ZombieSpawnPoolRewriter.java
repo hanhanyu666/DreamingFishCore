@@ -2,6 +2,7 @@ package com.hhy.dreamingfishcore.gameplay.zombie_system;
 
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.biome.MobSpawnSettings;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,21 +32,27 @@ public final class ZombieSpawnPoolRewriter {
     /**
      * Rewrites one monster pool.
      *
-     * @param zombieFamilyPercent total zombie-family weight relative to the
-     *                             original zombie-family entry (120 means +20%)
-     * @param vanillaZombiePercent share of the scaled zombie-family weight
-     *                             assigned to the vanilla member
-     * @param customZombiePercent share of the scaled zombie-family weight
-     *                            assigned to the custom member
-     * @param otherMonsterPercent weight multiplier for every other entry
-     *                            (80 means -20%)
+     * <p>僵尸家族的权重先按 {@code zombieFamilyPercent} 整体缩放，再按
+     * {@code vanillaZombiePercent : customZombiePercent} 拆成「原版」与「自定义」两部分；
+     * 最后把「自定义」那部分再按 {@code archerZombiePercentOfCustom} 切成「围攻僵尸 + 射手僵尸」。
+     * 也就是说射手僵尸是**从自定义丧尸的份子里再分出去的**，不会稀释原版僵尸的比例，也不会
+     * 改变僵尸家族的总权重——传入 {@code archerZombieType == null} 或百分比为 0 时，行为与
+     * 只拆两方时完全一致。</p>
+     *
+     * @param zombieFamilyPercent       僵尸家族总权重相对原条目的百分比（120 表示 +20%）
+     * @param vanillaZombiePercent      缩放后分给原版僵尸的份额
+     * @param customZombiePercent       缩放后分给自定义丧尸的份额
+     * @param archerZombiePercentOfCustom 自定义丧尸份额中再分给射手僵尸的百分比（0~100）
+     * @param otherMonsterPercent       其他敌对条目的权重倍率（80 表示 -20%）
      */
     public static List<MobSpawnSettings.SpawnerData> rewrite(
             List<MobSpawnSettings.SpawnerData> original,
             EntityType<?> customZombieType,
+            @Nullable EntityType<?> archerZombieType,
             int zombieFamilyPercent,
             int vanillaZombiePercent,
             int customZombiePercent,
+            int archerZombiePercentOfCustom,
             int otherMonsterPercent) {
         if (original == null || original.isEmpty() || customZombieType == null) {
             return original;
@@ -56,15 +63,20 @@ public final class ZombieSpawnPoolRewriter {
         if (zombieShareTotal <= 0L) {
             return original;
         }
+        // 射手份额是「自定义份额的百分比」，所以自定义份额本身就是 0 时不会切出任何射手。
+        int archerSharePercent = archerZombieType != null && customZombiePercent > 0
+                ? Math.max(0, Math.min(100, archerZombiePercentOfCustom))
+                : 0;
 
         boolean hasZombieTemplate = false;
         for (MobSpawnSettings.SpawnerData entry : original) {
             if (entry == null || entry.type == null) {
                 continue;
             }
-            if (entry.type == customZombieType) {
-                // A datapack or another integration already supplied the
-                // custom entity. Do not create a competing second entry.
+            if (entry.type == customZombieType
+                    || (archerZombieType != null && entry.type == archerZombieType)) {
+                // A datapack or another integration already supplied one of the
+                // custom entities. Do not create a competing second entry.
                 return original;
             }
             if (isZombieTemplate(entry.type)) {
@@ -100,15 +112,18 @@ public final class ZombieSpawnPoolRewriter {
                     continue;
                 }
 
-                int vanillaWeight = proportionalWeight(
+                int[] split = splitZombieFamilyWeight(
                         scaledZombieWeight,
-                        Math.max(0, vanillaZombiePercent),
-                        zombieShareTotal);
-                int customWeight = scaledZombieWeight - vanillaWeight;
+                        vanillaZombiePercent,
+                        customZombiePercent,
+                        archerSharePercent);
+                int vanillaWeight = split[0];
+                int customWeight = split[1];
+                int archerWeight = split[2];
 
                 // Preserve the original object when the requested settings
                 // happen to be a no-op (100% family, 100% vanilla, 0% custom).
-                if (scaledZombieWeight == baseWeight && customWeight == 0) {
+                if (scaledZombieWeight == baseWeight && customWeight == 0 && archerWeight == 0) {
                     rewritten.add(entry);
                     continue;
                 }
@@ -120,6 +135,10 @@ public final class ZombieSpawnPoolRewriter {
                 if (customWeight > 0) {
                     rewritten.add(stableEntry(
                             customZombieType, customWeight, entry.minCount, entry.maxCount));
+                }
+                if (archerWeight > 0 && archerZombieType != null) {
+                    rewritten.add(stableEntry(
+                            archerZombieType, archerWeight, entry.minCount, entry.maxCount));
                 }
                 changed = true;
                 continue;
@@ -145,6 +164,27 @@ public final class ZombieSpawnPoolRewriter {
         }
 
         return changed ? List.copyOf(rewritten) : original;
+    }
+
+    /**
+     * 只拆「原版 / 自定义」两方的旧签名，等价于不切出射手僵尸。
+     */
+    public static List<MobSpawnSettings.SpawnerData> rewrite(
+            List<MobSpawnSettings.SpawnerData> original,
+            EntityType<?> customZombieType,
+            int zombieFamilyPercent,
+            int vanillaZombiePercent,
+            int customZombiePercent,
+            int otherMonsterPercent) {
+        return rewrite(
+                original,
+                customZombieType,
+                null,
+                zombieFamilyPercent,
+                vanillaZombiePercent,
+                customZombiePercent,
+                0,
+                otherMonsterPercent);
     }
 
     /**
@@ -215,6 +255,48 @@ public final class ZombieSpawnPoolRewriter {
     /** Vanilla uses HUSK as the zombie-family overworld entry in deserts. */
     public static boolean isZombieTemplate(EntityType<?> type) {
         return type == EntityType.ZOMBIE || type == EntityType.HUSK;
+    }
+
+    /**
+     * 把一个僵尸家族条目的缩放后权重拆成「原版 / 自定义丧尸 / 射手僵尸」三份。
+     *
+     * <p>分配顺序刻意是「先扣原版、再从剩余里扣射手、余额全给自定义丧尸」，这样三份之和
+     * <b>恒等于</b>输入权重，不会因为两次四舍五入多出或丢掉权重。射手那份是「自定义丧尸份额
+     * 的百分比」，所以自定义份额为 0 时不会凭空切出射手。</p>
+     *
+     * <p>抽成不依赖 {@link EntityType} 的纯函数，是为了能在单元测试里直接验证分配性质。</p>
+     *
+     * @return 长度 3 的数组：{ 原版, 自定义丧尸, 射手僵尸 }
+     */
+    static int[] splitZombieFamilyWeight(
+            int scaledZombieWeight,
+            int vanillaZombiePercent,
+            int customZombiePercent,
+            int archerPercentOfCustom) {
+        int[] split = new int[3];
+        if (scaledZombieWeight <= 0) {
+            return split;
+        }
+        long zombieShareTotal = (long) Math.max(0, vanillaZombiePercent)
+                + Math.max(0, customZombiePercent);
+        if (zombieShareTotal <= 0L) {
+            return split;
+        }
+
+        int vanillaWeight = proportionalWeight(
+                scaledZombieWeight,
+                Math.max(0, vanillaZombiePercent),
+                zombieShareTotal);
+        int customTotalWeight = scaledZombieWeight - vanillaWeight;
+        int archerWeight = proportionalWeight(
+                customTotalWeight,
+                Math.max(0, Math.min(100, archerPercentOfCustom)),
+                100);
+
+        split[0] = vanillaWeight;
+        split[1] = customTotalWeight - archerWeight;
+        split[2] = archerWeight;
+        return split;
     }
 
     /** Clears stable potential-spawn entries when a server lifecycle ends. */
