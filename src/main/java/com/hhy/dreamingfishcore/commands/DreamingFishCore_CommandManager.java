@@ -21,6 +21,7 @@ import com.hhy.dreamingfishcore.server.notice_system.command.Command_Notice;
 import com.hhy.dreamingfishcore.server.rank_system.command.Command_Rank;
 import com.hhy.dreamingfishcore.server.title_system.command.Command_Title;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.Command_RaidAnchor;
+import com.hhy.dreamingfishcore.gameplay.raid_system.Command_Raid;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -58,6 +59,7 @@ public final class DreamingFishCore_CommandManager {
         Command_Clue.register(dreamingFishRoot);
         Command_Blueprint.register(dreamingFishRoot);
         Command_RaidAnchor.register(dreamingFishRoot);
+        Command_Raid.register(dreamingFishRoot);
         // 仅 3 级权限可用：感染等级直改 + 疗程/随访直接完成 + 线索发放，供服务器自测。
         dreamingFishRoot.then(Commands.literal("debug")
                 .requires(source -> source.hasPermission(3))
