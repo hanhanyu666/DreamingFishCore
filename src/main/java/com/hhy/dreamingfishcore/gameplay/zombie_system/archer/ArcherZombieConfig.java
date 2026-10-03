@@ -71,8 +71,14 @@ public final class ArcherZombieConfig {
     /** 射程：目标在这个距离内且视线通畅才开火；比它远则继续接近。 */
     private double rangedAttackRange = 16.0D;
 
-    /** 蓄力/抬手时长（tick），期间几乎不移动。 */
-    private int chargeTicks = 22;
+    /**
+     * 蓄力/抬手时长（tick），期间几乎不移动。
+     *
+     * <p>默认 16 tick（0.8 秒）是<b>与 shoot 动画的长度对齐</b>的：抬手动作完全由 Blockbench 的
+     * 射击动画负责，蓄力一结束动画正好播完——既不会「动作播到一半就出手」，也不会「出手后还在抬手」。
+     * 单独改这个值会让动作与节奏脱节，要改建议连动画长度一起改。</p>
+     */
+    private int chargeTicks = 16;
     /** 两次发射之间的固定间隔（tick），即攻击冷却。 */
     private int attackIntervalTicks = 40;
 

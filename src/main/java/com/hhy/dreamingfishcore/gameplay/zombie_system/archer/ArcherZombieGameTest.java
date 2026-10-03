@@ -50,7 +50,7 @@ import java.util.List;
 @GameTestHolder(DreamingFishCore.MODID)
 @PrefixGameTestTemplate(false)
 public class ArcherZombieGameTest {
-    /** AI 推进上限：蓄力 22 tick + 首帧路径，80 tick 有足够余量。 */
+    /** AI 推进上限：蓄力 16 tick + 首帧路径，80 tick 有足够余量。 */
     private static final int MAX_AI_TICKS = 80;
     /** 骨刺推进上限。 */
     private static final int MAX_PROJECTILE_TICKS = 60;
@@ -128,7 +128,7 @@ public class ArcherZombieGameTest {
 
             // 关掉散布与重力：这一条只验证「命中后的伤害与减益」，弹道随机性另行由瞄准公式负责。
             ArcherZombieConfig.Resolved deterministic = new ArcherZombieConfig.Resolved(
-                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 22, 40,
+                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 16, 40,
                     4.0D, 1.6D, 0.0D, 0.0D, 24.0D, true, 60, 0, true, 100, 0);
 
             spike = new BoneSpikeEntity(level, archer, deterministic);
@@ -199,7 +199,7 @@ public class ArcherZombieGameTest {
             archer.setNoAi(true);
 
             ArcherZombieConfig.Resolved settings = new ArcherZombieConfig.Resolved(
-                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 22, 40,
+                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 16, 40,
                     4.0D, 1.6D, 0.0D, 0.0D, 24.0D, true, 60, 0, true, 100, 0);
             spike = new BoneSpikeEntity(level, archer, settings);
 
@@ -353,7 +353,7 @@ public class ArcherZombieGameTest {
 
             // 关掉散布与重力：只测伤害换算，不掺弹道随机。
             ArcherZombieConfig.Resolved deterministic = new ArcherZombieConfig.Resolved(
-                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 22, 40,
+                    true, true, 40, 16.0D, 0.21D, 35.0D, 2.5D, 6.0D, 16.0D, 16, 40,
                     4.0D, 1.6D, 0.0D, 0.0D, 24.0D, true, 60, 0, true, 100, 0);
 
             spike = new BoneSpikeEntity(level, archer, deterministic);

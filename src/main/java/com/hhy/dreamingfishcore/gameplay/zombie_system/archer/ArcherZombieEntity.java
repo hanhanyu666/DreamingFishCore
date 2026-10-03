@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.entity.AnimationState;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
@@ -67,6 +68,15 @@ public class ArcherZombieEntity extends Zombie implements ModZombieSpecies {
     private int settingsRefreshCooldown;
     /** 只在客户端累加，用于把同步过来的蓄力时长换算成动画进度。 */
     private int clientChargeTicks;
+
+    /**
+     * 射击动画的时间轴（只影响渲染）。
+     *
+     * <p>原版的 {@code AnimationState} 不参与游戏逻辑，所以放在实体里、只在客户端驱动就够了。
+     * 它与蓄力状态共用同一段时间轴：蓄力开始就播、蓄力结束就停，而 shoot 动画的 0.8 秒
+     * 正好等于蓄力时长（16 tick），所以抬手动作完全交给动画，模型里不再有程序化抬臂。</p>
+     */
+    public final AnimationState shootAnimationState = new AnimationState();
 
     public ArcherZombieEntity(EntityType<? extends ArcherZombieEntity> entityType, Level level) {
         super(entityType, level);
@@ -147,6 +157,8 @@ public class ArcherZombieEntity extends Zombie implements ModZombieSpecies {
             } else {
                 this.clientChargeTicks = 0;
             }
+            // 蓄力期间播 shoot 动画：抬手动作完全由 Blockbench 的动画负责。
+            this.shootAnimationState.animateWhen(this.isCharging(), this.tickCount);
         }
         super.tick();
     }

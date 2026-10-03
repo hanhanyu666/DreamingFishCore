@@ -37,7 +37,7 @@ class ArcherZombieConfigTest {
         assertEquals(16.0D, resolved.maxHealth(), 1.0E-9D);
         assertEquals(0.21D, resolved.movementSpeed(), 1.0E-9D);
         assertEquals(16.0D, resolved.rangedAttackRange(), 1.0E-9D);
-        assertEquals(22, resolved.chargeTicks());
+        assertEquals(16, resolved.chargeTicks());
         assertEquals(40, resolved.attackIntervalTicks());
         assertEquals(4.0D, resolved.projectileDamage(), 1.0E-9D);
         assertEquals(1.6D, resolved.projectileSpeed(), 1.0E-9D);

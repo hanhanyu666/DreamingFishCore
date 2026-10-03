@@ -393,3 +393,54 @@ getViewYRot 取 yHeadRot，而 Entity#getViewVector 是 final 的、会走那个
 物品模型与资源一致性测试（7 条）全绿。随后按第一人称手持观感，贴图换成其水平镜像版
 （枪口朝左，逐像素 256/256 与原图镜像一致）。
 
+射手僵尸换成自制模型（新）
+射手僵尸改用作者自制的 Blockbench 工程（azombie.bbmodel）：16 个立方体（6 个人形盒 + 10 个枪械
+部件），骨骼原点与原版僵尸模板对齐。几何由 tools/convert_archer_zombie.py 生成 Java 模型代码；
+Bedrock 坐标与原版的换算是 (x, 24-y, -z)，即「绕 x 轴 180° 的纯旋转」，所以旋转角按「x 保持、
+y/z 取反」映射；带自身旋转的立方体提升为子骨骼（原版 CubeListBuilder 不支持立方体自转）。
+两个动画（walk / shoot）转成 NeoForge 动画 JSON 放在 neoforge/animations/entity/archer_zombie/，
+改动画只需重导 JSON + F3+T，不用编译。贴图从 bbmodel 内嵌图烘焙（80/96 个面与标准 box UV 展开
+逐像素一致；16 个底面因标准位置被占用而留空，均朝下或朝内，正常视角看不到）。
+蓄力时长随之从 22 tick 调整为 16 tick 与 shoot 动画（0.8 秒）对齐，抬手完全交给动画，原先的
+程序化抬手代码已删除。改几何需重跑脚本并重启客户端。
+
+修复：射手僵尸头顶永久显示自己的名字（看起来像被命名牌命名过）
+根因是渲染器父类选错。原版 MobRenderer 覆写了 shouldShowName，要求「实体名字常显，或有自定义
+名字且准星正对着它」；而 LivingEntityRenderer#shouldShowName 只判距离与可见性、完全不看实体
+有没有名字，于是每只怪头上都会永久顶着自己的名字。当初为了让自定义骨骼不受原版盔甲层错位影响，
+父类从 AbstractZombieRenderer 改成了 LivingEntityRenderer，顺带丢掉了这层判定。
+改为继承 MobRenderer：它本身不追加任何层（盔甲层是 AbstractZombieRenderer 加的），既避开盔甲
+错位，又保留原版名牌规则。其余三个僵尸变体一直走 AbstractZombieRenderer，所以没有这个问题。
+
+修复：射手僵尸「背身开枪」+「说是站定却一直往前挪」
+两个原版机制没处理对，一起修：
+1) 停机用错了 API。原版 PathNavigation#stop() 只把 path 置空，moveControl 上一次留下的移动输入
+   （zza/xxa）原封不动 —— 而 Mob#setSpeed(speed) 会顺手把 zza 设成 speed。所以蓄力期间的「站定」
+   实际上是保持原速继续往前走。改用 Mob#stopInPlace()（speed 与移动输入一起归零），并在蓄力
+   期间每 tick 维持。
+2) 站定后没有自己转身。原版 BodyRotationControl 在**移动中**会把 yBodyRot 直接设成 mob.getYRot()
+   （= 上一次的行进方向），而 getYRot() 只有寻路才会被改；头又只能在 getMaxHeadYRot()（75°）内偏。
+   于是它身子朝着旧方向、头最多扭 75°、骨刺却按数学精确命中 —— 表现就是「背身射我」。
+   现在站定与蓄力时显式把 yRot / yBodyRot 以 30 度/tick 转向目标（蓄力 16 tick 足够转满 180°）。
+一并调整：
+- 站桩时不再横向侧移。原实现用 MoveControl#strafe，它把 speedModifier 写死 0.25（每秒只挪约 1 格）
+  且完全不碰 getYRot()，是「走路诡异」的另一半原因。现在改为干净的站定瞄准。
+- 射程内但视线被墙挡住时会去接近（原来「射程内一律站桩」会卡在墙后干等，永远打不着）。
+- 走路动画驱动系数改为与原版 HumanoidModel 一致（animateWalk 的 2.0F / 2.5F）：原来配的是
+  1.0F / 2.0F，腿摆得比实际移动慢，看上去像在滑步。
+- 转换脚本修正动画 position 通道的 z 符号：NeoForge 的 KeyframeAnimations.posVec 自带 y 取反
+  （new Vector3f(x, -y, z)），所以只有 z 需要我们自己翻。射击动画里身体后仰的位移原来方向是反的。
+关于「骨块左右反了」：核对过模型的 6 个人形部件（body / head / left_arm / right_arm / left_leg /
+right_leg）的 box 与 pivot 数值，与原版 HumanoidModel **逐字节一致**，因此模型本身不可能左右镜像；
+枪件是 right_arm 的子部件、x 比骨骼枢轴更负（同侧外侧）。看到的「反了」是身体朝向错误导致的错觉，
+随上面第 1、2 条一并修复。
+
+美术调整：右臂上 3 个大块的贴图左右镜像
+缠在右臂上的 3 个大块（6x2x6、6x2x6、5x4x6 —— 把 4x4 的手臂整圈包住的那几块）贴图改为左右翻转。
+实现用 CubeListBuilder#mirror()：原版语义是「只交换盒子的 x 两端 + 反转 UV 顶点顺序 + 法线 x 取反」，
+也就是**几何原地不动、贴图左右镜像**——这几块左右本来就对称，所以灰模完全看不出差别，只有贴图能看出来。
+转换脚本里的判据写成「父骨骼是 right_arm 且 x、z 尺寸都 >= 5」，不用 uuid（重导模型后 uuid 会变，
+写死会静默失效）。
+说明：核过源模型 16 个部件的非底面 UV，全部匹配标准（未镜像）box 布局，原版 HumanoidModel 的右臂也
+没有使用 mirror() —— 所以这是一次美术取向的调整，不是转换脚本的漏项。想还原只需去掉脚本里那条判据。
+

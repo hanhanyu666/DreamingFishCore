@@ -68,6 +68,15 @@ public class ClientSetup {
     }
 
     @SubscribeEvent
+    public static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        // 射手僵尸的几何来自作者的 Blockbench 工程（自定义骨骼名），不能复用原版 ZOMBIE 模型层，
+        // 要在这里注册自己的层；几何代码由 tools/convert_archer_zombie.py 生成。
+        event.registerLayerDefinition(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.ArcherZombieRenderer.LAYER,
+                com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.ArcherZombieModel::createBodyLayer);
+    }
+
+    @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(StoryNpcEntities.STORY_NPC.get(), StoryNpcRenderer::new);
         event.registerEntityRenderer(DeathCorpseEntities.DEATH_CORPSE.get(), DeathCorpseRenderer::new);
