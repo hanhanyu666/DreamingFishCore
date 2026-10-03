@@ -306,8 +306,8 @@ public final class RaidLootService {
     }
 
     /** 一个文件里可以只放一个对象、也可以放数组或 {@code {"items": [...]}} / {@code {"zones": [...]}}。 */
-    private static void collectObjects(ResourceLocation id, JsonElement element, List<JsonObject> objects,
-                                       List<String> problems) {
+    static void collectObjects(ResourceLocation id, JsonElement element, List<JsonObject> objects,
+                               List<String> problems) {
         if (element == null || element.isJsonNull()) {
             problems.add("空文件（已跳过）：" + id);
             return;
