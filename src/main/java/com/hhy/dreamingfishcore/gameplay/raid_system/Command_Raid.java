@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
 import java.util.ArrayList;
 import java.util.List;
@@ -93,9 +94,15 @@ public final class Command_Raid {
     }
 
     private static int newRaid(CommandContext<CommandSourceStack> context, int difficulty, int players) {
+        CommandSourceStack source = context.getSource();
         String map = StringArgumentType.getString(context, "map");
-        reply(context.getSource(), RaidService.startNewRaid(context.getSource().getServer(), map,
-                difficulty, players));
+        List<String> messages = new ArrayList<>(
+                RaidService.startNewRaid(source.getServer(), map, difficulty, players));
+        // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
+        messages.addAll(RaidLootService.generatePlan(source.getServer()));
+        RaidService.current().ifPresent(manifest -> messages.addAll(
+                RaidLootApplier.apply(source.getServer(), manifest, RaidLootService.plan())));
+        reply(source, messages);
         return 1;
     }
 
@@ -115,7 +122,14 @@ public final class Command_Raid {
     }
 
     private static int end(CommandContext<CommandSourceStack> context) {
-        reply(context.getSource(), RaidService.endRaid(context.getSource().getServer()));
+        CommandSourceStack source = context.getSource();
+        List<String> messages = new ArrayList<>();
+        RaidService.ensureLoaded(source.getServer());
+        // 服主要求：结束对局时把本局填进去的物品清掉（内容被动过的容器一律跳过）
+        RaidService.current().ifPresent(manifest ->
+                messages.addAll(RaidLootApplier.clear(source.getServer(), manifest.raidId())));
+        messages.addAll(RaidService.endRaid(source.getServer()));
+        reply(source, messages);
         return 1;
     }
 
