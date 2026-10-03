@@ -29,12 +29,12 @@ public final class RaidAnchorZoneLookup implements RaidAnchorCatalog.ZoneLookup 
 
     @Override
     public boolean exists(String zoneId) {
-        return zoneId != null && TaskLocationManager.getLocation(zoneId).isPresent();
+        return zoneId != null && TaskLocationManager.resolveLocationReference(zoneId).isPresent();
     }
 
     @Override
     public boolean contains(String zoneId, double x, double y, double z) {
-        Optional<TaskLocationDefinition> location = TaskLocationManager.getLocation(zoneId);
+        Optional<TaskLocationDefinition> location = TaskLocationManager.resolveLocationReference(zoneId);
         if (location.isEmpty()) {
             return false;
         }
@@ -51,7 +51,7 @@ public final class RaidAnchorZoneLookup implements RaidAnchorCatalog.ZoneLookup 
 
     /** 该区域所属维度的 id（命令层用来判断玩家是否站在同一个维度）。 */
     public static Optional<String> dimensionOf(String zoneId) {
-        return TaskLocationManager.getLocation(zoneId)
+        return TaskLocationManager.resolveLocationReference(zoneId)
                 .map(definition -> definition.getDimensionKey().location().toString());
     }
 }

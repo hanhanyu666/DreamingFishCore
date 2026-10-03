@@ -57,6 +57,7 @@ public final class DreamingFishCore_CommandManager {
         Command_ZombieSpecies.register(dreamingFishRoot);
         Command_Clue.register(dreamingFishRoot);
         Command_Blueprint.register(dreamingFishRoot);
+        Command_RaidAnchor.register(dreamingFishRoot);
         // 仅 3 级权限可用：感染等级直改 + 疗程/随访直接完成 + 线索发放，供服务器自测。
         dreamingFishRoot.then(Commands.literal("debug")
                 .requires(source -> source.hasPermission(3))
