@@ -274,7 +274,8 @@ public final class LootAllocator {
             for (LootConfig.Guarantee guarantee : zone.guarantees()) {
                 int placed = 0;
                 for (int attempt = 0; attempt < guarantee.minCount(); attempt++) {
-                    List<LootConfig.Item> candidates = affordable(eligible, remaining, guarantee.category());
+                    List<LootConfig.Item> candidates = affordable(eligible, remaining,
+                            guarantee.category(), rareLeft);
                     Optional<LootConfig.Item> choice = random.pickWeighted(candidates, LootConfig.Item::rarityWeight);
                     if (choice.isEmpty()) {
                         if (problems != null) {
@@ -311,7 +312,7 @@ public final class LootAllocator {
         // 第三步：普通填充——每轮只在买得起的子集里抽
         int safety = 0;
         while (true) {
-            List<LootConfig.Item> candidates = affordable(eligible, remaining, null);
+            List<LootConfig.Item> candidates = affordable(eligible, remaining, null, rareLeft);
             if (candidates.isEmpty()) {
                 break;
             }
@@ -322,6 +323,10 @@ public final class LootAllocator {
             LootConfig.Item item = choice.get();
             picked.add(item.itemId());
             remaining -= item.spawnCost();
+            // 有全局上限的物品，普通填充也要扣配额——否则它会被反复抽中，单局产出失控
+            if (item.hasGlobalLimit() && rareLeft != null) {
+                rareLeft.merge(item.itemId(), -1, Integer::sum);
+            }
             if (++safety > 10_000) {
                 if (problems != null) {
                     problems.add(Problem.of(anchorId, "SAFETY_STOP", "填充次数达到上限，提前收尾"));
@@ -333,15 +338,25 @@ public final class LootAllocator {
         return new PointAllocation(anchorId, picked, budget, budget - remaining);
     }
 
-    /** 买得起的子集（可选再加类别过滤）；顺序与传入一致，保证抽取确定性。 */
+    /**
+     * 买得起的子集（可选再加类别过滤）；顺序与传入一致，保证抽取确定性。
+     *
+     * <p>有单局全局上限的物品，只有配额还有剩余时才允许进入候选——**这一步是"稀有物品不失控"的关键**：
+     * 如果只在上限分配阶段管配额、普通填充阶段不管，那么钥匙卡这类物品会被反复抽中
+     * （设计稿 §12.1 说的"每个箱子独立抽 1%"就是这个后果）。</p>
+     */
     private static List<LootConfig.Item> affordable(List<LootConfig.Item> eligible, int remaining,
-                                                    String category) {
+                                                    String category, Map<String, Integer> rareLeft) {
         List<LootConfig.Item> result = new ArrayList<>();
         for (LootConfig.Item item : eligible) {
             if (item.spawnCost() > remaining || item.rarityWeight() <= 0) {
                 continue;
             }
             if (category != null && !category.equals(item.category())) {
+                continue;
+            }
+            if (item.hasGlobalLimit()
+                    && (rareLeft == null || rareLeft.getOrDefault(item.itemId(), 0) <= 0)) {
                 continue;
             }
             result.add(item);
