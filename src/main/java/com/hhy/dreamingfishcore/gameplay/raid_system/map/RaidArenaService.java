@@ -39,7 +39,7 @@ public final class RaidArenaService {
     /** 是否在开局时拨时间。原版限制导致这会影响主世界时钟，所以留个开关。 */
     public static final boolean SET_TIME_ON_START = true;
     /** 是否在开局时自动把参与者送进竞技场。 */
-    public static final boolean TELEPORT_ON_START = true;
+    public static final boolean TELEPORT_ON_START = false;   // 默认关：地图搬进竞技场后再打开
     /** 是否在收尾时把竞技场里的人送回来。 */
     public static final boolean RECALL_ON_END = true;
 

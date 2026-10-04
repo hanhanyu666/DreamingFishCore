@@ -141,7 +141,7 @@ mod 负责把"这一局"变成一个**可复现、可审计的对象**：
 | | `SPAWN_X/Y/Z` | `0.5 / 100 / 0.5` | 进场落点 |
 | | `START_TIME` | `1000` | 开局把世界时间拨到（1000 ≈ 清晨） |
 | | `SET_TIME_ON_START` | `true` | 是否开局拨时间（原版共享时钟，会影响主世界） |
-| | `TELEPORT_ON_START` | `true` | 是否开局自动把参与者送进竞技场 |
+| | `TELEPORT_ON_START` | `false` | 是否开局自动把参与者送进竞技场（**默认关**：地图还没搬进竞技场前别开） |
 | | `RECALL_ON_END` | `true` | 是否收尾时把竞技场里的人送回出口 |
 | `LooseLootService` | `PICKUP_RADIUS` | `1.5` | 露天物品自动拾取半径（格） |
 | | `MARKER_INTERVAL_TICKS` | `10` | 粒子标识与定时同步的节流 |
@@ -531,7 +531,7 @@ mod 自带 `dreamingfishcore:raid_arena`：
 | 一局结束不了 | ① `auto_end_seconds = 0` 且没人手动 end ② 还有参与者在图里（`all_out` 不触发） | 配好时长；`raid info` 看参与者；`raid end` 手动收尾 |
 | 撤离后落在奇怪的地方 | `exit_dimension` / `exit_position` | 按 §5.1 配置 |
 | 变体方块没还原 | 忘记执行还原 | `raid variants restore`（登记仍在，可反复应用/还原） |
-| 部分玩家一开局就被传送走 | `TELEPORT_ON_START = true` | 见 §5.2 警告；改 `false` 或把地图搬进竞技场 |
+| 部分玩家一开局就被传送走 | 你手动打开了 `TELEPORT_ON_START` | 改回 `false`（默认），或确认地图已放进竞技场 |
 | 玩家卡在虚空 | 竞技场里没有落脚点 | 用 `raid region place` 放一份地面零件，或改 `SPAWN_Y` |
 | 地图变体总是"退回无变体" | 配置的变体组合切断了必经之路 | `raid variants` 看 `SPAWN_NO_ROUTE` / `SEALED_OFF` 提示，放宽变体对边的禁用 |
 
@@ -621,3 +621,54 @@ mod 自带 `dreamingfishcore:raid_arena`：
 | `252c598` `b1968b6` | 本说明书 + **开局自动化**（拨本局起始时间、自动进场、收尾自动召回） |
 
 > 详细进度与设计决策另见 `docs/RAID_SYSTEM_PROGRESS.md`、`docs/RAID_EXTRACTION_FLOW.md`、`docs/RAID_ANCHOR_SYSTEM.md`。
+
+---
+
+## 16. 交接给地图编辑
+
+**给人做地图的人看这一节就够**（其余看 §6 全流程、§9 命令总表、§12 最后一组勾选项）。
+
+### 16.1 你手上的工具
+
+| 工具 | 命令 | 用途 |
+| --- | --- | --- |
+| 锚点 | `raid_anchor place <区域id> <类型> <锚点id>` | 标箱子 / 地上物品 / 撤离点 |
+| 锚点标签 | `raid_anchor tag <锚点id> add <标签>` | 决定行为（撤离点类型、限次、只出某类物品…） |
+| 区域（zone） | `task_location ...`（权限 3） | 划 3D 盒子，战利品预算按区域给 |
+| 区域块 | `raid region capture/place/reset/list` | 把搭好的建筑存成"零件"、搬到竞技场、重置 |
+| 变体方块 | `raid variant_block` + `variants apply/restore` | 门/路障/电梯的开合，且能一键还原 |
+| 校验 | `raid_anchor validate`、`raid variants overview` | 检查有没有放错或配置写错 |
+
+### 16.2 三条必须记住的规矩
+
+1. **区域名不能有连字符** —— 连通图的边名 `A-B` 靠第一个连字符拆分，区域名里带连字符会解析错。
+2. **标签里的冒号直接敲**：`add extract:fixed`、`add loot:electronic`、`add uses:3`，不要加引号也不需要转义。
+3. **区域块只抓方块、不抓实体**（防复制实体），单边 ≤ 128、体积 ≤ 32768。
+
+### 16.3 现在的地图状态（重要）
+
+目前 mod **只带一个空的虚空竞技场**（`dreamingfishcore:raid_arena`，只有 y=-64 一层基岩）。
+地图内容需要你们搭进去，推荐顺序：
+
+```
+① /execute in dreamingfishcore:raid_arena run tp @s 0 100 0     进去
+② 在 y=100 附近搭第一块区域（房间/街区），注意留出撤离点与箱子位置
+③ /dreamingfish raid region capture <零件名> ~-N ~-1 ~-N ~N ~M ~N   抓成零件
+④ 反复 place / reset 验证：门、箱子内容、告示牌、朝向、光照是否都正确
+⑤ 确认模板可用后，再让开发做"按种子自动拼装"（现在没有自动拼装，是手工摆放）
+```
+
+### 16.4 自动进场开关（当前默认关闭）
+
+`RaidArenaService.TELEPORT_ON_START` **默认 `false`**：开局**不会**把玩家传进竞技场，
+所以大家现在仍在你现有的主世界地图里玩。等地图搬进竞技场、并且你们确认落点安全后，
+把这一行改成 `true`（改完要重新编译），开局就会自动送人进场；`raid end` 会自动把人送回出口。
+
+同处的另外两个开关：`SET_TIME_ON_START`（开局拨本局起始时间；因原版所有维度共享时钟，会影响主世界）、
+`RECALL_ON_END`（收尾自动召回）。
+
+### 16.5 出问题找谁
+
+- 命令报错 / 行为不对 → 记下**命令原文 + 聊天栏回显 + `/dreamingfish raid info` 输出**
+- 箱子没清 / 地图被改乱 → `/dreamingfish raid clear`、`/dreamingfish raid variants restore`
+- 需要新的制作工具（比如"批量放锚点""带朝向抓门"）→ 提出来，这些都好加
