@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -55,6 +56,22 @@ public final class ExtractionService {
     private static volatile ExtractionSelector.Result lastResult =
             new ExtractionSelector.Result(List.of(), List.of(), List.of());
     private static volatile boolean loaded;
+    /** 撤离点的完整位置与维度，用来做粒子标识（Candidate 只带 x/z）。 */
+    private static volatile Map<String, MarkerPoint> markers = Map.of();
+    /** 粒子标识的节流：每多少 tick 喷一次。 */
+    private static final int MARKER_INTERVAL_TICKS = 10;
+    private static int markerTick;
+
+    /**
+     * 粒子标识用的点。
+     *
+     * @param id        撤离点 id
+     * @param dimension 所在维度（配置里可写，默认主世界）
+     * @param kind      类型（不同类型用不同粒子，方便一眼区分保底/随机/限次）
+     */
+    public record MarkerPoint(String id, String dimension, ExtractionSelector.Kind kind,
+                              double x, double y, double z) {
+    }
 
     private ExtractionService() {
     }
@@ -85,6 +102,7 @@ public final class ExtractionService {
         randomCount = DEFAULT_RANDOM_COUNT;
         problems = List.of();
         lastResult = new ExtractionSelector.Result(List.of(), List.of(), List.of());
+        markers = Map.of();
         loaded = false;
     }
 
@@ -101,6 +119,7 @@ public final class ExtractionService {
             return messages;
         }
         List<ExtractionSelector.Candidate> parsed = new ArrayList<>();
+        Map<String, MarkerPoint> markerDraft = new TreeMap<>();
         Set<String> tags = new TreeSet<>();
         List<String> found = new ArrayList<>();
         int count = DEFAULT_RANDOM_COUNT;
@@ -154,7 +173,7 @@ public final class ExtractionService {
                         continue;
                     }
                     ExtractionSelector.Candidate candidate = parse(item.getAsJsonObject(), found,
-                            id + " 第 " + index + " 项");
+                            id + " 第 " + index + " 项", markerDraft);
                     if (candidate != null) {
                         parsed.add(candidate);
                     }
@@ -169,6 +188,7 @@ public final class ExtractionService {
         activeTags = Set.copyOf(tags);
         randomCount = count;
         problems = List.copyOf(found);
+        markers = Map.copyOf(markerDraft);
         loaded = true;
 
         messages.add("撤离点配置已加载：候选 " + candidates.size() + " 个，本局条件 " + activeTags
@@ -182,7 +202,8 @@ public final class ExtractionService {
         return messages;
     }
 
-    private static ExtractionSelector.Candidate parse(JsonObject json, List<String> problems, String where) {
+    private static ExtractionSelector.Candidate parse(JsonObject json, List<String> problems, String where,
+                                                      Map<String, MarkerPoint> markers) {
         JsonElement idJson = json.get("id");
         if (idJson == null || !idJson.isJsonPrimitive()) {
             problems.add(where + " 缺少 id（已跳过）");
@@ -204,6 +225,7 @@ public final class ExtractionService {
         if (position == null) {
             return null;
         }
+        recordMarker(json, id, kind, markers);
         return new ExtractionSelector.Candidate(id, kind,
                 json.has("weight") ? Math.max(0, json.get("weight").getAsInt()) : 100,
                 position[0], position[1],
@@ -212,6 +234,85 @@ public final class ExtractionService {
                 json.has("minimum_distance_from_spawn") ? json.get("minimum_distance_from_spawn").getAsDouble() : 0.0D,
                 json.has("maximum_distance_from_spawn") ? json.get("maximum_distance_from_spawn").getAsDouble() : 0.0D,
                 json.has("max_uses") ? Math.max(0, json.get("max_uses").getAsInt()) : 0);
+    }
+
+    /** 记下粒子标识要用的完整位置（含 Y 与维度）——Candidate 只带 x/z，不够喷粒子。 */
+    private static void recordMarker(JsonObject json, String id, ExtractionSelector.Kind kind,
+                                     Map<String, MarkerPoint> markers) {
+        JsonElement position = json.get("position");
+        if (position == null || !position.isJsonArray() || position.getAsJsonArray().size() < 3) {
+            return;
+        }
+        JsonArray array = position.getAsJsonArray();
+        double y = array.get(1).getAsDouble();
+        String dimension = "minecraft:overworld";
+        JsonElement dimensionJson = json.get("dimension");
+        if (dimensionJson != null && dimensionJson.isJsonPrimitive()) {
+            dimension = dimensionJson.getAsString().trim();
+        }
+        markers.put(id, new MarkerPoint(id, dimension, kind, array.get(0).getAsDouble(), y,
+                array.get(2).getAsDouble()));
+    }
+
+    /** 本局开放的撤离点（含位置与维度），供粒子标识使用。 */
+    public static List<MarkerPoint> activeMarkers() {
+        List<MarkerPoint> active = new ArrayList<>();
+        for (String id : lastResult.all()) {
+            MarkerPoint marker = markers.get(id);
+            if (marker != null) {
+                active.add(marker);
+            }
+        }
+        return active;
+    }
+
+    /**
+     * 每 tick 调一次：给本局开放的撤离点喷粒子标识。
+     *
+     * <p>用服务端粒子（不新增自定义包、不动协议版本）：不同类型用不同粒子，
+     * 玩家一眼就能分清保底 / 随机 / 条件 / 限次。节流到每 {@value #MARKER_INTERVAL_TICKS} tick 一次。</p>
+     */
+    public static void tickMarkers(net.minecraft.server.MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        if (++markerTick < MARKER_INTERVAL_TICKS) {
+            return;
+        }
+        markerTick = 0;
+        if (!loaded || RaidService.current().isEmpty()) {
+            return;
+        }
+        for (MarkerPoint marker : activeMarkers()) {
+            net.minecraft.server.level.ServerLevel level = levelOf(server, marker.dimension());
+            if (level == null) {
+                continue;
+            }
+            net.minecraft.core.particles.SimpleParticleType particle = switch (marker.kind()) {
+                case FIXED -> net.minecraft.core.particles.ParticleTypes.END_ROD;
+                case CONDITIONAL -> net.minecraft.core.particles.ParticleTypes.SOUL_FIRE_FLAME;
+                case SINGLE_USE -> net.minecraft.core.particles.ParticleTypes.ELECTRIC_SPARK;
+                default -> net.minecraft.core.particles.ParticleTypes.CLOUD;
+            };
+            // 一小段向上的光柱：每隔几格补一点，远处也能看见
+            for (int offset = 0; offset <= 3; offset++) {
+                level.sendParticles(particle, marker.x(), marker.y() + 0.6D + offset * 0.8D, marker.z(),
+                        2, 0.25D, 0.05D, 0.25D, 0.0D);
+            }
+        }
+    }
+
+    private static net.minecraft.server.level.ServerLevel levelOf(net.minecraft.server.MinecraftServer server,
+                                                                  String dimensionId) {
+        try {
+            net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> key =
+                    net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.DIMENSION,
+                            net.minecraft.resources.ResourceLocation.parse(dimensionId));
+            return server.getLevel(key);
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     private static double[] readPosition(JsonObject json, List<String> problems, String where) {

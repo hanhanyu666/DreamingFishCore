@@ -29,4 +29,11 @@ public final class RaidEvents {
         com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService.clear();
         com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService.clear();
     }
+
+    /** 给本局开放的撤离点喷粒子标识（服务端粒子，不动协议）。 */
+    @SubscribeEvent
+    public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+        com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService
+                .tickMarkers(event.getServer());
+    }
 }
