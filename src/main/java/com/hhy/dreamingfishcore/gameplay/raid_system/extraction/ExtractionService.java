@@ -183,6 +183,26 @@ public final class ExtractionService {
             }
         }
 
+        // 主要来源是**锚点系统**（EXTRACTION 类型）：在游戏里用准心放置 + 区域校验，
+        // 比手写坐标可靠得多（手写坐标最容易"埋进石头里"，粒子看不见、人也走不到）。
+        // 配置文件里的 extractions 仍然支持，作为补充一起合并；同一个 id 以锚点为准。
+        RaidAnchorService.ensureLoaded(server);
+        for (RaidAnchor anchor : RaidAnchorService.catalog().byType(RaidAnchorType.EXTRACTION)) {
+            if (!anchor.enabled()) {
+                continue;
+            }
+            ExtractionSelector.Candidate candidate = fromAnchor(anchor);
+            parsed.add(candidate);
+            markerDraft.put(candidate.id(), new MarkerPoint(candidate.id(),
+                    RaidAnchorZoneLookup.dimensionOf(anchor.zone()).orElse("minecraft:overworld"),
+                    candidate.kind(), anchor.x(), anchor.y(), anchor.z()));
+        }
+
+        // 去重：后进的覆盖先进的（锚点在后，所以锚点优先）
+        Map<String, ExtractionSelector.Candidate> byId = new TreeMap<>();
+        parsed.forEach(candidate -> byId.put(candidate.id(), candidate));
+        parsed = new ArrayList<>(byId.values());
+
         parsed.sort(Comparator.comparing(ExtractionSelector.Candidate::id));
         candidates = List.copyOf(parsed);
         activeTags = Set.copyOf(tags);
@@ -404,6 +424,50 @@ public final class ExtractionService {
             }
         }
         return messages;
+    }
+
+    /**
+     * 把一个 {@code EXTRACTION} 锚点转成撤离点候选。
+     *
+     * <p>高级字段用**标签**表达，这样在游戏里放点即可，不必改 JSON：</p>
+     * <pre>
+     * extract:fixed / extract:random / extract:conditional / extract:single_use   类型（默认随机）
+     * requires:factory_power_on                                                  需要的条件标签
+     * nospawn:east_spawn                                                         禁止使用的出生组
+     * mindist:350 / maxdist:900                                                  与出生点的距离窗口
+     * uses:4                                                                     本局可用次数
+     * </pre>
+     */
+    private static ExtractionSelector.Candidate fromAnchor(RaidAnchor anchor) {
+        ExtractionSelector.Kind kind = ExtractionSelector.Kind.RANDOM;
+        Set<String> required = new TreeSet<>();
+        Set<String> forbidden = new TreeSet<>();
+        double minDistance = 0.0D;
+        double maxDistance = 0.0D;
+        int uses = 0;
+        for (String raw : anchor.tags()) {
+            String tag = raw.toLowerCase(Locale.ROOT);
+            try {
+                if (tag.startsWith("extract:")) {
+                    kind = ExtractionSelector.Kind.valueOf(
+                            tag.substring("extract:".length()).toUpperCase(Locale.ROOT));
+                } else if (tag.startsWith("requires:")) {
+                    required.add(tag.substring("requires:".length()));
+                } else if (tag.startsWith("nospawn:")) {
+                    forbidden.add(tag.substring("nospawn:".length()));
+                } else if (tag.startsWith("mindist:")) {
+                    minDistance = Double.parseDouble(tag.substring("mindist:".length()));
+                } else if (tag.startsWith("maxdist:")) {
+                    maxDistance = Double.parseDouble(tag.substring("maxdist:".length()));
+                } else if (tag.startsWith("uses:")) {
+                    uses = Math.max(0, Integer.parseInt(tag.substring("uses:".length())));
+                }
+            } catch (IllegalArgumentException ignored) {
+                // 标签值写坏了就当没写，不影响这个点被使用
+            }
+        }
+        return new ExtractionSelector.Candidate(anchor.id(), kind, Math.max(1, anchor.weight()),
+                anchor.x(), anchor.z(), required, forbidden, minDistance, maxDistance, uses);
     }
 
     /** 供命令打印配置总览。 */
