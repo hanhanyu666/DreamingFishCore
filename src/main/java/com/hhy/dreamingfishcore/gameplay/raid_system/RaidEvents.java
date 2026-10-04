@@ -39,6 +39,7 @@ public final class RaidEvents {
         RaidService.clear();
         RaidRoster.clear();
         RaidLootService.clear();
+        com.hhy.dreamingfishcore.gameplay.raid_system.loot.LooseLootService.clear();
         ExtractionService.clear();
         ExtractionRunner.clear();
     }
@@ -90,6 +91,7 @@ public final class RaidEvents {
     public static void onServerTick(ServerTickEvent.Post event) {
         ExtractionService.tickMarkers(event.getServer());
         ExtractionRunner.tick(event.getServer());
+        com.hhy.dreamingfishcore.gameplay.raid_system.loot.LooseLootService.tick(event.getServer());
         RaidRoster.tickGrace(event.getServer());
     }
 }

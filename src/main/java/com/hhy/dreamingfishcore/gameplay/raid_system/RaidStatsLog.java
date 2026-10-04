@@ -83,6 +83,17 @@ public final class RaidStatsLog {
         write(server, json);
     }
 
+    /** 露天物品被拾取。 */
+    public static void looted(MinecraftServer server, RaidManifest manifest, ServerPlayer player,
+                              String anchorId, String itemId) {
+        JsonObject json = base(manifest.raidId(), "loot");
+        json.addProperty("player", player.getGameProfile().getName());
+        json.addProperty("player_uuid", player.getUUID().toString());
+        json.addProperty("node", anchorId);
+        json.addProperty("item", itemId);
+        write(server, json);
+    }
+
     private static JsonObject base(long raidId, String type) {
         JsonObject json = new JsonObject();
         json.addProperty("at", System.currentTimeMillis());
