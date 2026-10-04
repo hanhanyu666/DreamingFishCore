@@ -20,6 +20,7 @@ public final class RaidEvents {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
+        RaidConfig.reload();     // config/dreamingfishcore/raid.json：读条半径/时长、出口、自动结束时间
         RaidService.load(event.getServer());
     }
 

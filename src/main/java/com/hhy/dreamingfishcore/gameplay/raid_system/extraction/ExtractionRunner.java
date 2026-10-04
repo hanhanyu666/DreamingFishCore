@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.raid_system.extraction;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.raid_system.RaidConfig;
 import com.hhy.dreamingfishcore.gameplay.raid_system.RaidManifest;
 import com.hhy.dreamingfishcore.gameplay.raid_system.RaidService;
 import java.util.HashMap;
@@ -118,6 +119,12 @@ public final class ExtractionRunner {
             clear();
             return;
         }
+        // 自动结束（默认 30 分钟，配置里可关）：时间到就清战利品、归档、收工
+        if (RaidConfig.shouldAutoEnd(raid.get().startedAtEpochMillis(), System.currentTimeMillis(),
+                RaidConfig.autoEndSeconds())) {
+            autoEnd(server, raid.get());
+            return;
+        }
         List<ExtractionService.MarkerPoint> markers = ExtractionService.activeMarkers();
         if (markers.isEmpty()) {
             return;
@@ -138,7 +145,7 @@ public final class ExtractionRunner {
                 }
                 double distance = horizontalDistance(player, marker);
                 Progress progress = progressOf(player.getUUID(), marker.id());
-                Progress.Step step = progress.advance(distance <= DEFAULT_RADIUS);
+                Progress.Step step = progress.advance(distance <= RaidConfig.extractionRadius());
                 switch (step) {
                     case PROGRESSING -> player.displayClientMessage(Component.literal(
                             "撤离中 " + Math.round(progress.ratio() * 100.0D) + "%（保持在范围内）"), true);
@@ -165,11 +172,16 @@ public final class ExtractionRunner {
             USES_LEFT.put(marker.id(), left - 1);
         }
 
-        ServerLevel target = levelOf(server, "minecraft:overworld");
+        ServerLevel target = levelOf(server, RaidConfig.exitDimension());
         if (target != null) {
-            var spawn = target.getSharedSpawnPos();
-            player.teleportTo(target, spawn.getX() + 0.5D, spawn.getY() + 1.0D, spawn.getZ() + 0.5D,
-                    player.getYRot(), player.getXRot());
+            double[] exit = RaidConfig.exitPosition();
+            if (exit != null) {
+                player.teleportTo(target, exit[0], exit[1], exit[2], player.getYRot(), player.getXRot());
+            } else {
+                var spawn = target.getSharedSpawnPos();
+                player.teleportTo(target, spawn.getX() + 0.5D, spawn.getY() + 1.0D, spawn.getZ() + 0.5D,
+                        player.getYRot(), player.getXRot());
+            }
         }
 
         RaidManifest manifest = RaidService.current().orElse(null);
@@ -180,6 +192,17 @@ public final class ExtractionRunner {
         DreamingFishCore.LOGGER.info("[raid_extraction] {} 从 {} 撤离成功（对局 {}）",
                 player.getGameProfile().getName(), marker.id(),
                 manifest != null ? manifest.raidId() : -1L);
+    }
+
+    /** 时间到自动结束：清战利品（含还原覆盖前内容）→ 归档对局 → 清空撤离状态。 */
+    private static void autoEnd(MinecraftServer server, RaidManifest manifest) {
+        server.getPlayerList().broadcastSystemMessage(
+                Component.literal("[搜打撤] 本局时间到，自动结束（第 " + manifest.raidId() + " 局）"), false);
+        com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier
+                .clear(server, manifest.raidId());
+        RaidService.endRaid(server);
+        clear();
+        DreamingFishCore.LOGGER.info("[raid] 第 {} 局时间到，已自动结束", manifest.raidId());
     }
 
     /** 限次撤离点的本局余量（未配置时返回 null，表示不限次）。 */
@@ -196,7 +219,7 @@ public final class ExtractionRunner {
         for (ExtractionService.MarkerPoint marker : markers) {
             ServerLevel level = levelOf(player.getServer(), marker.dimension());
             if (level != null && player.level() == level
-                    && horizontalDistance(player, marker) <= DEFAULT_RADIUS) {
+                    && horizontalDistance(player, marker) <= RaidConfig.extractionRadius()) {
                 inRange = true;
                 break;
             }
@@ -213,7 +236,7 @@ public final class ExtractionRunner {
 
     private static Progress progressOf(UUID playerId, String extractionId) {        Map<String, Progress> byPoint = PROGRESS.computeIfAbsent(playerId, key -> new HashMap<>());
         return byPoint.computeIfAbsent(extractionId, key -> {
-            int duration = DEFAULT_DURATION_TICKS;
+            int duration = RaidConfig.extractionTicks();
             Integer uses = maxUsesOf(extractionId);
             if (uses != null) {
                 USES_LEFT.putIfAbsent(extractionId, uses);
