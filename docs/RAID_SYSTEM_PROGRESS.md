@@ -134,3 +134,38 @@
 4. **校验顺序：先看 Gradle 退出码，再看用例数**。编译失败时 `test` 不运行，旧结果会伪装成"0 失败"。
 5. **集合归一化要幂等**：边键先被 `Variant` 归一成 `"A|B"`，`Selection` 再归一化时按"第一个连字符"拆
    就把它丢掉了 → 关边失效。同一份数据被两层归一化时，第二次必须能接受第一次的输出。
+
+## 九、撤离地图专用维度 raid_arena（2026-10-04）
+
+需求（服主定）：**虚空超平坦、不自然刷怪、有日夜光照、昼夜跟着本局走**。
+
+落地（随 mod 发布，所有服务器自动具备，不用每个存档单独配）：
+- `data/dreamingfishcore/dimension_type/raid_arena.json`：`has_skylight: true`（有天空光）、
+  `has_ceiling: false`、`ambient_light: 0`、`effects: minecraft:overworld`（天空/云/雾按主世界）、
+  **没有 `fixed_time`**（所以时间是流动的，会有真正的日出日落）、
+  `monster_spawn_light_level: 0` 且 `monster_spawn_block_light_limit: 0`（只在全黑处才可能刷）、
+  `has_raids: false`、`bed_works: true`。
+- `data/dreamingfishcore/dimension/raid_arena.json`：`minecraft:flat` 生成器 + `minecraft:the_void` 生物群系
+  （该群系**没有任何自然生成物**，这是"不刷怪"的关键）+ 仅一层基岩作为兜底地板（防止掉进虚空）。
+  需要的话把 `layers` 改成 `[]` 就是纯虚空，或加更多层。
+
+进入方式：`/execute in dreamingfishcore:raid_arena run tp @s 0 0 0`（后续会做成命令/传送门）。
+
+### 昼夜时间：一个必须知道的原版限制
+
+**Minecraft 的所有维度共享同一个昼夜时钟**（只有主世界推进它），维度无法各自独立计时——
+除非用 `fixed_time` 把时间**冻住**（那就没有日夜变化了）。所以"昼夜按本局时间"的可行实现是：
+**开局时把世界时间设到本局起始点（例如清晨 1000 tick），之后随时间自然流动**。
+
+副作用：这会**同时移动主世界的时钟**（因为共享）。因此这件事做成配置开关
+（`arena_set_time_on_raid_start`，默认开），不想要就关掉。
+
+另外提醒：默认对局时长 30 分钟 = 36000 tick，而一个昼夜是 24000 tick——
+**一局会跨过约 1.5 个昼夜**（清晨进场、天黑、再天亮）。这其实很符合搜打撤的气氛，
+但如果你想让"整局都在白天"，就得把对局时长压到 20 分钟以内，或改成冻住时间。
+
+### 还没做
+
+1. `raid region capture|place|reset|list` 四个命令接线（服务层 `RaidRegionService` 已就绪）
+2. 开局时设置本局起始时间 +（可选）把玩家传送进竞技场/从竞技场撤出
+3. mod 侧再兜一层"禁止自然刷怪"（现在靠虚空群系与维度类型；再加一道服务端拦截更保险）
