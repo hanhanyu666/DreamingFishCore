@@ -50,6 +50,8 @@ public final class Command_Raid {
                                         .executes(context -> seed(context,
                                                 com.mojang.brigadier.arguments.LongArgumentType
                                                         .getLong(context, "raid_id"))))))
+                .then(Commands.literal("clear")
+                        .executes(Command_Raid::clearApplied))
                 .then(Commands.literal("extractions")
                         .executes(Command_Raid::extractions)
                         .then(Commands.literal("reload")
@@ -103,8 +105,15 @@ public final class Command_Raid {
     private static int newRaid(CommandContext<CommandSourceStack> context, int difficulty, int players) {
         CommandSourceStack source = context.getSource();
         String map = StringArgumentType.getString(context, "map");
-        List<String> messages = new ArrayList<>(
-                RaidService.startNewRaid(source.getServer(), map, difficulty, players));
+        List<String> messages = new ArrayList<>();
+        // 开新局前先把上一局的战利品还回去：服主常常只是连续开新局而不结束上一局，
+        // 不这么做的话箱子里的旧战利品会一直留着（而且会让新一局"箱子非空"）
+        RaidService.ensureLoaded(source.getServer());
+        RaidService.current().ifPresent(previous -> {
+            messages.add("先回滚上一局 #" + previous.raidId() + "：");
+            messages.addAll(RaidLootApplier.clear(source.getServer(), previous.raidId()));
+        });
+        messages.addAll(RaidService.startNewRaid(source.getServer(), map, difficulty, players));
         // 顺序照设计稿：先定撤离点（玩家要有路可走），再生成并落地战利品
         messages.addAll(ExtractionService.selectAndRecord(source.getServer()));
         // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
@@ -145,6 +154,12 @@ public final class Command_Raid {
     /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
     private static int plan(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 清理所有未清理的填充记录（含还原覆盖前的内容）。 */
+    private static int clearApplied(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidLootApplier.clearAll(context.getSource().getServer()));
         return 1;
     }
 

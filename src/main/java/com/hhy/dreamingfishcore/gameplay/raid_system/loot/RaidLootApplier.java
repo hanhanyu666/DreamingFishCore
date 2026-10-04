@@ -423,6 +423,61 @@ public final class RaidLootApplier {
         return List.of(base, base.west(), base.east(), base.below(), base.above(), base.north(), base.south());
     }
 
+    /**
+     * 扫出存档里所有**还没清理**的填充记录并逐个清理（含还原被覆盖的内容）。
+     *
+     * <p>为什么需要它：服主常常只是连续 `raid new` 而不走 `raid end`，
+     * 于是上一局的战利品留在箱子里、记录文件也没人删。开新局前会自动调它，
+     * 也可以手动 {@code /dreamingfish raid clear} 收拾历史残留。</p>
+     */
+    public static List<String> clearAll(MinecraftServer server) {
+        List<String> messages = new ArrayList<>();
+        if (server == null) {
+            messages.add("服务器尚未就绪");
+            return messages;
+        }
+        List<Long> raidIds = listRecordIds(server);
+        if (raidIds.isEmpty()) {
+            messages.add("没有待清理的填充记录");
+            return messages;
+        }
+        messages.add("发现 " + raidIds.size() + " 份未清理的填充记录，逐个清理：");
+        for (long raidId : raidIds) {
+            List<String> result = clear(server, raidId);
+            result.forEach(line -> messages.add("  [#" + raidId + "] " + line));
+        }
+        return messages;
+    }
+
+    /** 存档目录下所有 raid_applied_&lt;对局号&gt;.json 的对局号（升序）。 */
+    public static List<Long> listRecordIds(MinecraftServer server) {
+        List<Long> ids = new ArrayList<>();
+        if (server == null) {
+            return ids;
+        }
+        Path directory = server.getWorldPath(LevelResource.ROOT).resolve(SAVE_SUBDIR);
+        if (!Files.isDirectory(directory)) {
+            return ids;
+        }
+        try (var stream = Files.list(directory)) {
+            stream.forEach(path -> {
+                String name = path.getFileName().toString();
+                if (name.startsWith("raid_applied_") && name.endsWith(".json")) {
+                    String digits = name.substring("raid_applied_".length(), name.length() - ".json".length());
+                    try {
+                        ids.add(Long.parseLong(digits));
+                    } catch (NumberFormatException ignored) {
+                        // 不是我们认得的文件名，跳过
+                    }
+                }
+            });
+        } catch (IOException exception) {
+            DreamingFishCore.LOGGER.error("[raid_loot] 枚举填充记录失败", exception);
+        }
+        ids.sort(java.util.Comparator.naturalOrder());
+        return ids;
+    }
+
     // ---------------------------------------------------------------- 持久化
 
     private static Path recordPath(MinecraftServer server, long raidId) {
