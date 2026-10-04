@@ -36,7 +36,7 @@ import net.minecraft.world.level.storage.LevelResource;
  */
 public final class RaidRoster {
 
-    /** 掉线宽限：5 分钟。想改就把它挪进 RaidConfig。 */
+    /** 掉线宽限的默认值（5 分钟）；实际生效值来自 RaidConfig 的 logout_grace_seconds。 */
     public static final long GRACE_MILLIS = 5L * 60L * 1000L;
 
     /** 一个玩家在本局里的状态。 */
@@ -92,7 +92,7 @@ public final class RaidRoster {
                 return false;
             }
             long left = leftAt.getOrDefault(id, nowMillis);
-            if (nowMillis - left > GRACE_MILLIS) {
+            if (nowMillis - left > RaidConfig.logoutGraceMillis()) {
                 states.put(id, State.ABANDONED);
                 leftAt.remove(id);
                 return false;
@@ -110,7 +110,7 @@ public final class RaidRoster {
                     continue;
                 }
                 long left = leftAt.getOrDefault(entry.getKey(), nowMillis);
-                if (nowMillis - left > GRACE_MILLIS) {
+                if (nowMillis - left > RaidConfig.logoutGraceMillis()) {
                     states.put(entry.getKey(), State.ABANDONED);
                     leftAt.remove(entry.getKey());
                     expired++;

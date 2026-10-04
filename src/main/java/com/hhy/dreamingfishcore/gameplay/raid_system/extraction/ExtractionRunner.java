@@ -123,7 +123,12 @@ public final class ExtractionRunner {
         // 自动结束（默认 30 分钟，配置里可关）：时间到就清战利品、归档、收工
         if (RaidConfig.shouldAutoEnd(raid.get().startedAtEpochMillis(), System.currentTimeMillis(),
                 RaidConfig.autoEndSeconds())) {
-            autoEnd(server, raid.get());
+            autoEnd(server, raid.get(), "time_up");
+            return;
+        }
+        // 无人留在图里也可以收工（撤了、死了、掉线超时都算出去）；服主可在配置里关掉
+        if (RaidConfig.autoEndWhenAllOut() && RaidRoster.roster().nobodyLeftInRaid()) {
+            autoEnd(server, raid.get(), "all_out");
             return;
         }
         List<ExtractionService.MarkerPoint> markers = ExtractionService.activeMarkers();
@@ -210,15 +215,15 @@ public final class ExtractionRunner {
     }
 
     /** 时间到自动结束：清战利品（含还原覆盖前内容）→ 归档对局 → 清空撤离状态。 */
-    private static void autoEnd(MinecraftServer server, RaidManifest manifest) {
+    private static void autoEnd(MinecraftServer server, RaidManifest manifest, String reason) {
         server.getPlayerList().broadcastSystemMessage(
-                Component.literal("[搜打撤] 本局时间到，自动结束（第 " + manifest.raidId() + " 局）"), false);
+                Component.literal("[搜打撤] " + ("all_out".equals(reason) ? "本局已无人留在图里，自动结束" : "本局时间到，自动结束") + "（第 " + manifest.raidId() + " 局）"), false);
         com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier
                 .clear(server, manifest.raidId());
-        com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog.raidEnd(server, manifest, "time_up");
+        com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog.raidEnd(server, manifest, reason);
         RaidService.endRaid(server);
         clear();
-        DreamingFishCore.LOGGER.info("[raid] 第 {} 局时间到，已自动结束", manifest.raidId());
+        DreamingFishCore.LOGGER.info("[raid] 第 {} 局自动结束（原因 {}）", manifest.raidId(), reason);
     }
 
     /** 限次撤离点的本局余量（未配置时返回 null，表示不限次）。 */

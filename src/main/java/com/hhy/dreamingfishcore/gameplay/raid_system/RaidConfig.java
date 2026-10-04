@@ -19,7 +19,8 @@ import net.neoforged.fml.loading.FMLPaths;
  * 搜打撤的服务器配置（{@code config/dreamingfishcore/raid.json}）。
  *
  * <p>与地图内容分开：物品表、区域模板、锚点、撤离点候选都随地图分发，
- * 而"读条几秒、半径几格、出口在哪、一局多久"这类**服务器设定**放这里，服主改完 {@code /reload} 即可。</p>
+ * 而"读条几秒、半径几格、出口在哪、一局多久、掉线宽限多久"这类**服务器设定**放这里，
+ * 服主改完 {@code /reload} 即可。</p>
  *
  * <p>所有数值都会夹取到合法区间，坏文件回退默认值并且**不覆盖**原文件（服主写坏了自己能看出来）。</p>
  */
@@ -39,6 +40,7 @@ public final class RaidConfig {
     public static final double DEFAULT_EXTRACTION_RADIUS = 3.0D;
     public static final int DEFAULT_EXTRACTION_SECONDS = 5;
     public static final int DEFAULT_AUTO_END_SECONDS = 1800;
+    public static final int DEFAULT_LOGOUT_GRACE_SECONDS = 300;
 
     private static volatile Settings settings = new Settings();
 
@@ -51,6 +53,8 @@ public final class RaidConfig {
         public double extractionRadius = DEFAULT_EXTRACTION_RADIUS;
         public int extractionSeconds = DEFAULT_EXTRACTION_SECONDS;
         public int autoEndSeconds = DEFAULT_AUTO_END_SECONDS;
+        public boolean autoEndWhenAllOut = true;
+        public int logoutGraceSeconds = DEFAULT_LOGOUT_GRACE_SECONDS;
         public String exitDimension = "minecraft:overworld";
         public double[] exitPosition;
     }
@@ -65,6 +69,16 @@ public final class RaidConfig {
 
     public static int autoEndSeconds() {
         return settings.autoEndSeconds;
+    }
+
+    /** 本局无人留在图里时是否自动结束（默认开：撤了、死了、掉线超时都算出去）。 */
+    public static boolean autoEndWhenAllOut() {
+        return settings.autoEndWhenAllOut;
+    }
+
+    /** 掉线宽限（毫秒）。 */
+    public static long logoutGraceMillis() {
+        return Math.max(0, settings.logoutGraceSeconds) * 1000L;
     }
 
     public static String exitDimension() {
@@ -82,7 +96,7 @@ public final class RaidConfig {
     }
 
     /**
-     * 是否该自动结束这一局（纯函数，单独测）。
+     * 是否该因超时自动结束这一局（纯函数，单独测）。
      *
      * @param autoEndSeconds 0 或负数表示关闭自动结束
      */
@@ -113,6 +127,9 @@ public final class RaidConfig {
                     DEFAULT_EXTRACTION_SECONDS, 1, 60);
             loaded.autoEndSeconds = clampInt(json, "auto_end_seconds",
                     DEFAULT_AUTO_END_SECONDS, 0, 24 * 3600);
+            loaded.autoEndWhenAllOut = readBoolean(json, "auto_end_when_all_out", true);
+            loaded.logoutGraceSeconds = clampInt(json, "logout_grace_seconds",
+                    DEFAULT_LOGOUT_GRACE_SECONDS, 0, 3600);
             JsonElement dimension = json.get("exit_dimension");
             if (dimension != null && dimension.isJsonPrimitive()) {
                 String value = dimension.getAsString().trim();
@@ -142,6 +159,8 @@ public final class RaidConfig {
         json.addProperty("extraction_radius", value.extractionRadius);
         json.addProperty("extraction_seconds", value.extractionSeconds);
         json.addProperty("auto_end_seconds", value.autoEndSeconds);
+        json.addProperty("auto_end_when_all_out", value.autoEndWhenAllOut);
+        json.addProperty("logout_grace_seconds", value.logoutGraceSeconds);
         json.addProperty("exit_dimension", value.exitDimension);
         try {
             Files.createDirectories(configPath().getParent());
@@ -151,6 +170,14 @@ public final class RaidConfig {
         } catch (IOException exception) {
             DreamingFishCore.LOGGER.error("[raid_config] 默认配置写入失败：{}", configPath(), exception);
         }
+    }
+
+    private static boolean readBoolean(JsonObject json, String key, boolean fallback) {
+        JsonElement element = json.get(key);
+        if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isBoolean()) {
+            return fallback;
+        }
+        return element.getAsBoolean();
     }
 
     private static double clampDouble(JsonObject json, String key, double fallback,
