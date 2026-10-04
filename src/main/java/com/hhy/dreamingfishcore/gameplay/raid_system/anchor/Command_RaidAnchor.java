@@ -34,10 +34,10 @@ public final class Command_RaidAnchor {
         root.then(Commands.literal("raid_anchor")
                 .then(Commands.literal("list")
                         .executes(context -> list(context, null, null))
-                        .then(Commands.argument("zone", StringArgumentType.word())
+                        .then(Commands.argument("zone", StringArgumentType.string())
                                 .executes(context -> list(context,
                                         StringArgumentType.getString(context, "zone"), null))
-                                .then(Commands.argument("type", StringArgumentType.word())
+                                .then(Commands.argument("type", StringArgumentType.string())
                                         .executes(context -> list(context,
                                                 StringArgumentType.getString(context, "zone"),
                                                 StringArgumentType.getString(context, "type"))))))
@@ -46,38 +46,38 @@ public final class Command_RaidAnchor {
                 .then(Commands.literal("reload")
                         .executes(Command_RaidAnchor::reload))
                 .then(Commands.literal("place")
-                        .then(Commands.argument("zone", StringArgumentType.word())
-                                .then(Commands.argument("type", StringArgumentType.word())
+                        .then(Commands.argument("zone", StringArgumentType.string())
+                                .then(Commands.argument("type", StringArgumentType.string())
                                         .executes(context -> place(context, null))
-                                        .then(Commands.argument("id", StringArgumentType.word())
+                                        .then(Commands.argument("id", StringArgumentType.string())
                                                 .executes(context -> place(context,
                                                         StringArgumentType.getString(context, "id")))))))
                 .then(Commands.literal("tag")
-                        .then(Commands.argument("id", StringArgumentType.word())
+                        .then(Commands.argument("id", StringArgumentType.string())
                                 .suggests(Command_RaidAnchor::suggestAnchorIds)
                                 .then(Commands.literal("add")
-                                        .then(Commands.argument("tag", StringArgumentType.word())
+                                        .then(Commands.argument("tag", StringArgumentType.string())
                                                 .suggests(Command_RaidAnchor::suggestTags)
                                                 .executes(context -> tag(context, true))))
                                 .then(Commands.literal("remove")
-                                        .then(Commands.argument("tag", StringArgumentType.word())
+                                        .then(Commands.argument("tag", StringArgumentType.string())
                                                 .suggests(Command_RaidAnchor::suggestTags)
                                                 .executes(context -> tag(context, false))))))
                 .then(Commands.literal("remove")
-                        .then(Commands.argument("id", StringArgumentType.word())
+                        .then(Commands.argument("id", StringArgumentType.string())
                                 .executes(context -> remove(context,
                                         StringArgumentType.getString(context, "id")))))
                 .then(Commands.literal("enable")
-                        .then(Commands.argument("id", StringArgumentType.word())
+                        .then(Commands.argument("id", StringArgumentType.string())
                                 .executes(context -> setEnabled(context,
                                         StringArgumentType.getString(context, "id"), true))))
                 .then(Commands.literal("disable")
-                        .then(Commands.argument("id", StringArgumentType.word())
+                        .then(Commands.argument("id", StringArgumentType.string())
                                 .executes(context -> setEnabled(context,
                                         StringArgumentType.getString(context, "id"), false))))
                 .then(Commands.literal("export")
                         .executes(context -> export(context, null))
-                        .then(Commands.argument("zone", StringArgumentType.word())
+                        .then(Commands.argument("zone", StringArgumentType.string())
                                 .executes(context -> export(context,
                                         StringArgumentType.getString(context, "zone"))))));
     }
