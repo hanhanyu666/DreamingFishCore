@@ -11,6 +11,7 @@ import com.hhy.dreamingfishcore.gameplay.raid_system.RaidService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchor;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchorService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchorType;
+import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchorZoneLookup;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
