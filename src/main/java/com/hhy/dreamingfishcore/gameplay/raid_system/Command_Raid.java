@@ -9,12 +9,15 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
+import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidRegionService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidVariantBlocks;
 import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidVariantService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.BlockHitResult;
@@ -71,6 +74,22 @@ public final class Command_Raid {
                                 .executes(Command_Raid::lootReload))
                         .then(Commands.literal("overview")
                                 .executes(Command_Raid::lootOverview)))
+                .then(Commands.literal("region")
+                        .then(Commands.literal("list")
+                                .executes(Command_Raid::regionList))
+                        .then(Commands.literal("capture")
+                                .then(Commands.argument("name", StringArgumentType.string())
+                                        .then(Commands.argument("from", BlockPosArgument.blockPos())
+                                                .then(Commands.argument("to", BlockPosArgument.blockPos())
+                                                        .executes(Command_Raid::regionCapture)))))
+                        .then(Commands.literal("place")
+                                .then(Commands.argument("name", StringArgumentType.string())
+                                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                                .executes(Command_Raid::regionPlace))))
+                        .then(Commands.literal("reset")
+                                .then(Commands.argument("name", StringArgumentType.string())
+                                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                                .executes(Command_Raid::regionReset)))))
                 .then(Commands.literal("variants")
                         .executes(Command_Raid::variants)
                         .then(Commands.literal("reload")
@@ -181,6 +200,43 @@ public final class Command_Raid {
     /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
     private static int plan(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    /**
+     * 抓取一片区域存成"地图零件"。
+     *
+     * <p>**只抓方块、不抓实体**：抓实体的话每次放置都会把箱子里的怪、掉落物一起复制一遍，
+     * 这在"每局重建竞技场"的用法下是灾难。以后真要抓实体就单开一个命令。</p>
+     */
+    private static int regionCapture(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String name = StringArgumentType.getString(context, "name");
+        BlockPos from = BlockPosArgument.getBlockPos(context, "from");
+        BlockPos to = BlockPosArgument.getBlockPos(context, "to");
+        reply(source, RaidRegionService.capture(source.getServer(), source.getLevel(), name, from, to, false));
+        return 1;
+    }
+
+    private static int regionPlace(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String name = StringArgumentType.getString(context, "name");
+        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
+        reply(source, RaidRegionService.place(source.getServer(), source.getLevel(), name, pos, false));
+        return 1;
+    }
+
+    private static int regionReset(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String name = StringArgumentType.getString(context, "name");
+        BlockPos pos = BlockPosArgument.getBlockPos(context, "pos");
+        reply(source, RaidRegionService.reset(source.getServer(), source.getLevel(), name, pos, false));
+        return 1;
+    }
+
+    private static int regionList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        reply(source, RaidRegionService.list(source.getServer(), source.getLevel()));
         return 1;
     }
 
