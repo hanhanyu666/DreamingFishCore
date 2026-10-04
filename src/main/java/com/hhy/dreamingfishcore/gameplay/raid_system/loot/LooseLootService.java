@@ -252,8 +252,9 @@ public final class LooseLootService {
             if (node.picked()) {
                 continue;
             }
-            level.sendParticles(ParticleTypes.END_ROD, node.x(), node.y() + 0.35D, node.z(),
-                    1, 0.1D, 0.05D, 0.1D, 0.0D);
+            // 用附魔台的微光而不是末地烛：末地烛是"固定撤离点"的标识，两者撞脸会让人分不清
+            level.sendParticles(ParticleTypes.ENCHANT, node.x(), node.y() + 0.45D, node.z(),
+                    2, 0.15D, 0.1D, 0.15D, 0.02D);
         }
     }
 
