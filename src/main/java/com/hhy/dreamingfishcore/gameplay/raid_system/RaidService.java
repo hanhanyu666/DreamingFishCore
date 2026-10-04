@@ -156,6 +156,9 @@ public final class RaidService {
         boolean saved = save(server);
         // 事件日志：手动结束（时间到的那条由 ExtractionRunner 记，理由是 time_up）
         RaidStatsLog.raidEnd(server, ending, "manual");
+        // 收尾自动化：把还在竞技场里的玩家送回安全区（手动结束与自动结束都经过这里）
+        messages.addAll(com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidArenaService
+                .onRaidEnd(server));
         messages.add("已结束对局 #" + raidId);
         messages.add(saved ? "已写入存档" : "写入存档失败（详见日志）");
         return messages;

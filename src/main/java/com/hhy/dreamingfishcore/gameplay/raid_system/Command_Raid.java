@@ -162,6 +162,9 @@ public final class Command_Raid {
         messages.addAll(RaidVariantService.selectAndRecord(source.getServer()));
         // 顺序照设计稿：先定撤离点（玩家要有路可走），再生成并落地战利品
         messages.addAll(ExtractionService.selectAndRecord(source.getServer()));
+        // 开局自动化：把时间拨到本局起始点，并把参与者送进竞技场
+        messages.addAll(com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidArenaService
+                .onRaidStart(source.getServer()));
         // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
         messages.addAll(RaidLootService.generatePlan(source.getServer()));
         RaidService.current().ifPresent(manifest -> messages.addAll(
