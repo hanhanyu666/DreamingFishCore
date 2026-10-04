@@ -189,6 +189,11 @@ public final class ExtractionRunner {
                 + (manifest != null ? "（第 " + manifest.raidId() + " 局" : "（")
                 + "，撤离点 " + marker.id() + "，背包已带走）"), false);
         progressOf(player.getUUID(), marker.id()).reset();
+        saveUses(server);
+        if (manifest != null) {
+            com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog
+                    .extracted(server, manifest, player, marker.id());
+        }
         DreamingFishCore.LOGGER.info("[raid_extraction] {} 从 {} 撤离成功（对局 {}）",
                 player.getGameProfile().getName(), marker.id(),
                 manifest != null ? manifest.raidId() : -1L);
@@ -200,6 +205,7 @@ public final class ExtractionRunner {
                 Component.literal("[搜打撤] 本局时间到，自动结束（第 " + manifest.raidId() + " 局）"), false);
         com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier
                 .clear(server, manifest.raidId());
+        com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog.raidEnd(server, manifest, "time_up");
         RaidService.endRaid(server);
         clear();
         DreamingFishCore.LOGGER.info("[raid] 第 {} 局时间到，已自动结束", manifest.raidId());
@@ -208,6 +214,72 @@ public final class ExtractionRunner {
     /** 限次撤离点的本局余量（未配置时返回 null，表示不限次）。 */
     public static synchronized Integer usesLeft(String extractionId) {
         return USES_LEFT.get(extractionId);
+    }
+
+    private static final String USES_FILE_NAME = "raid_extraction_uses.json";
+
+    /**
+     * 读回本局的限次余量（服务端启动时调）。
+     *
+     * <p>只认**同一个对局号**的记录：换了新局就该从满次数开始，不能被上一局用剩的次数污染。</p>
+     */
+    public static synchronized void load(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        RaidManifest manifest = RaidService.current().orElse(null);
+        if (manifest == null) {
+            return;
+        }
+        java.nio.file.Path path = usesPath(server);
+        if (!java.nio.file.Files.isRegularFile(path)) {
+            return;
+        }
+        try (java.io.Reader reader = java.nio.file.Files.newBufferedReader(path,
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            com.google.gson.JsonElement element = com.google.gson.JsonParser.parseReader(reader);
+            if (element == null || !element.isJsonObject()) {
+                return;
+            }
+            com.google.gson.JsonObject json = element.getAsJsonObject();
+            if (!json.has("raid_id") || json.get("raid_id").getAsLong() != manifest.raidId()) {
+                return;     // 上一局的余量，忽略
+            }
+            if (json.has("uses") && json.get("uses").isJsonObject()) {
+                USES_LEFT.clear();
+                json.getAsJsonObject("uses").entrySet().forEach(entry ->
+                        USES_LEFT.put(entry.getKey(), entry.getValue().getAsInt()));
+                DreamingFishCore.LOGGER.info("[raid_extraction] 已读回本局限次余量：{}", USES_LEFT);
+            }
+        } catch (java.io.IOException | RuntimeException exception) {
+            DreamingFishCore.LOGGER.error("[raid_extraction] 限次余量读取失败：{}", path, exception);
+        }
+    }
+
+    /** 写回本局的限次余量（每次扣减后调）。 */
+    private static synchronized void saveUses(MinecraftServer server) {
+        RaidManifest manifest = RaidService.current().orElse(null);
+        if (server == null || manifest == null || USES_LEFT.isEmpty()) {
+            return;
+        }
+        com.google.gson.JsonObject uses = new com.google.gson.JsonObject();
+        USES_LEFT.forEach(uses::addProperty);
+        com.google.gson.JsonObject root = new com.google.gson.JsonObject();
+        root.addProperty("raid_id", manifest.raidId());
+        root.add("uses", uses);
+        java.nio.file.Path path = usesPath(server);
+        try {
+            java.nio.file.Files.createDirectories(path.getParent());
+            java.nio.file.Files.writeString(path, root.toString(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException exception) {
+            DreamingFishCore.LOGGER.error("[raid_extraction] 限次余量写入失败：{}", path, exception);
+        }
+    }
+
+    private static java.nio.file.Path usesPath(MinecraftServer server) {
+        return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve("dreamingfishcore").resolve(USES_FILE_NAME);
     }
 
     /** 已经提示过"创造模式无法撤离"的玩家，避免每 tick 刷屏。 */
