@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
 import java.util.ArrayList;
@@ -49,6 +50,12 @@ public final class Command_Raid {
                                         .executes(context -> seed(context,
                                                 com.mojang.brigadier.arguments.LongArgumentType
                                                         .getLong(context, "raid_id"))))))
+                .then(Commands.literal("extractions")
+                        .executes(Command_Raid::extractions)
+                        .then(Commands.literal("reload")
+                                .executes(Command_Raid::extractionsReload))
+                        .then(Commands.literal("overview")
+                                .executes(Command_Raid::extractionsOverview)))
                 .then(Commands.literal("plan")
                         .executes(Command_Raid::plan))
                 .then(Commands.literal("loot")
@@ -98,6 +105,8 @@ public final class Command_Raid {
         String map = StringArgumentType.getString(context, "map");
         List<String> messages = new ArrayList<>(
                 RaidService.startNewRaid(source.getServer(), map, difficulty, players));
+        // 顺序照设计稿：先定撤离点（玩家要有路可走），再生成并落地战利品
+        messages.addAll(ExtractionService.selectAndRecord(source.getServer()));
         // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
         messages.addAll(RaidLootService.generatePlan(source.getServer()));
         RaidService.current().ifPresent(manifest -> messages.addAll(
@@ -136,6 +145,23 @@ public final class Command_Raid {
     /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
     private static int plan(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 重新选一次撤离点并记进对局记录（换了配置或想重抽时用）。 */
+    private static int extractions(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), ExtractionService.selectAndRecord(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int extractionsReload(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), ExtractionService.reload(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int extractionsOverview(CommandContext<CommandSourceStack> context) {
+        ExtractionService.ensureLoaded(context.getSource().getServer());
+        reply(context.getSource(), ExtractionService.overview());
         return 1;
     }
 

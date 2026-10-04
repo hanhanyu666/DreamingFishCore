@@ -156,6 +156,19 @@ public final class RaidService {
         return messages;
     }
 
+    /** 用新的记录替换当前对局并落盘（撤离点、地图变体等选择结果都这样记进去）。 */
+    public static synchronized List<String> replaceCurrent(MinecraftServer server, RaidManifest manifest) {
+        List<String> messages = new ArrayList<>();
+        if (server == null || manifest == null) {
+            messages.add("服务器尚未就绪，未能更新对局记录");
+            return messages;
+        }
+        current = manifest;
+        loaded = true;
+        messages.add(save(server) ? "对局记录已更新" : "对局记录写入失败（详见日志）");
+        return messages;
+    }
+
     /** 按系统取名取随机源；没有进行中的对局时返回空（调用方应据此拒绝生成）。 */
     public static Optional<RaidRandom> randomFor(String system) {
         RaidManifest manifest = current;

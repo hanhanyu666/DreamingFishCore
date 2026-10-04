@@ -73,6 +73,20 @@ public record RaidManifest(long raidId,
                 allocatedRareItems, next);
     }
 
+    /** 记下本局开放的撤离点（选择逻辑在 ExtractionService，这里只负责落账）。 */
+    public RaidManifest withExtractions(Set<String> extractions) {
+        return new RaidManifest(raidId, raidSeed, mapId, startedAtEpochMillis, playerCount,
+                difficultyTier, activeSpawnGroups, activeVariants, ordered(extractions),
+                allocatedRareItems, notes);
+    }
+
+    /** 记下本局启用的地图变体（第 5 步会用到，先留好接口）。 */
+    public RaidManifest withVariants(Set<String> variants) {
+        return new RaidManifest(raidId, raidSeed, mapId, startedAtEpochMillis, playerCount,
+                difficultyTier, activeSpawnGroups, ordered(variants), activeExtractions,
+                allocatedRareItems, notes);
+    }
+
     public JsonObject toJson() {
         JsonObject json = new JsonObject();
         json.addProperty("raid_id", raidId);
