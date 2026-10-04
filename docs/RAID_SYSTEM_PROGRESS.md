@@ -83,3 +83,18 @@
   `DreamingFishCore_NetworkManager.PROTOCOL_VERSION` 里确认）
 
 **本地领先远端 9 个提交（未推送）**，等服主测完再推。
+
+## 七、补记：本轮新踩的两个坑（2026-10-04）
+
+1. **命令参数类型要按字符集选**。`StringArgumentType.word()` **只接受字母、数字、下划线**；
+   标签（`extract:fixed`、`uses:4`、`mindist:350`）与锚点 id（允许 `.`、`-`）都带特殊字符，
+   用 `word()` 会报「参数后应有空格分隔，但发现了尾随数据」，且错误信息指向冒号位置，很容易误判成语法错。
+   凡是带冒号/点/连字符的参数一律用 `StringArgumentType.string()`（读未加引号的单个 token 时接受任意非空白字符）。
+   **这条命令加进来那天就注定不可能成功，属于"写了但没自测"** —— 加带特殊字符的参数后，必须在游戏里真敲一次。
+2. **PowerShell 里多行中文提交信息必须写文件再 `git commit -F`**。`-m '多行文本'` 会被拆成多个参数
+   （换行被当分隔，`|`、`+` 还会被当管道/运算符），表现为 `error: pathspec 'xxx' did not match any file(s) known to git`。
+   本人这轮连踩三次。稳妥做法：here-string 写进 `build/dsh_commit_msg.txt`，再 `git commit -F`。
+
+第三条同样值得记：**校验必须"先看 Gradle 退出码，再看用例数"**。编译失败时 `test` 任务不会运行，
+读到的仍是上一轮的 `test-results`，「0 失败」会把编译不过的提交放过去（本轮真发生过一次，
+见提交 `5068247` 与修复 `3fcb09c`）。
