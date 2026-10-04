@@ -127,6 +127,7 @@ public final class RaidService {
         }
         current = manifest;
         boolean saved = save(server);
+        RaidStatsLog.raidStart(server, manifest);     // 事件日志：开局
         messages.add("已开新局 #" + raidId + "（地图 " + (mapId == null || mapId.isBlank() ? "未指定" : mapId)
                 + "，难度档 " + difficultyTier + "，人数 " + manifest.playerCount() + "）");
         messages.add("主种子 " + seed + "（0x" + Long.toHexString(seed) + "）");
@@ -148,9 +149,12 @@ public final class RaidService {
             return messages;
         }
         long raidId = current.raidId();
+        RaidManifest ending = current;
         archive(current);
         current = null;
         boolean saved = save(server);
+        // 事件日志：手动结束（时间到的那条由 ExtractionRunner 记，理由是 time_up）
+        RaidStatsLog.raidEnd(server, ending, "manual");
         messages.add("已结束对局 #" + raidId);
         messages.add(saved ? "已写入存档" : "写入存档失败（详见日志）");
         return messages;
