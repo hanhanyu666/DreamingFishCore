@@ -105,6 +105,7 @@ public final class ExtractionRunner {
     public static synchronized void clear() {
         PROGRESS.clear();
         USES_LEFT.clear();
+        HINTED.clear();
     }
 
     /** 每 tick 调一次。 */
@@ -123,8 +124,11 @@ public final class ExtractionRunner {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            // 与其它系统口径一致：只认生存与冒险模式
+            // 与其它系统口径一致：只有生存与冒险模式能撤离。
+            // 但**不能静默跳过**——服主常常在创造模式下测试，什么都不发生会让人以为功能坏了，
+            // 所以在范围里站定时给一条明确提示（每个玩家只提示一次，避免刷屏）。
             if (player.isCreative() || player.isSpectator()) {
+                hintForNonSurvival(player, markers);
                 continue;
             }
             for (ExtractionService.MarkerPoint marker : markers) {
@@ -183,8 +187,31 @@ public final class ExtractionRunner {
         return USES_LEFT.get(extractionId);
     }
 
-    private static Progress progressOf(UUID playerId, String extractionId) {
-        Map<String, Progress> byPoint = PROGRESS.computeIfAbsent(playerId, key -> new HashMap<>());
+    /** 已经提示过"创造模式无法撤离"的玩家，避免每 tick 刷屏。 */
+    private static final java.util.Set<UUID> HINTED = new java.util.HashSet<>();
+
+    /** 创造/旁观玩家站进撤离点范围时提示一次——否则会让人以为撤离功能坏了。 */
+    private static void hintForNonSurvival(ServerPlayer player, List<ExtractionService.MarkerPoint> markers) {
+        boolean inRange = false;
+        for (ExtractionService.MarkerPoint marker : markers) {
+            ServerLevel level = levelOf(player.getServer(), marker.dimension());
+            if (level != null && player.level() == level
+                    && horizontalDistance(player, marker) <= DEFAULT_RADIUS) {
+                inRange = true;
+                break;
+            }
+        }
+        if (!inRange) {
+            HINTED.remove(player.getUUID());
+            return;
+        }
+        if (HINTED.add(player.getUUID())) {
+            player.sendSystemMessage(Component.literal(
+                    "[搜打撤] 创造/旁观模式不会触发撤离——切换到生存模式再站进来（撤离点是给你测位置用的）"));
+        }
+    }
+
+    private static Progress progressOf(UUID playerId, String extractionId) {        Map<String, Progress> byPoint = PROGRESS.computeIfAbsent(playerId, key -> new HashMap<>());
         return byPoint.computeIfAbsent(extractionId, key -> {
             int duration = DEFAULT_DURATION_TICKS;
             Integer uses = maxUsesOf(extractionId);
