@@ -41,7 +41,9 @@ public final class DreamingFishCore_NetworkManager {
     // 旧客户端必须在握手阶段明确拒绝连接。
     // 0.31.0：研究桌新增"提交四分之一组物品解锁配方"——open 包多带了下标除数与提交判定字段，
     // 并新增 research_table/submit 请求包。
-    private static final String PROTOCOL_VERSION = "0.31.0";
+    // 0.32.0：搜打撤露天物品——新增 S2C 同步包 raid/loose_loot_sync，
+    // 客户端据此在世界里画出漂浮的战利品（拾取仍完全由服务端判定）。
+    private static final String PROTOCOL_VERSION = "0.32.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -160,6 +162,10 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToServer(Packet_GuidanceSnapshotRequest.TYPE, Packet_GuidanceSnapshotRequest.STREAM_CODEC, authenticated(Packet_GuidanceSnapshotRequest::handle));
         registrar.playToClient(Packet_GuidanceSnapshotResponse.TYPE, Packet_GuidanceSnapshotResponse.STREAM_CODEC, Packet_GuidanceSnapshotResponse::handle);
         registrar.playToClient(Packet_PlayKillEffect.TYPE, Packet_PlayKillEffect.STREAM_CODEC, Packet_PlayKillEffect::handle);
+        // 搜打撤：露天物品节点同步（客户端只用于显示，拾取判定在服务端）
+        registrar.playToClient(com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync.TYPE,
+                com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync::handle);
 
         registrar.playToServer(Packet_RequestMarker.TYPE, Packet_RequestMarker.STREAM_CODEC, authenticated(Packet_RequestMarker::handle));
         registrar.playToClient(Packet_ShowMarker.TYPE, Packet_ShowMarker.STREAM_CODEC, Packet_ShowMarker::handle);

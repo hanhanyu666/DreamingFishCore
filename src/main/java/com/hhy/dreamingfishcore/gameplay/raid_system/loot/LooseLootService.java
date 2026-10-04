@@ -13,6 +13,7 @@ import com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchor;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchorService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.anchor.RaidAnchorType;
+import com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -120,7 +121,12 @@ public final class LooseLootService {
     public static synchronized void ensureForCurrentRaid(MinecraftServer server) {
         RaidManifest manifest = RaidService.current().orElse(null);
         if (server == null || manifest == null) {
+            boolean hadNodes = !nodes.isEmpty();
             clear();
+            if (hadNodes && server != null) {
+                // 对局结束或没有对局：让客户端把地上的模型清掉
+                Packet_RaidLootSync.sendToAll(server);
+            }
             return;
         }
         if (boundRaidId == manifest.raidId()) {
@@ -215,6 +221,8 @@ public final class LooseLootService {
         }
         if (changed) {
             RaidService.current().ifPresent(manifest -> write(server, manifest.raidId()));
+            // 有人捡走之后立刻同步：客户端马上把那个物品的模型去掉，不用等下一次定时同步
+            Packet_RaidLootSync.sendToAll(server);
         }
         emitMarkers(server);
     }
@@ -242,6 +250,13 @@ public final class LooseLootService {
     }
 
     /** 未拾取的节点用粒子轻轻标一下（已拾取就不亮了，玩家一眼知道还剩什么）。 */
+    /**
+     * 未拾取的节点用粒子轻轻标一下（已拾取就不亮了，玩家一眼知道还剩什么），
+     * 并每隔几轮把节点全量同步给客户端（客户端据此画出漂浮的物品模型）。
+     *
+     * <p>全量同步而不是增量：节点只有几十个，全量简单可靠，而且还顺带解决"玩家中途重登、
+     * 客户端手里没有数据"的问题——最多等 40 tick 就会收到一次。</p>
+     */
     private static void emitMarkers(MinecraftServer server) {
         if (++markerTick < MARKER_INTERVAL_TICKS) {
             return;
@@ -255,6 +270,10 @@ public final class LooseLootService {
             // 用附魔台的微光而不是末地烛：末地烛是"固定撤离点"的标识，两者撞脸会让人分不清
             level.sendParticles(ParticleTypes.ENCHANT, node.x(), node.y() + 0.45D, node.z(),
                     2, 0.15D, 0.1D, 0.15D, 0.02D);
+        }
+        // 每 40 tick 全量同步一次给客户端：玩家中途重登也能在 2 秒内看到地上的战利品
+        if (server.getTickCount() % 40 == 0) {
+            Packet_RaidLootSync.sendToAll(server);
         }
     }
 
