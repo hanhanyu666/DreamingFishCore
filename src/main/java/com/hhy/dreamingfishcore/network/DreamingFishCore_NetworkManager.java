@@ -166,6 +166,12 @@ public final class DreamingFishCore_NetworkManager {
         registrar.playToClient(com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync.TYPE,
                 com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync.STREAM_CODEC,
                 com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootSync::handle);
+        // 搜打撤：右键请求拾取某个节点（只带锚点 id，距离与可拾取性由服务端重算）
+        registrar.playToServer(
+                com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootPickupRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.raid_system.loot.network.Packet_RaidLootPickupRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.raid_system.loot.network
+                        .Packet_RaidLootPickupRequest::handle));
 
         registrar.playToServer(Packet_RequestMarker.TYPE, Packet_RequestMarker.STREAM_CODEC, authenticated(Packet_RequestMarker::handle));
         registrar.playToClient(Packet_ShowMarker.TYPE, Packet_ShowMarker.STREAM_CODEC, Packet_ShowMarker::handle);

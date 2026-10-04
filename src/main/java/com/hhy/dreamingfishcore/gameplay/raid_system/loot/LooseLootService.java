@@ -172,10 +172,56 @@ public final class LooseLootService {
     }
 
     /**
+     * 客户端右键请求拾取某个节点（手动拾取）。
+     *
+     * <p>与自动拾取**共用同一套判定**（{@link LooseLootPlanner#canPickup}）：距离、是否已被拿走、
+     * 背包是否放得下，全部在服务端重新算一遍——客户端发来的只是"我想捡这个"，
+     * 它连物品是什么、自己离多远都不被信任。这是设计稿要求的服务端权威。</p>
+     *
+     * @return 给玩家的回执文本（无论成功失败都有话可说）
+     */
+    public static synchronized String requestPickup(MinecraftServer server, ServerPlayer player,
+                                                    String anchorId) {
+        if (server == null || player == null || anchorId == null) {
+            return "";
+        }
+        ensureForCurrentRaid(server);
+        if (player.isCreative() || player.isSpectator()) {
+            return "创造/旁观模式不能拾取战利品";
+        }
+        for (int index = 0; index < nodes.size(); index++) {
+            Node node = nodes.get(index);
+            if (!node.anchorId().equals(anchorId)) {
+                continue;
+            }
+            double distance = Math.sqrt(Math.pow(player.getX() - node.x(), 2.0D)
+                    + Math.pow(player.getY() - node.y(), 2.0D)
+                    + Math.pow(player.getZ() - node.z(), 2.0D));
+            boolean full = player.getInventory().getFreeSlot() < 0;
+            LooseLootPlanner.PickupCheck check =
+                    LooseLootPlanner.canPickup(node.picked(), distance, false, full);
+            if (!check.allowed()) {
+                return check.reason();
+            }
+            if (!give(player, node)) {
+                return "这个物品无法放入背包（物品 id 可能已失效）";
+            }
+            nodes = replace(index, node.withPicked());
+            RaidService.current().ifPresent(manifest -> {
+                write(server, manifest.raidId());
+                RaidStatsLog.looted(server, manifest, player, node.anchorId(), node.itemId());
+            });
+            Packet_RaidLootSync.sendToAll(server);
+            return "拾取：" + displayName(node.itemId());
+        }
+        return "附近没有这个节点（可能已经被拿走了）";
+    }
+
+    /**
      * 每 tick：自动拾取 + 给未拾取的节点喷粒子。
      *
      * <p>拾取判定复用 {@link LooseLootPlanner#canPickup}，所以"已拾取/太远/背包满"的规则
-     * 与将来接客户端包时完全一致，不会出现两套口径。</p>
+     * 与右键手动拾取完全一致，不会出现两套口径。</p>
      */
     public static void tick(MinecraftServer server) {
         if (server == null) {
