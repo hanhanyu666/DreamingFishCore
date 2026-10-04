@@ -46,7 +46,8 @@ class RaidLootApplierTest {
     void appliedRecordJsonRoundTrip() {
         RaidLootApplier.AppliedContainer original = new RaidLootApplier.AppliedContainer(
                 "factory_office_container_loot_01", "minecraft:overworld", 9810, -59, 1815,
-                List.of(stack("minecraft:coal", 4), stack("minecraft:gold_ingot", 2)));
+                List.of(stack("minecraft:coal", 4), stack("minecraft:gold_ingot", 2)),
+                List.of());
 
         RaidLootApplier.AppliedContainer reparsed =
                 RaidLootApplier.AppliedContainer.fromJson(original.toJson());
@@ -59,8 +60,26 @@ class RaidLootApplierTest {
         assertEquals(1815, reparsed.z());
         assertEquals(original.items(), reparsed.items());
         assertEquals(original.pos(), reparsed.pos(), "坐标应能还原成 BlockPos");
+        assertFalse(reparsed.overwroteExistingContent(), "没覆盖过时不该有还原内容");
 
         assertEquals(null, RaidLootApplier.AppliedContainer.fromJson(null), "坏数据应返回 null 而不是抛异常");
+    }
+
+    @Test
+    void overwrittenContentIsRecordedForRestore() {
+        RaidLootApplier.AppliedContainer overwritten = new RaidLootApplier.AppliedContainer(
+                "safe_01", "minecraft:overworld", 10, 20, 30,
+                List.of(stack("minecraft:diamond", 1)),
+                List.of(stack("minecraft:rotten_flesh", 5), stack("minecraft:bone", 2)));
+
+        assertTrue(overwritten.overwroteExistingContent());
+
+        RaidLootApplier.AppliedContainer reparsed =
+                RaidLootApplier.AppliedContainer.fromJson(overwritten.toJson());
+        assertNotNull(reparsed);
+        assertEquals(overwritten.replacedItems(), reparsed.replacedItems(),
+                "覆盖前的内容必须能原样读回，否则结束对局时还原不了");
+        assertTrue(reparsed.overwroteExistingContent());
     }
 
     @Test

@@ -110,7 +110,7 @@ public final class Command_Raid {
         // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
         messages.addAll(RaidLootService.generatePlan(source.getServer()));
         RaidService.current().ifPresent(manifest -> messages.addAll(
-                RaidLootApplier.apply(source.getServer(), manifest, RaidLootService.plan())));
+                RaidLootApplier.apply(source.getServer(), manifest, RaidLootService.plan(), true)));
         reply(source, messages);
         return 1;
     }

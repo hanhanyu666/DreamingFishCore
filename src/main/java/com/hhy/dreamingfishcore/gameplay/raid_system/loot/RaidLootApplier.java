@@ -72,12 +72,23 @@ public final class RaidLootApplier {
         }
     }
 
-    /** 一个被填过的容器。 */
+    /**
+     * 一个被填过的容器。
+     *
+     * @param replacedItems 覆盖前容器里原有的东西（没覆盖则为空）。
+     *                      记下来是为了 {@code raid end} 时能**把地图还原成原样**，
+     *                      而不是把服主原本放在箱子里的东西永久吞掉。
+     */
     public record AppliedContainer(String anchorId, String dimension, int x, int y, int z,
-                                   List<AppliedStack> items) {
+                                   List<AppliedStack> items, List<AppliedStack> replacedItems) {
 
         public AppliedContainer {
             items = items == null ? List.of() : List.copyOf(items);
+            replacedItems = replacedItems == null ? List.of() : List.copyOf(replacedItems);
+        }
+
+        public boolean overwroteExistingContent() {
+            return !replacedItems.isEmpty();
         }
 
         public BlockPos pos() {
@@ -96,6 +107,11 @@ public final class RaidLootApplier {
             JsonArray items = new JsonArray();
             this.items.forEach(stack -> items.add(stack.toJson()));
             json.add("items", items);
+            if (!replacedItems.isEmpty()) {
+                JsonArray replaced = new JsonArray();
+                this.replacedItems.forEach(stack -> replaced.add(stack.toJson()));
+                json.add("replaced_items", replaced);
+            }
             return json;
         }
 
@@ -104,21 +120,27 @@ public final class RaidLootApplier {
                 return null;
             }
             JsonArray position = json.getAsJsonArray("position");
-            List<AppliedStack> items = new ArrayList<>();
-            if (json.has("items") && json.get("items").isJsonArray()) {
-                for (JsonElement element : json.getAsJsonArray("items")) {
-                    if (element.isJsonObject()) {
-                        AppliedStack stack = AppliedStack.fromJson(element.getAsJsonObject());
+            List<AppliedStack> items = readStacks(json.get("items"));
+            List<AppliedStack> replaced = readStacks(json.get("replaced_items"));
+            return new AppliedContainer(json.has("anchor") ? json.get("anchor").getAsString() : "",
+                    json.has("dimension") ? json.get("dimension").getAsString() : "",
+                    position.get(0).getAsInt(), position.get(1).getAsInt(), position.get(2).getAsInt(),
+                    items, replaced);
+        }
+
+        private static List<AppliedStack> readStacks(JsonElement element) {
+            List<AppliedStack> stacks = new ArrayList<>();
+            if (element != null && element.isJsonArray()) {
+                for (JsonElement item : element.getAsJsonArray()) {
+                    if (item.isJsonObject()) {
+                        AppliedStack stack = AppliedStack.fromJson(item.getAsJsonObject());
                         if (stack != null) {
-                            items.add(stack);
+                            stacks.add(stack);
                         }
                     }
                 }
             }
-            return new AppliedContainer(json.has("anchor") ? json.get("anchor").getAsString() : "",
-                    json.has("dimension") ? json.get("dimension").getAsString() : "",
-                    position.get(0).getAsInt(), position.get(1).getAsInt(), position.get(2).getAsInt(),
-                    items);
+            return stacks;
         }
     }
 
@@ -151,10 +173,13 @@ public final class RaidLootApplier {
     /**
      * 把计划填进世界。
      *
+     * @param overwriteNonEmpty 容器里已有东西时是否清空后填入（服主可关；
+     *                          开启时会把原有内容记账，结束时还原）
      * @return 给人看的摘要（命令直接回显）
      */
     public static List<String> apply(MinecraftServer server, RaidManifest manifest,
-                                     Map<String, RaidLootPlanner.ZonePlan> plan) {
+                                     Map<String, RaidLootPlanner.ZonePlan> plan,
+                                     boolean overwriteNonEmpty) {
         List<String> messages = new ArrayList<>();
         if (server == null || manifest == null || plan == null || plan.isEmpty()) {
             messages.add("没有可应用的计划");
@@ -166,6 +191,7 @@ public final class RaidLootApplier {
         List<String> problems = new ArrayList<>();
         int filled = 0;
         int items = 0;
+        int overwritten = 0;
 
         for (RaidLootPlanner.ZonePlan zonePlan : plan.values()) {
             for (LootAllocator.PointAllocation point : zonePlan.allocation().points()) {
@@ -188,9 +214,16 @@ public final class RaidLootApplier {
                     continue;
                 }
                 Container target = container.get();
+                List<AppliedStack> replaced = List.of();
                 if (!target.isEmpty()) {
-                    problems.add("容器里已经有东西，跳过（不覆盖）：" + point.anchorId());
-                    continue;
+                    if (!overwriteNonEmpty) {
+                        problems.add("容器里已经有东西，跳过（未开启覆盖）：" + point.anchorId());
+                        continue;
+                    }
+                    // 覆盖前先把原有内容记下来，结束时能还回去（不吞服主原本放在箱子里的东西）
+                    replaced = currentStacks(target);
+                    target.clearContent();
+                    target.setChanged();
                 }
 
                 List<AppliedStack> placed = fill(target, point.itemIds(), problems, point.anchorId());
@@ -199,14 +232,18 @@ public final class RaidLootApplier {
                 }
                 BlockPos pos = containerPos(level, anchor.get());
                 applied.add(new AppliedContainer(point.anchorId(), level.dimension().location().toString(),
-                        pos.getX(), pos.getY(), pos.getZ(), placed));
+                        pos.getX(), pos.getY(), pos.getZ(), placed, replaced));
                 filled++;
                 items += placed.size();
+                if (!replaced.isEmpty()) {
+                    overwritten++;
+                }
             }
         }
 
         writeRecord(server, manifest.raidId(), applied);
-        messages.add("已填充容器 " + filled + " 个，放入物品 " + items + " 件");
+        messages.add("已填充容器 " + filled + " 个，放入物品 " + items + " 件"
+                + (overwritten > 0 ? "（其中 " + overwritten + " 个覆盖了原有内容，结束时会还原）" : ""));
         if (filled == 0 && !plan.isEmpty()) {
             messages.add("  一个都没填上——检查锚点位置是否对着容器（锚点是准心打在方块表面记的）");
         }
@@ -238,6 +275,7 @@ public final class RaidLootApplier {
 
         int cleared = 0;
         int skipped = 0;
+        boolean restored = false;
         for (AppliedContainer container : recorded) {
             ServerLevel level = levelOf(server, container.dimension());
             if (level == null) {
@@ -254,6 +292,22 @@ public final class RaidLootApplier {
                 continue;
             }
             target.clearContent();
+            // 覆盖过的容器：把原有内容还回去，让地图恢复成开局前的样子
+            if (container.overwroteExistingContent()) {
+                int slot = 0;
+                for (AppliedStack stack : container.replacedItems()) {
+                    if (slot >= target.getContainerSize()) {
+                        messages.add("  原有内容装不回容器（容量变小？），已跳过：" + container.anchorId());
+                        break;
+                    }
+                    Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(stack.itemId()));
+                    if (item == null || item == net.minecraft.world.item.Items.AIR) {
+                        continue;
+                    }
+                    target.setItem(slot++, new ItemStack(item, Math.max(1, stack.count())));
+                    restored = true;
+                }
+            }
             target.setChanged();
             cleared++;
         }
@@ -264,7 +318,8 @@ public final class RaidLootApplier {
         } catch (IOException exception) {
             DreamingFishCore.LOGGER.error("[raid_loot] 删除填充记录失败：{}", path, exception);
         }
-        messages.add("已清理容器 " + cleared + " 个（跳过 " + skipped + " 个）");
+        messages.add("已清理容器 " + cleared + " 个（跳过 " + skipped + " 个）"
+                + (restored ? "，其中覆盖过的已还原原有内容" : ""));
         return messages;
     }
 
