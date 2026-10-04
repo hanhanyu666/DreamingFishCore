@@ -52,6 +52,17 @@ public final class Command_RaidAnchor {
                                         .then(Commands.argument("id", StringArgumentType.word())
                                                 .executes(context -> place(context,
                                                         StringArgumentType.getString(context, "id")))))))
+                .then(Commands.literal("tag")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(Command_RaidAnchor::suggestAnchorIds)
+                                .then(Commands.literal("add")
+                                        .then(Commands.argument("tag", StringArgumentType.word())
+                                                .suggests(Command_RaidAnchor::suggestTags)
+                                                .executes(context -> tag(context, true))))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("tag", StringArgumentType.word())
+                                                .suggests(Command_RaidAnchor::suggestTags)
+                                                .executes(context -> tag(context, false))))))
                 .then(Commands.literal("remove")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .executes(context -> remove(context,
@@ -214,6 +225,59 @@ public final class Command_RaidAnchor {
             }
         }
         return prefix + "_" + System.currentTimeMillis();
+    }
+
+    /** 常见标签，供 Tab 补全（撤离点类型、容器类型、条件、距离窗口、可用次数）。 */
+    private static final List<String> COMMON_TAGS = List.of(
+            "extract:fixed", "extract:random", "extract:conditional", "extract:single_use",
+            "container:safe", "container:crate", "container:toolbox",
+            "requires:factory_power_on", "nospawn:east_spawn",
+            "mindist:350", "maxdist:900", "uses:4");
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>
+    suggestAnchorIds(CommandContext<CommandSourceStack> context,
+                     com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        RaidAnchorService.ensureLoaded(context.getSource().getServer());
+        return net.minecraft.commands.SharedSuggestionProvider.suggest(
+                RaidAnchorService.catalog().anchors().stream().map(RaidAnchor::id).toList(), builder);
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>
+    suggestTags(CommandContext<CommandSourceStack> context,
+                com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        return net.minecraft.commands.SharedSuggestionProvider.suggest(COMMON_TAGS, builder);
+    }
+
+    /** 给锚点加/减标签（撤离点类型、条件、距离、可用次数都靠标签表达）。 */
+    private static int tag(CommandContext<CommandSourceStack> context, boolean add) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        String tag = StringArgumentType.getString(context, "tag").trim().toLowerCase(java.util.Locale.ROOT);
+        RaidAnchorService.ensureLoaded(source.getServer());
+
+        java.util.Optional<RaidAnchor> existing = RaidAnchorService.catalog().byId(id);
+        if (existing.isEmpty()) {
+            source.sendFailure(Component.literal("找不到锚点：" + id));
+            return 0;
+        }
+        RaidAnchor anchor = existing.get();
+        if (add && anchor.tags().stream().anyMatch(t -> t.equalsIgnoreCase(tag))) {
+            source.sendSuccess(() -> Component.literal("该锚点已经有标签 " + tag + "，现有 " + anchor.tags()), false);
+            return 1;
+        }
+        List<String> nextTags = anchor.tagsWith(tag, add);
+        RaidAnchor updated = anchor.withTags(nextTags);
+
+        reply(source, RaidAnchorService.applyOverlay(source.getServer(),
+                RaidAnchorService.overlay().withPatch(updated)));
+        source.sendSuccess(() -> Component.literal("已" + (add ? "加上" : "移除") + "标签 " + tag
+                + "：" + id + "，现有 " + updated.tags()), true);
+        if (anchor.source() == RaidAnchor.Source.DEFINITION) {
+            source.sendSuccess(() -> Component.literal(
+                    "  提示：该锚点原本来自数据包，现在整条被复制进世界层覆盖；"
+                            + "以后改数据包里的定义不会再影响它（要恢复就 raid_anchor remove 再放）"), false);
+        }
+        return 1;
     }
 
     private static int remove(CommandContext<CommandSourceStack> context, String id) {

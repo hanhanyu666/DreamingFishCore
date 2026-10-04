@@ -231,6 +231,41 @@ public record RaidAnchor(String id,
                 qualityMultiplier, newSource);
     }
 
+    /**
+     * 换一组标签（统一小写、去重、保持字典序）。
+     *
+     * <p>标签是"在游戏里就能改的高级设置"的载体：撤离点类型、条件、禁用出生组、距离窗口、可用次数
+     * 都靠标签表达（见 {@code ExtractionService#fromAnchor}），所以加一条命令比让服主手改 JSON 靠谱。</p>
+     */
+    public RaidAnchor withTags(List<String> newTags) {
+        List<String> normalized = new ArrayList<>();
+        if (newTags != null) {
+            for (String tag : newTags) {
+                if (tag == null) {
+                    continue;
+                }
+                String value = tag.trim().toLowerCase(Locale.ROOT);
+                if (!value.isEmpty() && !normalized.contains(value)) {
+                    normalized.add(value);
+                }
+            }
+        }
+        normalized.sort(java.util.Comparator.naturalOrder());
+        return new RaidAnchor(id, type, zone, x, y, z, rotation, group, normalized, weight, enabled,
+                qualityMultiplier, source);
+    }
+
+    /** 返回加/减了一个标签之后的新标签表。 */
+    public List<String> tagsWith(String tag, boolean add) {
+        List<String> next = new ArrayList<>(tags);
+        if (add) {
+            next.add(tag);
+        } else {
+            next.removeIf(existing -> existing.equalsIgnoreCase(tag));
+        }
+        return next;
+    }
+
     public RaidAnchor withEnabled(boolean newEnabled) {
         return new RaidAnchor(id, type, zone, x, y, z, rotation, group, tags, weight, newEnabled,
                 qualityMultiplier, source);
