@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.gameplay.raid_system.extraction;
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import com.hhy.dreamingfishcore.gameplay.raid_system.RaidConfig;
 import com.hhy.dreamingfishcore.gameplay.raid_system.RaidManifest;
+import com.hhy.dreamingfishcore.gameplay.raid_system.RaidRoster;
 import com.hhy.dreamingfishcore.gameplay.raid_system.RaidService;
 import java.util.HashMap;
 import java.util.List;
@@ -138,6 +139,14 @@ public final class ExtractionRunner {
                 hintForNonSurvival(player, markers);
                 continue;
             }
+            // 只有开局在线的人算本局参与者：中途进来的站进撤离点不会读条，但必须给明确说明
+            if (!RaidRoster.roster().isInRaid(player.getUUID())) {
+                if (hintOnce(player) && distanceToAny(player, markers) <= RaidConfig.extractionRadius()) {
+                    player.sendSystemMessage(Component.literal(
+                            "[搜打撤] 你不是本局参与者（本局开始时你不在），撤离点对你无效——等下一局"));
+                }
+                continue;
+            }
             for (ExtractionService.MarkerPoint marker : markers) {
                 ServerLevel level = levelOf(server, marker.dimension());
                 if (level == null || player.level() != level) {
@@ -189,6 +198,7 @@ public final class ExtractionRunner {
                 + (manifest != null ? "（第 " + manifest.raidId() + " 局" : "（")
                 + "，撤离点 " + marker.id() + "，背包已带走）"), false);
         progressOf(player.getUUID(), marker.id()).reset();
+        RaidRoster.mark(server, player, RaidRoster.State.EXTRACTED);   // 名单：已撤离
         saveUses(server);
         if (manifest != null) {
             com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog
@@ -285,6 +295,22 @@ public final class ExtractionRunner {
     /** 已经提示过"创造模式无法撤离"的玩家，避免每 tick 刷屏。 */
     private static final java.util.Set<UUID> HINTED = new java.util.HashSet<>();
 
+    /** 每个玩家只提示一次（离开范围后重置），避免每 tick 刷屏。 */
+    private static boolean hintOnce(ServerPlayer player) {
+        return HINTED.add(player.getUUID());
+    }
+
+    /** 与最近的撤离点之间的水平距离（没有点时返回一个很大的值）。 */
+    private static double distanceToAny(ServerPlayer player, List<ExtractionService.MarkerPoint> markers) {
+        double best = Double.MAX_VALUE;
+        for (ExtractionService.MarkerPoint marker : markers) {
+            if (player.level() != levelOf(player.getServer(), marker.dimension())) {
+                continue;
+            }
+            best = Math.min(best, horizontalDistance(player, marker));
+        }
+        return best;
+    }
     /** 创造/旁观玩家站进撤离点范围时提示一次——否则会让人以为撤离功能坏了。 */
     private static void hintForNonSurvival(ServerPlayer player, List<ExtractionService.MarkerPoint> markers) {
         boolean inRange = false;

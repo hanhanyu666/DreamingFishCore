@@ -128,6 +128,7 @@ public final class RaidService {
         current = manifest;
         boolean saved = save(server);
         RaidStatsLog.raidStart(server, manifest);     // 事件日志：开局
+        RaidRoster.registerOnlinePlayers(server);     // 开局时在线的人算本局参与者
         messages.add("已开新局 #" + raidId + "（地图 " + (mapId == null || mapId.isBlank() ? "未指定" : mapId)
                 + "，难度档 " + difficultyTier + "，人数 " + manifest.playerCount() + "）");
         messages.add("主种子 " + seed + "（0x" + Long.toHexString(seed) + "）");
