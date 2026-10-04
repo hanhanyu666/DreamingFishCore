@@ -35,5 +35,8 @@ public final class RaidEvents {
     public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
         com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService
                 .tickMarkers(event.getServer());
+        // 撤离读条：站在撤离点范围内累计进度，满了就传送并结算
+        com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionRunner
+                .tick(event.getServer());
     }
 }
