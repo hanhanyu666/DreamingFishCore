@@ -8,6 +8,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
+import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidVariantService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
@@ -65,6 +66,12 @@ public final class Command_Raid {
                                 .executes(Command_Raid::lootReload))
                         .then(Commands.literal("overview")
                                 .executes(Command_Raid::lootOverview)))
+                .then(Commands.literal("variants")
+                        .executes(Command_Raid::variants)
+                        .then(Commands.literal("reload")
+                                .executes(Command_Raid::variantsReload))
+                        .then(Commands.literal("overview")
+                                .executes(Command_Raid::variantsOverview)))
                 .then(Commands.literal("end")
                         .executes(Command_Raid::end)));
     }
@@ -114,6 +121,8 @@ public final class Command_Raid {
             messages.addAll(RaidLootApplier.clear(source.getServer(), previous.raidId()));
         });
         messages.addAll(RaidService.startNewRaid(source.getServer(), map, difficulty, players));
+        // 顺序照设计稿：先定地图变体（可能封路），再做撤离点，最后生成并落地战利品
+        messages.addAll(RaidVariantService.selectAndRecord(source.getServer()));
         // 顺序照设计稿：先定撤离点（玩家要有路可走），再生成并落地战利品
         messages.addAll(ExtractionService.selectAndRecord(source.getServer()));
         // 服主要求：开新局就把计划填进世界（填充过程只在空容器里放，且逐个记账以便结束时清回）
@@ -154,6 +163,23 @@ public final class Command_Raid {
     /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
     private static int plan(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 为当前对局抽地图变体并写进对局记录（含连通性校验，抽不合格会退回无变体）。 */
+    private static int variants(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidVariantService.selectAndRecord(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int variantsReload(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidVariantService.reload(context.getSource().getServer()));
+        return 1;
+    }
+
+    private static int variantsOverview(CommandContext<CommandSourceStack> context) {
+        RaidVariantService.ensureLoaded(context.getSource().getServer());
+        reply(context.getSource(), RaidVariantService.overview());
         return 1;
     }
 
