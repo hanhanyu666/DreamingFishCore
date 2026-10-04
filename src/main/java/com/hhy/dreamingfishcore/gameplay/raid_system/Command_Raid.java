@@ -5,15 +5,20 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.hhy.dreamingfishcore.gameplay.raid_system.extraction.ExtractionService;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootApplier;
 import com.hhy.dreamingfishcore.gameplay.raid_system.loot.RaidLootService;
+import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidVariantBlocks;
 import com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidVariantService;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 
 /**
  * {@code /dreamingfish raid ...}：对局的开局、查询与收尾。
@@ -71,7 +76,20 @@ public final class Command_Raid {
                         .then(Commands.literal("reload")
                                 .executes(Command_Raid::variantsReload))
                         .then(Commands.literal("overview")
-                                .executes(Command_Raid::variantsOverview)))
+                                .executes(Command_Raid::variantsOverview))
+                        .then(Commands.literal("apply")
+                                .executes(context -> variantsApply(context, null))
+                                .then(Commands.argument("variant", StringArgumentType.string())
+                                        .executes(context -> variantsApply(context,
+                                                StringArgumentType.getString(context, "variant")))))
+                        .then(Commands.literal("restore")
+                                .executes(Command_Raid::variantsRestore)))
+                .then(Commands.literal("variant_block")
+                        .then(Commands.literal("list")
+                                .executes(Command_Raid::variantBlockList))
+                        .then(Commands.argument("variant", StringArgumentType.string())
+                                .then(Commands.argument("block", StringArgumentType.greedyString())
+                                        .executes(Command_Raid::variantBlockRecord))))
                 .then(Commands.literal("end")
                         .executes(Command_Raid::end)));
     }
@@ -180,6 +198,43 @@ public final class Command_Raid {
     private static int variantsOverview(CommandContext<CommandSourceStack> context) {
         RaidVariantService.ensureLoaded(context.getSource().getServer());
         reply(context.getSource(), RaidVariantService.overview());
+        return 1;
+    }
+
+    /** 应用变体方块：不给参数就用本局选中的变体，给了就只应用那一个变体。 */
+    private static int variantsApply(CommandContext<CommandSourceStack> context, String variantId) {
+        reply(context.getSource(), RaidVariantBlocks.apply(context.getSource().getServer(), variantId));
+        return 1;
+    }
+
+    /** 把变体方块还原成登记时的原方块（登记保留，之后还能再应用）。 */
+    private static int variantsRestore(CommandContext<CommandSourceStack> context) {
+        reply(context.getSource(), RaidVariantBlocks.restore(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 站在目标方块前登记：变体 <variant> 生效时，这个方块变成 <block>。 */
+    private static int variantBlockRecord(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        String variantId = StringArgumentType.getString(context, "variant");
+        String blockId = StringArgumentType.getString(context, "block");
+        HitResult hit = player.pick(player.blockInteractionRange(), 1.0F, false);
+        if (!(hit instanceof BlockHitResult blockHit)) {
+            source.sendFailure(Component.literal("请把准心对着要切换的方块再执行（距离 "
+                    + player.blockInteractionRange() + " 格内）"));
+            return 0;
+        }
+        String reply = RaidVariantBlocks.record(source.getServer(), player.serverLevel(),
+                blockHit.getBlockPos(), variantId, blockId);
+        source.sendSuccess(() -> Component.literal(reply), false);
+        return 1;
+    }
+
+    private static int variantBlockList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        RaidVariantBlocks.ensureForCurrentRaid(source.getServer());
+        reply(source, RaidVariantBlocks.describe());
         return 1;
     }
 
