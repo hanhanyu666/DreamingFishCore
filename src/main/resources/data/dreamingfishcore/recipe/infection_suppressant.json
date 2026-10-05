@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "dreamingfishcore:herb" },
+    { "item": "dreamingfishcore:herb" },
+    { "item": "dreamingfishcore:herb" },
+    { "item": "minecraft:glass_bottle" }
+  ],
+  "result": {
+    "id": "dreamingfishcore:infection_suppressant",
+    "count": 1
+  }
+}

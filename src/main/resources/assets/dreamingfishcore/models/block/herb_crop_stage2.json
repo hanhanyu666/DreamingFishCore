@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/crop",
+  "textures": {
+    "crop": "dreamingfishcore:block/herb_crop_stage2"
+  }
+}

@@ -103,6 +103,22 @@ public class DreamingFishCore_Items {
                     .stacksTo(64)
             ));
 
+    //农作物注册———————————————————————————————————————————————————————————————————————
+    /** 药草：模组药物的基础材料，由药草作物成熟后收获。 */
+    public static final DeferredHolder<Item, ? extends Item> HERB = ITEMS.register("herb",
+            () -> new Item(new Item.Properties().stacksTo(64)));
+
+    /**
+     * 药草种子：种在耕地上长成药草。
+     *
+     * <p>用 {@link net.minecraft.world.item.ItemNameBlockItem}（原版种子就是它），
+     * 这样右键耕地能直接种下去，并自动带上作物的名称方块提示。</p>
+     */
+    public static final DeferredHolder<Item, ? extends Item> HERB_SEEDS = ITEMS.register("herb_seeds",
+            () -> new net.minecraft.world.item.ItemNameBlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.HERB_CROP.get(),
+                    new Item.Properties()));
+
     //药品注册————————————————————————————————————————————————————————————————————————
     // 简易急救包（初级）
     public static final DeferredHolder<Item, ? extends Item> EASY_AID_KIT = ITEMS.register("easy_aid_kit",

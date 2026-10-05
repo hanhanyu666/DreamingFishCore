@@ -71,5 +71,8 @@
   "subtitles.entity.bone_spike.hit": "骨刺碎裂",
   "block.dreamingfishcore.settlement_filter": "聚居地过滤装置",
   "block.dreamingfishcore.spawner": "刷怪箱",
-  "block.dreamingfishcore.research_table": "研究桌"
+  "block.dreamingfishcore.research_table": "研究桌",
+  "block.dreamingfishcore.herb_crop": "药草",
+  "item.dreamingfishcore.herb": "药草",
+  "item.dreamingfishcore.herb_seeds": "药草种子"
 }

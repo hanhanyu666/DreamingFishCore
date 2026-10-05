@@ -33,6 +33,21 @@ public final class DreamingFishCore_Blocks {
             BLOCKS.register("research_table",
                     () -> new ResearchTableBlock(ResearchTableBlock.defaultProperties()));
 
+    /**
+     * 药草作物：模组药物的种植来源。
+     *
+     * <p>属性照抄原版作物：无碰撞、随机刻生长、瞬间破坏、作物音效、被活塞推就掉。</p>
+     */
+    public static final DeferredHolder<Block, HerbCropBlock> HERB_CROP =
+            BLOCKS.register("herb_crop",
+                    () -> new HerbCropBlock(net.minecraft.world.level.block.state.BlockBehaviour.Properties
+                            .of()
+                            .noCollission()
+                            .randomTicks()
+                            .instabreak()
+                            .sound(net.minecraft.world.level.block.SoundType.CROP)
+                            .pushReaction(net.minecraft.world.level.material.PushReaction.DESTROY)));
+
     private DreamingFishCore_Blocks() {
     }
 
