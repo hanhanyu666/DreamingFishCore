@@ -74,7 +74,9 @@ public final class ZombieSpawnPoolRewriter {
                 continue;
             }
             if (entry.type == customZombieType
-                    || (archerZombieType != null && entry.type == archerZombieType)) {
+                    || (archerZombieType != null && entry.type == archerZombieType)
+                    || entry.type == com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.CHARRED_ZOMBIE.get()
+                    || entry.type == com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.ADAMANT_ZOMBIE.get()) {
                 // A datapack or another integration already supplied one of the
                 // custom entities. Do not create a competing second entry.
                 return original;
@@ -132,9 +134,21 @@ public final class ZombieSpawnPoolRewriter {
                     rewritten.add(stableEntry(
                             entry.type, vanillaWeight, entry.minCount, entry.maxCount));
                 }
-                if (customWeight > 0) {
+                // 自定义丧尸的份额里再分出焦尸与金刚僵尸（方案 A：25% / 10%，从小往大排）
+                int charredWeight = proportionalWeight(customWeight, 25, 100L);
+                int adamantWeight = proportionalWeight(customWeight, 10, 100L);
+                int siegeWeight = Math.max(0, customWeight - charredWeight - adamantWeight);
+                if (siegeWeight > 0) {
                     rewritten.add(stableEntry(
-                            customZombieType, customWeight, entry.minCount, entry.maxCount));
+                            customZombieType, siegeWeight, entry.minCount, entry.maxCount));
+                }
+                if (charredWeight > 0) {
+                    rewritten.add(stableEntry(com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.CHARRED_ZOMBIE.get(),
+                            charredWeight, entry.minCount, entry.maxCount));
+                }
+                if (adamantWeight > 0) {
+                    rewritten.add(stableEntry(com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.ADAMANT_ZOMBIE.get(),
+                            adamantWeight, entry.minCount, entry.maxCount));
                 }
                 if (archerWeight > 0 && archerZombieType != null) {
                     rewritten.add(stableEntry(
