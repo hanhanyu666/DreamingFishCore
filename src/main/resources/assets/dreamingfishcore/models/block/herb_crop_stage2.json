@@ -1,6 +1,29 @@
 {
-  "parent": "minecraft:block/crop",
+  "render_type": "minecraft:cutout",
   "textures": {
+    "particle": "dreamingfishcore:block/herb_crop_stage2",
     "crop": "dreamingfishcore:block/herb_crop_stage2"
-  }
+  },
+  "elements": [
+    {
+      "from": [0, 0, 7.5],
+      "to": [16, 16, 8.5],
+      "rotation": { "origin": [8, 8, 8], "axis": "y", "angle": 45, "rescale": false },
+      "shade": false,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#crop" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#crop" }
+      }
+    },
+    {
+      "from": [0, 0, 7.5],
+      "to": [16, 16, 8.5],
+      "rotation": { "origin": [8, 8, 8], "axis": "y", "angle": 135, "rescale": false },
+      "shade": false,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#crop" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#crop" }
+      }
+    }
+  ]
 }
