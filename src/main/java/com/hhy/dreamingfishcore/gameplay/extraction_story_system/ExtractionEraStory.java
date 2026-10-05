@@ -147,6 +147,25 @@ public final class ExtractionEraStory {
     }
 
     /**
+     * 剧情页里本阶段任务的可见性。
+     *
+     * <p>与开篇期"按个人步骤逐步放出"不同：本阶段三个任务都是**一开始就该看到的目标**
+     * （先听简报 → 再活着撤一次 → 顺带带东西回来），所以只要 taskKey 属于本阶段就可见。</p>
+     *
+     * <p>接这个分支是必须的：{@code StoryManager.isPersonalTaskVisibleToPlayer} 对未识别的阶段
+     * 回退到"该玩家是否已完成该任务"，那会让本阶段的任务**在完成前全都看不见**——
+     * 玩家根本不知道要做什么。</p>
+     */
+    public static boolean isTaskVisibleToPlayer(String taskKey, java.util.UUID playerId) {
+        if (taskKey == null || playerId == null) {
+            return false;
+        }
+        return TASK_BRIEFING_ID.equals(taskKey)
+                || TASK_FIRST_EXTRACT_ID.equals(taskKey)
+                || TASK_BRING_BACK_ID.equals(taskKey);
+    }
+
+    /**
      * 造一个个人任务。
      *
      * <p>与开篇期/余梦期保持同一写法：默认发布、个人作用域。这里不绑地点与引导

@@ -1614,6 +1614,11 @@ public final class StoryManager {
         if (AfterdreamStory.STAGE_ID.equals(stageId)) {
             return AfterdreamStory.isTaskVisibleToPlayer(taskKey, playerId);
         }
+        if (com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                .STAGE_ID.equals(stageId)) {
+            return com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                    .isTaskVisibleToPlayer(taskKey, playerId);
+        }
         return state.hasPersonalTaskCompletion(taskKey, playerId);
     }
 
