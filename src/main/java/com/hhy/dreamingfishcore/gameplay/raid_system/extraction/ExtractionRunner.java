@@ -204,6 +204,10 @@ public final class ExtractionRunner {
                 + "，撤离点 " + marker.id() + "，背包已带走）"), false);
         progressOf(player.getUUID(), marker.id()).reset();
         RaidRoster.mark(server, player, RaidRoster.State.EXTRACTED);   // 名单：已撤离
+        // 剧情：成功撤离是"服务端验证过的事实"，作为第三阶段任务（第一次活着回来 / 带东西回来）的完成入口
+        com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionStoryHooks.onExtracted(
+                player, com.hhy.dreamingfishcore.gameplay.extraction_story_system
+                        .ExtractionStoryHooks.hasAnyCarriedItem(player));
         saveUses(server);
         if (manifest != null) {
             com.hhy.dreamingfishcore.gameplay.raid_system.RaidStatsLog
