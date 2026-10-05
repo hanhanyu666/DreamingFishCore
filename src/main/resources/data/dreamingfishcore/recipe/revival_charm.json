@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "ECE",
+    "CDC",
+    "..."
+  ],
+  "key": {
+    "E": { "item": "minecraft:enchanted_golden_apple" },
+    "C": { "item": "minecraft:golden_carrot" },
+    "D": { "item": "minecraft:diamond" }
+  },
+  "result": {
+    "id": "dreamingfishcore:revival_charm",
+    "count": 1
+  }
+}

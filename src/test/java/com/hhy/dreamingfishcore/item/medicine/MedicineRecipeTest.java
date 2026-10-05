@@ -3,6 +3,7 @@ package com.hhy.dreamingfishcore.item.medicine;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -14,11 +15,11 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 /**
- * 感染抑制剂两档配方的数据守卫。
+ * 药物配方的数据守卫。
  *
- * <p>配方 JSON 里物品 id 打错**不会报错**：游戏只会静默用别的物品，或整条配方失效，
- * 服主到游戏里才发现"合成不出来"。所以把数据文件读进来断言材料清单精确匹配
- * （初级：药草 + 纸×2；高级：药草 + 纸×2 + 荧光浆果×2）。</p>
+ * <p>配方 JSON 里物品 id 或图案打错**都不会报错**：游戏只会静默用别的物品、
+ * 或者整条配方失效，服主到游戏里才发现"合成不出来"。所以把数据文件读进来，
+ * 把图案展开成"物品 → 数量"再断言，等价于在游戏里数一遍格子。</p>
  */
 class MedicineRecipeTest {
 
@@ -31,41 +32,92 @@ class MedicineRecipeTest {
         }
     }
 
-    private static Map<String, Integer> materials(JsonObject recipe) {
+    /** 把有序配方的图案展开成 物品id -> 数量（空格与 "." 视为空位）。 */
+    private static Map<String, Integer> shapedMaterials(JsonObject recipe) {
+        JsonObject keys = recipe.getAsJsonObject("key");
+        JsonArray pattern = recipe.getAsJsonArray("pattern");
         Map<String, Integer> counts = new TreeMap<>();
-        for (JsonElement ingredient : recipe.getAsJsonArray("ingredients")) {
-            String id = ingredient.getAsJsonObject().get("item").getAsString();
-            counts.merge(id, 1, Integer::sum);
+        for (JsonElement row : pattern) {
+            for (char symbol : row.getAsString().toCharArray()) {
+                if (symbol == ' ' || symbol == '.') {
+                    continue;
+                }
+                String id = keys.getAsJsonObject(String.valueOf(symbol)).get("item").getAsString();
+                counts.merge(id, 1, Integer::sum);
+            }
         }
         return counts;
     }
+
+    private static Map<String, Integer> shapelessMaterials(JsonObject recipe) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (JsonElement ingredient : recipe.getAsJsonArray("ingredients")) {
+            counts.merge(ingredient.getAsJsonObject().get("item").getAsString(), 1, Integer::sum);
+        }
+        return counts;
+    }
+
+    private static String resultId(JsonObject recipe) {
+        return recipe.getAsJsonObject("result").get("id").getAsString();
+    }
+
+    // ---------------------------------------------------------------- 感染抑制剂
 
     @Test
     void suppressantIsHerbPlusTwoPaper() throws Exception {
         JsonObject recipe = recipe("infection_suppressant");
         assertEquals("minecraft:crafting_shapeless", recipe.get("type").getAsString());
-        assertEquals("dreamingfishcore:infection_suppressant",
-                recipe.getAsJsonObject("result").get("id").getAsString());
-        assertEquals(Map.of("dreamingfishcore:herb", 1, "minecraft:paper", 2), materials(recipe),
-                "感染抑制剂必须是 药草 + 纸×2，多一样少一样都说明被改错了");
+        assertEquals("dreamingfishcore:infection_suppressant", resultId(recipe));
+        assertEquals(Map.of("dreamingfishcore:herb", 1, "minecraft:paper", 2), shapelessMaterials(recipe));
     }
 
     @Test
     void strongSuppressantAddsTwoGlowBerries() throws Exception {
         JsonObject recipe = recipe("strong_infection_suppressant");
-        assertEquals("dreamingfishcore:strong_infection_suppressant",
-                recipe.getAsJsonObject("result").get("id").getAsString());
+        assertEquals("dreamingfishcore:strong_infection_suppressant", resultId(recipe));
         assertEquals(Map.of("dreamingfishcore:herb", 1, "minecraft:paper", 2,
-                "minecraft:glow_berries", 2), materials(recipe),
-                "强效感染抑制剂 = 药草 + 纸×2 + 荧光浆果×2");
+                "minecraft:glow_berries", 2), shapelessMaterials(recipe));
+    }
+
+    // ---------------------------------------------------------------- 急救包
+
+    @Test
+    void easyAidKitIsHerbSurroundedByFourGoldAndFourIronNuggets() throws Exception {
+        JsonObject recipe = recipe("easy_aid_kit");
+        assertEquals("dreamingfishcore:easy_aid_kit", resultId(recipe));
+        assertEquals(Map.of("dreamingfishcore:herb", 1,
+                "minecraft:gold_nugget", 4, "minecraft:iron_nugget", 4), shapedMaterials(recipe),
+                "急救包 = 中心药草 + 四周 4 金粒 + 4 铁粒（共 9 格全满）");
+        // 九格必须全满：中心一格 + 外圈八格
+        int used = shapedMaterials(recipe).values().stream().mapToInt(Integer::intValue).sum();
+        assertEquals(9, used, "图案应该正好填满 3x3");
     }
 
     @Test
-    void aidKitsHaveNoRecipeYet() {
-        // 我一度误把"初级/高级"当成急救包并加了配方；记录一笔，避免以后有人当成漏做又加回来。
-        assertEquals(null, MedicineRecipeTest.class.getResource(
-                "/data/dreamingfishcore/recipe/easy_aid_kit.json"), "急救包配方不该存在（服主指的是抑制剂）");
-        assertEquals(null, MedicineRecipeTest.class.getResource(
-                "/data/dreamingfishcore/recipe/advanced_aid_kit.json"), "高级急救包配方同理");
+    void advancedAidKitSurroundsTheBasicOneWithFourHerbs() throws Exception {
+        JsonObject recipe = recipe("advanced_aid_kit");
+        assertEquals("dreamingfishcore:advanced_aid_kit", resultId(recipe));
+        assertEquals(Map.of("dreamingfishcore:easy_aid_kit", 1, "dreamingfishcore:herb", 4),
+                shapedMaterials(recipe), "高级急救包 = 初级急救包 + 围 4 个药草");
+    }
+
+    // ---------------------------------------------------------------- 复苏符
+
+    @Test
+    void revivalCharmNeedsTwoEnchantedApplesThreeCarrotsAndADiamond() throws Exception {
+        JsonObject recipe = recipe("revival_charm");
+        assertEquals("dreamingfishcore:revival_charm", resultId(recipe));
+        assertEquals(Map.of("minecraft:enchanted_golden_apple", 2,
+                "minecraft:golden_carrot", 3, "minecraft:diamond", 1), shapedMaterials(recipe),
+                "复苏符 = 2 附魔金苹果 + 3 金胡萝卜 + 1 钻石");
+    }
+
+    @Test
+    void everyMedicineRecipeProducesExactlyOne() throws Exception {
+        for (String name : new String[]{"infection_suppressant", "strong_infection_suppressant",
+                "easy_aid_kit", "advanced_aid_kit", "revival_charm"}) {
+            assertEquals(1, recipe(name).getAsJsonObject("result").get("count").getAsInt(),
+                    name + " 一次合成一个");
+        }
     }
 }

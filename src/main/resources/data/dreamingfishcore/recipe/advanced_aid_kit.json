@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    ".H.",
+    "HAH",
+    ".H."
+  ],
+  "key": {
+    "H": { "item": "dreamingfishcore:herb" },
+    "A": { "item": "dreamingfishcore:easy_aid_kit" }
+  },
+  "result": {
+    "id": "dreamingfishcore:advanced_aid_kit",
+    "count": 1
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "GIG",
+    "IHI",
+    "GIG"
+  ],
+  "key": {
+    "G": { "item": "minecraft:gold_nugget" },
+    "I": { "item": "minecraft:iron_nugget" },
+    "H": { "item": "dreamingfishcore:herb" }
+  },
+  "result": {
+    "id": "dreamingfishcore:easy_aid_kit",
+    "count": 1
+  }
+}
