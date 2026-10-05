@@ -536,7 +536,10 @@ public final class StoryManager {
     }
 
     private static StoryDefinitionDocument createDefaultDefinitions(StoryOperationsCatalog.Document operations) {
-        List<StoryStageData> stages = List.of(OpeningStory.createStageDefinition(), AfterdreamStory.createStageDefinition());
+        List<StoryStageData> stages = List.of(OpeningStory.createStageDefinition(),
+                AfterdreamStory.createStageDefinition(),
+                com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                        .createStageDefinition());
         for (StoryOperationsCatalog.WorldTask task : operations.worldTasks()) {
             StoryStageData stage = stages.stream().filter(value -> value.getStageId().equals(task.stageId()))
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("世界任务阶段尚未实现：" + task.stageId()));
