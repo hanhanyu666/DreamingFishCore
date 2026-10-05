@@ -26,6 +26,11 @@ public final class ZombieSpawnPoolRewriter {
     /** Stable entries required by NaturalSpawner.canSpawnMobAt(). */
     private static final Map<SpawnEntryKey, MobSpawnSettings.SpawnerData> STABLE_ENTRIES = new HashMap<>();
 
+    /** 自定义丧尸份额里再分给焦尸的百分比（服主定的方案 A）。 */
+    public static final int CHARRED_PERCENT_OF_CUSTOM = 25;
+    /** 自定义丧尸份额里再分给金刚僵尸的百分比（比焦尸更稀有，因为它更硬）。 */
+    public static final int ADAMANT_PERCENT_OF_CUSTOM = 10;
+
     private ZombieSpawnPoolRewriter() {
     }
 
@@ -135,8 +140,8 @@ public final class ZombieSpawnPoolRewriter {
                             entry.type, vanillaWeight, entry.minCount, entry.maxCount));
                 }
                 // 自定义丧尸的份额里再分出焦尸与金刚僵尸（方案 A：25% / 10%，从小往大排）
-                int charredWeight = proportionalWeight(customWeight, 25, 100L);
-                int adamantWeight = proportionalWeight(customWeight, 10, 100L);
+                int charredWeight = proportionalWeight(customWeight, CHARRED_PERCENT_OF_CUSTOM, 100L);
+                int adamantWeight = proportionalWeight(customWeight, ADAMANT_PERCENT_OF_CUSTOM, 100L);
                 int siegeWeight = Math.max(0, customWeight - charredWeight - adamantWeight);
                 if (siegeWeight > 0) {
                     rewritten.add(stableEntry(
