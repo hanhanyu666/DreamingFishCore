@@ -177,6 +177,9 @@ public final class StoryManager {
             case AfterdreamStory.STAGE_ID ->
                     com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
                             .onPlayerAuthenticated(player);
+            case com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory.STAGE_ID ->
+                    com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                            .onPlayerAuthenticated(player);
             default -> {
                 // 后续阶段尚未编写脚本。
             }

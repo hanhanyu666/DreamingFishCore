@@ -1,6 +1,7 @@
 package com.hhy.dreamingfishcore.gameplay.extraction_story_system;
 
 import com.hhy.dreamingfishcore.DreamingFishCore;
+import com.hhy.dreamingfishcore.gameplay.npc_message_system.NpcMessageManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryManager;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryStageData;
 import com.hhy.dreamingfishcore.gameplay.story_system.StoryTaskData;
@@ -15,7 +16,7 @@ import java.util.List;
  * <p>接在开篇期（编号 1）与余梦期（编号 2）之后，主题是把玩家从"在梦里活下去"
  * 推向"主动进入梦外的对局地图搜物资并活着带回来"——也就是搜打撤玩法的剧情外壳。</p>
  *
- * <p><b>本类只提供阶段与任务定义和触发入口</b>，遵循这套剧情系统的既有分工：</p>
+ * <p><b>本类只提供阶段定义、任务定义与触发入口</b>，遵循这套剧情系统的既有分工：</p>
  * <ul>
  *   <li>阶段/任务的顺序与编号写在 Java（本类），运行时绝不从 JSON 读流程；</li>
  *   <li>文案走 {@link StoryTextCatalog#textOrDefault}，键缺失时用这里的兜底文本，
@@ -25,6 +26,13 @@ import java.util.List;
  * <p><b>任务编号刻意取 3001 起的高段</b>：定义校验要求任务编号全局唯一，
  * 取高段可以避免与开篇期/余梦期已占用的低编号相撞——撞了会让整个故事定义校验失败、
  * 服务器起不来，属于最容易犯又最难查的错。</p>
+ *
+ * <p>三个任务的达成入口：</p>
+ * <ul>
+ *   <li>3001 了解梦外行动 —— 读完联络人的简报私信（{@link #onNpcMessageRead}）</li>
+ *   <li>3002 第一次活着回来 / 3003 带一件有用的东西回来 —— 搜打撤成功撤离
+ *       （{@code ExtractionStoryHooks.onExtracted}）</li>
+ * </ul>
  */
 public final class ExtractionEraStory {
 
@@ -85,6 +93,33 @@ public final class ExtractionEraStory {
                         StoryTextCatalog.textOrDefault(TASK_BRING_BACK_NAME_KEY, "带一件有用的东西回来"),
                         StoryTextCatalog.textOrDefault(TASK_BRING_BACK_CONTENT_KEY,
                                 "把对局里找到的物资带到撤离点并成功撤出，让它在梦外也属于你。")));
+    }
+
+    /**
+     * 玩家登录（已通过登录校验）：进入本章节时把简报推送给他。
+     *
+     * <p>照余梦期 {@code AfterdreamStory.sendBaizhiMessage} 的写法：</p>
+     * <ul>
+     *   <li>用 {@link NpcMessageManager#sendStoryMessage}——**主线私信通道**，
+     *       不是普通的 {@code sendConfiguredMessage}（主线私信的语义与后续处理不同）；</li>
+     *   <li>内容包尚未加载时直接返回：稍后的登录/换章会重试，
+     *       不会把"已收到"错误地写进玩家状态；</li>
+     *   <li>已经收到过（{@code hasReceivedDefinition}）也算送达，因此不会重复推送。</li>
+     * </ul>
+     */
+    public static synchronized void onPlayerAuthenticated(ServerPlayer player) {
+        if (player == null || !STAGE_ID.equals(StoryManager.getCurrentStageIdOrDefault())) {
+            return;
+        }
+        if (!NpcMessageManager.isWorldDataLoaded()) {
+            return;     // 私信内容包可能晚于剧情状态机就绪，下次登录再来
+        }
+        boolean delivered = NpcMessageManager.sendStoryMessage(player, BRIEFING_MESSAGE_ID)
+                || NpcMessageManager.hasReceivedDefinition(player.getUUID(), BRIEFING_MESSAGE_ID);
+        if (delivered) {
+            DreamingFishCore.LOGGER.info("[extraction_story] 已向 {} 推送梦外行动简报",
+                    player.getGameProfile().getName());
+        }
     }
 
     /**
