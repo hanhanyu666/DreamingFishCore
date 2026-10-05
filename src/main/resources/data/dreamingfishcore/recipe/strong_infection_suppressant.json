@@ -4,10 +4,12 @@
   "ingredients": [
     { "item": "dreamingfishcore:herb" },
     { "item": "minecraft:paper" },
-    { "item": "minecraft:paper" }
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:glow_berries" },
+    { "item": "minecraft:glow_berries" }
   ],
   "result": {
-    "id": "dreamingfishcore:infection_suppressant",
+    "id": "dreamingfishcore:strong_infection_suppressant",
     "count": 1
   }
 }
