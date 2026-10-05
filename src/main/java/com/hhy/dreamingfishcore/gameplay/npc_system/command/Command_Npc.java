@@ -65,7 +65,7 @@ public class Command_Npc {
                 .then(Commands.literal("message")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument(ARG_TARGET, EntityArgument.player())
-                                .then(Commands.argument(ARG_MESSAGE_ID, StringArgumentType.word())
+                                .then(Commands.argument(ARG_MESSAGE_ID, StringArgumentType.greedyString())
                                         .executes(context -> sendMessage(
                                                 EntityArgument.getPlayer(context, ARG_TARGET),
                                                 StringArgumentType.getString(context, ARG_MESSAGE_ID),
