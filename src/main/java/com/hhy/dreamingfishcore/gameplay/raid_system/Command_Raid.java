@@ -74,6 +74,13 @@ public final class Command_Raid {
                                 .executes(Command_Raid::lootReload))
                         .then(Commands.literal("overview")
                                 .executes(Command_Raid::lootOverview)))
+                .then(Commands.literal("arena")
+                        .then(Commands.literal("status")
+                                .executes(Command_Raid::arenaStatus))
+                        .then(Commands.literal("back")
+                                .executes(context -> arenaBack(context, false))
+                                .then(Commands.literal("all")
+                                        .executes(context -> arenaBack(context, true)))))
                 .then(Commands.literal("region")
                         .then(Commands.literal("list")
                                 .executes(Command_Raid::regionList))
@@ -203,6 +210,26 @@ public final class Command_Raid {
     /** 用当前对局与本局锚点算出各区域的战利品计划（第 10~14 步）。 */
     private static int plan(CommandContext<CommandSourceStack> context) {
         reply(context.getSource(), RaidLootService.generatePlan(context.getSource().getServer()));
+        return 1;
+    }
+
+    /** 看竞技场维度是否加载、进场落点、当前时间与三个开关。 */
+    private static int arenaStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        reply(source, com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidArenaService
+                .status(source.getServer()));
+        return 1;
+    }
+
+    /**
+     * 回家路：把在竞技场里的玩家送回出口（**不需要进行中的对局**）。
+     *
+     * @param all true = 所有还在竞技场的人；false = 只送执行者自己
+     */
+    private static int arenaBack(CommandContext<CommandSourceStack> context, boolean all) {
+        CommandSourceStack source = context.getSource();
+        reply(source, com.hhy.dreamingfishcore.gameplay.raid_system.map.RaidArenaService
+                .sendHome(source.getServer(), all ? null : source.getPlayer()));
         return 1;
     }
 

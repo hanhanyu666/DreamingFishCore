@@ -135,6 +135,65 @@ public final class RaidArenaService {
         return messages;
     }
 
+    /**
+     * 把玩家送回出口——**不要求有进行中的对局**。
+     *
+     * <p>补这个是因为：竞技场是虚空维度、没有传送门，进去之后只能靠命令或死亡出来；
+     * 而 {@link #onRaidEnd} 只在结束对局时召回。所以需要一条随时可用的回家路，
+     * 否则"谁被 tp 进去谁就卡住了"。</p>
+     *
+     * @param only 指定玩家；传 {@code null} 表示所有还在竞技场里的人
+     */
+    public static List<String> sendHome(MinecraftServer server, ServerPlayer only) {
+        List<String> messages = new ArrayList<>();
+        if (server == null) {
+            messages.add("服务器尚未就绪");
+            return messages;
+        }
+        ServerLevel arena = arena(server);
+        if (arena == null) {
+            messages.add("⚠ 没找到竞技场维度 " + ARENA_ID + "（检查数据包是否加载）");
+            return messages;
+        }
+        ServerLevel exit = exitLevel(server);
+        if (exit == null) {
+            messages.add("⚠ 出口维度不存在，无法召回");
+            return messages;
+        }
+        double[] position = RaidConfig.exitPosition();
+        double x;
+        double y;
+        double z;
+        if (position != null && position.length >= 3) {
+            x = position[0];
+            y = position[1];
+            z = position[2];
+        } else {
+            var spawn = exit.getSharedSpawnPos();
+            x = spawn.getX() + 0.5D;
+            y = spawn.getY();
+            z = spawn.getZ() + 0.5D;
+        }
+        List<ServerPlayer> targets = only != null ? List.of(only) : server.getPlayerList().getPlayers();
+        int moved = 0;
+        for (ServerPlayer player : targets) {
+            if (player.level() != arena) {
+                if (only != null) {
+                    messages.add("你不在竞技场（当前维度不是 " + ARENA_ID + "），无需召回");
+                }
+                continue;
+            }
+            player.teleportTo(exit, x, y, z, player.getYRot(), player.getXRot());
+            player.sendSystemMessage(Component.literal("[搜打撤] 已把你送回安全区"));
+            moved++;
+        }
+        if (moved > 0) {
+            messages.add("已把 " + moved + " 名玩家送回出口（" + exit.dimension().location() + " "
+                    + String.format(java.util.Locale.ROOT, "%.1f/%.1f/%.1f", x, y, z) + "）");
+        }
+        return messages;
+    }
+
     /** 本局参与者（在册且仍在图里的人）。 */
     private static List<ServerPlayer> participants(MinecraftServer server) {
         List<ServerPlayer> players = new ArrayList<>();
