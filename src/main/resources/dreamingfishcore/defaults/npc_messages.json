@@ -141,6 +141,20 @@
       "membershipRequirement": "ANY",
       "replies": [],
       "guidance": null
+    },
+    {
+      "id": "dreamingfishcore:extraction_era/zhoucen/briefing",
+      "npcId": 105,
+      "subject": "梦外行动：第一次简报",
+      "content": "听说你要进梦外了。先把规矩说清楚，省得白跑一趟。\n\n进去以后，物资主要在箱子和地上：箱子直接开，地上的走过去就会捡起来，也可以右键拿最近的那一件。\n\n真正要紧的是撤离点——发光的那几个。站进范围里别动，等读条走完就算撤出来，包里带的东西才真正归你；中途走出去读条会断，得从头再来。\n\n还有一句得说明白：死在里头，东西就留在里头了。掉线的话有五分钟宽限，回来还在局里；过了那五分钟，这一局就当你没撤出来。\n\n先活着回来，别的以后再说。",
+      "trigger": "MANUAL",
+      "once": true,
+      "priority": 220,
+      "minimumFavorability": -1000,
+      "maximumFavorability": 1000,
+      "membershipRequirement": "ANY",
+      "replies": [],
+      "guidance": null
     }
   ]
 }

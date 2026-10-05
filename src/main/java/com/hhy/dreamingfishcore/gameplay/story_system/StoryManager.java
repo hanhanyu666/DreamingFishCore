@@ -270,12 +270,22 @@ public final class StoryManager {
 
     public static synchronized void onNpcMessageRead(
             ServerPlayer player, String definitionId, int npcId) {
-        if (player == null || !loaded
-                || !AfterdreamStory.STAGE_ID.equals(getCurrentStageIdOrDefault())) {
+        if (player == null || !loaded) {
             return;
         }
-        com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
-                .onNpcMessageRead(player, definitionId, npcId);
+        // 按当前阶段分发。原先只路由到余梦期，所以第三阶段（梦外行动）读完简报无法推进任务；
+        // 这里补上分支，同时保持余梦期行为完全不变。
+        String stageId = getCurrentStageIdOrDefault();
+        if (AfterdreamStory.STAGE_ID.equals(stageId)) {
+            com.hhy.dreamingfishcore.gameplay.afterdream_story_system.AfterdreamStory
+                    .onNpcMessageRead(player, definitionId, npcId);
+        } else if (com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                .STAGE_ID.equals(stageId)) {
+            com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                    .onNpcMessageRead(player, definitionId, npcId);
+        } else {
+            return;
+        }
         // 同上：读信本身可能在目标区域内发生，不能把“进入地点”错过。
         replayCurrentStoryLocation(player);
     }

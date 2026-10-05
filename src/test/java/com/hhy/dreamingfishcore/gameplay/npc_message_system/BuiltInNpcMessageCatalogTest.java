@@ -16,11 +16,12 @@ class BuiltInNpcMessageCatalogTest {
         List<NpcMessageDefinition> additions =
                 BuiltInNpcMessageCatalog.createMissingMessages(List.of());
 
-        // 当前开服切片只有五条开场主线私信、一条余梦期救治私信，以及终检后的
-        // 两条白芷随访私信；旧协议、旧分支和身份壳 NPC 的历史内容不会重新进入内容包。
-        assertEquals(8, additions.size());
+        // 当前开服切片：五条开场主线私信、一条余梦期救治私信、两条白芷随访私信，
+        // 以及第三阶段（梦外行动）的联络人简报；旧协议、旧分支和身份壳 NPC 的历史内容
+        // 不会重新进入内容包。
+        assertEquals(9, additions.size());
         assertEquals(4, countMessagesForNpc(additions, 101));
-        assertEquals(4, countMessagesForNpc(additions, 105));
+        assertEquals(5, countMessagesForNpc(additions, 105));
         assertEquals(0, countMessagesForNpc(additions, 102));
         assertEquals(0, countMessagesForNpc(additions, 103));
         assertEquals(0, countMessagesForNpc(additions, 104));
@@ -31,6 +32,12 @@ class BuiltInNpcMessageCatalogTest {
                 "第 3 天随访私信应被保留");
         assertTrue(findById(additions, AfterdreamStory.BAIZHI_FOLLOW_UP_SEVENTH_DAY_MESSAGE_ID) != null,
                 "第 7 天随访私信应被保留");
+        // 梦外行动的简报也必须进包，否则第三阶段的任务 3001 永远无法完成
+        // （它正是靠"读完这条私信"来当作服务端事实的）。
+        NpcMessageDefinition briefing = findById(additions,
+                com.hhy.dreamingfishcore.gameplay.extraction_story_system.ExtractionEraStory
+                        .BRIEFING_MESSAGE_ID);
+        assertEquals(105, briefing.getNpcId(), "简报由现有联络人（周岑）发出，避免为一条私信新增 NPC");
 
         NpcMessageDefinition introduction = findById(
                 additions, OpeningStory.ZHOUCEN_INTRODUCTION_MESSAGE_ID);
