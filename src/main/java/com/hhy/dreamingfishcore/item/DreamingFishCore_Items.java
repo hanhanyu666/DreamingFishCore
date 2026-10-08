@@ -209,6 +209,12 @@ public class DreamingFishCore_Items {
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.RESEARCH_TABLE.get(),
                     new Item.Properties().rarity(Rarity.UNCOMMON)));
 
+    // 资料库：右键存入自己已解锁的配方，左键学习库内全部配方（不消耗）。
+    public static final DeferredHolder<Item, BlockItem> ARCHIVE = ITEMS.register("archive",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.ARCHIVE.get(),
+                    new Item.Properties().rarity(Rarity.UNCOMMON)));
+
     private static Map<ArmorItem.Type, Integer> zeroDefenseValues() {
         EnumMap<ArmorItem.Type, Integer> values = new EnumMap<>(ArmorItem.Type.class);
         for (ArmorItem.Type type : ArmorItem.Type.values()) {

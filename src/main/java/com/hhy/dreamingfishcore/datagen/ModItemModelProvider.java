@@ -56,6 +56,10 @@ public class ModItemModelProvider extends ItemModelProvider {
         // 防护面具
         simpleItem(DreamingFishCore_Items.PROTECTIVE_MASK);
         withExistingParent("siege_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
+        // 三个丧尸变体的刷怪蛋（先前只声明了攻城丧尸那只，这三个漏了，物品栏里会显示成紫黑格）
+        withExistingParent("archer_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
+        withExistingParent("charred_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
+        withExistingParent("adamant_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
     }
 
     private ItemModelBuilder simpleItem(DeferredHolder<Item, ? extends Item> itemRegistryObject) {

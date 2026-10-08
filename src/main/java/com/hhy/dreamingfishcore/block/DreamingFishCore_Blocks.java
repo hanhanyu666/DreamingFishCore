@@ -34,6 +34,16 @@ public final class DreamingFishCore_Blocks {
                     () -> new ResearchTableBlock(ResearchTableBlock.defaultProperties()));
 
     /**
+     * 资料库：右键存入自己已解锁的配方，左键学习库内全部配方（不消耗）。
+     *
+     * <p>内容不在方块里，而在 {@code ArchiveRegistry}（世界存档 JSON）——本模组不给方块用
+     * 方块实体，理由见那个类。</p>
+     */
+    public static final DeferredHolder<Block, ArchiveBlock> ARCHIVE =
+            BLOCKS.register("archive",
+                    () -> new ArchiveBlock(ArchiveBlock.defaultProperties()));
+
+    /**
      * 药草作物：模组药物的种植来源。
      *
      * <p>属性照抄原版作物：无碰撞、随机刻生长、瞬间破坏、作物音效、被活塞推就掉。</p>

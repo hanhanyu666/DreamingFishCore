@@ -76,6 +76,8 @@ public final class WorldDataLifecycleEvents {
         runSafely("加载聚居地设备", () -> SettlementFilterRegistry.loadWorldData(server));
         runSafely("加载刷怪箱", () -> com.hhy.dreamingfishcore.gameplay.spawner_system
                 .SpawnerRegistry.loadWorldData(server));
+        runSafely("加载资料库", () -> com.hhy.dreamingfishcore.gameplay.archive_system
+                .ArchiveRegistry.loadWorldData(server));
         // 组织领地登记要等经济服务（领地数据）与组织数据都就绪后再校验，
         // 因此放在加载序列的最后一步：摘除失效登记（经济读不到时会直接跳过）。
         runSafely("校验组织领地登记", () -> OrganizationManager.reconcileTerritories(server));
@@ -152,6 +154,8 @@ public final class WorldDataLifecycleEvents {
         saved &= runSaveSafely("保存聚居地设备", () -> SettlementFilterRegistry.saveIfDirty(server));
         saved &= runSaveSafely("保存刷怪箱", () -> com.hhy.dreamingfishcore.gameplay.spawner_system
                 .SpawnerRegistry.saveIfDirty(server));
+        saved &= runSaveSafely("保存资料库", () -> com.hhy.dreamingfishcore.gameplay.archive_system
+                .ArchiveRegistry.saveIfDirty(server));
         // StoryManager 已经保存统一的剧情事实；内容包管理器只负责文案配置，
         // 不再拥有第二份阶段状态。
         return saved;
@@ -178,6 +182,8 @@ public final class WorldDataLifecycleEvents {
         runSafely("清理聚居地设备缓存", SettlementFilterRegistry::clearWorldCache);
         runSafely("清理刷怪箱缓存",
                 com.hhy.dreamingfishcore.gameplay.spawner_system.SpawnerRegistry::clearWorldCache);
+        runSafely("清理资料库缓存",
+                com.hhy.dreamingfishcore.gameplay.archive_system.ArchiveRegistry::clearWorldCache);
     }
 
     private static boolean runSaveSafely(String actionName, SaveAction action) {

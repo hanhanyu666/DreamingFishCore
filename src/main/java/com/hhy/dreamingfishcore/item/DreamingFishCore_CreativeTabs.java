@@ -35,6 +35,7 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.SETTLEMENT_FILTER.get());
                         output.accept(DreamingFishCore_Items.SPAWNER.get());
                         output.accept(DreamingFishCore_Items.RESEARCH_TABLE.get());
+                        output.accept(DreamingFishCore_Items.ARCHIVE.get());
                         output.accept(SiegeZombieEntities.SIEGE_ZOMBIE_SPAWN_EGG.get());
                         output.accept(com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieEntities
                                 .ARCHER_ZOMBIE_SPAWN_EGG.get());
