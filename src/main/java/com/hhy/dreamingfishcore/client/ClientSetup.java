@@ -74,6 +74,10 @@ public class ClientSetup {
         event.registerLayerDefinition(
                 com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.ArcherZombieRenderer.LAYER,
                 com.hhy.dreamingfishcore.gameplay.zombie_system.archer.client.ArcherZombieModel::createBodyLayer);
+        // 尸潮指挥官同样自定义骨骼（多了帽子 / 背旗 / 军刀），几何由 tools/convert_commander_model.py 生成。
+        event.registerLayerDefinition(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.client.ZombieCommanderRenderer.LAYER,
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.client.ZombieCommanderModel::createBodyLayer);
     }
 
     @SubscribeEvent
@@ -93,6 +97,12 @@ public class ClientSetup {
         event.registerEntityRenderer(
                 com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.ADAMANT_ZOMBIE.get(),
                 com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.client.AdamantZombieRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities.ZOMBIE_COMMANDER.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.client.ZombieCommanderRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities.COMMANDER_MINION.get(),
+                com.hhy.dreamingfishcore.gameplay.zombie_system.boss.client.CommanderMinionRenderer::new);
         event.registerEntityRenderer(
                 com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunEntities.WATER_JET.get(),
                 com.hhy.dreamingfishcore.gameplay.water_gun_system.client.WaterJetRenderer::new);

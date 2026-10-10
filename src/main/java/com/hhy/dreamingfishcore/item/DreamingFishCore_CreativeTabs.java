@@ -43,6 +43,8 @@ public class DreamingFishCore_CreativeTabs {
                                 .CHARRED_ZOMBIE_SPAWN_EGG.get());
                         output.accept(com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities
                                 .ADAMANT_ZOMBIE_SPAWN_EGG.get());
+                        output.accept(com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities
+                                .ZOMBIE_COMMANDER_SPAWN_EGG.get());
                         output.accept(DreamingFishCore_Items.WATER_GUN.get());
                         output.accept(DreamingFishCore_Items.HERB.get());
                         output.accept(DreamingFishCore_Items.HERB_SEEDS.get());

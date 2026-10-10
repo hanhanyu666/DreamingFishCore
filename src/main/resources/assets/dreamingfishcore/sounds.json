@@ -25,5 +25,13 @@
         "type": "event"
       }
     ]
+  },
+  "music.zombie_commander": {
+    "sounds": [
+      {
+        "name": "dreamingfishcore:zombie_commander_bgm",
+        "stream": true
+      }
+    ]
   }
 }

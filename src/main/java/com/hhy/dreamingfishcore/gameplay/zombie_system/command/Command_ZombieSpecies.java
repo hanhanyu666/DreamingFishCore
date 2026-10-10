@@ -5,6 +5,8 @@ import com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieSpeciesConfig;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieConfig;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieConfig;
 import com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieConfig;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderConfig;
+import com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderRules;
 import com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunConfig;
 import net.minecraft.world.Difficulty;
 import com.mojang.brigadier.CommandDispatcher;
@@ -182,6 +184,36 @@ public final class Command_ZombieSpecies {
                 + "（每 " + adamant.rustIntervalTicks() + " tick 一层）"
                 + "\n- 白天自燃/下水腐化: " + adamant.burnInDaylight() + "/" + adamant.convertInWater()
                 + "\n- 金刚僵尸配置文件: " + AdamantZombieConfig.getConfigPath().toAbsolutePath();
+        ZombieCommanderConfig.Resolved commander = ZombieCommanderConfig.current().resolve();
+        String commanderMessage = "\n尸潮指挥官"
+                + "\n- 启用: " + commander.enabled()
+                + "（Boss：仅刷怪蛋与 /summon，不接入自然刷怪池）"
+                + "\n- 生命/移速/索敌/近战/护甲/击退抗性: " + commander.maxHealth() + "/" + commander.movementSpeed()
+                + "/" + commander.followRange() + "/" + commander.attackDamage() + "/" + commander.armor()
+                + "/" + commander.knockbackResistance()
+                + "\n- 走位距离（期望最小/开火射程）: " + commander.preferredMinDistance()
+                + "/" + commander.rangedAttackRange()
+                + "\n- 蓄力/攻击间隔（普通/狂暴）: " + commander.chargeTicks()
+                + "/" + commander.attackIntervalTicks() + "/" + commander.enragedAttackIntervalTicks() + " tick"
+                + "\n- 连发弹数（普通/狂暴）/弹间隔: " + commander.burstCount()
+                + "/" + commander.enragedBurstCount() + "/" + commander.burstSpacingTicks() + " tick"
+                + "\n- 弹丸伤害/弹速/重力/射程: " + commander.projectileDamage()
+                + "/" + commander.projectileSpeed() + "/" + commander.projectileGravity()
+                + "/" + commander.projectileMaxRange()
+                + "\n- 难度伤害倍率（和平/简单/普通/困难）: "
+                + ZombieCommanderRules.projectileDamageMultiplier(Difficulty.PEACEFUL.getId())
+                + "/" + ZombieCommanderRules.projectileDamageMultiplier(Difficulty.EASY.getId())
+                + "/" + ZombieCommanderRules.projectileDamageMultiplier(Difficulty.NORMAL.getId())
+                + "/" + ZombieCommanderRules.projectileDamageMultiplier(Difficulty.HARD.getId())
+                + "（实际伤害 = 弹丸伤害 × 倍率）"
+                + "\n- 召唤冷却/蓄力/每次（普通/狂暴）/存活上限/护卫寿命: "
+                + commander.summonCooldownTicks() + "/" + commander.summonChargeTicks()
+                + "/" + commander.summonCount() + "/" + commander.enragedSummonCount()
+                + "/" + commander.maxMinions() + "/" + commander.minionLifetimeTicks() + " tick"
+                + "\n- 狂暴阈值（生命比例）/击杀经验: " + commander.enrageHealthFraction()
+                + "/" + commander.experienceReward()
+                + "\n- 粒子强度: " + commander.particleIntensity() + "（0 = 完全关闭，不影响战斗结算）"
+                + "\n- 指挥官配置文件: " + ZombieCommanderConfig.getConfigPath().toAbsolutePath();
         WaterGunConfig.Resolved waterGun = WaterGunConfig.current().resolve();
         String waterGunMessage = "\n呲水枪"
                 + "\n- 启用: " + waterGun.enabled()
@@ -194,7 +226,8 @@ public final class Command_ZombieSpecies {
                 + "\n- 装水: " + (waterGun.refillToFull() ? "一次装满" : "每次 +" + waterGun.refillAmount())
                 + "；消耗炼药锅 " + waterGun.drainWaterCauldron()
                 + "\n- 呲水枪配置文件: " + WaterGunConfig.getConfigPath().toAbsolutePath();
-        String statusMessage = message + archerMessage + charredMessage + adamantMessage + waterGunMessage;
+        String statusMessage = message + archerMessage + charredMessage + adamantMessage
+                + commanderMessage + waterGunMessage;
         source.sendSuccess(() -> Component.literal(statusMessage), false);
         return 1;
     }
@@ -205,10 +238,11 @@ public final class Command_ZombieSpecies {
             ArcherZombieConfig.reload();
             CharredZombieConfig.reload();
             AdamantZombieConfig.reload();
+            ZombieCommanderConfig.reload();
             WaterGunConfig.reload();
             source.sendSuccess(
-                    () -> Component.literal("配置已重载（围攻僵尸 + 射手僵尸 + 焦尸 + 金刚僵尸 + 呲水枪）；"
-                            + "在线实体将在下一次 AI 刷新时应用当前设置"),
+                    () -> Component.literal("配置已重载（围攻僵尸 + 射手僵尸 + 焦尸 + 金刚僵尸 + 尸潮指挥官"
+                            + " + 呲水枪）；在线实体将在下一次 AI 刷新时应用当前设置"),
                     true);
             return 1;
         } catch (RuntimeException exception) {

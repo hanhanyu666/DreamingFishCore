@@ -54,6 +54,9 @@ public class BoneSpikeEntity extends ThrowableProjectile {
     private double damage = DEFAULT_DAMAGE;
     private double gravity = DEFAULT_GRAVITY;
     private double maxRange = DEFAULT_MAX_RANGE;
+    /** Boss 弹丸使用自己的难度倍率快照；null 保持普通射手原有的实时配置行为。 */
+    @Nullable
+    private Double fixedDamageMultiplier;
     private int slowDurationTicks;
     private int slowAmplifier;
     private int bleedDurationTicks;
@@ -84,6 +87,19 @@ public class BoneSpikeEntity extends ThrowableProjectile {
             this.bleedDurationTicks = settings.bleedDurationTicks();
             this.bleedAmplifier = settings.bleedAmplifier();
         }
+    }
+
+    /** 指挥官复用骨刺的命中、模型与友军过滤，不依赖普通射手的伤害/减益配置。 */
+    public BoneSpikeEntity(Level level, LivingEntity shooter, double damage, double gravity,
+                           double maxRange, double damageMultiplier) {
+        this(ArcherZombieEntities.BONE_SPIKE.get(), level);
+        this.setOwner(shooter);
+        this.setPos(shooter.getX(), shooter.getEyeY() - 0.15D, shooter.getZ());
+        this.origin = this.position();
+        this.damage = damage;
+        this.gravity = gravity;
+        this.maxRange = maxRange;
+        this.fixedDamageMultiplier = damageMultiplier;
     }
 
     @Override
@@ -144,8 +160,9 @@ public class BoneSpikeEntity extends ThrowableProjectile {
         // 不会和原版 mob_projectile 那套硬编码的难度缩放叠加成双倍变化。
         DamageSource source = this.damageSources().source(
                 com.hhy.dreamingfishcore.gameplay.zombie_system.ZombieDamageTypes.BONE_SPIKE, thrower, this);
-        float damage = (float) (this.damage
-                * ArcherZombieConfig.damageMultiplierFor(this.level().getDifficulty()));
+        float damage = (float) (this.damage * (this.fixedDamageMultiplier == null
+                ? ArcherZombieConfig.damageMultiplierFor(this.level().getDifficulty())
+                : this.fixedDamageMultiplier));
 
         if (hit.hurt(source, damage) && hit instanceof LivingEntity livingHit) {
             applyOnHitEffects(livingHit, thrower);
@@ -198,6 +215,9 @@ public class BoneSpikeEntity extends ThrowableProjectile {
     public void addAdditionalSaveData(CompoundTag compound) {
         super.addAdditionalSaveData(compound);
         compound.putDouble(TAG_DAMAGE, this.damage);
+        if (this.fixedDamageMultiplier != null) {
+            compound.putDouble("BoneSpikeFixedDamageMultiplier", this.fixedDamageMultiplier);
+        }
         compound.putDouble(TAG_GRAVITY, this.gravity);
         compound.putDouble(TAG_MAX_RANGE, this.maxRange);
         compound.putInt(TAG_SLOW_DURATION, this.slowDurationTicks);
@@ -214,6 +234,8 @@ public class BoneSpikeEntity extends ThrowableProjectile {
     @Override
     public void readAdditionalSaveData(CompoundTag compound) {
         super.readAdditionalSaveData(compound);
+        this.fixedDamageMultiplier = compound.contains("BoneSpikeFixedDamageMultiplier")
+                ? compound.getDouble("BoneSpikeFixedDamageMultiplier") : null;
         if (compound.contains(TAG_DAMAGE)) {
             this.damage = compound.getDouble(TAG_DAMAGE);
         }

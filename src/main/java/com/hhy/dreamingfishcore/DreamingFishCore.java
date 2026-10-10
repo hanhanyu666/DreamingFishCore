@@ -41,6 +41,9 @@ public class DreamingFishCore {
         com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieSounds.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.register(modEventBus);
+        // 尸潮指挥官是 Boss，只登记实体与刷怪蛋，不接入自然刷怪池
+        com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderSounds.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunEntities.register(modEventBus);
         DeathCorpseEntities.register(modEventBus);
         // 注册菜单类型（研究桌的容器菜单）

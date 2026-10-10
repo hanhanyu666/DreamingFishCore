@@ -137,14 +137,20 @@ def to_java_point(x, y, z):
 
 
 def box_uv_region(u0, v0, dx, dy, dz):
-    """标准 Minecraft box UV 展开：由起点与尺寸推出六个面的像素区域。"""
+    """标准 Minecraft box UV 展开：由起点与尺寸推出六个面的像素区域。
+
+    注意 `down` 的位置：标准皮肤布局里，第一行是「顶面 + 底面」并排（高 dz），
+    第二行才是东南西北四个侧面（高 dy）。曾经这里把 down 写到了侧面行的下方，
+    于是一切正常模型都会被判成「底面被挪走了」，再被烘到错误的位置上去。
+    判据是项目里那份真·Blockbench 导出的 bbmodel：head_box 的 down 是 [24,0,16,8]。
+    """
     return {
         "east":  (u0, v0 + dz, u0 + dz, v0 + dz + dy),
         "north": (u0 + dz, v0 + dz, u0 + dz + dx, v0 + dz + dy),
         "west":  (u0 + dz + dx, v0 + dz, u0 + 2 * dz + dx, v0 + dz + dy),
         "south": (u0 + 2 * dz + dx, v0 + dz, u0 + 2 * dz + 2 * dx, v0 + dz + dy),
         "up":    (u0 + dz, v0, u0 + dz + dx, v0 + dz),
-        "down":  (u0 + dz, v0 + dz + dy, u0 + dz + dx, v0 + dz + dy + dz),
+        "down":  (u0 + dz + dx, v0, u0 + dz + 2 * dx, v0 + dz),
     }
 
 
@@ -205,7 +211,7 @@ class Converter:
                 lines.append(
                     f"{pad}PartDefinition {var} = {parent_var}.addOrReplaceChild("
                     f"\"{name}\", CubeListBuilder.create(), "
-                    f"PartPose.offset({self._v(local[0])}F, {self._v(local[1])}F, {self._v(local[2])}F));")
+                    f"{self._group_pose(local, group.get('rotation'))});")
                 self._emit_children(node.get("children", []), lines, var, abs_pt, indent)
             else:
                 self._emit_element(self.elements[node["uuid"]], lines, parent_var, parent_abs, indent)
@@ -263,6 +269,21 @@ class Converter:
 
         self._check_bottom_face(element, u0, v0, size)
 
+    def _group_pose(self, local, rotation=None) -> str:
+        """骨骼的 PartPose。
+
+        **骨骼自身的 rotation 必须走 offsetAndRotation**：早期版本只读了 origin、
+        把 rotation 整条丢掉，得到的是一条「位置对、角度归零」的骨骼 —— 表现是模型里
+        某个零件明明挂在手上却朝错方向（指挥官那把军刀就是栽在这：bbmodel 里绕 x 转了
+        105°，进游戏后刀身顺着小臂直直朝下、看着不像被握着）。
+        这种丢失完全静默：不报错、不警告，只有对着模型看才发现。
+        """
+        base = f"{self._v(local[0])}F, {self._v(local[1])}F, {self._v(local[2])}F"
+        if rotation and any(float(v) for v in rotation):
+            jx, jy, jz = (a * DEG for a in self._to_java_deg(rotation))
+            return f"PartPose.offsetAndRotation({base}, {fmt(jx)}F, {fmt(jy)}F, {fmt(jz)}F)"
+        return f"PartPose.offset({base})"
+
     def _needs_mirror(self, parent_var: str, size) -> bool:
         """
         右臂上那些「把整条手臂包住」的大块，贴图需要左右翻转。
@@ -275,7 +296,10 @@ class Converter:
 
     def _check_bottom_face(self, element, u0, v0, size):
         """底面若与标准展开不符，就把它搬回去（标准位置空着时）或记下来。"""
-        dx, dy, dz = size
+        # 贴图区域永远是整数像素：from/to 允许带小数（为了错开共面），算区域时要先取整，
+        # 否则 range() 会直接抛 "float object cannot be interpreted as an integer"。
+        dx, dy, dz = (int(round(v)) for v in size)
+        u0, v0 = int(round(u0)), int(round(v0))
         std = box_uv_region(u0, v0, dx, dy, dz)["down"]
         actual_raw = element["faces"]["down"]["uv"]
         actual = (min(actual_raw[0], actual_raw[2]), min(actual_raw[1], actual_raw[3]),
@@ -324,16 +348,18 @@ class Converter:
     def bake(self, width: int, height: int, pixels):
         out = [row[:] for row in pixels]
         for src, dst, _name in self.baked_moves:
-            sw, sh = src[2] - src[0], src[3] - src[1]
-            dw, dh = dst[2] - dst[0], dst[3] - dst[1]
+            sw, sh = int(round(src[2] - src[0])), int(round(src[3] - src[1]))
+            dw, dh = int(round(dst[2] - dst[0])), int(round(dst[3] - dst[1]))
+            sx, sy = int(round(src[0])), int(round(src[1]))
+            dx, dy = int(round(dst[0])), int(round(dst[1]))
             if (sw, sh) != (dw, dh):
                 print(f"  [跳过] 尺寸不匹配 {src} -> {dst}")
                 continue
             for y in range(dh):
                 for x in range(dw):
-                    sy, sx = src[1] + y, src[0] + x
-                    if 0 <= sy < height and 0 <= sx < width:
-                        out[dst[1] + y][dst[0] + x] = pixels[sy][sx]
+                    src_x, src_y = sx + x, sy + y
+                    if 0 <= src_y < height and 0 <= src_x < width:
+                        out[dy + y][dx + x] = pixels[src_y][src_x]
         return out
 
 

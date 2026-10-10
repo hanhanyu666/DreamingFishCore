@@ -45,6 +45,7 @@ public final class CommonInit {
         com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieConfig.init();
         com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieConfig.init();
         com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieConfig.init();
+        com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderConfig.init();
         com.hhy.dreamingfishcore.gameplay.water_gun_system.WaterGunConfig.init();
         // 蓝图配置要在配方加载之前就绪：抽取池是在配方收集完成后按它过滤出来的。
         com.hhy.dreamingfishcore.gameplay.blueprint_system.BlueprintConfig.init();
