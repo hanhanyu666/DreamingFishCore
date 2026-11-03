@@ -80,5 +80,6 @@
   "block.dreamingfishcore.archive": "资料库",
   "block.dreamingfishcore.herb_crop": "药草",
   "item.dreamingfishcore.herb": "药草",
-  "item.dreamingfishcore.herb_seeds": "药草种子"
+  "item.dreamingfishcore.herb_seeds": "药草种子",
+  "block.dreamingfishcore.disaster_warning": "天灾预警系统"
 }

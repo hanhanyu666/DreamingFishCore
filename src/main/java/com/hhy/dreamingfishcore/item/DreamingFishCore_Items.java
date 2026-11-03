@@ -114,6 +114,11 @@ public class DreamingFishCore_Items {
      * <p>用 {@link net.minecraft.world.item.ItemNameBlockItem}（原版种子就是它），
      * 这样右键耕地能直接种下去，并自动带上作物的名称方块提示。</p>
      */
+    /** 天灾预警系统方块物品。 */
+    public static final DeferredHolder<Item, BlockItem> DISASTER_WARNING = ITEMS.register("disaster_warning",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.DISASTER_WARNING.get(),
+                    new Item.Properties()));
     public static final DeferredHolder<Item, ? extends Item> HERB_SEEDS = ITEMS.register("herb_seeds",
             () -> new net.minecraft.world.item.ItemNameBlockItem(
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.HERB_CROP.get(),

@@ -58,6 +58,11 @@ public final class DreamingFishCore_Blocks {
                             .sound(net.minecraft.world.level.block.SoundType.CROP)
                             .pushReaction(net.minecraft.world.level.material.PushReaction.DESTROY)));
 
+    /** 天灾预警系统：右键查看今天与后 3 日的天灾日程。 */
+    public static final DeferredHolder<Block, DisasterWarningBlock> DISASTER_WARNING =
+            BLOCKS.register("disaster_warning",
+                    () -> new DisasterWarningBlock(DisasterWarningBlock.defaultProperties()));
+
     private DreamingFishCore_Blocks() {
     }
 

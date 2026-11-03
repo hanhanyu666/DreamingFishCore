@@ -39,6 +39,8 @@ final class MorePage extends TerminalPage {
         List<Module> list = new ArrayList<>();
         list.add(new Module(Icons.HELP, "生存手册", "身体、感染与重生规则", TerminalUi.GREEN,
                 () -> terminal.push(new HelpPage(terminal))));
+        list.add(new Module(Icons.STAR, "天灾预警", "今天的天灾与 14 天日程", TerminalUi.AMBER,
+                () -> terminal.push(new DisasterPage(terminal))));
         list.add(new Module(Icons.HISTORY, "世界历史", "全服共同经历的年表", TerminalUi.GOLD,
                 () -> terminal.push(new HistoryPage(terminal))));
         list.add(new Module(Icons.COIN, "经济系统", "梦鱼币、交易与账户", TerminalUi.GOLD, () -> {

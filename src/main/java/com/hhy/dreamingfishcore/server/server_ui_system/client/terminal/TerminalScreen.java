@@ -250,6 +250,7 @@ public class TerminalScreen extends UiScreen {
     public void openRoute(String route) {
         switch (route) {
             case "help" -> push(new HelpPage(this));
+            case "disaster" -> push(new DisasterPage(this));
             case "history" -> push(new HistoryPage(this));
             case "market" -> push(new MarketPage(this));
             case "rank" -> {

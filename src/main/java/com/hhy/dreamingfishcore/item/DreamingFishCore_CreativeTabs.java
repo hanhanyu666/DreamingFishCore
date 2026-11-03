@@ -48,6 +48,7 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.WATER_GUN.get());
                         output.accept(DreamingFishCore_Items.HERB.get());
                         output.accept(DreamingFishCore_Items.HERB_SEEDS.get());
+                        output.accept(DreamingFishCore_Items.DISASTER_WARNING.get());
                     })
                     .build()
     );

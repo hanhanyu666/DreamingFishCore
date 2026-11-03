@@ -43,7 +43,7 @@ public final class DreamingFishCore_NetworkManager {
     // 并新增 research_table/submit 请求包。
     // 0.32.0：搜打撤露天物品——新增 S2C 同步包 raid/loose_loot_sync，
     // 客户端据此在世界里画出漂浮的战利品（拾取仍完全由服务端判定）。
-    private static final String PROTOCOL_VERSION = "0.32.0";
+    private static final String PROTOCOL_VERSION = "0.33.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -182,6 +182,23 @@ public final class DreamingFishCore_NetworkManager {
                 Packet_WaterGunFire.TYPE,
                 Packet_WaterGunFire.STREAM_CODEC,
                 authenticated(Packet_WaterGunFire::handle));
+
+        // 天灾系统：终端 UI 的"天灾预警"页（快照请求 / 快照下发 / 管理员单日调整）
+        registrar.playToServer(
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.disaster_system.network
+                        .Packet_DisasterSnapshotRequest::handle));
+        registrar.playToClient(
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotResponse.TYPE,
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotResponse.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network
+                        .Packet_DisasterSnapshotResponse::handle);
+        registrar.playToServer(
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterEditRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterEditRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.disaster_system.network
+                        .Packet_DisasterEditRequest::handle));
     }
 
     public static void sendToClient(CustomPacketPayload packet, ServerPlayer player) {
