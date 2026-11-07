@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * 天灾日程：提前排好的一串"哪一天会有什么天灾"。
@@ -26,23 +28,67 @@ import java.util.Map;
  */
 public final class DisasterSchedule {
 
-    /** 天灾类型。权重越高越常见。 */
+    /**
+     * 天灾类型。
+     *
+     * <p>每个类型带两个属性：</p>
+     * <ul>
+     *   <li><b>displayName</b>：玩家看到的名字；</li>
+     *   <li><b>biomeTags</b>：这个天灾**只在哪些群系生效**（空集合 = 全世界）。
+     *       用原版群系标签的字符串形式表达，纯数据、可单测；实际匹配在效果层做。</li>
+     * </ul>
+     */
     public enum EventType {
-        /** 大尸潮：最稀有，也最危险。 */
+        /** 大尸潮：最稀有，也最危险。全世界。 */
         ZOMBIE_HORDE("大尸潮"),
-        /** 寒霜之夜：夜间严寒。 */
+        /** 寒霜之夜：夜间严寒。全世界。 */
         FROST_NIGHT("寒霜之夜"),
-        /** 风暴天：大风与雷暴。 */
-        STORM_DAY("风暴天");
+        /** 风暴天：大风与雷暴。全世界。 */
+        STORM_DAY("风暴天"),
+        /** 海洋黑潮：内海被污染，泡水会被侵蚀，溺尸会登岸。只在海洋。 */
+        OCEAN_BLIGHT("海洋黑潮", "minecraft:is_ocean", "minecraft:is_beach"),
+        /** 孢子瘟疫：森林被孢子笼罩，无声的丧尸在雾里。只在森林。 */
+        SPORE_PLAGUE("孢子瘟疫", "minecraft:is_forest", "minecraft:is_taiga"),
+        /**
+         * 天降火雨：陨石砸向地面、砸出火海。**全世界生效**——原版没有"平原"群系标签，
+         * 硬绑一个不存在的标签会让这个天灾永远不触发，不如全世界都下。
+         */
+        METEOR_RAIN("天降火雨"),
+        /** 酸雨：恶地的腐蚀性降雨，淋雨会掉血、磨损护甲。只在恶地。 */
+        ACID_RAIN("酸雨", "minecraft:is_badlands"),
+        /** 沙尘暴：恶地的强风，把人往一个方向推（复用风暴的风力）。只在恶地。 */
+        SANDSTORM("沙尘暴", "minecraft:is_badlands");
 
         private final String displayName;
+        private final Set<String> biomeTags;
 
-        EventType(String displayName) {
+        EventType(String displayName, String... biomeTags) {
             this.displayName = displayName;
+            this.biomeTags = biomeTags == null ? Set.of() : Set.copyOf(new TreeSet<>(List.of(biomeTags)));
         }
 
         public String displayName() {
             return displayName;
+        }
+
+        /** 生效的群系标签；空集合表示"全世界"（例如大尸潮、寒霜、风暴）。 */
+        public Set<String> biomeTags() {
+            return biomeTags;
+        }
+
+        /** 是否受群系限制（= 不是全世界事件）。 */
+        public boolean isBiomeBound() {
+            return !biomeTags.isEmpty();
+        }
+
+        /** 抽取权重（与 {@link #WEIGHTS} 保持一致；未配置的按 10）。 */
+        public int weight() {
+            return WEIGHTS.getOrDefault(this, 10);
+        }
+
+        /** 是不是"新四灾"里那批地形事件（UI 与管理命令用来分组）。 */
+        public boolean isTerrainEvent() {
+            return isBiomeBound();
         }
     }
 
@@ -52,7 +98,8 @@ public final class DisasterSchedule {
     /**
      * 各类天灾的权重（相对值）。
      *
-     * <p>大尸潮刻意比另外两种稀有：它是"重头戏"，天天来就不叫重头戏了。</p>
+     * <p>大尸潮刻意比另外两种稀有：它是"重头戏"，天天来就不叫重头戏了。
+     * 地形天灾比通用天灾略低：它们只在特定群系发作，出现得太频繁会让其它地方"白白放假"。</p>
      */
     private static final Map<EventType, Integer> WEIGHTS = new EnumMap<>(EventType.class);
 
@@ -60,6 +107,11 @@ public final class DisasterSchedule {
         WEIGHTS.put(EventType.ZOMBIE_HORDE, 20);
         WEIGHTS.put(EventType.FROST_NIGHT, 40);
         WEIGHTS.put(EventType.STORM_DAY, 40);
+        WEIGHTS.put(EventType.OCEAN_BLIGHT, 25);
+        WEIGHTS.put(EventType.SPORE_PLAGUE, 25);
+        WEIGHTS.put(EventType.METEOR_RAIN, 25);
+        WEIGHTS.put(EventType.ACID_RAIN, 20);
+        WEIGHTS.put(EventType.SANDSTORM, 20);
     }
 
     /** "这天没有天灾"的权重。与上面三个类型一起参与加权抽取。 */

@@ -92,6 +92,16 @@ public record Packet_DisasterSnapshotResponse(
                 .DisasterClientCache.accept(packet));
     }
 
+    /** 服务端：把当前日程发给所有在线玩家（跨天、登录时调用，客户端据此判断"今天是哪种天灾"）。 */
+    public static void sendToAll(net.minecraft.server.MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            send(player);
+        }
+    }
+
     /** 服务端：把当前日程发给某个玩家（编辑权限按他的权限等级判断）。 */
     public static void send(ServerPlayer player) {
         if (player == null || player.getServer() == null) {

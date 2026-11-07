@@ -29,6 +29,15 @@ public final class DisasterEvents {
         DisasterService.clear();
     }
 
+    /** 登录时把当前天灾快照发给这个玩家：客户端据此显示雨滴/沙尘（不依赖天气是否真的在下雨）。 */
+    @SubscribeEvent
+    public static void onPlayerLogin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotResponse
+                    .send(player);
+        }
+    }
+
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         DisasterService.tick(event.getServer());

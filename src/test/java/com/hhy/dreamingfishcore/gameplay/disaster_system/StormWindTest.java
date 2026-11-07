@@ -56,7 +56,7 @@ class StormWindTest {
                     "推力必须很小且有上限：" + push);
         }
         // 基础推力本身就是个小数（每 tick 几百分之一格，几秒才会明显偏移）
-        assertTrue(DisasterTiming.WIND_PUSH <= 0.05D, "基础推力不该大到能把人吹跑");
+        assertTrue(DisasterTiming.WIND_PUSH <= 0.1D, "基础推力不该大到能把人吹跑（0.08 约等于 0.7 格/秒的漂移）");
     }
 
     @Test

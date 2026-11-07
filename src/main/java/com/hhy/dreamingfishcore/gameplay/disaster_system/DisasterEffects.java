@@ -92,9 +92,31 @@ public final class DisasterEffects {
         tickHorde(server);
         tickFrost(server, plan);
         tickWind(server, plan);
+        if (plan.contains(EventType.STORM_DAY)) {
+            ensureStormWeather(server);     // 风暴天期间保持暴雨
+        }
+        // 地形天灾（黑潮/孢子/火雨/酸雨/沙尘暴）只在对应群系生效，逻辑单独一个类
+        TerrainDisasterEffects.tick(server, plan);
     }
 
     // ---------------------------------------------------------------- 大尸潮
+
+    /**
+     * 风暴天：**持续暴雨**。
+     *
+     * <p>原版有自己的天气循环，会随机放晴；如果只在跨天时设一次雷雨，很快就会被它覆盖掉。
+     * 所以风暴天期间每 5 秒重申一次（雨量/雷量拉满），保证"这天一直在下暴雨"。</p>
+     */
+    private static void ensureStormWeather(MinecraftServer server) {
+        if (Math.floorMod(server.getTickCount(), 100) != 0) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        // 6000 tick 的窗口远大于 100 tick 的重申间隔，所以不会闪成"雨停了又下"
+        level.setWeatherParameters(6000, 6000, true, true);
+        level.setRainLevel(1.0F);
+        level.setThunderLevel(1.0F);
+    }
 
     private static void tickHorde(MinecraftServer server) {
         if (hordeBatchesLeft <= 0) {
@@ -219,8 +241,12 @@ public final class DisasterEffects {
 
     // ---------------------------------------------------------------- 风暴天
 
-    /** 风力每多少 tick 推一次（1 秒一次，够有存在感又不至于把玩家推得到处跑）。 */
-    private static final int WIND_INTERVAL = 20;
+    /** 风力每多少 tick 施力一次（2 次/秒，玩家侧是直接位移，太频繁会打乱走路的输入）。 */
+    private static final int WIND_INTERVAL = 2;
+    /** 每次施加的冲量。每 2 tick 给 0.035，地面上稳态约 0.7~0.9 格/秒。 */
+    private static final double WIND_PLAYER_STEP = 0.035D;
+    /** 怪物/掉落物用的冲量（比玩家略大：它们没有踩地摩擦那套）。 */
+    private static final double WIND_ENTITY_PUSH = 0.05D;
     /** 只推动玩家周围这个半径内的生物。 */
     private static final double WIND_RADIUS = 48.0D;
 
@@ -251,16 +277,35 @@ public final class DisasterEffects {
         }
         long day = DisasterService.today(server);
         double[] wind = DisasterTiming.windDirection(schedule.seed(), day);
-        double push = DisasterTiming.WIND_PUSH
-                * DisasterTiming.windGustFactor(server.getTickCount());
+        double gust = DisasterTiming.windGustFactor(server.getTickCount());
         ServerLevel level = server.overworld();
-        for (ServerPlayer player : eligible(server)) {
-            for (net.minecraft.world.entity.Entity entity
-                    : level.getEntities(player, player.getBoundingBox().inflate(WIND_RADIUS))) {
+        // 关键：Level#getEntities(Entity, AABB) 会**排除传入的那个实体**。
+        // 早先我把玩家当成"中心实体"传进去，结果玩家自己永远不在结果里——
+        // 于是怪物/掉落物被吹动了、唯独玩家不动（服主实测报的就是这个）。
+        // 现在传 null 作为"排除谁"，并按实体去重（多人时范围会重叠）。
+        java.util.Set<net.minecraft.world.entity.Entity> nearby = new java.util.LinkedHashSet<>();
+        for (ServerPlayer anchor : eligible(server)) {
+            nearby.addAll(level.getEntities((net.minecraft.world.entity.Entity) null,
+                    anchor.getBoundingBox().inflate(WIND_RADIUS)));
+        }
+        for (net.minecraft.world.entity.Entity entity : nearby) {
+            {
+                // 待在屋里/洞里（看不见天）就不该被风吹到——与屏幕雨滴用的是同一套"暴露"判定
+                if (!entity.level().canSeeSky(entity.blockPosition())) {
+                    continue;
+                }
                 if (!isWindAffected(entity)) {
                     continue;
                 }
+                // 统一用冲量：物理驱动，画面是平滑的（瞬移会一顿一顿，实测手感极差）
+                double push = (entity instanceof ServerPlayer ? WIND_PLAYER_STEP : WIND_ENTITY_PUSH) * gust;
                 entity.push(wind[0] * push, 0.0D, wind[1] * push);
+                if (entity instanceof ServerPlayer pushed) {
+                    // 玩家自己的速度不会通过实体追踪同步给自己，必须显式补一个速度包；
+                    // 每 2 tick 一次、单次位移很小，所以不会被服务端的位置校正拉回去。
+                    pushed.connection.send(
+                            new net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket(pushed));
+                }
             }
         }
     }

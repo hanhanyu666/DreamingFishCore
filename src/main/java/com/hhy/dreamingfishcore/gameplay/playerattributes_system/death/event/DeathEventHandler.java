@@ -73,8 +73,10 @@ public class DeathEventHandler {
         boolean isInfected = deathPlayerAttributesData.isInfected();
         float currentRespawnPoint = deathPlayerAttributesData.getRespawnPoint();
 
-        // 计算消耗（按感染身份分档）
-        float respawnCost = getNormalCost(deathPlayerAttributesData.getInfectionIdentity());
+        // 计算消耗（按感染身份分档）；外缘开关打开时，只有死在外缘才收代价（默认关闭，行为不变）
+        float respawnCost = com.hhy.dreamingfishcore.gameplay.frontier_system.FrontierRules
+                .gateRespawnCost(getNormalCost(deathPlayerAttributesData.getInfectionIdentity()),
+                        serverPlayer);
         boolean awaitingChoice = com.hhy.dreamingfishcore.gameplay.playerattributes_system.death.TemplateReconstructionRules.canReconstruct(currentRespawnPoint);
         UUID corpseId = DeathCorpseManager.configureCapture(serverPlayer, awaitingChoice);
 

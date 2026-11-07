@@ -53,8 +53,14 @@ public final class DisasterTiming {
         return new double[]{Math.cos(angle), Math.sin(angle)};
     }
 
-    /** 每一 tick 的基础推力（很小：是"被风吹得偏移一点"，不是把人吹跑）。 */
-    public static final double WIND_PUSH = 0.035D;
+    /**
+     * 每一次施加的基础推力（**每 2 tick 施力一次**，不是每秒一次）。
+     *
+     * <p>为什么要持续施力：地面上玩家的摩擦会在一两次 tick 内吃掉一次性的速度脉冲，
+     * 于是"每秒推一下"在玩家身上几乎看不出来（掉落物因为没有地面摩擦，反而会动）。
+     * 每 2 tick 给 0.03，稳态速度约 1.3 格/秒，能明显感到被风推着走。</p>
+     */
+    public static final double WIND_PUSH = 0.03D;
 
     /**
      * 阵风曲线：在 0.6~1.0 倍之间缓慢起伏，让风有"一阵一阵"的手感而不是恒定推力。

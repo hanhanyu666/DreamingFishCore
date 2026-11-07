@@ -202,6 +202,9 @@ public final class DisasterService {
         announce(server, plan);
         // 跨天的一次性效果：雷雨天气、尸潮排期
         DisasterEffects.onDayStarted(server, plan);
+        // 让客户端知道"今天是什么天灾"：客户端的雨滴/视野效果据此判断，而不是猜天气
+        com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterSnapshotResponse
+                .sendToAll(server);
         // 今天是最后一天 → 明天就没预告了，提前续排
         if (schedule != null && day >= schedule.lastDay()) {
             long nextFirstDay = schedule.lastDay() + 1L;
@@ -262,6 +265,11 @@ public final class DisasterService {
             case ZOMBIE_HORDE -> "§4大尸潮";
             case FROST_NIGHT -> "§b寒霜之夜";
             case STORM_DAY -> "§9风暴天";
+            case OCEAN_BLIGHT -> "§2海洋黑潮";
+            case SPORE_PLAGUE -> "§a孢子瘟疫";
+            case METEOR_RAIN -> "§6天降火雨";
+            case ACID_RAIN -> "§a酸雨";
+            case SANDSTORM -> "§e沙尘暴";
         };
     }
 
