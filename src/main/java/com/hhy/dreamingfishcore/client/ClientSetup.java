@@ -98,6 +98,12 @@ public class ClientSetup {
                 com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.ADAMANT_ZOMBIE.get(),
                 com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.client.AdamantZombieRenderer::new);
         event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperEntities.PHANTOM_CREEPER.get(),
+                com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.client.PhantomCreeperRenderer::new);
+        event.registerEntityRenderer(
+                com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperEntities.ENDER_CREEPER.get(),
+                com.hhy.dreamingfishcore.gameplay.creeper_system.ender.client.EnderCreeperRenderer::new);
+        event.registerEntityRenderer(
                 com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities.ZOMBIE_COMMANDER.get(),
                 com.hhy.dreamingfishcore.gameplay.zombie_system.boss.client.ZombieCommanderRenderer::new);
         event.registerEntityRenderer(

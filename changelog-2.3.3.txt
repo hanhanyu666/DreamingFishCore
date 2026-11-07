@@ -755,3 +755,41 @@ tools/commander_bgm_preview.wav（试听用）与 mod 实际播放的 sounds/zom
   逐立方体比角点 —— 22/22 个部件最大偏差 0.000 像素；同一脚本在缺陷版上只会挑出那 6 块军刀部件
   （偏差 3.2 ~ 17.1 像素）。对照图 tools/commander_java_vs_bbmodel.png。
 - gradlew test 779 条全绿（新增 3 条）、gradlew build 通过。
+
+苦力怕变体：幻翼苦力怕 + 末影人苦力怕（新）
+两条都直接继承原版苦力怕（引爆、怕猫、闪电充能原样保留），各自只加一层机制；
+与焦尸/金刚当初一样**不接入自然生成**，只给创造栏刷怪蛋与 /summon。
+
+幻翼苦力怕（dreamingfishcore:phantom_creeper）：趴平了在天上飞。
+- 常驻 noGravity，每 tick 直接写 setDeltaMovement 控制飞行：巡航到目标头顶 hoverHeight（默认 3 格），
+  进 diveRange（默认 6 格）或已被点燃后改俯冲。俯冲速度必须高于巡航速度，配置层强制校验——
+  写反了「扑过来」的体感会直接消失，而且表面上一切正常。
+- 为此摘掉原版的 MeleeAttackGoal 与 WaterAvoidingRandomStrollGoal：它们会开寻路、改移动输入，
+  和「直接写速度」互相抵消，表现为悬在半空抽搐。SwellGoal（引爆）与怕猫的 AvoidEntityGoal 保留。
+  不吃摔落伤害（飞行怪掉不下来，原版「摔一下就更急着炸」对它也无意义）。
+- 渲染是原版苦力怕模型 + 一层翅膀：几何复用原版 ElytraModel（本来就是贴背的一对膜翼），
+  贴图换成 textures/entity/phantom.png，于是看着就是幻翼翅膀；不要求胸甲槽里有鞘翅。
+  趴平在 setupRotations 里把整个姿态栈绕 X 俯转 90°（轴心抬到躯体中心，否则会以脚底为轴甩出去），
+  **只影响渲染**——命中箱仍是直立的 0.6×1.7，判定与视觉解耦。
+- 没有 enabled 总开关：这一条的特殊机制就是飞行本身，关掉只会剩一只不会走路的苦力怕。
+
+末影人苦力怕（dreamingfishcore:ender_creeper）：会瞬移贴脸。
+- 落点搜索直接用 LivingEntity#randomTeleport：它本来就负责「往下找到实地、确认不卡墙不落液体、
+  失败退回原位」，并广播实体事件 46 画出那 128 颗末影人传送粒子；音效自己补（事件 46 只有粒子）。
+- 三条硬约束：已点燃不许瞬移（否则引信一响就闪走＝无敌）；贴脸（小于 teleportMinDistance）不许瞬移
+  （否则永远炸不到人）；瞬移有冷却（默认 80 tick）。落点全失败也走一次冷却，避免每 tick 空转 8 次。
+- 受击按 dodgeChance（默认 0.35）闪走，同样受「已点燃」与冷却约束。
+- 怕水是**可选**项，默认关：开了等于下雨天它自己化了，是很便宜的解法；关着就得靠走位处理。
+- 与原版苦力怕共用一张贴图，靠传送粒子识别——不闪的时候分不出是哪只，这正是它吓人的地方。
+
+配置：config/dreamingfishcore/phantom_creeper.json 与 ender_creeper.json，范围校验、写坏保留上一份，
+改完 /dreamingfish zombie reload 热重载；/dreamingfish zombie status 会分节打印这两条的全部当前数值。
+
+验证：gradlew test 833 用例 0 失败（新增 9 条：两份配置的默认值、俯冲速度必须大于巡航速度、
+瞬移窗口不能为空、缺省字段保持默认、越界拒绝、版本号拒绝）；新增 4 条 gametest 通过
+（幻翼：沿用苦力怕底子 + 常驻无重力、会爬到目标头顶；末影人：远距离目标被瞬移拉近、已点燃不瞬移）。
+注意 runGameTestServer 目前整体是红的，28 条失败**全部是既有问题、与本次改动无关**：新加的
+disaster/snapshot_response 载荷会往模拟玩家推包，而模拟玩家的连接没协商过自定义通道，
+NetworkRegistry.checkPacket 直接抛 "may not be sent to the client!"——凡是用了
+makeMockServerPlayerInLevel 的用例都被连坐（archer / water_gun / research / infection 均中）。
+本次两条用例因此改用僵尸当目标绕开它。

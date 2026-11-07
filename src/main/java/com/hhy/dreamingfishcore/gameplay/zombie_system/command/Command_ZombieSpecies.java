@@ -227,9 +227,38 @@ public final class Command_ZombieSpecies {
                 + "；消耗炼药锅 " + waterGun.drainWaterCauldron()
                 + "\n- 呲水枪配置文件: " + WaterGunConfig.getConfigPath().toAbsolutePath();
         String statusMessage = message + archerMessage + charredMessage + adamantMessage
-                + commanderMessage + waterGunMessage;
+                + commanderMessage + waterGunMessage + creeperVariantMessage();
         source.sendSuccess(() -> Component.literal(statusMessage), false);
         return 1;
+    }
+
+    /** 苦力怕变体（幻翼 / 末影人）的当前数值。与丧尸变体分节打印，避免一张表里混两种生物。 */
+    private static String creeperVariantMessage() {
+        com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperConfig.Resolved phantom =
+                com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperConfig.current().resolve();
+        com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperConfig.Resolved ender =
+                com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperConfig.current().resolve();
+        return "\n幻翼苦力怕（趴平飞行，仅刷怪蛋与 /summon）"
+                + "\n- 生命/移速/索敌: " + phantom.maxHealth() + "/" + phantom.movementSpeed()
+                + "/" + phantom.followRange()
+                + "\n- 巡航速度/俯冲速度/俯冲距离: " + phantom.flySpeed() + "/" + phantom.diveSpeed()
+                + "/" + phantom.diveRange() + " 格"
+                + "\n- 巡航高度/无目标下沉: " + phantom.hoverHeight() + " 格/"
+                + phantom.idleSinkSpeed() + " 格每 tick"
+                + "\n- 配置文件: "
+                + com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperConfig
+                        .getConfigPath().toAbsolutePath()
+                + "\n末影人苦力怕（瞬移，仅刷怪蛋与 /summon）"
+                + "\n- 生命/移速/索敌: " + ender.maxHealth() + "/" + ender.movementSpeed()
+                + "/" + ender.followRange()
+                + "\n- 瞬移启用/冷却: " + ender.teleportEnabled() + "/" + ender.teleportCooldownTicks() + " tick"
+                + "\n- 瞬移距离区间（最小/最大）/落点半径: " + ender.teleportMinDistance()
+                + "/" + ender.teleportMaxDistance() + "/" + ender.landingRadius() + " 格"
+                + "\n- 受击闪避概率/距离: " + ender.dodgeChance() + "/" + ender.dodgeRadius() + " 格"
+                + "\n- 传送粒子/怕水: " + ender.auraParticles() + "/" + ender.waterHurts()
+                + "\n- 配置文件: "
+                + com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperConfig
+                        .getConfigPath().toAbsolutePath();
     }
 
     private static int reload(CommandSourceStack source) {
@@ -240,9 +269,11 @@ public final class Command_ZombieSpecies {
             AdamantZombieConfig.reload();
             ZombieCommanderConfig.reload();
             WaterGunConfig.reload();
+            com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperConfig.reload();
+            com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperConfig.reload();
             source.sendSuccess(
                     () -> Component.literal("配置已重载（围攻僵尸 + 射手僵尸 + 焦尸 + 金刚僵尸 + 尸潮指挥官"
-                            + " + 呲水枪）；在线实体将在下一次 AI 刷新时应用当前设置"),
+                            + " + 呲水枪 + 幻翼苦力怕 + 末影人苦力怕）；在线实体将在下一次 AI 刷新时应用当前设置"),
                     true);
             return 1;
         } catch (RuntimeException exception) {

@@ -41,6 +41,9 @@ public class DreamingFishCore {
         com.hhy.dreamingfishcore.gameplay.zombie_system.archer.ArcherZombieSounds.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.zombie_system.adamant.AdamantZombieEntities.register(modEventBus);
+        // 苦力怕变体：幻翼苦力怕（趴平飞行）与末影人苦力怕（瞬移），同样是刷怪蛋 + /summon，不进刷怪池
+        com.hhy.dreamingfishcore.gameplay.creeper_system.phantom.PhantomCreeperEntities.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.creeper_system.ender.EnderCreeperEntities.register(modEventBus);
         // 尸潮指挥官是 Boss，只登记实体与刷怪蛋，不接入自然刷怪池
         com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderEntities.register(modEventBus);
         com.hhy.dreamingfishcore.gameplay.zombie_system.boss.ZombieCommanderSounds.register(modEventBus);

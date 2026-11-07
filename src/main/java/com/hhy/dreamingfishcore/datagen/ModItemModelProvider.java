@@ -60,6 +60,9 @@ public class ModItemModelProvider extends ItemModelProvider {
         withExistingParent("archer_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
         withExistingParent("charred_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
         withExistingParent("adamant_zombie_spawn_egg", mcLoc("item/template_spawn_egg"));
+        // 苦力怕变体的刷怪蛋
+        withExistingParent("phantom_creeper_spawn_egg", mcLoc("item/template_spawn_egg"));
+        withExistingParent("ender_creeper_spawn_egg", mcLoc("item/template_spawn_egg"));
         // 尸潮指挥官（Boss）：与上面几个一致，模板来自原版刷怪蛋
         withExistingParent("zombie_commander_spawn_egg", mcLoc("item/template_spawn_egg"));
     }

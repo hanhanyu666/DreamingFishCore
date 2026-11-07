@@ -170,6 +170,11 @@ public final class TerrainDisasterEffects {
     private static final int METEOR_WARNING_TICKS = 30;
 
 
+    /** 陨石落点刷焦尸的概率（百分比）：小概率，不然每次砸完都冒怪太吵。 */
+    private static final int METEOR_CHARRED_PERCENT = 25;
+    /** 刷出的焦尸带着火的时间（秒）。 */
+    private static final float METEOR_CHARRED_BURN_SECONDS = 15.0F;
+
     /** 已经排期、还没落地的陨石。 */
     private record PendingMeteor(long impactTick, double x, double y, double z) {
     }
@@ -256,12 +261,16 @@ public final class TerrainDisasterEffects {
         level.playSound(null, cx, meteor.y(), cz,
                 net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
                 net.minecraft.sounds.SoundSource.BLOCKS, 4.0F, 0.85F);
-        Mob charred = com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities
-                .CHARRED_ZOMBIE.get().create(level);
-        if (charred != null) {
-            charred.moveTo(cx, meteor.y(), cz, 0.0F, 0.0F);
-            charred.setPersistenceRequired();
-            level.addFreshEntity(charred);
+        // 小概率才冒出焦尸；冒出来的时候是**点着的**（刚从陨石里爬出来）
+        if (level.getRandom().nextInt(100) < METEOR_CHARRED_PERCENT) {
+            Mob charred = com.hhy.dreamingfishcore.gameplay.zombie_system.charred.CharredZombieEntities
+                    .CHARRED_ZOMBIE.get().create(level);
+            if (charred != null) {
+                charred.moveTo(cx, meteor.y(), cz, 0.0F, 0.0F);
+                charred.setPersistenceRequired();
+                charred.igniteForSeconds(METEOR_CHARRED_BURN_SECONDS);
+                level.addFreshEntity(charred);
+            }
         }
     }
 

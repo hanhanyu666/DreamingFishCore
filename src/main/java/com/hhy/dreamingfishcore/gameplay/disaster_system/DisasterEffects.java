@@ -72,9 +72,9 @@ public final class DisasterEffects {
         hordeBatchTimer = 0;
 
         if (plan.contains(EventType.STORM_DAY)) {
-            // 约一个游戏日的雷雨；thunder 时间给一半，避免整段时间都在打雷
-            server.overworld().setWeatherParameters(24_000, 12_000, true, true);
-            DreamingFishCore.LOGGER.info("[disaster] 第 {} 天风暴天：主世界天气已切为雷雨", plan.day());
+            // 风暴天**不改变天气**：风与客户端表现（湿玻璃/视野）都由日程驱动，
+            // 天气交给原版/服主自己控制（服主要求去掉"自动暴雨"）。
+            DreamingFishCore.LOGGER.info("[disaster] 第 {} 天风暴天：起风（不改天气）", plan.day());
         }
         if (plan.contains(EventType.ZOMBIE_HORDE)) {
             hordeBatchesLeft = HORDE_BATCHES;
@@ -92,31 +92,12 @@ public final class DisasterEffects {
         tickHorde(server);
         tickFrost(server, plan);
         tickWind(server, plan);
-        if (plan.contains(EventType.STORM_DAY)) {
-            ensureStormWeather(server);     // 风暴天期间保持暴雨
-        }
         // 地形天灾（黑潮/孢子/火雨/酸雨/沙尘暴）只在对应群系生效，逻辑单独一个类
         TerrainDisasterEffects.tick(server, plan);
     }
 
     // ---------------------------------------------------------------- 大尸潮
 
-    /**
-     * 风暴天：**持续暴雨**。
-     *
-     * <p>原版有自己的天气循环，会随机放晴；如果只在跨天时设一次雷雨，很快就会被它覆盖掉。
-     * 所以风暴天期间每 5 秒重申一次（雨量/雷量拉满），保证"这天一直在下暴雨"。</p>
-     */
-    private static void ensureStormWeather(MinecraftServer server) {
-        if (Math.floorMod(server.getTickCount(), 100) != 0) {
-            return;
-        }
-        ServerLevel level = server.overworld();
-        // 6000 tick 的窗口远大于 100 tick 的重申间隔，所以不会闪成"雨停了又下"
-        level.setWeatherParameters(6000, 6000, true, true);
-        level.setRainLevel(1.0F);
-        level.setThunderLevel(1.0F);
-    }
 
     private static void tickHorde(MinecraftServer server) {
         if (hordeBatchesLeft <= 0) {
