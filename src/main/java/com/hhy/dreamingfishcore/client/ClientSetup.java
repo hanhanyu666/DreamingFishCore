@@ -48,6 +48,8 @@ public class ClientSetup {
 
     @SubscribeEvent
     public static void registerMenuScreens(net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) {
+        event.register(com.hhy.dreamingfishcore.block.DreamingFishCore_BlockEntities.DISASTER_REACTOR_MENU.get(),
+                com.hhy.dreamingfishcore.client.DisasterReactorScreen::new);
         // 研究桌的界面是自绘的（不是 AbstractContainerScreen），但仍然必须实现 MenuAccess：
         // 客户端就是靠这个接口把 containerMenu 指向菜单实例，槽位点击才会发给服务端。
         event.register(

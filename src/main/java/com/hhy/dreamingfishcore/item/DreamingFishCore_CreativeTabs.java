@@ -53,6 +53,9 @@ public class DreamingFishCore_CreativeTabs {
                         output.accept(DreamingFishCore_Items.HERB.get());
                         output.accept(DreamingFishCore_Items.HERB_SEEDS.get());
                         output.accept(DreamingFishCore_Items.DISASTER_WARNING.get());
+                        output.accept(DreamingFishCore_Items.DISASTER_REACTOR.get());
+                        output.accept(com.hhy.dreamingfishcore.item.DisasterDataItem.create(
+                                com.hhy.dreamingfishcore.gameplay.disaster_system.DisasterSchedule.EventType.STORM_DAY));
                     })
                     .build()
     );

@@ -28,6 +28,8 @@ public class DreamingFishCore {
         com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.register(modEventBus);
         // 注册物品
         DreamingFishCore_Items.register(modEventBus);
+        com.hhy.dreamingfishcore.gameplay.disaster_system.DisasterDataComponents.COMPONENTS
+                .register(modEventBus);
         // 注册网络包
         DreamingFishCore_NetworkManager.register(modEventBus);
         // 注册创造物品栏
@@ -51,6 +53,7 @@ public class DreamingFishCore {
         DeathCorpseEntities.register(modEventBus);
         // 注册菜单类型（研究桌的容器菜单）
         com.hhy.dreamingfishcore.gameplay.research_system.ResearchTableMenus.register(modEventBus);
+        com.hhy.dreamingfishcore.block.DreamingFishCore_BlockEntities.register(modEventBus);
         CorpseAccessoryCompat.initialize();
         CommonInit.initialize();
 

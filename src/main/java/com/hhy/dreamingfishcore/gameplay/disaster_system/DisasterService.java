@@ -162,6 +162,43 @@ public final class DisasterService {
         return true;
     }
 
+    /** 反应器解析数据的结果。 */
+    public enum ClearResult {
+        /** 今天没有这场天灾（数据不消耗）。 */
+        NO_SUCH_DISASTER,
+        /** 数据损坏（数据消耗，但天灾不清）。 */
+        CORRUPTED,
+        /** 清除成功。 */
+        CLEARED
+    }
+
+    /**
+     * 天灾反应器：用一份分析数据尝试清掉**今天**的某一场天灾。
+     *
+     * <p>数据损坏的概率见 {@link DisasterReactorRules#CORRUPTION_PERCENT}。
+     * 清除成功后会把 {@code announcedDay} 复位，当天的播报按新日程重说一次。</p>
+     */
+    public static synchronized ClearResult clearToday(MinecraftServer server, EventType type) {
+        Schedule current = schedule;
+        if (server == null || current == null || type == null) {
+            return ClearResult.NO_SUCH_DISASTER;
+        }
+        long today = today(server);
+        DayPlan plan = current.forDay(today);
+        if (!DisasterReactorRules.scheduledToday(plan, type)) {
+            return ClearResult.NO_SUCH_DISASTER;
+        }
+        boolean corrupted = DisasterReactorRules.isCorrupted(
+                server.overworld().getRandom().nextInt(100));
+        if (!DisasterReactorRules.clears(true, corrupted)) {
+            DreamingFishCore.LOGGER.info("[disaster] 第 {} 天的 {} 数据损坏，未清除", today, type.name());
+            return ClearResult.CORRUPTED;
+        }
+        setDayEvent(server, today, type, false);
+        DreamingFishCore.LOGGER.info("[disaster] 反应器清除了第 {} 天的 {}", today, type.name());
+        return ClearResult.CLEARED;
+    }
+
     /** 今天的安排（没有就返回空计划，而不是 null，调用方少一层判空）。 */
     public static DayPlan todayPlan(MinecraftServer server) {
         ensureLoaded(server);
@@ -198,6 +235,18 @@ public final class DisasterService {
         if (day == announcedDay) {
             return;
         }
+        // 跨天：给"熬过昨天天灾"的玩家发该天灾的分析数据（大概率）
+        long finishedDay = announcedDay;
+        if (finishedDay >= 0L && finishedDay != day && schedule != null) {
+            DayPlan finished = schedule.forDay(finishedDay);
+            if (finished != null) {
+                com.hhy.dreamingfishcore.gameplay.disaster_system.DisasterDataDrops
+                        .rewardSurvivors(server, finished);
+            }
+        }
+        // 跨天先让反应器拦截（可能改动日程），再播报——否则玩家会先看到"今天有风暴天"又被悄悄改掉
+        com.hhy.dreamingfishcore.block.DisasterReactorBlockEntity.resolveForDay(server.overworld(), plan);
+        plan = todayPlan(server);
         announcedDay = day;
         announce(server, plan);
         // 跨天的一次性效果：雷雨天气、尸潮排期

@@ -84,4 +84,6 @@
   "item.dreamingfishcore.herb": "Herb",
   "item.dreamingfishcore.herb_seeds": "Herb Seeds",
   "block.dreamingfishcore.disaster_warning": "Disaster Warning System"
+  ,"block.dreamingfishcore.disaster_reactor": "Disaster Reactor"
+  ,"item.dreamingfishcore.disaster_data": "Disaster Analysis Data"
 }

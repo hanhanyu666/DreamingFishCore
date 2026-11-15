@@ -1,5 +1,6 @@
 package com.hhy.dreamingfishcore.block;
 
+
 import com.hhy.dreamingfishcore.DreamingFishCore;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
@@ -57,6 +58,21 @@ public final class DreamingFishCore_Blocks {
                             .instabreak()
                             .sound(net.minecraft.world.level.block.SoundType.CROP)
                             .pushReaction(net.minecraft.world.level.material.PushReaction.DESTROY)));
+
+    /**
+     * 天灾反应器：把「天灾分析数据」插进去，清掉今天对应的那一场天灾。
+     *
+     * <p>硬得像信标级别的东西：采掘需要镐且不会掉落（用错工具只掉经验），
+     * 因为它的成本是信标 + 下界合金，不该被随手一挖带走。</p>
+     */
+    public static final DeferredHolder<Block, DisasterReactorBlock> DISASTER_REACTOR =
+            BLOCKS.register("disaster_reactor",
+                    () -> new DisasterReactorBlock(net.minecraft.world.level.block.state.BlockBehaviour.Properties
+                            .of().mapColor(net.minecraft.world.level.material.MapColor.DIAMOND)
+                            .instrument(net.minecraft.world.level.block.state.properties.NoteBlockInstrument.PLING)
+                            .strength(5.0F, 1200.0F)
+                            .requiresCorrectToolForDrops()
+                            .sound(net.minecraft.world.level.block.SoundType.METAL)));
 
     /** 天灾预警系统：右键查看今天与后 3 日的天灾日程。 */
     public static final DeferredHolder<Block, DisasterWarningBlock> DISASTER_WARNING =

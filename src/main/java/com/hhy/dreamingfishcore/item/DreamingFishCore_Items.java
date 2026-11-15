@@ -119,6 +119,21 @@ public class DreamingFishCore_Items {
             () -> new BlockItem(
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.DISASTER_WARNING.get(),
                     new Item.Properties()));
+    /**
+     * 天灾分析数据：可插入天灾反应器，清掉今天对应的那一场天灾。
+     *
+     * <p>只有一种物品，靠 {@code disaster_type} 组件区分是哪种天灾的数据 ——
+     * 八种天灾各建一个物品只会让合成、掉落、堆叠都翻八倍。</p>
+     */
+    public static final DeferredHolder<Item, ? extends Item> DISASTER_DATA = ITEMS.register("disaster_data",
+            () -> new com.hhy.dreamingfishcore.item.DisasterDataItem(new Item.Properties().stacksTo(16)));
+
+    /** 天灾反应器方块物品。 */
+    public static final DeferredHolder<Item, BlockItem> DISASTER_REACTOR = ITEMS.register("disaster_reactor",
+            () -> new BlockItem(
+                    com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.DISASTER_REACTOR.get(),
+                    new Item.Properties()));
+
     public static final DeferredHolder<Item, ? extends Item> HERB_SEEDS = ITEMS.register("herb_seeds",
             () -> new net.minecraft.world.item.ItemNameBlockItem(
                     com.hhy.dreamingfishcore.block.DreamingFishCore_Blocks.HERB_CROP.get(),

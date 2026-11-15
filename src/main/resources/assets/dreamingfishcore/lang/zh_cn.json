@@ -84,4 +84,6 @@
   "item.dreamingfishcore.herb": "药草",
   "item.dreamingfishcore.herb_seeds": "药草种子",
   "block.dreamingfishcore.disaster_warning": "天灾预警系统"
+  ,"block.dreamingfishcore.disaster_reactor": "天灾反应器"
+  ,"item.dreamingfishcore.disaster_data": "天灾分析数据"
 }
