@@ -115,7 +115,13 @@ public final class DisasterSchedule {
     }
 
     /** "这天没有天灾"的权重。与上面三个类型一起参与加权抽取。 */
-    static final int NO_EVENT_WEIGHT = 45;
+    static final int NO_EVENT_WEIGHT = 320;
+
+    /** 已经出现天灾的日子，再叠第二场的概率（百分比）。 */
+    static final int STACK_SECOND_PERCENT = 35;
+
+    /** 叠到第三场的概率（百分比）。 */
+    static final int STACK_THIRD_PERCENT = 15;
 
     /** 一天的计划。{@code events} 为空表示晴天（太平日子）。 */
     public record DayPlan(long day, List<EventType> events) {
@@ -255,14 +261,17 @@ public final class DisasterSchedule {
     /**
      * 排出 {@code count} 天的日程。
      *
-     * <p>三条规则：不连续同类型（空日会打断"连续"）、14 天内至少一次大尸潮、其余按权重抽。</p>
+     * <p>规则：不连续同类型（空日会打断"连续"）、14 天内至少一次大尸潮、其余按权重抽；
+     * **平安日占比很高**（{@link #NO_EVENT_WEIGHT}），但只要当天有灾，就可能再叠 1~2 场
+     * （{@link #STACK_SECOND_PERCENT} / {@link #STACK_THIRD_PERCENT}）——
+     * 目标是"平常日子安静、出事那天一起上"，而不是把天灾摊成天天一点点。</p>
      */
     public static Schedule generate(long seed, long firstDay, int count) {
         int days = Math.max(1, count);
         RaidRandom random = new RaidRandom(seed);
 
         List<DayPlan> plans = new ArrayList<>(days);
-        EventType previous = null;
+        java.util.Set<EventType> previousDay = new java.util.HashSet<>();
         boolean hordeSeen = false;
 
         for (int index = 0; index < days; index++) {
@@ -270,24 +279,45 @@ public final class DisasterSchedule {
             // 候选：三个天灾类型（排除昨天刚来过的那种）+ 一个"平安"档
             List<Candidate> candidates = new ArrayList<>();
             for (EventType type : EventType.values()) {
-                if (type == previous) {
-                    continue;   // 不连续同类型
+                if (previousDay.contains(type)) {
+                    continue;   // 不连续同类型（前一天出现过的都不行）
                 }
                 candidates.add(new Candidate(type, WEIGHTS.getOrDefault(type, 10)));
             }
             candidates.add(new Candidate(null, NO_EVENT_WEIGHT));
 
-            List<Candidate> pool = new ArrayList<>(candidates);
-            var picked = random.pickWeighted(pool, Candidate::weight);
+            var picked = random.pickWeighted(candidates, Candidate::weight);
             Candidate candidate = picked.orElse(null);
             if (candidate == null || candidate.type() == null) {
                 plans.add(new DayPlan(day, List.of()));
-                previous = null;    // 空日打断连续约束
+                previousDay = new java.util.HashSet<>();    // 空日打断连续约束
                 continue;
             }
-            plans.add(new DayPlan(day, List.of(candidate.type())));
-            previous = candidate.type();
-            hordeSeen |= candidate.type() == EventType.ZOMBIE_HORDE;
+            List<EventType> events = new ArrayList<>();
+            events.add(candidate.type());
+            // 叠加：既然今天已经有天灾了，就按概率再叠 1~2 场——
+            // 于是"平安日更多、但有天灾的日子更凶"，而不是把天灾摊薄到每天都有。
+            for (int layer = 0; layer < 2; layer++) {
+                int chance = layer == 0 ? STACK_SECOND_PERCENT : STACK_THIRD_PERCENT;
+                if (random.nextInt(100) >= chance) {
+                    break;
+                }
+                List<Candidate> extras = new ArrayList<>();
+                for (EventType type : EventType.values()) {
+                    if (events.contains(type) || previousDay.contains(type)) {
+                        continue;
+                    }
+                    extras.add(new Candidate(type, WEIGHTS.getOrDefault(type, 10)));
+                }
+                var extra = random.pickWeighted(extras, Candidate::weight);
+                if (extra.isEmpty()) {
+                    break;
+                }
+                events.add(extra.get().type());
+            }
+            plans.add(new DayPlan(day, events));
+            previousDay = new java.util.HashSet<>(events);
+            hordeSeen |= events.contains(EventType.ZOMBIE_HORDE);
         }
 
         if (!hordeSeen) {
