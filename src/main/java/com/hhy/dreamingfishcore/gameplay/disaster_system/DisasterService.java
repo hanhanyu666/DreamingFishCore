@@ -308,18 +308,9 @@ public final class DisasterService {
         server.getPlayerList().broadcastSystemMessage(Component.literal(text), false);
     }
 
-    /** 给聊天栏/命令用的着色名。 */
+    /** 给聊天栏/命令用的着色名（颜色与名字都由枚举自己带，这里只是转发）。 */
     public static String coloredName(EventType type) {
-        return switch (type) {
-            case ZOMBIE_HORDE -> "§4大尸潮";
-            case FROST_NIGHT -> "§b寒霜之夜";
-            case STORM_DAY -> "§9风暴天";
-            case OCEAN_BLIGHT -> "§2海洋黑潮";
-            case SPORE_PLAGUE -> "§a孢子瘟疫";
-            case METEOR_RAIN -> "§6天降火雨";
-            case ACID_RAIN -> "§a酸雨";
-            case SANDSTORM -> "§e沙尘暴";
-        };
+        return type.coloredName();
     }
 
     /**

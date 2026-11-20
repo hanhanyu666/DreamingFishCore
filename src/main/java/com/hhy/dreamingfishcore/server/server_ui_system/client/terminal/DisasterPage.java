@@ -131,17 +131,8 @@ final class DisasterPage extends TerminalPage {
         return String.join(" · ", names);
     }
 
-    /** 各天灾在 UI 里的配色（编辑页复用）。 */
+    /** 各天灾在 UI 里的配色（编辑页复用；颜色由 {@code EventType#uiColor} 提供）。 */
     static int colorOf(DisasterSchedule.EventType type) {
-        return switch (type) {
-            case ZOMBIE_HORDE -> 0xFFFF7A88;
-            case FROST_NIGHT -> TerminalUi.SKY;
-            case STORM_DAY -> TerminalUi.VIOLET;
-            case OCEAN_BLIGHT -> TerminalUi.MINT;
-            case SPORE_PLAGUE -> TerminalUi.GREEN;
-            case METEOR_RAIN -> TerminalUi.GOLD;
-            case ACID_RAIN -> TerminalUi.GREEN;
-            case SANDSTORM -> TerminalUi.AMBER;
-        };
+        return type.uiColor();
     }
 }

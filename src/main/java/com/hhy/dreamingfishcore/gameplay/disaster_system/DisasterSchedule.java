@@ -31,44 +31,67 @@ public final class DisasterSchedule {
     /**
      * 天灾类型。
      *
-     * <p>每个类型带两个属性：</p>
+     * <p>每个类型自带它需要的展示信息：</p>
      * <ul>
      *   <li><b>displayName</b>：玩家看到的名字；</li>
-     *   <li><b>biomeTags</b>：这个天灾**只在哪些群系生效**（空集合 = 全世界）。
-     *       用原版群系标签的字符串形式表达，纯数据、可单测；实际匹配在效果层做。</li>
+     *   <li><b>chatColor</b> / <b>uiColor</b>：聊天栏色码与终端 UI 的 ARGB 颜色；</li>
+     *   <li><b>biomeTags</b>：只在哪些群系生效（空集合 = 全世界）。</li>
      * </ul>
+     *
+     * <p><b>为什么把颜色收进枚举</b>：以前名字和颜色散在三处 {@code switch}（服务端着色名、
+     * 终端页配色），新增一种天灾要改三个地方，漏一个就是"新天灾在 UI 里是灰色/无色的"。
+     * 现在只有这一处，新增类型时编译器会直接提醒（枚举构造器参数变了）。</p>
      */
     public enum EventType {
         /** 大尸潮：最稀有，也最危险。全世界。 */
-        ZOMBIE_HORDE("大尸潮"),
+        ZOMBIE_HORDE("大尸潮", "§4", 0xFFFF7A88),
         /** 寒霜之夜：夜间严寒。全世界。 */
-        FROST_NIGHT("寒霜之夜"),
+        FROST_NIGHT("寒霜之夜", "§b", 0xFF6FB6D9),
         /** 风暴天：大风与雷暴。全世界。 */
-        STORM_DAY("风暴天"),
+        STORM_DAY("风暴天", "§9", 0xFF8E7BE8),
         /** 海洋黑潮：内海被污染，泡水会被侵蚀，溺尸会登岸。只在海洋。 */
-        OCEAN_BLIGHT("海洋黑潮", "minecraft:is_ocean", "minecraft:is_beach"),
+        OCEAN_BLIGHT("海洋黑潮", "§2", 0xFF3FA98C, "minecraft:is_ocean", "minecraft:is_beach"),
         /** 孢子瘟疫：森林被孢子笼罩，无声的丧尸在雾里。只在森林。 */
-        SPORE_PLAGUE("孢子瘟疫", "minecraft:is_forest", "minecraft:is_taiga"),
+        SPORE_PLAGUE("孢子瘟疫", "§a", 0xFF6FCF6F, "minecraft:is_forest", "minecraft:is_taiga"),
         /**
          * 天降火雨：陨石砸向地面、砸出火海。**全世界生效**——原版没有"平原"群系标签，
          * 硬绑一个不存在的标签会让这个天灾永远不触发，不如全世界都下。
          */
-        METEOR_RAIN("天降火雨"),
+        METEOR_RAIN("天降火雨", "§6", 0xFFE0A34B),
         /** 酸雨：恶地的腐蚀性降雨，淋雨会掉血、磨损护甲。只在恶地。 */
-        ACID_RAIN("酸雨", "minecraft:is_badlands"),
+        ACID_RAIN("酸雨", "§a", 0xFF8FBF5A, "minecraft:is_badlands"),
         /** 沙尘暴：恶地的强风，把人往一个方向推（复用风暴的风力）。只在恶地。 */
-        SANDSTORM("沙尘暴", "minecraft:is_badlands");
+        SANDSTORM("沙尘暴", "§e", 0xFFD9B85C, "minecraft:is_badlands");
 
         private final String displayName;
+        private final String chatColor;
+        private final int uiColor;
         private final Set<String> biomeTags;
 
-        EventType(String displayName, String... biomeTags) {
+        EventType(String displayName, String chatColor, int uiColor, String... biomeTags) {
             this.displayName = displayName;
+            this.chatColor = chatColor;
+            this.uiColor = uiColor;
             this.biomeTags = biomeTags == null ? Set.of() : Set.copyOf(new TreeSet<>(List.of(biomeTags)));
         }
 
         public String displayName() {
             return displayName;
+        }
+
+        /** 聊天栏用的色码，例如 {@code §4}。 */
+        public String chatColor() {
+            return chatColor;
+        }
+
+        /** 终端 UI 用的 ARGB 颜色。 */
+        public int uiColor() {
+            return uiColor;
+        }
+
+        /** 聊天栏里带颜色的名字，例如 {@code §4大尸潮}。 */
+        public String coloredName() {
+            return chatColor + displayName;
         }
 
         /** 生效的群系标签；空集合表示"全世界"（例如大尸潮、寒霜、风暴）。 */

@@ -1764,131 +1764,64 @@ public final class StoryManager {
         };
     }
 
-    public static int getTaskFinishedCount(int taskId) {
-        StoryTaskData task = TASKS_BY_NUMBER.get(taskId);
-        if (task == null) {
-            return 0;
-        }
-        StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-        return isPersonalStoryTask(task.getTaskKey())
-                ? state.getPersonalTaskCompletionCount(task.getTaskKey())
-                : progress == null ? 0 : progress.getParticipantCount();
+    // ---- 统计：实现已搬到 StoryStatistics（只读，无副作用） ----
+
+    /** 供 StoryStatistics 读世界状态用（包内可见）。 */
+    static StoryWorldState stateForQueries() {
+        ensureLoaded();
+        return state;
     }
 
-    public static int[] getStageTaskFinishedCounts(int stageNumber) {
-        StoryStageData stage = STAGES_BY_NUMBER.get(stageNumber);
-        if (stage == null) {
-            return new int[0];
-        }
-        List<StoryTaskData> tasks = getTrackedTasks(stage);
-        int[] result = new int[tasks.size()];
-        for (int index = 0; index < tasks.size(); index++) {
-            result[index] = getTaskFinishedCount(tasks.get(index).getTaskId());
-        }
-        return result;
+    static StoryTaskData taskByNumber(int taskId) {
+        return TASKS_BY_NUMBER.get(taskId);
     }
 
-    public static List<String> getTaskFinishedPlayers(int taskId) {
-        StoryTaskData task = TASKS_BY_NUMBER.get(taskId);
-        if (task == null) {
-            return List.of();
-        }
-        if (isPersonalStoryTask(task.getTaskKey())) {
-            return state.getPersonalTaskCompletions(task.getTaskKey()).values().stream().sorted().toList();
-        }
-        StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-        if (progress == null) {
-            return List.of();
-        }
-        return progress.getParticipantNames().values().stream().sorted().toList();
+    static StoryStageData stageByNumber(int stageNumber) {
+        return STAGES_BY_NUMBER.get(stageNumber);
     }
 
-    public static int getStageUniquePlayerCount(int stageNumber) {
-        StoryStageData stage = STAGES_BY_NUMBER.get(stageNumber);
-        if (stage == null) {
-            return 0;
-        }
-        Set<String> players = new HashSet<>();
-        for (StoryTaskData task : stage.getTasks()) {
-            if (isPersonalStoryTask(task.getTaskKey())) {
-                players.addAll(state.getPersonalTaskCompletions(task.getTaskKey()).keySet());
-                continue;
-            }
-            StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-            if (progress != null) {
-                players.addAll(progress.getParticipantNames().keySet());
-            }
-        }
-        return players.size();
-    }
-
-    public static int getTotalTaskCompletions() {
-        int sharedCompletions = state.getTaskProgressView().values().stream()
-                .mapToInt(StoryWorldState.TaskProgress::getParticipantCount)
-                .sum();
-        int personalCompletions = state.getPersonalTaskProgressView().values().stream()
-                .mapToInt(Map::size)
-                .sum();
-        return sharedCompletions + personalCompletions;
-    }
-
-    public static int getTotalUniquePlayers() {
-        Set<String> players = new HashSet<>();
-        state.getTaskProgressView().values()
-                .forEach(progress -> players.addAll(progress.getParticipantNames().keySet()));
-        state.getPersonalTaskProgressView().values()
-                .forEach(progress -> players.addAll(progress.keySet()));
-        return players.size();
-    }
-
-    public static int getStageCount() {
+    static int stageDefinitionCount() {
         return STAGES_BY_ID.size();
     }
 
+    static List<StoryTaskData> trackedTasks(StoryStageData stage) {
+        return getTrackedTasks(stage);
+    }
+
+    public static int getTaskFinishedCount(int taskId) {
+        return StoryStatistics.taskFinishedCount(taskId);
+    }
+
+    public static int[] getStageTaskFinishedCounts(int stageNumber) {
+        return StoryStatistics.stageTaskFinishedCounts(stageNumber);
+    }
+
+    public static List<String> getTaskFinishedPlayers(int taskId) {
+        return StoryStatistics.taskFinishedPlayers(taskId);
+    }
+
+    public static int getStageUniquePlayerCount(int stageNumber) {
+        return StoryStatistics.stageUniquePlayerCount(stageNumber);
+    }
+
+    public static int getTotalTaskCompletions() {
+        return StoryStatistics.totalTaskCompletions();
+    }
+
+    public static int getTotalUniquePlayers() {
+        return StoryStatistics.totalUniquePlayers();
+    }
+
+    public static int getStageCount() {
+        return StoryStatistics.stageCount();
+    }
+
     public static String getTaskStatisticsString(int taskId) {
-        StoryTaskData task = TASKS_BY_NUMBER.get(taskId);
-        if (task == null) {
-            return "任务不存在";
-        }
-        StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-        String outcome = progress == null
-                ? (isPersonalStoryTask(task.getTaskKey()) ? "个人进行中" : "未发布")
-                : progress.getOutcome().name();
-        int playerCount = isPersonalStoryTask(task.getTaskKey())
-                ? state.getPersonalTaskCompletionCount(task.getTaskKey())
-                : progress == null ? 0 : progress.getParticipantCount();
-        String countLabel = isPersonalStoryTask(task.getTaskKey())
-                ? "人已完成个人部分"
-                : "人在场";
-        return String.format("任务 [%d / %s] %s: %s，%d %s",
-                task.getTaskId(), task.getTaskKey(), task.getTaskName(), outcome, playerCount, countLabel);
+        return StoryStatistics.taskStatisticsString(taskId);
     }
 
     public static String getStageStatisticsString(int stageNumber) {
-        StoryStageData stage = STAGES_BY_NUMBER.get(stageNumber);
-        if (stage == null) {
-            return "阶段不存在";
-        }
-        StringBuilder result = new StringBuilder();
-        result.append(String.format("=== 阶段 %d / %s: %s ===\n",
-                stage.getStageNumber(), stage.getStageId(), stage.getStageName()));
-        for (StoryTaskData task : getTrackedTasks(stage)) {
-            StoryWorldState.TaskProgress progress = state.getTaskProgress(task.getTaskKey());
-            String outcome = progress == null
-                    ? (isPersonalStoryTask(task.getTaskKey()) ? "个人进行中" : "未发布")
-                    : progress.getOutcome().name();
-            int participantCount = isPersonalStoryTask(task.getTaskKey())
-                    ? state.getPersonalTaskCompletionCount(task.getTaskKey())
-                    : progress == null ? 0 : progress.getParticipantCount();
-            String countLabel = isPersonalStoryTask(task.getTaskKey())
-                    ? "人已完成个人部分"
-                    : "人在场";
-            result.append(String.format("  [%d / %s] %s: %s，%d %s\n",
-                    task.getTaskId(), task.getTaskKey(), task.getTaskName(),
-                    outcome, participantCount, countLabel));
-        }
-        result.append("阶段推进方式：服主手动；固定人数门槛请查看 worldtask list");
-        return result.toString();
+        return StoryStatistics.stageStatisticsString(stageNumber);
     }
 
     /**
