@@ -51,6 +51,10 @@ description='''${mod_description}'''
 [[mixins]]
 config="${mod_id}.mixins.json"
 
+# Xaero 联动用的独立 mixin 配置（required=false：没装/版本不符只警告不崩）
+[[mixins]]
+config="${mod_id}.xaero.mixins.json"
+
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
 #[[accessTransformers]]

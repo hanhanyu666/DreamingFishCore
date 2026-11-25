@@ -260,3 +260,18 @@ idea {
         downloadJavadoc = true
     }
 }
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Xaero 小地图 / 世界地图：**本地 jar**（compileOnly，不随本模组分发）。
+// 取自官方 https://chocolateminecraft.com/maven（版本记录在 libs/README-xaero.txt）。
+// 用本地文件而不是远程 Maven：那个仓库极慢，每次编译都要等好几分钟。
+// ---------------------------------------------------------------------------
+dependencies {
+    compileOnly files(
+            'libs/xaeroworldmap-neoforge-1.21.1-1.44.2.jar',
+            'libs/xaerominimap-neoforge-1.21.1-26.6.0.jar',
+            'libs/xaerolib-neoforge-1.21.1-1.7.3.jar'
+    )
+}

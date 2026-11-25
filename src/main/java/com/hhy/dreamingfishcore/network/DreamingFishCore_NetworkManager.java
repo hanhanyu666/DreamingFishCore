@@ -43,7 +43,7 @@ public final class DreamingFishCore_NetworkManager {
     // 并新增 research_table/submit 请求包。
     // 0.32.0：搜打撤露天物品——新增 S2C 同步包 raid/loose_loot_sync，
     // 客户端据此在世界里画出漂浮的战利品（拾取仍完全由服务端判定）。
-    private static final String PROTOCOL_VERSION = "0.33.0";
+    private static final String PROTOCOL_VERSION = "0.34.0";
 
     private DreamingFishCore_NetworkManager() {
     }
@@ -199,6 +199,17 @@ public final class DreamingFishCore_NetworkManager {
                 com.hhy.dreamingfishcore.gameplay.disaster_system.network.Packet_DisasterEditRequest.STREAM_CODEC,
                 authenticated(com.hhy.dreamingfishcore.gameplay.disaster_system.network
                         .Packet_DisasterEditRequest::handle));
+
+        // 地图区域：快照下发（S2C）+ 客户端请求（C2S）
+        registrar.playToClient(
+                com.hhy.dreamingfishcore.gameplay.map_region_system.network.Packet_MapRegionSnapshot.TYPE,
+                com.hhy.dreamingfishcore.gameplay.map_region_system.network.Packet_MapRegionSnapshot.STREAM_CODEC,
+                com.hhy.dreamingfishcore.gameplay.map_region_system.network.Packet_MapRegionSnapshot::handle);
+        registrar.playToServer(
+                com.hhy.dreamingfishcore.gameplay.map_region_system.network.Packet_MapRegionRequest.TYPE,
+                com.hhy.dreamingfishcore.gameplay.map_region_system.network.Packet_MapRegionRequest.STREAM_CODEC,
+                authenticated(com.hhy.dreamingfishcore.gameplay.map_region_system.network
+                        .Packet_MapRegionRequest::handle));
     }
 
     public static void sendToClient(CustomPacketPayload packet, ServerPlayer player) {

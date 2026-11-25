@@ -61,6 +61,8 @@ public final class DreamingFishCore_CommandManager {
         Command_RaidAnchor.register(dreamingFishRoot);
         Command_Raid.register(dreamingFishRoot);
         com.hhy.dreamingfishcore.gameplay.disaster_system.Command_Disaster.register(dreamingFishRoot);
+        com.hhy.dreamingfishcore.gameplay.map_region_system.Command_MapRegions
+                .register(dreamingFishRoot);
         // 仅 3 级权限可用：感染等级直改 + 疗程/随访直接完成 + 线索发放，供服务器自测。
         dreamingFishRoot.then(Commands.literal("debug")
                 .requires(source -> source.hasPermission(3))
